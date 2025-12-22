@@ -1,0 +1,149 @@
+﻿{
+    "Phase8":  [
+                   {
+                       "Category":  "Authentication",
+                       "Test":  "Login",
+                       "Status":  "PASS",
+                       "Details":  "Successfully logged in"
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Dashboard",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  1667
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Leads Page",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  313
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Renewals Page",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  259
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Inbox Page",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  315
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Admin Dashboard",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  2083
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Admin Users",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  2712
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Admin Services",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  1278
+                   },
+                   {
+                       "Category":  "Page Access",
+                       "Test":  "Reports Page",
+                       "Status":  "PASS",
+                       "Details":  "Page loads successfully",
+                       "ResponseTime":  255
+                   },
+                   {
+                       "Category":  "API Endpoints",
+                       "Test":  "Get Leads",
+                       "Status":  "PASS",
+                       "Details":  "Status: 200"
+                   },
+                   {
+                       "Category":  "API Endpoints",
+                       "Test":  "Get Renewals",
+                       "Status":  "PASS",
+                       "Details":  "Status: 200"
+                   },
+                   {
+                       "Category":  "API Endpoints",
+                       "Test":  "Get Users",
+                       "Status":  "PASS",
+                       "Details":  "Status: 200"
+                   }
+               ],
+    "Summary":  {
+                    "Phase8Total":  12,
+                    "Phase7Total":  7,
+                    "TotalTime":  17.4326678,
+                    "Phase7Passed":  0,
+                    "Phase8Passed":  12
+                },
+    "Phase7":  [
+                   {
+                       "Endpoint":  "Leads List",
+                       "Path":  "/api/leads",
+                       "StatusCode":  200,
+                       "ResponseTime":  891,
+                       "Success":  true,
+                       "Passed":  false
+                   },
+                   {
+                       "Endpoint":  "Renewals",
+                       "Path":  "/api/renewals",
+                       "StatusCode":  200,
+                       "ResponseTime":  1169,
+                       "Success":  true,
+                       "Passed":  false
+                   },
+                   {
+                       "Endpoint":  "Inbox Conversations",
+                       "Path":  "/api/inbox/conversations",
+                       "StatusCode":  200,
+                       "ResponseTime":  1701,
+                       "Success":  true,
+                       "Passed":  false
+                   },
+                   {
+                       "Endpoint":  "Reports KPIs",
+                       "Path":  "/api/reports/kpis",
+                       "StatusCode":  200,
+                       "ResponseTime":  1476,
+                       "Success":  true,
+                       "Passed":  false
+                   },
+                   {
+                       "Endpoint":  "Reports Users",
+                       "Path":  "/api/reports/users",
+                       "StatusCode":  200,
+                       "ResponseTime":  525,
+                       "Success":  true,
+                       "Passed":  false
+                   },
+                   {
+                       "Endpoint":  "Admin Users",
+                       "Path":  "/api/admin/users",
+                       "StatusCode":  200,
+                       "ResponseTime":  537,
+                       "Success":  true,
+                       "Passed":  false
+                   },
+                   {
+                       "Endpoint":  "Admin Services",
+                       "Path":  "/api/admin/services",
+                       "StatusCode":  200,
+                       "ResponseTime":  549,
+                       "Success":  true,
+                       "Passed":  false
+                   }
+               ]
+}

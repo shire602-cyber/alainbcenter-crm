@@ -1,0 +1,10 @@
+{
+  "fullName": "Test User",
+  "phone": "+971501234567",
+  "email": "test@example.com",
+  "service": "Family Visa",
+  "source": "website",
+  "notes": "Test lead for automation testing",
+  "expiryDate": "2025-03-10"
+}
+

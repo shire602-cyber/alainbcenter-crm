@@ -1,0 +1,3 @@
+-- AlterTable
+ALTER TABLE "Lead" ADD COLUMN "aiNotes" TEXT;
+ALTER TABLE "Lead" ADD COLUMN "aiScore" INTEGER;

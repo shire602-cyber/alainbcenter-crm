@@ -1,0 +1,56 @@
+﻿[
+    {
+        "Category":  "Public",
+        "Endpoint":  "Health Check",
+        "Path":  "/api/health",
+        "StatusCode":  200,
+        "ResponseTime":  943,
+        "Success":  true,
+        "Passed":  true
+    },
+    {
+        "Category":  "Public",
+        "Endpoint":  "Login Page",
+        "Path":  "/login",
+        "StatusCode":  200,
+        "ResponseTime":  358,
+        "Success":  true,
+        "Passed":  true
+    },
+    {
+        "Category":  "Authenticated",
+        "Endpoint":  "Leads List",
+        "Path":  "/api/leads",
+        "StatusCode":  401,
+        "ResponseTime":  24,
+        "Success":  true,
+        "Passed":  true
+    },
+    {
+        "Category":  "Authenticated",
+        "Endpoint":  "Renewals",
+        "Path":  "/api/renewals",
+        "StatusCode":  401,
+        "ResponseTime":  12,
+        "Success":  true,
+        "Passed":  true
+    },
+    {
+        "Category":  "Authenticated",
+        "Endpoint":  "Inbox Conversations",
+        "Path":  "/api/inbox/conversations",
+        "StatusCode":  401,
+        "ResponseTime":  7,
+        "Success":  true,
+        "Passed":  true
+    },
+    {
+        "Category":  "Authenticated",
+        "Endpoint":  "Reports",
+        "Path":  "/api/reports",
+        "StatusCode":  401,
+        "ResponseTime":  11,
+        "Success":  true,
+        "Passed":  true
+    }
+]

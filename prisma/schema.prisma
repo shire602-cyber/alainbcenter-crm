@@ -1,0 +1,515 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================
+// ENUM VALUES (documented for reference)
+// UserRole: ADMIN | MANAGER | AGENT
+// LeadStage: NEW | CONTACTED | ENGAGED | QUALIFIED | PROPOSAL_SENT | IN_PROGRESS | COMPLETED_WON | LOST | ON_HOLD
+// LeadServiceType: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | OFFSHORE_COMPANY | BRANCH_SUBSIDIARY_SETUP | BANK_ACCOUNT_ASSISTANCE | ACCOUNTING_VAT_SERVICES | EMPLOYMENT_VISA | FAMILY_VISA | FREELANCE_VISA | INVESTOR_PARTNER_VISA | GOLDEN_VISA | DOMESTIC_WORKER_VISA | EMIRATES_ID | MEDICAL_BIOMETRICS | VISA_RENEWAL | VISA_CANCELLATION | STATUS_CHANGE_INSIDE_UAE
+// LeadPriority: LOW | NORMAL | HIGH | URGENT
+// ContactChannel: whatsapp | instagram | facebook | website | email | internal
+// ExpiryType: VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | MEDICAL_FITNESS_EXPIRY | TRADE_LICENSE_EXPIRY | ESTABLISHMENT_CARD_EXPIRY | IMMIGRATION_FILE_EXPIRY | MOHRE_LABOUR_CARD_EXPIRY | EJARI_OFFICE_LEASE_EXPIRY | BANK_KYC_REVIEW_DATE | VAT_RETURN_DUE | CORPORATE_TAX_FILING_DUE | AUDIT_DUE_DATE
+// ConversationChannel: WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+// ConversationStatus: open | closed
+// MessageDirection: INBOUND | OUTBOUND (legacy: "IN" | "OUT" still supported)
+// MessageStatus: PENDING | RECEIVED | SENT | DELIVERED | READ | FAILED
+// AutomationTrigger: NEW_LEAD | FOLLOWUP_DUE | FOLLOWUP_OVERDUE | EXPIRY_WINDOW | INBOUND_MESSAGE | NO_REPLY_SLA
+// ============================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("AGENT") // ADMIN | MANAGER | AGENT
+  createdAt DateTime @default(now())
+
+  assignedLeads         Lead[]
+  assignedExpiryItems   ExpiryItem[]
+  assignedConversations Conversation[]
+  createdMessages       Message[]
+  createdAIDrafts       AIDraft[]
+  automationRunLogs     AutomationRunLog[]
+  assignedTasks         Task[]             @relation("AssignedTasks")
+  createdTasks          Task[]             @relation("CreatedTasks")
+  uploadedDocuments     Document[]         @relation("UploadedDocuments")
+}
+
+model ServiceType {
+  id        Int      @id @default(autoincrement())
+  name      String
+  code      String?  @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  leads     Lead[]
+}
+
+model Contact {
+  id               Int      @id @default(autoincrement())
+  fullName         String
+  phone            String
+  email            String?
+  nationality      String?
+  source           String?
+  localSponsorName String? // Searchable sponsor name
+  companyName      String? // Optional company name
+  createdAt        DateTime @default(now())
+
+  leads             Lead[]
+  chatMessages      ChatMessage[]
+  conversations     Conversation[]
+  expiryItems       ExpiryItem[]
+  messages          Message[]
+  automationRunLogs AutomationRunLog[]
+  aiActionLogs      AIActionLog[]
+  aiDrafts          AIDraft[]
+
+  @@index([phone])
+  @@index([email])
+  @@index([localSponsorName])
+  @@index([companyName])
+}
+
+model Lead {
+  id            Int          @id @default(autoincrement())
+  contact       Contact      @relation(fields: [contactId], references: [id])
+  contactId     Int
+  leadType      String? // Legacy field for backward compatibility
+  serviceTypeId Int? // New relation to ServiceType
+  serviceType   ServiceType? @relation(fields: [serviceTypeId], references: [id])
+
+  // Locked enums per spec (stored as strings for SQLite)
+  stage              String  @default("NEW") // NEW | CONTACTED | ENGAGED | QUALIFIED | PROPOSAL_SENT | IN_PROGRESS | COMPLETED_WON | LOST | ON_HOLD
+  serviceTypeEnum    String? // Direct enum field: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | etc.
+  priority           String? @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  lastContactChannel String? // whatsapp | instagram | facebook | website | email | internal
+
+  // Legacy string fields (for backward compatibility during migration)
+  status        String  @default("new")
+  pipelineStage String  @default("new")
+  urgency       String?
+
+  notes         String?
+  priorityScore Int?
+  aiScore       Int? // AI-generated score (0-100)
+  aiNotes       String? // AI-generated qualification notes
+
+  // Assignment and follow-up
+  assignedUserId Int?
+  assignedUser   User?     @relation(fields: [assignedUserId], references: [id])
+  nextFollowUpAt DateTime?
+  lastContactAt  DateTime? // Last communication timestamp
+
+  // Legacy expiry tracking (kept for backward compatibility)
+  expiryDate         DateTime?
+  autoWorkflowStatus String?
+  expiry90Sent       Boolean   @default(false)
+  expiry30Sent       Boolean   @default(false)
+
+  // Renewal tracking fields
+  isRenewal             Boolean     @default(false)
+  originalExpiryItemId  Int? // If this lead came from a renewal
+  originalExpiryItem    ExpiryItem? @relation("OriginalExpiryLeads", fields: [originalExpiryItemId], references: [id])
+  estimatedValue        String? // Decimal stored as string for SQLite
+  estimatedRenewalValue String? // Renewal revenue estimate
+  renewalProbability    Int? // 0-100 probability of renewal
+  renewalNotes          String? // AI-generated renewal insights
+
+  // Automation control
+  autopilotEnabled Boolean @default(true) // Lead-level autopilot toggle
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  communicationLogs  CommunicationLog[]
+  tasks              Task[]
+  documents          Document[]
+  checklistItems     ChecklistItem[]
+  chatMessages       ChatMessage[]
+  sentAutomations    SentAutomation[]
+  expiryItems        ExpiryItem[]       @relation("LeadExpiryItems")
+  renewalExpiryLeads ExpiryItem[]       @relation("RenewalExpiryLeads")
+  messages           Message[]
+  conversations      Conversation[]
+  automationRunLogs  AutomationRunLog[]
+  aiDrafts           AIDraft[]
+  aiActionLogs       AIActionLog[]
+}
+
+model ExpiryItem {
+  id                   Int       @id @default(autoincrement())
+  contact              Contact   @relation(fields: [contactId], references: [id])
+  contactId            Int
+  lead                 Lead?     @relation("LeadExpiryItems", fields: [leadId], references: [id])
+  leadId               Int?
+  type                 String // VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | etc.
+  expiryDate           DateTime
+  reminderScheduleDays String    @default("[90,60,30,7]") // JSON array as string for SQLite
+  lastReminderSentAt   DateTime?
+  notes                String? // Optional notes about the expiry
+  assignedUserId       Int?
+  assignedUser         User?     @relation(fields: [assignedUserId], references: [id])
+
+  // Renewal tracking fields
+  renewalStatus       String  @default("PENDING") // PENDING | IN_PROGRESS | RENEWED | NOT_RENEWING
+  renewalLeadId       Int? // Link to renewal Lead when they sign again
+  renewalLead         Lead?   @relation("RenewalExpiryLeads", fields: [renewalLeadId], references: [id])
+  lastReminderChannel String? // WHATSAPP | EMAIL | INTERNAL
+  reminderCount       Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks               Task[]
+  automationRunLogs   AutomationRunLog[]
+  originalExpiryLeads Lead[]             @relation("OriginalExpiryLeads")
+
+  @@index([renewalStatus, expiryDate])
+  @@index([renewalLeadId])
+}
+
+model Conversation {
+  id               Int       @id @default(autoincrement())
+  contact          Contact   @relation(fields: [contactId], references: [id])
+  contactId        Int
+  lead             Lead?     @relation(fields: [leadId], references: [id])
+  leadId           Int?
+  channel          String    @default("whatsapp") // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+  externalId       String? // Provider conversation/thread ID (generic, works for all channels)
+  externalThreadId String? // Legacy field - kept for backward compatibility
+  waConversationId String? // WhatsApp-specific conversation ID from Meta (legacy)
+  waUserWaId       String? // WhatsApp user ID (phone/waid)
+  status           String    @default("open") // open | closed
+  lastMessageAt    DateTime  @default(now())
+  lastInboundAt    DateTime? // Last inbound message timestamp
+  lastOutboundAt   DateTime? // Last outbound message timestamp
+  needsReplySince  DateTime? // When conversation started needing reply
+  slaBreachAt      DateTime? // When SLA was breached
+  priorityScore    Int       @default(0) // Computed priority (0-100)
+  assignedUserId   Int?
+  assignedUser     User?     @relation(fields: [assignedUserId], references: [id])
+  unreadCount      Int       @default(0)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+
+  messages          Message[]
+  communicationLogs CommunicationLog[]
+  aiDrafts          AIDraft[]
+  aiActionLogs      AIActionLog[]
+  statusEvents      MessageStatusEvent[]
+  tasks             Task[]               @relation("ConversationTasks")
+
+  @@unique([contactId, channel])
+  @@index([channel, lastMessageAt])
+  @@index([contactId])
+  @@index([assignedUserId, lastMessageAt])
+  @@index([externalId])
+}
+
+model Message {
+  id                Int          @id @default(autoincrement())
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  conversationId    Int
+  lead              Lead?        @relation(fields: [leadId], references: [id])
+  leadId            Int?
+  contact           Contact?     @relation(fields: [contactId], references: [id])
+  contactId         Int?
+  direction         String // INBOUND | OUTBOUND (stored as "IN" or "OUT" in legacy data, new code uses "INBOUND"/"OUTBOUND")
+  channel           String // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+  type              String       @default("text") // text | image | document | audio | video | location | etc
+  body              String? // Text content (nullable for media-only messages)
+  mediaUrl          String? // URL to media file
+  mediaMimeType     String? // MIME type for media
+  providerMessageId String?      @unique // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
+  status            String       @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED | PENDING
+  payload           String? // JSON: Provider-specific payload/metadata (stored as string in SQLite)
+  meta              String? // Legacy field - JSON for provider IDs and metadata (kept for backward compatibility)
+  rawPayload        String? // JSON: Full webhook payload for debugging
+  sentAt            DateTime? // When message was sent (for outbound)
+  deliveredAt       DateTime? // When message was delivered (populated from status events)
+  readAt            DateTime? // When message was read (populated from status events)
+  createdByUserId   Int?
+  createdByUser     User?        @relation(fields: [createdByUserId], references: [id])
+  createdAt         DateTime     @default(now())
+
+  statusEvents MessageStatusEvent[]
+
+  @@index([conversationId, createdAt])
+  @@index([leadId])
+  @@index([contactId])
+  @@index([providerMessageId])
+  @@index([status, createdAt])
+}
+
+// Keep ChatMessage for backward compatibility (can be deprecated later)
+model ChatMessage {
+  id          Int       @id @default(autoincrement())
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  leadId      Int?
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+  contactId   Int?
+  channel     String // 'whatsapp' | 'email' | 'facebook' | 'instagram' | 'internal'
+  direction   String // 'inbound' | 'outbound'
+  message     String
+  senderName  String? // For inbound messages
+  senderPhone String? // For WhatsApp
+  senderEmail String? // For email
+  attachments String? // JSON array of attachment URLs
+  metadata    String? // JSON for additional data
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model AutomationRule {
+  id       Int     @id @default(autoincrement())
+  name     String
+  isActive Boolean @default(true)
+  enabled  Boolean @default(true)
+  key      String? @unique
+  schedule String? @default("daily")
+  template String?
+
+  // Legacy fields
+  type              String? // 'expiry_reminder' | 'followup_due'
+  channel           String? // 'whatsapp' | 'email'
+  daysBeforeExpiry  Int?
+  followupAfterDays Int?
+
+  // New fields per spec
+  trigger    String? // NEW_LEAD | FOLLOWUP_DUE | FOLLOWUP_OVERDUE | EXPIRY_WINDOW | INBOUND_MESSAGE | NO_REPLY_SLA
+  conditions String? // JSON
+  actions    String? // JSON
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sentAutomations SentAutomation[]
+  runLogs         AutomationRunLog[]
+}
+
+model AutomationRunLog {
+  id             Int             @id @default(autoincrement())
+  rule           AutomationRule? @relation(fields: [ruleId], references: [id])
+  ruleId         Int?
+  ruleKey        String?
+  lead           Lead?           @relation(fields: [leadId], references: [id])
+  leadId         Int?
+  contact        Contact?        @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  expiryItem     ExpiryItem?     @relation(fields: [expiryItemId], references: [id])
+  expiryItemId   Int? // For renewal automation logs
+  user           User?           @relation(fields: [userId], references: [id])
+  userId         Int?
+  status         String? // 'success' | 'failed' | 'skipped' | 'SUCCESS' | 'FAILED' | 'SKIPPED'
+  reason         String?
+  message        String?
+  details        String? // JSON
+  idempotencyKey String?         @unique
+  dateKey        String?
+  actionKey      String?
+  ranAt          DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+
+  @@unique([dateKey, ruleId, leadId, actionKey])
+  @@index([ruleKey, leadId, createdAt])
+  @@index([ruleKey, expiryItemId, createdAt])
+  @@index([status, createdAt])
+  @@index([expiryItemId])
+}
+
+model ExternalEventLog {
+  id         Int      @id @default(autoincrement())
+  provider   String // 'meta' | 'whatsapp' | 'website'
+  externalId String
+  payload    String? // JSON
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, externalId])
+  @@index([provider, receivedAt])
+}
+
+model SentAutomation {
+  id        Int            @id @default(autoincrement())
+  lead      Lead           @relation(fields: [leadId], references: [id])
+  leadId    Int
+  rule      AutomationRule @relation(fields: [ruleId], references: [id])
+  ruleId    Int
+  sentAt    DateTime       @default(now())
+  createdAt DateTime       @default(now())
+}
+
+model CommunicationLog {
+  id                Int           @id @default(autoincrement())
+  lead              Lead          @relation(fields: [leadId], references: [id])
+  leadId            Int
+  conversation      Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId    Int?
+  channel           String // 'whatsapp' | 'email' | 'phone' | 'internal'
+  direction         String // 'outbound' | 'inbound'
+  messageSnippet    String?
+  body              String?
+  externalId        String?       @unique
+  from              String?
+  to                String?
+  meta              String? // JSON
+  whatsappMessageId String?       @unique
+  deliveryStatus    String?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  failureReason     String?
+  isRead            Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Task {
+  id              Int           @id @default(autoincrement())
+  lead            Lead          @relation(fields: [leadId], references: [id])
+  leadId          Int
+  conversation    Conversation? @relation("ConversationTasks", fields: [conversationId], references: [id])
+  conversationId  Int?
+  expiryItem      ExpiryItem?   @relation(fields: [expiryItemId], references: [id])
+  expiryItemId    Int? // Task may be tied to a specific expiry
+  title           String
+  type            String // CALL | WHATSAPP | EMAIL | MEETING | DOCUMENT_REQUEST | REPLY_WHATSAPP | ESCALATION | RENEWAL_OUTREACH | RENEWAL_FOLLOWUP | RENEWAL_INTERNAL | OTHER
+  dueAt           DateTime?
+  status          String        @default("OPEN") // OPEN | DONE | SNOOZED
+  doneAt          DateTime?
+  assignedUserId  Int?
+  assignedUser    User?         @relation("AssignedTasks", fields: [assignedUserId], references: [id])
+  createdByUserId Int?
+  createdByUser   User?         @relation("CreatedTasks", fields: [createdByUserId], references: [id])
+  aiSuggested     Boolean       @default(false)
+  idempotencyKey  String?       @unique // For preventing duplicate auto-created tasks
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  @@index([expiryItemId])
+}
+
+model Document {
+  id               Int       @id @default(autoincrement())
+  lead             Lead      @relation(fields: [leadId], references: [id])
+  leadId           Int
+  fileName         String
+  fileType         String? // MIME type
+  fileSize         Int? // Size in bytes
+  storageProvider  String    @default("local") // local | s3 | r2
+  storagePath      String? // Server path or S3 key
+  url              String? // Public URL if available
+  category         String? // passport | eid | visa | photo | trade_license | other
+  expiryDate       DateTime? // Some documents expire
+  notes            String? // Optional notes about the document
+  uploadedByUserId Int?
+  uploadedByUser   User?     @relation("UploadedDocuments", fields: [uploadedByUserId], references: [id])
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+model ChecklistItem {
+  id          Int       @id @default(autoincrement())
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  leadId      Int
+  label       String
+  required    Boolean   @default(true)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model ServiceDocumentRequirement {
+  id           Int      @id @default(autoincrement())
+  serviceType  String // Match serviceTypeEnum values (e.g., MAINLAND_BUSINESS_SETUP, FAMILY_VISA)
+  documentType String // PASSPORT | EID | PHOTO | EJARI | COMPANY_LICENSE | BANK_STATEMENT | OTHER
+  label        String // Display name (e.g., "Passport Copy (All Pages)")
+  isMandatory  Boolean  @default(true)
+  order        Int      @default(0) // Display order
+  description  String? // Optional description/instructions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([serviceType, order])
+}
+
+model Integration {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique // 'whatsapp', 'email', 'facebook', 'instagram', 'openai'
+  provider        String // e.g., '360dialog', 'twilio', 'gmail', 'meta', 'openai'
+  isEnabled       Boolean   @default(false)
+  apiKey          String? // Encrypted/stored securely
+  apiSecret       String? // For OAuth flows
+  webhookUrl      String? // For receiving webhooks
+  accessToken     String? // For OAuth tokens
+  refreshToken    String? // For token refresh
+  config          String? // JSON config for provider-specific settings
+  lastTestedAt    DateTime?
+  lastTestStatus  String? // 'success' | 'failed' | null
+  lastTestMessage String? // Last test error or success message
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AIDraft {
+  id              Int          @id @default(autoincrement())
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  conversationId  Int
+  lead            Lead?        @relation(fields: [leadId], references: [id])
+  leadId          Int?
+  contact         Contact?     @relation(fields: [contactId], references: [id])
+  contactId       Int?
+  tone            String
+  language        String       @default("en")
+  promptVersion   String       @default("v1")
+  inputSummary    String?
+  draftText       String
+  createdByUserId Int?
+  createdByUser   User?        @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([leadId])
+  @@index([contactId])
+}
+
+model AIActionLog {
+  id             Int          @id @default(autoincrement())
+  kind           String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId Int
+  lead           Lead?        @relation(fields: [leadId], references: [id])
+  leadId         Int?
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  ok             Boolean      @default(true)
+  error          String?
+  meta           String? // JSON
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([kind, createdAt])
+}
+
+model MessageStatusEvent {
+  id             Int          @id @default(autoincrement())
+  message        Message      @relation(fields: [messageId], references: [id])
+  messageId      Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId Int
+  status         String // RECEIVED | SENT | DELIVERED | READ | FAILED
+  providerStatus String? // Raw status from provider (e.g., "sent", "delivered", "read")
+  errorMessage   String? // Error details if status is FAILED
+  rawPayload     String? // JSON: Full webhook payload for this status update
+  receivedAt     DateTime     @default(now())
+
+  @@index([messageId, receivedAt])
+  @@index([conversationId, receivedAt])
+  @@index([status, receivedAt])
+}
