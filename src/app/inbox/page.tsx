@@ -324,7 +324,7 @@ export default function InboxPage() {
                 })}
               </TabsList>
             </Tabs>
-          </div>
+            </div>
 
           {/* Search */}
           <div className="p-3 border-b border-slate-200 dark:border-slate-800">
@@ -367,25 +367,25 @@ export default function InboxPage() {
                       onClick={() => handleSelectConversation(conv)}
                     >
                       <Avatar fallback={conv.contact.fullName || conv.contact.phone} size="sm" />
-                      <div className="flex-1 min-w-0">
+                        <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <p className="font-medium text-xs truncate text-slate-900 dark:text-slate-100">
-                            {conv.contact.fullName || conv.contact.phone}
-                          </p>
+                              {conv.contact.fullName || conv.contact.phone}
+                            </p>
                           <div className="flex items-center gap-1 shrink-0">
                             <ChannelIcon className="h-3 w-3 text-slate-400" />
-                            {conv.unreadCount > 0 && (
+                              {conv.unreadCount > 0 && (
                               <Badge className="text-xs h-4 px-1.5">
-                                {conv.unreadCount}
-                              </Badge>
-                            )}
+                                  {conv.unreadCount}
+                                </Badge>
+                              )}
+                            </div>
                           </div>
-                        </div>
                         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                           <p className="truncate flex-1">
                             {conv.lastMessage?.direction === 'outbound' ? 'You: ' : ''}
                             {conv.lastMessage?.body || 'No messages'}
-                          </p>
+                            </p>
                           <span className="ml-1 shrink-0">{formatMessageTime(conv.lastMessageAt)}</span>
                         </div>
                       </div>
@@ -404,23 +404,23 @@ export default function InboxPage() {
               <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
                 <div className="flex items-center gap-2">
                   <Avatar fallback={selectedConversation.contact.fullName || selectedConversation.contact.phone} size="md" />
-                  <div>
+                    <div>
                     <h3 className="text-sm font-semibold tracking-tight">
                       {selectedConversation.contact.fullName || selectedConversation.contact.phone}
                     </h3>
                     <p className="text-xs text-slate-500 dark:text-slate-400">
-                      {selectedConversation.contact.phone}
+                            {selectedConversation.contact.phone}
                     </p>
+                    </div>
                   </div>
-                </div>
-                {selectedLead && (
+                  {selectedLead && (
                   <Link href={`/leads/${selectedLead.id}`} target="_blank">
                     <Button variant="outline" size="sm" className="gap-1.5 text-xs">
                       <Eye className="h-3.5 w-3.5" />
-                      View Lead
-                    </Button>
-                  </Link>
-                )}
+                        View Lead
+                      </Button>
+                    </Link>
+                  )}
               </div>
 
               {/* Error/Success Messages */}
@@ -453,7 +453,7 @@ export default function InboxPage() {
                     </div>
                     <div className="flex justify-end">
                       <Skeleton className="h-10 w-2/3 rounded-lg" />
-                    </div>
+                  </div>
                   </div>
                 ) : (
                   messages.map((msg) => {

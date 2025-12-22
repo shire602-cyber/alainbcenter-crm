@@ -334,13 +334,23 @@ export function IntegrationSettings({
   // Compute webhook URL for WhatsApp
   // On Vercel, window.location.origin will automatically have the correct Vercel URL
   // This works for both preview and production deployments
-  const webhookUrl = typeof window !== 'undefined'
-    ? `${window.location.origin}/api/webhooks/whatsapp`
-    : process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
-    : process.env.VERCEL_URL
-    ? `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
-    : 'https://your-app.vercel.app/api/webhooks/whatsapp'
+  const getWebhookUrl = () => {
+    if (typeof window !== 'undefined') {
+      // Client-side: use current origin (guaranteed to be correct on Vercel)
+      const origin = window.location.origin
+      return `${origin}/api/webhooks/whatsapp`
+    }
+    // Server-side fallbacks
+    if (process.env.NEXT_PUBLIC_APP_URL) {
+      return `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
+    }
+    if (process.env.VERCEL_URL) {
+      return `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
+    }
+    return 'https://your-app.vercel.app/api/webhooks/whatsapp'
+  }
+  
+  const webhookUrl = getWebhookUrl()
 
   return (
     <div className="space-y-4">
@@ -516,7 +526,9 @@ export function IntegrationSettings({
                       <Input
                         value={webhookUrl}
                         readOnly
-                        className="bg-white dark:bg-gray-800 font-mono text-xs"
+                        className="bg-white dark:bg-gray-800 font-mono text-xs overflow-x-auto"
+                        style={{ minWidth: '300px' }}
+                        title={webhookUrl}
                       />
                       <Button
                         variant="outline"
@@ -529,6 +541,9 @@ export function IntegrationSettings({
                         Copy
                       </Button>
                     </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all font-mono">
+                      {webhookUrl}
+                    </p>
                   </div>
                   {whatsappConfig.webhookVerifyToken && (
                     <div>
@@ -539,7 +554,9 @@ export function IntegrationSettings({
                         <Input
                           value={whatsappConfig.webhookVerifyToken}
                           readOnly
-                          className="bg-white dark:bg-gray-800 font-mono text-xs"
+                          className="bg-white dark:bg-gray-800 font-mono text-xs overflow-x-auto"
+                          style={{ minWidth: '300px' }}
+                          title={whatsappConfig.webhookVerifyToken}
                         />
                         <Button
                           variant="outline"
@@ -552,6 +569,9 @@ export function IntegrationSettings({
                           Copy
                         </Button>
                       </div>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all font-mono">
+                        {whatsappConfig.webhookVerifyToken}
+                      </p>
                     </div>
                   )}
                   <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
@@ -563,17 +583,6 @@ export function IntegrationSettings({
                         </p>
                         <p className="text-xs text-green-700 dark:text-green-300">
                           Your webhook URL is publicly accessible and ready for Meta webhook verification.
-                        </p>
-                      </div>
-                    )}
-                    {/* Localhost Warning (only if not on Vercel) */}
-                    {typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')) && (
-                      <div className="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
-                        <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
-                          ⚠️ Local Development Detected
-                        </p>
-                        <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                          Meta cannot reach localhost URLs. Deploy to Vercel for production webhook support.
                         </p>
                       </div>
                     )}
