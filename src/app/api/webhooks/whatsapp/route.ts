@@ -33,61 +33,49 @@ export async function GET(req: NextRequest) {
       queryParams: Object.fromEntries(req.nextUrl.searchParams),
     })
 
-    // First try to get verify token from Integration model
-    let verifyToken: string | null = null
-    let integrationData: any = null
+    // PRIORITY: Environment variable (most reliable for production)
+    let verifyToken: string | null = process.env.WHATSAPP_VERIFY_TOKEN || null
     
-    try {
-      const integration = await prisma.integration.findUnique({
-        where: { name: 'whatsapp' },
+    if (verifyToken) {
+      console.log('✅ Found verify token in environment variable WHATSAPP_VERIFY_TOKEN', {
+        tokenLength: verifyToken.length,
+        tokenPreview: `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}`,
       })
+    } else {
+      // Fallback to Integration model (if env var not set)
+      let integrationData: any = null
+      
+      try {
+        const integration = await prisma.integration.findUnique({
+          where: { name: 'whatsapp' },
+        })
 
-      integrationData = integration
+        integrationData = integration
 
-      if (integration?.config) {
-        try {
-          const config = typeof integration.config === 'string' 
-            ? JSON.parse(integration.config) 
-            : integration.config
-          verifyToken = config.webhookVerifyToken || null
-          
-          console.log('✅ Found verify token in integration config', {
-            tokenLength: verifyToken?.length,
-            tokenPreview: verifyToken ? `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}` : null,
-            configKeys: Object.keys(config || {}),
-          })
-        } catch (e: any) {
-          console.error('❌ Failed to parse integration config:', {
-            error: e.message,
-            configType: typeof integration.config,
-            configPreview: typeof integration.config === 'string' 
-              ? integration.config.substring(0, 100) 
-              : 'not a string',
-          })
+        if (integration?.config) {
+          try {
+            const config = typeof integration.config === 'string' 
+              ? JSON.parse(integration.config) 
+              : integration.config
+            verifyToken = config.webhookVerifyToken || null
+            
+            if (verifyToken) {
+              console.log('✅ Found verify token in integration config (fallback)', {
+                tokenLength: verifyToken.length,
+                tokenPreview: `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}`,
+              })
+            }
+          } catch (e: any) {
+            console.error('❌ Failed to parse integration config:', {
+              error: e.message,
+            })
+          }
         }
-      } else {
-        console.warn('⚠️ Integration exists but has no config', {
-          integrationId: integration?.id,
-          integrationName: integration?.name,
+      } catch (e: any) {
+        console.warn('⚠️ Could not fetch integration from DB:', {
+          error: e.message,
+          errorCode: e.code,
         })
-      }
-    } catch (e: any) {
-      console.warn('⚠️ Could not fetch integration from DB:', {
-        error: e.message,
-        errorCode: e.code,
-      })
-    }
-
-    // Fallback to environment variable
-    if (!verifyToken) {
-      verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || null
-      if (verifyToken) {
-        console.log('✅ Found verify token in environment variable', {
-          tokenLength: verifyToken.length,
-          tokenPreview: `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}`,
-        })
-      } else {
-        console.warn('⚠️ No verify token found in environment variable WHATSAPP_VERIFY_TOKEN')
       }
     }
 
