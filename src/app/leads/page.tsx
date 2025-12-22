@@ -1,6 +1,6 @@
 'use client'
 
-import { useEffect, useState, FormEvent, useMemo, useCallback, memo } from 'react'
+import { useEffect, useState, FormEvent, useMemo, useCallback, memo, Suspense } from 'react'
 import Link from 'next/link'
 import { useSearchParams, useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
@@ -82,7 +82,7 @@ type Lead = {
 
 type FilterType = 'all' | 'followups_today' | 'expiring_90' | 'overdue' | 'hot_only'
 
-export default function LeadsPage() {
+function LeadsPageContent() {
   const searchParams = useSearchParams()
   const router = useRouter()
   const [allLeads, setAllLeads] = useState<Lead[]>([])
@@ -559,5 +559,27 @@ export default function LeadsPage() {
         </Dialog>
       </div>
     </MainLayout>
+  )
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={
+      <MainLayout>
+        <div className="space-y-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+            {[1, 2, 3, 4, 5, 6].map((i) => (
+              <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                <Skeleton className="h-4 w-24 mb-3" />
+                <Skeleton className="h-3 w-full mb-2" />
+                <Skeleton className="h-3 w-2/3" />
+              </div>
+            ))}
+          </div>
+        </div>
+      </MainLayout>
+    }>
+      <LeadsPageContent />
+    </Suspense>
   )
 }
