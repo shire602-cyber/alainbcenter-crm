@@ -1,3 +1,5 @@
+const path = require('path');
+
 /** @type {import('next').NextConfig} */
 const nextConfig = {
   // App Router is default in Next.js 13+ (using src/app directory)
@@ -5,6 +7,12 @@ const nextConfig = {
   
   // Exclude script files from build (they're standalone scripts, not part of the app)
   webpack: (config, { isServer }) => {
+    // Configure path aliases for webpack
+    config.resolve.alias = {
+      ...config.resolve.alias,
+      '@': path.resolve(__dirname, './src'),
+    }
+    
     if (!isServer) {
       // Client-side: prevent Buffer polyfill
       config.resolve.fallback = {
