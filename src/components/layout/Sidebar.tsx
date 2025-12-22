@@ -82,30 +82,30 @@ export function Sidebar() {
         <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col transition-all duration-300">
           <div className="flex grow flex-col gap-y-2 overflow-y-auto border-r border-border bg-card pb-4 px-4">
             <div className="flex h-16 shrink-0 items-center justify-between">
-              <div className="flex items-center gap-2 flex-1">
-                <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                  <FileText className="h-5 w-5 text-white" />
-                </div>
-                <div>
+            <div className="flex items-center gap-2 flex-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
+                <FileText className="h-5 w-5 text-white" />
+              </div>
+              <div>
                   <h1 className="text-base font-semibold tracking-tight text-foreground">Alain CRM</h1>
                   <p className="text-xs text-muted-foreground font-normal">Business Center</p>
                 </div>
               </div>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={toggle}
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={toggle}
                 className="h-8 w-8 p-0 hover:bg-secondary"
                 title="Close sidebar"
                 aria-label="Close sidebar"
               >
-                <ChevronLeft className="h-4 w-4" />
-              </Button>
-            </div>
-            <nav className="flex flex-1 flex-col">
-              <ul role="list" className="flex flex-1 flex-col gap-y-1">
-                {/* Main Navigation */}
-                {mainNavigation.map((item) => {
+              <ChevronLeft className="h-4 w-4" />
+          </Button>
+        </div>
+          <nav className="flex flex-1 flex-col">
+            <ul role="list" className="flex flex-1 flex-col gap-y-1">
+              {/* Main Navigation */}
+              {mainNavigation.map((item) => {
                 // Filter based on adminOnly
                 if (item.adminOnly && userRole?.toUpperCase() !== 'ADMIN' && userRole?.toUpperCase() !== 'MANAGER') {
                   return null

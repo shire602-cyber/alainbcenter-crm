@@ -125,8 +125,14 @@ export async function POST(req: NextRequest) {
     // Test 2: Webhook reachability (best effort - don't fail if this fails)
     if (webhookUrl && webhookVerifyToken) {
       try {
-        // Only test if it's not localhost (Meta can't reach localhost anyway)
-        if (!webhookUrl.includes('localhost') && !webhookUrl.includes('127.0.0.1')) {
+        // Check if URL is publicly accessible (not localhost)
+        const isPublic = webhookUrl && (
+          webhookUrl.includes('vercel.app') ||
+          webhookUrl.includes('vercel.com') ||
+          webhookUrl.startsWith('https://') && !webhookUrl.includes('localhost') && !webhookUrl.includes('127.0.0.1')
+        )
+
+        if (isPublic) {
           const testChallenge = `test-${Date.now()}`
           const webhookTestUrl = `${webhookUrl}?hub.mode=subscribe&hub.verify_token=${encodeURIComponent(webhookVerifyToken)}&hub.challenge=${testChallenge}`
 
@@ -154,15 +160,21 @@ export async function POST(req: NextRequest) {
               status: webhookResponse.status,
               response: webhookBody.substring(0, 200),
               reason: `Webhook returned status ${webhookResponse.status} or incorrect challenge response`,
-              hint: 'Verify the webhook URL is correct and publicly accessible (use ngrok for local development).',
+              hint: 'Verify the webhook URL is correct and publicly accessible. If you\'re on Vercel, make sure you\'re using your production deployment URL.',
             }
           }
         } else {
+          // Localhost or non-public URL detected
+          const isVercel = process.env.VERCEL || process.env.VERCEL_URL
           results.webhook = {
             ok: false,
             url: webhookUrl,
-            reason: 'Localhost URL cannot be tested externally. Use ngrok for local development.',
-            hint: 'Replace localhost with your ngrok HTTPS URL in the webhook configuration.',
+            reason: isVercel 
+              ? 'Webhook URL appears to be localhost. Update it to your Vercel deployment URL.'
+              : 'Localhost URL cannot be tested externally. Deploy to Vercel or use a publicly accessible URL.',
+            hint: isVercel
+              ? `Your app is deployed on Vercel. Use your Vercel deployment URL (e.g., https://your-app.vercel.app/api/webhooks/whatsapp)`
+              : 'Replace localhost with a publicly accessible URL (like your Vercel deployment URL).',
           }
         }
       } catch (error: any) {
@@ -171,7 +183,9 @@ export async function POST(req: NextRequest) {
           ok: false,
           url: webhookUrl,
           reason: error.message || 'Webhook endpoint is not reachable',
-          hint: 'Verify the webhook URL is publicly accessible and ngrok is running (if using localhost).',
+          hint: process.env.VERCEL || process.env.VERCEL_URL
+            ? 'Verify the webhook URL points to your Vercel deployment and is publicly accessible.'
+            : 'Verify the webhook URL is publicly accessible and points to your deployment.',
         }
       }
     } else {

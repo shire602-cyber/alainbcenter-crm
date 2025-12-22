@@ -251,7 +251,7 @@ export default async function DashboardPage() {
 
     // Calculate trends
     const newLeadsTrend = calculateTrend(leadsLast7DaysCount, leadsPrevious7DaysCount)
-    
+
     // Calculate projected renewal revenue
     const projectedRenewalRevenue = expiringLeadsData.reduce((sum: number, lead: any) => {
       const value = parseFloat(lead.estimatedRenewalValue || '0')
@@ -361,71 +361,71 @@ export default async function DashboardPage() {
               colSpan={2}
               action={<Badge variant="secondary" className="text-xs">{myDayItems.length} items</Badge>}
             >
-              {myDayItems.length === 0 ? (
+                  {myDayItems.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-8 text-center">
                   <CheckCircle2 className="h-8 w-8 text-green-600 mb-2" />
                   <p className="text-xs font-medium text-slate-900 dark:text-slate-100 mb-0.5">Nothing urgent</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">Great work!</p>
-                </div>
-              ) : (
+                    </div>
+                  ) : (
                 <div className="space-y-1">
-                  {myDayItems.map((item, idx) => (
-                    <Link
-                      key={idx}
-                      href={item.lead?.id ? `/leads/${item.lead.id}` : '#'}
+                      {myDayItems.map((item, idx) => (
+                        <Link
+                          key={idx}
+                          href={item.lead?.id ? `/leads/${item.lead.id}` : '#'}
                       className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
-                    >
+                        >
                       <div className="flex items-center gap-2 flex-1 min-w-0">
-                        <div className={cn(
+                            <div className={cn(
                           "flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center",
-                          item.type === 'followup' && "bg-blue-100 dark:bg-blue-900/20",
-                          item.type === 'expiry' && "bg-orange-100 dark:bg-orange-900/20",
-                          item.type === 'task' && "bg-red-100 dark:bg-red-900/20",
-                        )}>
+                              item.type === 'followup' && "bg-blue-100 dark:bg-blue-900/20",
+                              item.type === 'expiry' && "bg-orange-100 dark:bg-orange-900/20",
+                              item.type === 'task' && "bg-red-100 dark:bg-red-900/20",
+                            )}>
                           {item.type === 'followup' && <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
                           {item.type === 'expiry' && <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
                           {item.type === 'task' && <Clock className="h-4 w-4 text-red-600 dark:text-red-400" />}
-                        </div>
-                        <div className="flex-1 min-w-0">
+                            </div>
+                            <div className="flex-1 min-w-0">
                           <p className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
-                            {item.title}
-                          </p>
+                                {item.title}
+                              </p>
                           <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            {item.subtitle} · {item.action}
-                          </p>
-                        </div>
-                      </div>
+                                {item.subtitle} · {item.action}
+                              </p>
+                            </div>
+                          </div>
                       <div className="flex items-center gap-2 flex-shrink-0">
                         <span className="text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                          {item.date ? formatDate(item.date) : '—'}
+                              {item.date ? formatDate(item.date) : '—'}
                         </span>
-                        {item.lead?.contact?.phone && (
+                            {item.lead?.contact?.phone && (
                           <div className="flex gap-0.5">
-                            <a
-                              href={`https://wa.me/${item.lead.contact.phone.replace(/[^0-9]/g, '')}`}
-                              target="_blank"
-                              rel="noopener noreferrer"
-                              onClick={(e) => e.stopPropagation()}
+                                <a
+                                  href={`https://wa.me/${item.lead.contact.phone.replace(/[^0-9]/g, '')}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  onClick={(e) => e.stopPropagation()}
                               className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                              title="WhatsApp"
-                            >
+                                  title="WhatsApp"
+                                >
                               <MessageSquare className="h-3.5 w-3.5 text-green-600" />
-                            </a>
-                            <a
-                              href={`tel:${item.lead.contact.phone}`}
-                              onClick={(e) => e.stopPropagation()}
+                                  </a>
+                                <a
+                                  href={`tel:${item.lead.contact.phone}`}
+                                  onClick={(e) => e.stopPropagation()}
                               className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                              title="Call"
-                            >
+                                  title="Call"
+                                >
                               <Phone className="h-3.5 w-3.5 text-blue-600" />
-                            </a>
-                          </div>
+                                </a>
+                            </div>
                         )}
-                      </div>
-                    </Link>
-                  ))}
-                </div>
-              )}
+                          </div>
+                        </Link>
+                      ))}
+                    </div>
+                  )}
             </BentoCard>
 
             {/* Renewals - 1 column */}
@@ -434,56 +434,56 @@ export default async function DashboardPage() {
               action={
                 <Link href="/renewals" className="text-xs text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
                   View all →
-                </Link>
+                    </Link>
               }
             >
-              {expiringLeadsData.length === 0 ? (
+                  {expiringLeadsData.length === 0 ? (
                 <div className="flex flex-col items-center justify-center py-6 text-center">
                   <CheckCircle2 className="h-6 w-6 text-blue-600 mb-1.5" />
                   <p className="text-xs font-medium text-slate-900 dark:text-slate-100 mb-0.5">No renewals</p>
                   <p className="text-xs text-slate-500 dark:text-slate-400">All clear!</p>
-                </div>
-              ) : (
+                    </div>
+                  ) : (
                 <div className="space-y-1">
                   {expiringLeadsData.slice(0, 5).map((lead: any) => {
-                    const expiry = lead.expiryItems?.[0]
-                    if (!expiry) return null
-                    const expiryDateObj = expiry.expiryDate instanceof Date ? expiry.expiryDate : (expiry.expiryDate ? parseISO(expiry.expiryDate.toString()) : null)
-                    const daysRemaining = expiryDateObj ? differenceInDays(expiryDateObj, today) : 999
-                    const isUrgent = daysRemaining <= 7
-                    return (
-                      <Link
-                        key={lead.id}
-                        href={`/leads/${lead.id}`}
+                        const expiry = lead.expiryItems?.[0]
+                        if (!expiry) return null
+                        const expiryDateObj = expiry.expiryDate instanceof Date ? expiry.expiryDate : (expiry.expiryDate ? parseISO(expiry.expiryDate.toString()) : null)
+                        const daysRemaining = expiryDateObj ? differenceInDays(expiryDateObj, today) : 999
+                        const isUrgent = daysRemaining <= 7
+                        return (
+                          <Link
+                            key={lead.id}
+                            href={`/leads/${lead.id}`}
                         className="block p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
-                      >
-                        <div className="flex items-start justify-between gap-2 mb-1">
-                          <p className="text-xs font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors truncate flex-1">
-                            {lead.contact?.fullName || 'Unknown'}
-                          </p>
-                          <Badge 
-                            variant={isUrgent ? 'destructive' : 'outline'} 
-                            className="text-xs flex-shrink-0"
                           >
+                            <div className="flex items-start justify-between gap-2 mb-1">
+                          <p className="text-xs font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors truncate flex-1">
+                              {lead.contact?.fullName || 'Unknown'}
+                              </p>
+                              <Badge 
+                                variant={isUrgent ? 'destructive' : 'outline'} 
+                                className="text-xs flex-shrink-0"
+                              >
                             {formatDaysRemaining(expiry.expiryDate instanceof Date ? expiry.expiryDate : expiry.expiryDate.toString())}
-                          </Badge>
-                        </div>
+                              </Badge>
+                            </div>
                         <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                          {expiry.type?.replace(/_/g, ' ') || 'Expiry'}
-                        </p>
-                        {lead.estimatedRenewalValue && (
+                            {expiry.type?.replace(/_/g, ' ') || 'Expiry'}
+                            </p>
+                            {lead.estimatedRenewalValue && (
                           <div className="flex items-center gap-1 mt-1">
-                            <DollarSign className="h-3 w-3 text-green-600" />
-                            <span className="text-xs font-medium text-green-600">
-                              AED {parseFloat(lead.estimatedRenewalValue).toLocaleString()}
-                            </span>
-                          </div>
-                        )}
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
+                                <DollarSign className="h-3 w-3 text-green-600" />
+                                <span className="text-xs font-medium text-green-600">
+                                  AED {parseFloat(lead.estimatedRenewalValue).toLocaleString()}
+                                </span>
+                              </div>
+                            )}
+                          </Link>
+                        )
+                      })}
+                    </div>
+                  )}
             </BentoCard>
 
             {/* Pipeline - 2 columns */}
@@ -528,29 +528,29 @@ export default async function DashboardPage() {
             <BentoCard title="Lead Quality">
               <div className="space-y-1.5">
                 <div className="flex items-center justify-between p-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20">
-                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                     <Flame className="h-3.5 w-3.5 text-red-600" />
                     <span className="text-xs font-medium text-slate-900 dark:text-slate-100">HOT</span>
                   </div>
                   <Badge variant="destructive" className="text-xs font-semibold">{hotLeads}</Badge>
                 </div>
                 <div className="flex items-center justify-between p-2 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/20">
-                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                     <Zap className="h-3.5 w-3.5 text-orange-600" />
                     <span className="text-xs font-medium text-slate-900 dark:text-slate-100">WARM</span>
                   </div>
                   <Badge className="bg-orange-500 text-white text-xs font-semibold">{warmLeads}</Badge>
                 </div>
                 <div className="flex items-center justify-between p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                  <div className="flex items-center gap-2">
+                    <div className="flex items-center gap-2">
                     <Snowflake className="h-3.5 w-3.5 text-slate-500" />
                     <span className="text-xs font-medium text-slate-900 dark:text-slate-100">COLD</span>
-                  </div>
+                    </div>
                   <Badge variant="secondary" className="text-xs font-semibold">
-                    {Math.max(0, totalLeadsCount - hotLeads - warmLeads)}
-                  </Badge>
-                </div>
-              </div>
+                      {Math.max(0, totalLeadsCount - hotLeads - warmLeads)}
+                    </Badge>
+                  </div>
+            </div>
             </BentoCard>
           </div>
         </div>
@@ -564,8 +564,8 @@ export default async function DashboardPage() {
         <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
           <h2 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">Error loading dashboard</h2>
           <p className="text-xs text-red-700 dark:text-red-300">
-            {error?.message || 'Unknown error occurred'}
-          </p>
+              {error?.message || 'Unknown error occurred'}
+            </p>
         </div>
       </MainLayout>
     )

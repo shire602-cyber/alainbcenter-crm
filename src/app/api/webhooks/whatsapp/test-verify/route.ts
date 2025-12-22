@@ -36,29 +36,40 @@ export async function GET(req: NextRequest) {
       verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || null
     }
 
-    // Check if user wants full token (for debugging)
-    const showFull = req.nextUrl.searchParams.get('full') === 'true'
+    // Get Vercel URL from environment or use the request host
+    const getWebhookUrl = () => {
+      if (process.env.VERCEL_URL) {
+        return `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
+      }
+      if (process.env.NEXT_PUBLIC_APP_URL) {
+        return `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
+      }
+      // Fallback to current request host
+      const host = req.headers.get('host')
+      if (host) {
+        return `https://${host}/api/webhooks/whatsapp`
+      }
+      return 'https://your-app.vercel.app/api/webhooks/whatsapp'
+    }
 
     return NextResponse.json({
       success: true,
       verifyTokenConfigured: !!verifyToken,
-      verifyToken: showFull && verifyToken ? verifyToken : null, // Show full token only if requested
-      verifyTokenPreview: verifyToken ? `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}` : null,
+      verifyToken: verifyToken || null, // Always show the full token
       verifyTokenLength: verifyToken?.length || 0,
       integrationExists: !!integration,
       integrationEnabled: integration?.isEnabled || false,
       source: verifyToken ? (integration?.config ? 'integration_config' : 'env_var') : 'none',
-      webhookUrl: process.env.VERCEL_URL 
-        ? `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
-        : 'https://your-app.vercel.app/api/webhooks/whatsapp',
+      webhookUrl: getWebhookUrl(),
       instructions: {
-        step1: showFull 
-          ? 'Copy the verify token above and paste it in Meta'
-          : 'Add ?full=true to the URL to see the full verify token',
-        step2: 'Paste it in Meta Business Manager → WhatsApp → Configuration → Webhooks → Verify Token',
-        step3: 'Use your Vercel deployment URL + /api/webhooks/whatsapp as Callback URL',
-        step4: 'Click "Verify and Save"',
-        troubleshooting: 'If verification fails, make sure the token in Meta exactly matches the token shown here',
+        step1: verifyToken
+          ? `Copy this EXACT token and paste it in Meta: ${verifyToken}`
+          : 'No verify token configured. Set it in /admin/integrations or via WHATSAPP_VERIFY_TOKEN env var',
+        step2: 'Go to Meta Business Manager → WhatsApp → Configuration → Webhooks',
+        step3: `Set Callback URL to: ${getWebhookUrl()}`,
+        step4: `Set Verify Token to: ${verifyToken || '(not configured)'}`,
+        step5: 'Click "Verify and Save"',
+        troubleshooting: 'If verification fails, ensure the token in Meta exactly matches the "verifyToken" field above',
       },
     })
   } catch (error: any) {
