@@ -5,6 +5,9 @@ import { normalizeInboundPhone, findContactByPhone } from '@/lib/phone-inbound'
 import { prepareInboundContext, buildWhatsAppExternalId } from '@/lib/whatsappInbound'
 import { handleInboundMessage } from '@/lib/inbound'
 
+// Ensure this runs in Node.js runtime (not Edge) for Prisma compatibility
+export const runtime = 'nodejs'
+
 /**
  * GET /api/webhooks/whatsapp
  * Webhook verification (Meta requires this for webhook setup)
@@ -90,12 +93,28 @@ export async function GET(req: NextRequest) {
 
     if (!verifyToken) {
       console.error('❌ WhatsApp verify token not configured in integration settings or environment variables')
-      return NextResponse.json({ error: 'Webhook not configured' }, { status: 500 })
+      return NextResponse.json({ 
+        error: 'Webhook not configured',
+        hint: 'Configure verify token in /admin/integrations or set WHATSAPP_VERIFY_TOKEN environment variable'
+      }, { status: 500 })
     }
 
-    if (!mode || !token || !challenge) {
+    // Meta requires all three parameters, but let's be flexible
+    if (!mode || !token) {
       console.warn('⚠️ Missing required webhook parameters:', { mode, token: !!token, challenge: !!challenge })
-      return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
+      return NextResponse.json({ 
+        error: 'Missing required parameters',
+        hint: 'Meta requires hub.mode and hub.verify_token parameters'
+      }, { status: 400 })
+    }
+
+    // Challenge is required for verification, but we can log if missing
+    if (!challenge) {
+      console.warn('⚠️ Challenge parameter missing - cannot complete verification')
+      return NextResponse.json({ 
+        error: 'Missing challenge parameter',
+        hint: 'Meta requires hub.challenge parameter for webhook verification'
+      }, { status: 400 })
     }
 
     // Trim whitespace from tokens (in case of copy-paste issues)
