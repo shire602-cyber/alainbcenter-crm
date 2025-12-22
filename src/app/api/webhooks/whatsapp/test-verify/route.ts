@@ -31,9 +31,12 @@ export async function GET(req: NextRequest) {
       console.error('Integration fetch error:', e)
     }
 
-    // Fallback to env var
+    // PRIORITY: Environment variable first (most reliable)
     if (!verifyToken) {
       verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || null
+      if (verifyToken) {
+        console.log('✅ Using verify token from environment variable WHATSAPP_VERIFY_TOKEN')
+      }
     }
 
     // Get Vercel URL from environment or use the request host
