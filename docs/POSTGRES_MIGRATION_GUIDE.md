@@ -110,3 +110,4 @@ After running migrations locally, Vercel will use `prisma migrate deploy` during
 
 **Recommended:** Use Option 1 for proper migration tracking! 🚀
 
+

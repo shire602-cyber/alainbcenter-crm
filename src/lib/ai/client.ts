@@ -72,3 +72,4 @@ export async function isAIConfigured(): Promise<boolean> {
 export async function isOpenAIConfigured(): Promise<boolean> {
   return isAIConfigured()
 }
+

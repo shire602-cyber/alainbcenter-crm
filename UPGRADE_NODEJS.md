@@ -58,3 +58,4 @@ Once Node.js is upgraded:
 The app **will not run** with Node.js 18.16.0 - Next.js checks the version and blocks execution if it's too old. This is a hard requirement for security and compatibility reasons.
 
 
+

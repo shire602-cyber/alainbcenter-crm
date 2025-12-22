@@ -217,3 +217,4 @@ export async function recalcLeadRenewalScore(leadId: number): Promise<void> {
 
   console.log(`✅ Updated renewal score for lead ${leadId}: ${score.probability}%`)
 }
+

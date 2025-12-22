@@ -36,19 +36,29 @@ export async function GET(req: NextRequest) {
       verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || null
     }
 
+    // Check if user wants full token (for debugging)
+    const showFull = req.nextUrl.searchParams.get('full') === 'true'
+
     return NextResponse.json({
       success: true,
       verifyTokenConfigured: !!verifyToken,
+      verifyToken: showFull && verifyToken ? verifyToken : null, // Show full token only if requested
       verifyTokenPreview: verifyToken ? `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}` : null,
       verifyTokenLength: verifyToken?.length || 0,
       integrationExists: !!integration,
       integrationEnabled: integration?.isEnabled || false,
       source: verifyToken ? (integration?.config ? 'integration_config' : 'env_var') : 'none',
+      webhookUrl: process.env.VERCEL_URL 
+        ? `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
+        : 'https://your-app.vercel.app/api/webhooks/whatsapp',
       instructions: {
-        step1: 'Copy the verify token shown above',
+        step1: showFull 
+          ? 'Copy the verify token above and paste it in Meta'
+          : 'Add ?full=true to the URL to see the full verify token',
         step2: 'Paste it in Meta Business Manager → WhatsApp → Configuration → Webhooks → Verify Token',
-        step3: 'Use your ngrok HTTPS URL + /api/webhooks/whatsapp as Callback URL',
+        step3: 'Use your Vercel deployment URL + /api/webhooks/whatsapp as Callback URL',
         step4: 'Click "Verify and Save"',
+        troubleshooting: 'If verification fails, make sure the token in Meta exactly matches the token shown here',
       },
     })
   } catch (error: any) {
@@ -61,6 +71,7 @@ export async function GET(req: NextRequest) {
     )
   }
 }
+
 
 
 

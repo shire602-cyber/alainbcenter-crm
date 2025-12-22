@@ -206,3 +206,4 @@ Fill this out as you complete manual tests:
 ---
 
 **Use this guide alongside automated test results for complete Phase 4 coverage.**
+
