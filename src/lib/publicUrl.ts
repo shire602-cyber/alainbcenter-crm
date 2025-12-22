@@ -1,36 +1,79 @@
 // Helper to get public URL for webhooks
-// Supports APP_PUBLIC_URL env var or falls back to request origin
+// Supports Vercel deployment detection and multiple fallback options
+
+/**
+ * Check if we're running on Vercel
+ */
+export function isVercel(): boolean {
+  return !!(
+    process.env.VERCEL ||
+    process.env.VERCEL_URL ||
+    process.env.NEXT_PUBLIC_VERCEL_URL
+  )
+}
+
+/**
+ * Check if a URL is publicly accessible (not localhost)
+ */
+export function isPublicUrl(url: string): boolean {
+  if (!url) return false
+  const lowerUrl = url.toLowerCase()
+  return !(
+    lowerUrl.includes('localhost') ||
+    lowerUrl.includes('127.0.0.1') ||
+    lowerUrl.includes('0.0.0.0') ||
+    lowerUrl.startsWith('http://localhost') ||
+    lowerUrl.startsWith('http://127.0.0.1')
+  )
+}
 
 /**
  * Get the public URL for webhooks
  * Priority:
- * 1. APP_PUBLIC_URL environment variable
- * 2. Request origin (if available)
- * 3. Default localhost (dev only)
+ * 1. VERCEL_URL (auto-detected on Vercel)
+ * 2. APP_PUBLIC_URL environment variable
+ * 3. NEXT_PUBLIC_APP_URL environment variable
+ * 4. Request origin (if available and not localhost)
+ * 5. Default localhost (dev only)
  */
 export function getPublicUrl(request?: Request): string {
-  // Check environment variable first
-  if (process.env.APP_PUBLIC_URL) {
-    return process.env.APP_PUBLIC_URL.replace(/\/$/, '') // Remove trailing slash
+  // Vercel deployment (highest priority for production)
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`
   }
 
-  // Try to get from request
+  // Check environment variable
+  if (process.env.APP_PUBLIC_URL) {
+    const url = process.env.APP_PUBLIC_URL.replace(/\/$/, '')
+    // If it's a public URL (not localhost), use it
+    if (isPublicUrl(url)) {
+      return url
+    }
+  }
+
+  // Try to get from request (if it's a public URL)
   if (request) {
     const url = new URL(request.url)
-    return `${url.protocol}//${url.host}`
+    const fullUrl = `${url.protocol}//${url.host}`
+    if (isPublicUrl(fullUrl)) {
+      return fullUrl
+    }
   }
 
   // Fallback for server-side without request
   if (process.env.NEXT_PUBLIC_APP_URL) {
-    return process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+    const url = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+    if (isPublicUrl(url)) {
+      return url
+    }
   }
 
-  // Last resort: localhost (dev only)
-  if (process.env.NODE_ENV === 'development') {
+  // Last resort: localhost (dev only) - only if we're not on Vercel
+  if (process.env.NODE_ENV === 'development' && !isVercel()) {
     return 'http://localhost:3000'
   }
 
-  // Production fallback (should not happen)
+  // Production fallback (should not happen if VERCEL_URL is set)
   return 'https://your-domain.com'
 }
 
@@ -41,6 +84,7 @@ export function getWebhookUrl(endpoint: string, request?: Request): string {
   const baseUrl = getPublicUrl(request)
   return `${baseUrl}${endpoint.startsWith('/') ? endpoint : `/${endpoint}`}`
 }
+
 
 
 

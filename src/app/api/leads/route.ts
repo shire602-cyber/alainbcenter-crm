@@ -217,56 +217,56 @@ export async function GET(req: NextRequest) {
     // Optimized: Use select to only fetch needed fields, limit nested data
     const [leads, total] = await Promise.all([
       prisma.lead.findMany({
-        where: whereClause,
-        select: {
-          id: true,
-          leadType: true,
-          status: true,
-          pipelineStage: true,
-          stage: true,
-          aiScore: true,
-          expiryDate: true,
-          nextFollowUpAt: true,
-          assignedUserId: true,
-          createdAt: true,
-          contact: {
-            select: {
-              id: true,
-              fullName: true,
-              phone: true,
-              email: true,
-              source: true,
-            }
-          },
-          assignedUser: {
-            select: { id: true, name: true, email: true }
-          },
-          // Only get latest communication log (optimized)
-          communicationLogs: {
-            orderBy: { createdAt: 'desc' },
-            take: 1,
-            select: {
-              id: true,
-              channel: true,
-              direction: true,
-              createdAt: true,
-            }
-          },
-          // Only get nearest 3 expiry items (optimized)
-          expiryItems: {
-            orderBy: { expiryDate: 'asc' },
-            take: 3,
-            select: {
-              id: true,
-              type: true,
-              expiryDate: true,
-              renewalStatus: true,
-            }
-          },
-          renewalProbability: true,
-          estimatedRenewalValue: true,
+      where: whereClause,
+      select: {
+        id: true,
+        leadType: true,
+        status: true,
+        pipelineStage: true,
+        stage: true,
+        aiScore: true,
+        expiryDate: true,
+        nextFollowUpAt: true,
+        assignedUserId: true,
+        createdAt: true,
+        contact: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+            source: true,
+          }
         },
-        orderBy: { createdAt: 'desc' },
+        assignedUser: {
+          select: { id: true, name: true, email: true }
+        },
+          // Only get latest communication log (optimized)
+        communicationLogs: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+          select: {
+            id: true,
+            channel: true,
+            direction: true,
+            createdAt: true,
+          }
+        },
+          // Only get nearest 3 expiry items (optimized)
+        expiryItems: {
+          orderBy: { expiryDate: 'asc' },
+          take: 3,
+          select: {
+            id: true,
+            type: true,
+            expiryDate: true,
+            renewalStatus: true,
+          }
+        },
+        renewalProbability: true,
+        estimatedRenewalValue: true,
+      },
+      orderBy: { createdAt: 'desc' },
         skip,
         take: Math.min(limit, 100), // Max 100 per page
       }),

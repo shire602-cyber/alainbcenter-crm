@@ -332,11 +332,15 @@ export function IntegrationSettings({
   const canEdit = !isEnabled || true // Always allow editing
 
   // Compute webhook URL for WhatsApp
-  const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
-    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
-    : typeof window !== 'undefined'
+  // On Vercel, window.location.origin will automatically have the correct Vercel URL
+  // This works for both preview and production deployments
+  const webhookUrl = typeof window !== 'undefined'
     ? `${window.location.origin}/api/webhooks/whatsapp`
-    : 'https://your-domain.com/api/webhooks/whatsapp'
+    : process.env.NEXT_PUBLIC_APP_URL
+    ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
+    : process.env.VERCEL_URL
+    ? `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
+    : 'https://your-app.vercel.app/api/webhooks/whatsapp'
 
   return (
     <div className="space-y-4">
@@ -551,35 +555,43 @@ export function IntegrationSettings({
                     </div>
                   )}
                   <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
-                    <div className="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
-                      <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
-                        ⚠️ Important for Local Development:
-                      </p>
-                      <p className="text-xs text-yellow-700 dark:text-yellow-300">
-                        If you see "localhost:3000" above, Meta cannot access it! You need to use <strong>ngrok</strong> to create a public URL.
-                      </p>
-                    </div>
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-1">
-                      <strong>For Local Development (ngrok required):</strong>
-                    </p>
-                    <ol className="text-xs text-blue-600 dark:text-blue-400 mt-1 ml-4 list-decimal space-y-1 mb-3">
-                      <li>Install ngrok: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">npm install -g ngrok</code></li>
-                      <li>Start your dev server: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">npm run dev</code></li>
-                      <li>In another terminal, run: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">ngrok http 3000</code></li>
-                      <li>Copy the <strong>HTTPS</strong> URL from ngrok (e.g., https://abc123.ngrok-free.app)</li>
-                      <li>Use that URL + <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">/api/webhooks/whatsapp</code> in Meta</li>
-                    </ol>
+                    {/* Vercel Detection Status */}
+                    {typeof window !== 'undefined' && (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('vercel.com')) && (
+                      <div className="mb-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
+                        <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-1">
+                          ✅ Detected Vercel Deployment
+                        </p>
+                        <p className="text-xs text-green-700 dark:text-green-300">
+                          Your webhook URL is publicly accessible and ready for Meta webhook verification.
+                        </p>
+                      </div>
+                    )}
+                    {/* Localhost Warning (only if not on Vercel) */}
+                    {typeof window !== 'undefined' && (window.location.hostname.includes('localhost') || window.location.hostname.includes('127.0.0.1')) && (
+                      <div className="mb-2 p-2 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded">
+                        <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-200 mb-1">
+                          ⚠️ Local Development Detected
+                        </p>
+                        <p className="text-xs text-yellow-700 dark:text-yellow-300">
+                          Meta cannot reach localhost URLs. Deploy to Vercel for production webhook support.
+                        </p>
+                      </div>
+                    )}
                     <p className="text-xs text-blue-700 dark:text-blue-300 mb-1">
                       <strong>Steps to Configure in Meta:</strong>
                     </p>
                     <ol className="text-xs text-blue-600 dark:text-blue-400 mt-1 ml-4 list-decimal space-y-1">
                       <li>Go to Meta Business Manager → WhatsApp → Configuration → Webhooks</li>
                       <li>Click "Edit" on your webhook</li>
-                      <li>Paste the Webhook URL (use ngrok URL if localhost)</li>
-                      <li>Paste the Verify Token above</li>
+                      <li>Set Callback URL to your Vercel deployment URL + <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">/api/webhooks/whatsapp</code></li>
+                      <li>Copy the Verify Token from above and paste it in Meta</li>
                       <li>Subscribe to: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">messages</code> and <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">message_status</code></li>
                       <li>Click "Verify and Save"</li>
                     </ol>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+                      <strong>Example:</strong> If your Vercel URL is <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">https://your-app.vercel.app</code>, 
+                      use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">https://your-app.vercel.app/api/webhooks/whatsapp</code> as the Callback URL.
+                    </p>
                   </div>
                 </div>
               </div>
