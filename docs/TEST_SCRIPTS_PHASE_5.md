@@ -393,3 +393,4 @@ SELECT * FROM ServiceType WHERE isActive = true;
 ```sql
 SELECT name, provider, enabled, configured FROM Integration;
 ```
+

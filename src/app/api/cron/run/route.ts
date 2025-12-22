@@ -68,3 +68,4 @@ export async function GET() {
     message: 'Cron endpoint is running. Use POST with Authorization header.',
   })
 }
+

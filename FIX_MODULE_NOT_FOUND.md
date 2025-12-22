@@ -50,3 +50,4 @@ This error occurs when Next.js build cache is corrupted and tries to reference a
 - ✅ Confirmed App Router structure
 
 The error should be resolved after restarting the dev server with a clean build cache.
+

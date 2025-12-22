@@ -40,3 +40,4 @@ CREATE INDEX IF NOT EXISTS "Task_dueAt_idx" ON "Task" ("dueAt");
 CREATE INDEX IF NOT EXISTS "CommunicationLog_createdAt_idx" ON "CommunicationLog" ("createdAt");
 CREATE INDEX IF NOT EXISTS "CommunicationLog_leadId_idx" ON "CommunicationLog" ("leadId");
 
+

@@ -23,3 +23,4 @@ ALTER TABLE "ChecklistItem" ADD COLUMN "notes" TEXT;
 
 
 
+

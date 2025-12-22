@@ -27,14 +27,19 @@ export async function GET(req: NextRequest) {
       tokenProvided: !!token,
       challengeProvided: !!challenge,
       url: req.url,
+      queryParams: Object.fromEntries(req.nextUrl.searchParams),
     })
 
     // First try to get verify token from Integration model
     let verifyToken: string | null = null
+    let integrationData: any = null
+    
     try {
       const integration = await prisma.integration.findUnique({
         where: { name: 'whatsapp' },
       })
+
+      integrationData = integration
 
       if (integration?.config) {
         try {
@@ -42,20 +47,44 @@ export async function GET(req: NextRequest) {
             ? JSON.parse(integration.config) 
             : integration.config
           verifyToken = config.webhookVerifyToken || null
-          console.log('✅ Found verify token in integration config')
-        } catch (e) {
-          console.error('❌ Failed to parse integration config:', e)
+          
+          console.log('✅ Found verify token in integration config', {
+            tokenLength: verifyToken?.length,
+            tokenPreview: verifyToken ? `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}` : null,
+            configKeys: Object.keys(config || {}),
+          })
+        } catch (e: any) {
+          console.error('❌ Failed to parse integration config:', {
+            error: e.message,
+            configType: typeof integration.config,
+            configPreview: typeof integration.config === 'string' 
+              ? integration.config.substring(0, 100) 
+              : 'not a string',
+          })
         }
+      } else {
+        console.warn('⚠️ Integration exists but has no config', {
+          integrationId: integration?.id,
+          integrationName: integration?.name,
+        })
       }
-    } catch (e) {
-      console.warn('⚠️ Could not fetch integration from DB:', e)
+    } catch (e: any) {
+      console.warn('⚠️ Could not fetch integration from DB:', {
+        error: e.message,
+        errorCode: e.code,
+      })
     }
 
     // Fallback to environment variable
     if (!verifyToken) {
       verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || null
       if (verifyToken) {
-        console.log('✅ Found verify token in environment variable')
+        console.log('✅ Found verify token in environment variable', {
+          tokenLength: verifyToken.length,
+          tokenPreview: `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}`,
+        })
+      } else {
+        console.warn('⚠️ No verify token found in environment variable WHATSAPP_VERIFY_TOKEN')
       }
     }
 
@@ -69,11 +98,16 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Missing required parameters' }, { status: 400 })
     }
 
-    if (mode === 'subscribe' && token === verifyToken) {
+    // Trim whitespace from tokens (in case of copy-paste issues)
+    const cleanedToken = token?.trim()
+    const cleanedVerifyToken = verifyToken?.trim()
+    
+    if (mode === 'subscribe' && cleanedToken && cleanedVerifyToken && cleanedToken === cleanedVerifyToken) {
       console.log('✅ WhatsApp webhook verified successfully!', {
         mode,
         tokenMatch: true,
         challengeLength: challenge.length,
+        tokenLength: cleanedToken.length,
       })
       
       // Log webhook event
@@ -100,15 +134,30 @@ export async function GET(req: NextRequest) {
       })
     }
 
+    // Detailed comparison for debugging (cleanedToken already defined above)
     console.warn('⚠️ WhatsApp webhook verification failed', { 
       mode,
       modeMatches: mode === 'subscribe',
       tokenProvided: !!token,
       tokenLength: token?.length,
+      tokenLengthAfterTrim: cleanedToken?.length,
       expectedTokenLength: verifyToken?.length,
+      expectedTokenLengthAfterTrim: cleanedVerifyToken?.length,
       tokenMatches: token === verifyToken,
-      tokenPreview: token ? `${token.substring(0, 10)}...` : 'none',
-      expectedPreview: verifyToken ? `${verifyToken.substring(0, 10)}...` : 'none',
+      tokenMatchesAfterTrim: cleanedToken === cleanedVerifyToken,
+      tokenPreview: token ? `${token.substring(0, 10)}...${token.substring(token.length - 5)}` : 'none',
+      expectedPreview: verifyToken ? `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}` : 'none',
+      // Show first and last 5 chars for easier debugging
+      tokenStart: token ? token.substring(0, 5) : null,
+      tokenEnd: token ? token.substring(token.length - 5) : null,
+      expectedStart: verifyToken ? verifyToken.substring(0, 5) : null,
+      expectedEnd: verifyToken ? verifyToken.substring(verifyToken.length - 5) : null,
+      // Character-by-character comparison (first 20 chars)
+      tokenChars: cleanedToken ? cleanedToken.substring(0, 20).split('').map((c, i) => ({ pos: i, char: c, code: c.charCodeAt(0) })) : null,
+      expectedChars: cleanedVerifyToken ? cleanedVerifyToken.substring(0, 20).split('').map((c, i) => ({ pos: i, char: c, code: c.charCodeAt(0) })) : null,
+      integrationExists: !!integrationData,
+      integrationConfigExists: !!integrationData?.config,
+      tokenSource: verifyToken ? (integrationData?.config ? 'database' : 'env') : 'none',
     })
     
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
