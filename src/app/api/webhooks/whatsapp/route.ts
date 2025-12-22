@@ -35,16 +35,17 @@ export async function GET(req: NextRequest) {
 
     // PRIORITY: Environment variable (most reliable for production)
     let verifyToken: string | null = process.env.WHATSAPP_VERIFY_TOKEN || null
+    let integrationData: any = null
+    let tokenSource: 'env' | 'database' | 'none' = 'none'
     
     if (verifyToken) {
+      tokenSource = 'env'
       console.log('✅ Found verify token in environment variable WHATSAPP_VERIFY_TOKEN', {
         tokenLength: verifyToken.length,
         tokenPreview: `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}`,
       })
     } else {
       // Fallback to Integration model (if env var not set)
-      let integrationData: any = null
-      
       try {
         const integration = await prisma.integration.findUnique({
           where: { name: 'whatsapp' },
@@ -60,6 +61,7 @@ export async function GET(req: NextRequest) {
             verifyToken = config.webhookVerifyToken || null
             
             if (verifyToken) {
+              tokenSource = 'database'
               console.log('✅ Found verify token in integration config (fallback)', {
                 tokenLength: verifyToken.length,
                 tokenPreview: `${verifyToken.substring(0, 10)}...${verifyToken.substring(verifyToken.length - 5)}`,
@@ -164,7 +166,7 @@ export async function GET(req: NextRequest) {
       expectedChars: cleanedVerifyToken ? cleanedVerifyToken.substring(0, 20).split('').map((c, i) => ({ pos: i, char: c, code: c.charCodeAt(0) })) : null,
       integrationExists: !!integrationData,
       integrationConfigExists: !!integrationData?.config,
-      tokenSource: verifyToken ? (integrationData?.config ? 'database' : 'env') : 'none',
+      tokenSource: tokenSource,
     })
     
     return NextResponse.json({ error: 'Forbidden' }, { status: 403 })
