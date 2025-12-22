@@ -1,0 +1,12 @@
+{
+  "crons": [
+    {
+      "path": "/api/automation/run-daily",
+      "schedule": "0 9 * * *"
+    }
+  ],
+  "buildCommand": "npm run build",
+  "installCommand": "npm install",
+  "framework": "nextjs",
+  "regions": ["iad1"]
+}
