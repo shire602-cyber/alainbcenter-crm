@@ -31,6 +31,38 @@ export type AutopilotResult = {
 }
 
 /**
+ * Map autopilot rule key to WhatsApp template name
+ * Returns template name if available, null otherwise
+ */
+function getWhatsAppTemplateName(ruleKey: string): string | null {
+  const templateMap: Record<string, string> = {
+    'followup_due': 'follow_up_message', // Default template name - update based on your approved templates
+    'expiry_90': 'expiry_reminder',
+    'overdue': 'overdue_notice',
+  }
+  return templateMap[ruleKey] || null
+}
+
+/**
+ * Extract template parameters from variables
+ * Converts variables to array format for WhatsApp template parameters
+ */
+function extractTemplateParams(variables: {
+  name?: string
+  service?: string
+  phone?: string
+  daysToExpiry?: number
+  company?: string
+}): string[] {
+  // Return parameters in order: name, service, daysToExpiry (if applicable)
+  const params: string[] = []
+  if (variables.name) params.push(variables.name)
+  if (variables.service) params.push(variables.service)
+  if (variables.daysToExpiry !== undefined) params.push(String(variables.daysToExpiry))
+  return params
+}
+
+/**
  * Replace template variables in message
  */
 function replaceTemplateVariables(
@@ -180,14 +212,21 @@ async function runFollowupDueRule(
       continue
     }
 
-    // Build message
-    const template = rule.template || 'Hi {{name}}, this is {{company}}. Just following up on your {{service}} request. Are you available for a quick call today?'
-    const message = replaceTemplateVariables(template, {
+    // Build variables
+    const variables = {
       name: lead.contact.fullName,
       service: lead.serviceType?.name || lead.leadType || 'service',
       phone: lead.contact.phone,
       company: 'Alain Business Center',
-    })
+    }
+
+    // Try to use WhatsApp template (preferred for autopilot - works outside 24h window)
+    const templateName = getWhatsAppTemplateName(rule.key)
+    const templateParams = extractTemplateParams(variables)
+    
+    // Build fallback message for logging
+    const template = rule.template || 'Hi {{name}}, this is {{company}}. Just following up on your {{service}} request. Are you available for a quick call today?'
+    const message = replaceTemplateVariables(template, variables)
 
     if (dryRun) {
       results.sent++
@@ -198,13 +237,19 @@ async function runFollowupDueRule(
         leadId: lead.id,
         contactId: lead.contactId,
         status: 'sent',
-        message,
+        message: templateName ? `Template: ${templateName}` : message,
       })
       continue
     }
 
-    // Send WhatsApp
-    const sendResult = await sendWhatsAppMessage(lead.contact.phone, message)
+    // Send WhatsApp - use template if available, otherwise fallback to free-form
+    const sendResult = templateName
+      ? await sendWhatsAppMessage(lead.contact.phone, message, {
+          templateName,
+          templateParams,
+          language: 'en_US',
+        })
+      : await sendWhatsAppMessage(lead.contact.phone, message)
 
     if (sendResult.ok) {
       results.sent++
@@ -341,15 +386,22 @@ async function runExpiry90Rule(
       continue
     }
 
-    // Build message
-    const template = rule.template || 'Hi {{name}}, reminder: your UAE {{service}} may be due for renewal soon (about {{daysToExpiry}} days left). Would you like us to handle it for you?'
-    const message = replaceTemplateVariables(template, {
+    // Build variables
+    const variables = {
       name: lead.contact.fullName,
       service: lead.serviceType?.name || lead.leadType || 'service',
       phone: lead.contact.phone,
       daysToExpiry,
       company: 'Alain Business Center',
-    })
+    }
+
+    // Try to use WhatsApp template (preferred for autopilot - works outside 24h window)
+    const templateName = getWhatsAppTemplateName(rule.key)
+    const templateParams = extractTemplateParams(variables)
+    
+    // Build fallback message for logging
+    const template = rule.template || 'Hi {{name}}, reminder: your UAE {{service}} may be due for renewal soon (about {{daysToExpiry}} days left). Would you like us to handle it for you?'
+    const message = replaceTemplateVariables(template, variables)
 
     if (dryRun) {
       results.sent++
@@ -360,13 +412,19 @@ async function runExpiry90Rule(
         leadId: lead.id,
         contactId: lead.contactId,
         status: 'sent',
-        message,
+        message: templateName ? `Template: ${templateName}` : message,
       })
       continue
     }
 
-    // Send WhatsApp
-    const sendResult = await sendWhatsAppMessage(lead.contact.phone, message)
+    // Send WhatsApp - use template if available, otherwise fallback to free-form
+    const sendResult = templateName
+      ? await sendWhatsAppMessage(lead.contact.phone, message, {
+          templateName,
+          templateParams,
+          language: 'en_US',
+        })
+      : await sendWhatsAppMessage(lead.contact.phone, message)
 
     if (sendResult.ok) {
       results.sent++
@@ -500,14 +558,21 @@ async function runOverdueRule(
       continue
     }
 
-    // Build message
-    const template = rule.template || 'Hi {{name}}, your {{service}} appears overdue. We can help fix it urgently. Reply 1) YES 2) Need price 3) Call me'
-    const message = replaceTemplateVariables(template, {
+    // Build variables
+    const variables = {
       name: lead.contact.fullName,
       service: lead.serviceType?.name || lead.leadType || 'service',
       phone: lead.contact.phone,
       company: 'Alain Business Center',
-    })
+    }
+
+    // Try to use WhatsApp template (preferred for autopilot - works outside 24h window)
+    const templateName = getWhatsAppTemplateName(rule.key)
+    const templateParams = extractTemplateParams(variables)
+    
+    // Build fallback message for logging
+    const template = rule.template || 'Hi {{name}}, your {{service}} appears overdue. We can help fix it urgently. Reply 1) YES 2) Need price 3) Call me'
+    const message = replaceTemplateVariables(template, variables)
 
     if (dryRun) {
       results.sent++
@@ -518,13 +583,19 @@ async function runOverdueRule(
         leadId: lead.id,
         contactId: lead.contactId,
         status: 'sent',
-        message,
+        message: templateName ? `Template: ${templateName}` : message,
       })
       continue
     }
 
-    // Send WhatsApp
-    const sendResult = await sendWhatsAppMessage(lead.contact.phone, message)
+    // Send WhatsApp - use template if available, otherwise fallback to free-form
+    const sendResult = templateName
+      ? await sendWhatsAppMessage(lead.contact.phone, message, {
+          templateName,
+          templateParams,
+          language: 'en_US',
+        })
+      : await sendWhatsAppMessage(lead.contact.phone, message)
 
     if (sendResult.ok) {
       results.sent++
@@ -662,6 +733,7 @@ export async function runAutopilot(
     timestamp: now.toISOString(),
   }
 }
+
 
 
 
