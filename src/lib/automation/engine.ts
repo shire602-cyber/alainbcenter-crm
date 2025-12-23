@@ -471,18 +471,23 @@ async function evaluateConditions(
     // Phase 3: Check if info was shared and follow-up is due
     const { daysAfter = 2, infoType } = conditions || {}
     
-    // Migration applied - fields now available directly
-    if (!lead.infoSharedAt) {
+    // Type assertion for new fields (will be available after migration)
+    const leadWithNewFields = lead as any & {
+      infoSharedAt: Date | null
+      lastInfoSharedType: string | null
+    }
+    
+    if (!leadWithNewFields.infoSharedAt) {
       return { met: false, reason: 'No info shared timestamp found' }
     }
 
     // Check info type filter if specified
-    if (infoType && lead.lastInfoSharedType !== infoType) {
-      return { met: false, reason: `Info type '${lead.lastInfoSharedType}' doesn't match required '${infoType}'` }
+    if (infoType && leadWithNewFields.lastInfoSharedType !== infoType) {
+      return { met: false, reason: `Info type '${leadWithNewFields.lastInfoSharedType}' doesn't match required '${infoType}'` }
     }
 
     const now = new Date()
-    const sharedDate = new Date(lead.infoSharedAt)
+    const sharedDate = new Date(leadWithNewFields.infoSharedAt!)
     const daysSinceShared = Math.floor(
       (now.getTime() - sharedDate.getTime()) / (1000 * 60 * 60 * 24)
     )
