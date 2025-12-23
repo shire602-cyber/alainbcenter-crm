@@ -279,7 +279,25 @@ export default function InboxPage() {
   async function handleSelectConversation(conversation: Conversation) {
     setSelectedConversation(conversation)
     await loadMessages(conversation.id)
+    // Clear phone param from URL after selecting
+    if (phoneParam) {
+      const url = new URL(window.location.href)
+      url.searchParams.delete('phone')
+      window.history.replaceState({}, '', url.toString())
+    }
   }
+
+  // Handle phone number query parameter to auto-select conversation
+  useEffect(() => {
+    if (phoneParam && conversations.length > 0) {
+      const matchingConv = conversations.find(c => 
+        c.contact.phone?.replace(/[^0-9]/g, '') === phoneParam.replace(/[^0-9]/g, '')
+      )
+      if (matchingConv && matchingConv.id !== selectedConversation?.id) {
+        handleSelectConversation(matchingConv)
+      }
+    }
+  }, [conversations, phoneParam])
 
   async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
