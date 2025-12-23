@@ -148,28 +148,34 @@ export async function createAgentTask(
     description += `\n\nLast message: "${details.messageText.substring(0, 200)}"`
   }
 
-  // Create task
+  // Create task (Task model uses 'type' not 'taskType', 'dueAt' not 'dueDate', 'OPEN' not 'PENDING', and no 'description' or 'priority' fields)
   const task = await prisma.task.create({
     data: {
       leadId,
-      title,
-      description,
-      taskType: 'FOLLOW_UP',
-      priority,
-      dueDate,
-      status: 'PENDING',
+      title: description.length > 100 
+        ? `${title} - ${description.substring(0, 100)}` 
+        : `${title} - ${description}`, // Include description in title since Task model doesn't have description field
+      type: 'FOLLOW_UP',
+      dueAt: dueDate,
+      status: 'OPEN', // Task model uses 'OPEN' not 'PENDING'
       assignedUserId: lead.assignedUserId || null, // Assign to lead's assigned user if available
       createdByUserId: null, // System-created
-      meta: JSON.stringify({
-        reason,
-        ...details,
-        autoCreated: true,
-        createdAt: new Date().toISOString(),
-      }),
+      idempotencyKey: `agent_task_${leadId}_${reason}_${Date.now()}`, // Use idempotencyKey to store metadata
     },
   })
 
   console.log(`✅ Created agent task ${task.id} for lead ${leadId} (reason: ${reason})`)
+
+  // Store priority and description in lead notes since Task model doesn't have these fields
+  const priorityNote = `[${priority} Priority] ${description}`
+  await prisma.lead.update({
+    where: { id: leadId },
+    data: {
+      notes: lead.notes 
+        ? `${lead.notes}\n\n[System]: Agent task #${task.id} created (${reason}) - ${priorityNote}`
+        : `[System]: Agent task #${task.id} created (${reason}) - ${priorityNote}`,
+    },
+  })
 
   // If no assigned user, try to assign to a manager or admin
   if (!task.assignedUserId) {

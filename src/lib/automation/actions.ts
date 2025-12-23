@@ -878,14 +878,15 @@ async function executeExtractAndUpdateLeadData(
     // Update lead if we have better info
     if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
       // Try to find matching ServiceType
-      const serviceType = await prisma.serviceType.findFirst({
-        where: {
-          OR: [
-            { name: { contains: extracted.serviceType, mode: 'insensitive' } },
-            { code: extracted.serviceTypeEnum || undefined },
-          ],
-        },
-      })
+            // SQLite doesn't support case-insensitive mode, use contains (case-sensitive)
+            const serviceType = await prisma.serviceType.findFirst({
+              where: {
+                OR: [
+                  { name: { contains: extracted.serviceType } },
+                  { code: extracted.serviceTypeEnum || undefined },
+                ],
+              },
+            })
       if (serviceType) {
         updates.serviceTypeId = serviceType.id
         updates.leadType = serviceType.name
@@ -979,13 +980,8 @@ async function executeCreateAgentTask(
 
     const taskId = await createAgentTask(lead.id, reason, details)
 
-    // Update task priority if specified
-    if (priority !== 'NORMAL') {
-      await prisma.task.update({
-        where: { id: taskId },
-        data: { priority },
-      })
-    }
+    // Priority is already stored in lead notes by createAgentTask
+    // Task model doesn't have priority field, so no update needed
 
     return {
       success: true,

@@ -603,9 +603,9 @@ export async function POST(req: NextRequest) {
         },
         tasks: {
           where: {
-            status: { not: 'COMPLETED' },
-            meta: {
-              contains: 'autoCreated',
+            status: { not: 'DONE' }, // Task model uses 'DONE' not 'COMPLETED'
+            idempotencyKey: {
+              contains: 'agent_task', // Check for auto-created tasks via idempotencyKey
             },
           },
           take: 1,
@@ -633,8 +633,8 @@ export async function POST(req: NextRequest) {
             reason = 'stale_lead'
           }
 
-          const lastInbound = lead.messages.find(
-            (m) => m.direction === 'INBOUND' || m.direction === 'IN'
+          const lastInbound = lead.messages?.find(
+            (m: any) => m.direction === 'INBOUND' || m.direction === 'IN'
           )
           const daysSinceContact = lastInbound
             ? Math.floor(

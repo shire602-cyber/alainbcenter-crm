@@ -8,6 +8,35 @@
 import { prisma } from '../prisma'
 import { getSystemPrompt } from './prompts'
 
+/**
+ * Get service info from Integration config (helper function)
+ */
+async function getServiceInfo(): Promise<Record<string, { description: string; pricing?: string; requirements?: string[] }>> {
+  try {
+    const integration = await prisma.integration.findUnique({
+      where: { name: 'openai' },
+    })
+
+    if (integration?.config) {
+      try {
+        const config = typeof integration.config === 'string' 
+          ? JSON.parse(integration.config) 
+          : integration.config
+        
+        if (config.serviceInfo && typeof config.serviceInfo === 'object') {
+          return config.serviceInfo
+        }
+      } catch (e) {
+        // Ignore parse errors
+      }
+    }
+  } catch (error) {
+    // Ignore errors
+  }
+
+  return {}
+}
+
 export interface ServicePromptConfig {
   serviceType: string
   customPrompt?: string

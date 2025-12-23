@@ -523,7 +523,7 @@ model MessageStatusEvent {
 model AITrainingDocument {
   id              Int      @id @default(autoincrement())
   title           String
-  content         String   // Long text content for AI training
+  content         String // Long text content for AI training
   type            String // guidance | examples | policies | scripts
   createdByUserId Int
   createdAt       DateTime @default(now())
