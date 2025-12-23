@@ -67,10 +67,21 @@ export async function markInfoShared(
   }
 
   // Migration applied - fields now exist in schema
-  await prisma.lead.update({
-    where: { id: leadId },
-    data: updateData,
-  })
+  // Add try-catch to handle case where migration hasn't been applied yet
+  try {
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: updateData,
+    })
+  } catch (error: any) {
+    // If column doesn't exist, migration hasn't been applied yet
+    if (error.code === 'P2022' || error.message?.includes('does not exist')) {
+      console.warn(`⚠️ Migration not applied yet for lead ${leadId}. Please run /api/admin/migrate`)
+      // Don't throw - allow message processing to continue
+      return
+    }
+    throw error
+  }
 
   console.log(`✅ Marked info shared for lead ${leadId}: ${infoType}`)
 
