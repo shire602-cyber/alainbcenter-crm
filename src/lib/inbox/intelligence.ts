@@ -36,23 +36,52 @@ export async function computeConversationFlags(
   const now = new Date()
 
   // Fetch conversation with relations
+  // Use select instead of include for lead to avoid loading fields that may not exist yet (infoSharedAt, etc.)
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     include: {
       contact: true,
       lead: {
-        include: {
+        select: {
+          id: true,
+          stage: true,
+          aiScore: true,
+          nextFollowUpAt: true,
           expiryItems: {
             orderBy: { expiryDate: 'asc' },
             take: 1, // Nearest expiry
+            select: {
+              id: true,
+              type: true,
+              expiryDate: true,
+            },
           },
-          assignedUser: true,
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+          // These will be available after migration is run
         },
       },
-      assignedUser: true,
+      assignedUser: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+        },
+      },
       messages: {
         orderBy: { createdAt: 'desc' },
         take: 10, // Last 10 messages to check reply status
+        select: {
+          id: true,
+          direction: true,
+          createdAt: true,
+        },
       },
     },
   })
