@@ -72,16 +72,47 @@ export async function POST(
       )
     }
 
-    // Get WhatsApp credentials from env vars
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+    // PRIORITY: Get WhatsApp credentials from Integration model first, then fallback to env vars
+    let accessToken: string | null = null
+    let phoneNumberId: string | null = null
+
+    try {
+      const integration = await prisma.integration.findUnique({
+        where: { name: 'whatsapp' },
+      })
+
+      if (integration) {
+        // Get from config JSON
+        if (integration.config) {
+          try {
+            const config = typeof integration.config === 'string'
+              ? JSON.parse(integration.config)
+              : integration.config
+            
+            accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
+            phoneNumberId = config.phoneNumberId || null
+          } catch (e) {
+            console.warn('Failed to parse integration config:', e)
+          }
+        } else {
+          // Fallback to direct fields
+          accessToken = integration.accessToken || integration.apiKey || null
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch integration from DB:', e)
+    }
+
+    // Fallback to environment variables if not found in database
+    if (!accessToken) accessToken = process.env.WHATSAPP_ACCESS_TOKEN || null
+    if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
 
     if (!accessToken || !phoneNumberId) {
       return NextResponse.json(
         {
           ok: false,
           error: 'WhatsApp configuration missing',
-          hint: 'WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID must be set in environment variables',
+          hint: 'Configure WhatsApp in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables',
         },
         { status: 500 }
       )
