@@ -220,7 +220,7 @@ function InboxPageContent() {
                 })
                 // Only update if there are actually new messages
                 if (newMessages.length !== prev.length || 
-                    newMessages.some((m, i) => m.id !== prev[i]?.id)) {
+                    newMessages.some((m: Message, i: number) => m.id !== prev[i]?.id)) {
                   return newMessages
                 }
                 return prev
