@@ -86,6 +86,9 @@ async function executeAction(
     case 'REQUALIFY_LEAD':
       return await executeRequalifyLead(action, context)
 
+    case 'EXTRACT_AND_UPDATE_LEAD_DATA':
+      return await executeExtractAndUpdateLeadData(action, context)
+
     default:
       return {
         success: false,
@@ -791,6 +794,128 @@ async function executeRequalifyLead(
     return {
       success: false,
       error: error.message || 'Failed to re-qualify lead',
+    }
+  }
+}
+
+/**
+ * Extract and update lead data from message (Phase 1)
+ */
+async function executeExtractAndUpdateLeadData(
+  action: any,
+  context: AutomationContext
+): Promise<ActionResult> {
+  const { lead, contact, triggerData } = context
+
+  try {
+    // Get the last message from trigger data
+    const lastMessage = triggerData?.lastMessage
+    if (!lastMessage || !lastMessage.body) {
+      return {
+        success: false,
+        error: 'No message body to extract data from',
+      }
+    }
+
+    const { extractLeadDataFromMessage } = await import('../ai/extractData')
+    const extracted = await extractLeadDataFromMessage(
+      lastMessage.body,
+      contact,
+      lead
+    )
+
+    // Only update if confidence is reasonable
+    if (extracted.confidence < 50) {
+      return {
+        success: false,
+        error: `Low confidence (${extracted.confidence}) - skipping extraction`,
+      }
+    }
+
+    const updates: any = {}
+    const contactUpdates: any = {}
+
+    // Update contact if we have better info
+    if (extracted.name && (!contact.fullName || contact.fullName.includes('Unknown') || contact.fullName.includes('WhatsApp'))) {
+      contactUpdates.fullName = extracted.name
+    }
+    if (extracted.email && !contact.email) {
+      contactUpdates.email = extracted.email
+    }
+    if (extracted.phone && !contact.phone) {
+      contactUpdates.phone = extracted.phone
+    }
+    if (extracted.nationality && !contact.nationality) {
+      contactUpdates.nationality = extracted.nationality
+    }
+
+    // Update lead if we have better info
+    if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
+      // Try to find matching ServiceType
+      const serviceType = await prisma.serviceType.findFirst({
+        where: {
+          OR: [
+            { name: { contains: extracted.serviceType, mode: 'insensitive' } },
+            { code: extracted.serviceTypeEnum || undefined },
+          ],
+        },
+      })
+      if (serviceType) {
+        updates.serviceTypeId = serviceType.id
+        updates.leadType = serviceType.name
+      } else {
+        updates.leadType = extracted.serviceType
+      }
+    }
+    if (extracted.serviceTypeEnum && !lead.serviceTypeEnum) {
+      updates.serviceTypeEnum = extracted.serviceTypeEnum
+    }
+    if (extracted.urgency && !lead.urgency) {
+      updates.urgency = extracted.urgency.toUpperCase()
+    }
+    if (extracted.expiryDate) {
+      try {
+        const parsedDate = new Date(extracted.expiryDate)
+        if (!isNaN(parsedDate.getTime()) && !lead.expiryDate) {
+          updates.expiryDate = parsedDate
+        }
+      } catch {
+        // Ignore invalid dates
+      }
+    }
+    if (extracted.notes) {
+      updates.notes = lead.notes 
+        ? `${lead.notes}\n\n[AI Extracted]: ${extracted.notes}`
+        : extracted.notes
+    }
+
+    // Apply updates
+    if (Object.keys(contactUpdates).length > 0) {
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: contactUpdates,
+      })
+    }
+
+    if (Object.keys(updates).length > 0) {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: updates,
+      })
+    }
+
+    return {
+      success: true,
+      data: {
+        leadId: lead.id,
+        extracted,
+        fieldsUpdated: Object.keys(updates).length + Object.keys(contactUpdates).length,
+      },
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to extract and update lead data',
     }
   }
 }

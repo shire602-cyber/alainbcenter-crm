@@ -249,6 +249,15 @@ export async function POST(
       },
     })
 
+    // Phase 2: Detect if info/quotation was shared
+    const { detectInfoOrQuotationShared, markInfoShared } = await import('@/lib/automation/infoShared')
+    const detection = detectInfoOrQuotationShared(text)
+    
+    if (detection.isInfoShared && detection.infoType) {
+      // Mark info as shared (triggers follow-up automation)
+      await markInfoShared(lead.id, detection.infoType)
+    }
+
     // Update lead
     await prisma.lead.update({
       where: { id: lead.id },

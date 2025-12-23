@@ -141,19 +141,19 @@ export default function AITrainingPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-6 p-6">
-        <div className="flex items-center justify-between">
+      <div className="space-y-2">
+        {/* Compact Header - matching other admin pages */}
+        <div className="flex items-center justify-between mb-2">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight flex items-center gap-2">
-              <Sparkles className="h-8 w-8 text-primary" />
+            <h1 className="text-xl font-semibold tracking-tight text-foreground">
               AI Training Area
             </h1>
-            <p className="text-muted-foreground mt-2">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
               Upload guidance documents and training materials for the AI autopilot
             </p>
           </div>
-          <Button onClick={newDocument} className="gap-2">
-            <BookOpen className="h-4 w-4" />
+          <Button onClick={newDocument} size="sm" className="gap-1.5 text-xs">
+            <BookOpen className="h-3.5 w-3.5" />
             New Document
           </Button>
         </div>
@@ -216,22 +216,16 @@ export default function AITrainingPage() {
                   ))}
                 </div>
               )}
-            </CardContent>
-          </Card>
+          </BentoCard>
 
           {/* Right: Editor */}
-          <Card className="lg:col-span-2">
-            <CardHeader>
-              <CardTitle>
-                {selectedDoc ? 'Edit Document' : 'New Training Document'}
-              </CardTitle>
-              <CardDescription>
-                {selectedDoc
-                  ? 'Update the training document content'
-                  : 'Create a new training document for the AI autopilot'}
-              </CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-4">
+          <BentoCard className="lg:col-span-2" title={selectedDoc ? 'Edit Document' : 'New Training Document'}>
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+              {selectedDoc
+                ? 'Update the training document content'
+                : 'Create a new training document for the AI autopilot'}
+            </p>
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="title">Title</Label>
                 <Input
@@ -283,8 +277,8 @@ export default function AITrainingPage() {
                   </Button>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </BentoCard>
         </div>
       </div>
     </MainLayout>

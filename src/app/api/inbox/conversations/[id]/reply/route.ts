@@ -142,12 +142,23 @@ export async function POST(
 
     // Update lead lastContactAt
     if (conversation.leadId) {
+      // Phase 2: Detect if info/quotation was shared
+      const { detectInfoOrQuotationShared, markInfoShared } = await import('@/lib/automation/infoShared')
+      const detection = detectInfoOrQuotationShared(text)
+      
+      const updateData: any = {
+        lastContactAt: sentAt,
+        lastContactChannel: 'whatsapp',
+      }
+
+      if (detection.isInfoShared && detection.infoType) {
+        // Mark info as shared (triggers follow-up automation)
+        await markInfoShared(conversation.leadId, detection.infoType)
+      }
+
       await prisma.lead.update({
         where: { id: conversation.leadId },
-        data: {
-          lastContactAt: sentAt,
-          lastContactChannel: 'whatsapp',
-        },
+        data: updateData,
       })
     }
 

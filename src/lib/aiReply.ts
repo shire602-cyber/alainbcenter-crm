@@ -97,8 +97,9 @@ export async function generateAiReply(
   const questionsToAsk = relevantQuestions.slice(0, 4)
 
   // Generate friendly WhatsApp-style message
-  const contactName = lead.contact.fullName.split(' ')[0] // First name only
-  const greeting = `Hi ${contactName}! 👋`
+  // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
+  const { getGreeting } = require('./message-utils')
+  const greeting = `${getGreeting(lead.contact, 'casual')}! 👋`
   const intro = `Thank you for your interest in our ${context}. To help you better, I'd like to ask a few questions:`
   const closing = `Please share the details, and I'll get back to you with the best solution! 🙏`
 

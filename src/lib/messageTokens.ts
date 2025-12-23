@@ -25,7 +25,9 @@ type LeadData = {
    */
   export function replaceMessageTokens(template: string, lead: LeadData): string {
     let result = template
-    const name = lead.contact?.fullName || lead.contact?.phone || 'there'
+    // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
+    const { getGreetingName } = require('./message-utils')
+    const name = getGreetingName(lead.contact) || 'there'
     result = result.replace(/{name}/gi, name)
     result = result.replace(/{phone}/gi, lead.contact?.phone || '')
     result = result.replace(/{email}/gi, lead.contact?.email || '')

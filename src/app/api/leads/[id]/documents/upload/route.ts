@@ -120,6 +120,16 @@ export async function POST(
       },
     })
 
+    // Phase 2: Mark info as shared when document is uploaded
+    // Documents are typically shared with customers, so trigger follow-up
+    try {
+      const { markInfoShared } = await import('@/lib/automation/infoShared')
+      await markInfoShared(leadId, 'document')
+    } catch (error: any) {
+      // Don't fail document upload if info sharing detection fails
+      console.warn('Failed to mark info as shared after document upload:', error.message)
+    }
+
     return NextResponse.json(document, { status: 201 })
   } catch (error: any) {
     console.error('POST /api/leads/[id]/documents/upload error:', error)

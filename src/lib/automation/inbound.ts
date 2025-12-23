@@ -122,6 +122,95 @@ export async function runInboundAutomationsForMessage(
       return
     }
 
+    // Phase 1: Extract data from message using AI (non-blocking)
+    if (message.body && message.body.trim().length > 0) {
+      try {
+        const { extractLeadDataFromMessage } = await import('../ai/extractData')
+        const extracted = await extractLeadDataFromMessage(
+          message.body,
+          lead.contact,
+          lead
+        )
+
+        // Only update if confidence is reasonable (>50) and data is new/better
+        if (extracted.confidence > 50) {
+          const updates: any = {}
+          const contactUpdates: any = {}
+
+          // Update contact if we have better info
+          if (extracted.name && (!lead.contact.fullName || lead.contact.fullName.includes('Unknown') || lead.contact.fullName.includes('WhatsApp'))) {
+            contactUpdates.fullName = extracted.name
+          }
+          if (extracted.email && !lead.contact.email) {
+            contactUpdates.email = extracted.email
+          }
+          if (extracted.phone && !lead.contact.phone) {
+            contactUpdates.phone = extracted.phone
+          }
+          if (extracted.nationality && !lead.contact.nationality) {
+            contactUpdates.nationality = extracted.nationality
+          }
+
+          // Update lead if we have better info
+          if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
+            const serviceType = await prisma.serviceType.findFirst({
+              where: {
+                OR: [
+                  { name: { contains: extracted.serviceType, mode: 'insensitive' } },
+                  { code: extracted.serviceTypeEnum || undefined },
+                ],
+              },
+            })
+            if (serviceType) {
+              updates.serviceTypeId = serviceType.id
+              updates.leadType = serviceType.name
+            } else {
+              updates.leadType = extracted.serviceType
+            }
+          }
+          if (extracted.serviceTypeEnum && !lead.serviceTypeEnum) {
+            updates.serviceTypeEnum = extracted.serviceTypeEnum
+          }
+          if (extracted.urgency && !lead.urgency) {
+            updates.urgency = extracted.urgency.toUpperCase()
+          }
+          if (extracted.expiryDate) {
+            try {
+              const parsedDate = new Date(extracted.expiryDate)
+              if (!isNaN(parsedDate.getTime()) && !lead.expiryDate) {
+                updates.expiryDate = parsedDate
+              }
+            } catch {
+              // Ignore invalid dates
+            }
+          }
+          if (extracted.notes) {
+            updates.notes = lead.notes 
+              ? `${lead.notes}\n\n[AI Extracted]: ${extracted.notes}`
+              : extracted.notes
+          }
+
+          // Apply updates
+          if (Object.keys(contactUpdates).length > 0) {
+            await prisma.contact.update({
+              where: { id: lead.contact.id },
+              data: contactUpdates,
+            })
+          }
+
+          if (Object.keys(updates).length > 0) {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: updates,
+            })
+          }
+        }
+      } catch (extractError: any) {
+        // Don't fail automation if extraction fails
+        console.warn('AI data extraction failed in automation (non-blocking):', extractError.message)
+      }
+    }
+
     // Build context with trigger data
     const context: AutomationContext = {
       lead,

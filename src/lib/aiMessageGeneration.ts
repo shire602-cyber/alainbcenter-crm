@@ -103,13 +103,15 @@ export async function generateFollowUpMessage(
  * Template-based expiry reminder (fallback when OpenAI is not available)
  */
 function generateTemplateExpiryMessage(lead: Lead, daysBefore: number): string {
-  const contactName = lead.contact.fullName.split(' ')[0]
+  // Use helper to get proper greeting (never "Unknown WHATSAPP User")
+  const { getGreeting } = require('./message-utils')
+  const greeting = getGreeting(lead.contact, 'casual')
   const serviceName = lead.leadType 
     ? lead.leadType.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
     : 'service'
 
   if (daysBefore === 90) {
-    return `Assalamu Alaikum ${contactName}! 👋
+    return `${greeting === 'Hello there' ? 'Assalamu Alaikum' : greeting}! 👋
 
 This is Alain Business Center. Your ${serviceName} is expiring in approximately 90 days.
 
@@ -122,7 +124,7 @@ Alain Business Center Team`
   }
 
   if (daysBefore === 30) {
-    return `Hi ${contactName}, 
+    return `${greeting}, 
 
 URGENT: Your ${serviceName} expires in 30 days. 
 
@@ -133,7 +135,7 @@ Reply to this message or call +971-XXX-XXXX.
 Alain Business Center`
   }
 
-  return `Hello ${contactName}, 
+  return `${greeting}, 
 
 This is Alain Business Center. Your ${serviceName} is expiring in ${daysBefore} days.
 
@@ -147,7 +149,9 @@ Alain Business Center Team`
  * Template-based follow-up message (fallback when OpenAI is not available)
  */
 function generateTemplateFollowUpMessage(lead: Lead): string {
-  const contactName = lead.contact.fullName.split(' ')[0]
+  // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
+  const { getGreetingName } = require('./message-utils')
+  const contactName = getGreetingName(lead.contact) || 'there'
   const serviceName = lead.leadType 
     ? lead.leadType.replace('_', ' ').replace(/\b\w/g, (l) => l.toUpperCase())
     : 'service'
