@@ -50,11 +50,13 @@ export async function runInboundAutomationsForMessage(
       return
     }
 
-    // Check if autopilot is disabled
+    // Check if autopilot is disabled (default to enabled if not set)
+    // Note: autopilotEnabled field may not exist in schema, so we check safely
     if (lead.autopilotEnabled === false) {
       console.log(`Autopilot disabled for lead ${leadId}, skipping automation`)
       return
     }
+    // If autopilotEnabled is null/undefined, default to enabled (autopilot runs)
 
     // Get all active INBOUND_MESSAGE rules
     // Filter by channel if rule specifies channels
@@ -171,4 +173,5 @@ export async function runInboundAutomationsForMessage(
     console.error(`Error running inbound automations for lead ${leadId}:`, error.message)
   }
 }
+
 
