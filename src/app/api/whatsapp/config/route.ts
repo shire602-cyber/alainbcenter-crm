@@ -11,10 +11,47 @@ export async function GET(req: NextRequest) {
   try {
     await requireAdminApi()
 
-    const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
-    const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
-    const verifyToken = process.env.WHATSAPP_VERIFY_TOKEN
-    const appSecret = process.env.WHATSAPP_APP_SECRET
+    // PRIORITY: Check Integration model first (database), then fallback to env vars
+    let accessToken: string | null = null
+    let phoneNumberId: string | null = null
+    let verifyToken: string | null = null
+    let appSecret: string | null = null
+
+    try {
+      const integration = await prisma.integration.findUnique({
+        where: { name: 'whatsapp' },
+      })
+
+      if (integration) {
+        // Get from config JSON
+        if (integration.config) {
+          try {
+            const config = typeof integration.config === 'string'
+              ? JSON.parse(integration.config)
+              : integration.config
+            
+            accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
+            phoneNumberId = config.phoneNumberId || null
+            verifyToken = config.webhookVerifyToken || null
+            appSecret = integration.apiSecret || config.appSecret || null
+          } catch (e) {
+            console.warn('Failed to parse integration config:', e)
+          }
+        } else {
+          // Fallback to direct fields
+          accessToken = integration.accessToken || integration.apiKey || null
+          appSecret = integration.apiSecret || null
+        }
+      }
+    } catch (e) {
+      console.warn('Could not fetch integration from DB:', e)
+    }
+
+    // Fallback to environment variables if not found in database
+    if (!accessToken) accessToken = process.env.WHATSAPP_ACCESS_TOKEN || null
+    if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
+    if (!verifyToken) verifyToken = process.env.WHATSAPP_VERIFY_TOKEN || null
+    if (!appSecret) appSecret = process.env.WHATSAPP_APP_SECRET || null
 
     // Get last inbound message webhook event
     let lastInboundMessage = null
