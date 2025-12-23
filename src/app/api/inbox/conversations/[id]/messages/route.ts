@@ -49,11 +49,35 @@ export async function POST(
     }
 
     // Get conversation with contact
+    // Use select instead of include to avoid loading fields that may not exist yet (infoSharedAt, etc.)
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: {
-        contact: true,
-        lead: true,
+      select: {
+        id: true,
+        contactId: true,
+        leadId: true,
+        channel: true,
+        lastInboundAt: true,
+        contact: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+          },
+        },
+        lead: {
+          select: {
+            id: true,
+            stage: true,
+            serviceTypeId: true,
+            nextFollowUpAt: true,
+            lastContactAt: true,
+            lastContactChannel: true,
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+            // These will be available after migration is run
+          },
+        },
       },
     })
 
