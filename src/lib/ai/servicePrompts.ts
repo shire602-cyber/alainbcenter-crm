@@ -6,7 +6,7 @@
  */
 
 import { prisma } from '../prisma'
-import { getSystemPrompt, getCompanyIdentity, getKnowledgeBase, getServiceInfo } from './prompts'
+import { getSystemPrompt } from './prompts'
 
 export interface ServicePromptConfig {
   serviceType: string
@@ -110,19 +110,8 @@ export async function buildServiceEnhancedPrompt(
     }
   }
 
-  // Add general service info from knowledge base
-  const serviceInfo = await getServiceInfo()
-  if (serviceType && serviceInfo[serviceType]) {
-    const info = serviceInfo[serviceType]
-    enhanced += `\n\nService Information:\n`
-    enhanced += `Description: ${info.description}\n`
-    if (info.pricing) {
-      enhanced += `Pricing: ${info.pricing}\n`
-    }
-    if (info.requirements && info.requirements.length > 0) {
-      enhanced += `Requirements: ${info.requirements.join(', ')}\n`
-    }
-  }
+  // Service information can be added here if needed
+  // For now, service-specific configs are handled above
 
   return enhanced
 }
@@ -208,3 +197,4 @@ export async function saveServicePromptConfig(
     throw error
   }
 }
+
