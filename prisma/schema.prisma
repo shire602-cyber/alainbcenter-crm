@@ -514,3 +514,18 @@ model MessageStatusEvent {
   @@index([conversationId, receivedAt])
   @@index([status, receivedAt])
 }
+
+model AITrainingDocument {
+  id            Int      @id @default(autoincrement())
+  title         String
+  content       String   @db.Text
+  type          String   // guidance | examples | policies | scripts
+  createdByUserId Int
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  createdBy     User     @relation(fields: [createdByUserId], references: [id])
+
+  @@index([type])
+  @@index([createdAt])
+}
