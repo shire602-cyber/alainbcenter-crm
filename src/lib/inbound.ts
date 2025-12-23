@@ -165,8 +165,16 @@ export async function handleInboundMessage(
 
   // Create contact if not found
   if (!contact) {
+    // Use phone number as display name if no name provided
+    let displayName = fromName
+    if (!displayName && contactLookupField === 'phone' && normalizedAddress) {
+      displayName = normalizedAddress
+    } else if (!displayName) {
+      displayName = `Unknown ${channel} User`
+    }
+    
     const contactData: any = {
-      fullName: fromName || `Unknown ${channel} User`,
+      fullName: displayName,
       source: channelLower,
     }
 
@@ -260,6 +268,20 @@ export async function handleInboundMessage(
   }
 
   // Step 6: Create Message record (with idempotency check via providerMessageId)
+  // Determine message type based on media
+  let messageType = 'text'
+  if (mediaUrl && mediaMimeType) {
+    if (mediaMimeType.startsWith('image/')) {
+      messageType = 'image'
+    } else if (mediaMimeType.startsWith('video/')) {
+      messageType = 'video'
+    } else if (mediaMimeType.startsWith('audio/')) {
+      messageType = 'audio'
+    } else if (mediaMimeType.startsWith('application/') || mediaMimeType.includes('pdf') || mediaMimeType.includes('document')) {
+      messageType = 'document'
+    }
+  }
+  
   let message
   let isDuplicate = false
   try {
@@ -270,7 +292,7 @@ export async function handleInboundMessage(
         contactId: contact.id,
         direction: 'inbound', // Use lowercase to match inbox expectations
         channel: channelLower,
-        type: 'text',
+        type: messageType,
         body: body || null,
         mediaUrl: mediaUrl || null,
         mediaMimeType: mediaMimeType || null,
