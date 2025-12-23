@@ -615,24 +615,41 @@ export default function InboxPage() {
               </div>
 
               {/* Message Input */}
-              <div className="border-t border-slate-200 dark:border-slate-800 p-3">
-                <form onSubmit={handleSendMessage} className="flex gap-2">
-                  <Input
+              <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
+                  <Textarea
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder="Type your message..."
-                    className="flex-1 h-9 text-sm"
+                    className="flex-1 min-h-[44px] max-h-32 text-sm resize-none"
                     disabled={sending}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && !e.shiftKey) {
+                        e.preventDefault()
+                        if (newMessage.trim() && !sending) {
+                          handleSendMessage(e as any)
+                        }
+                      }
+                    }}
+                    rows={1}
                   />
-                  <Button type="submit" disabled={!newMessage.trim() || sending} size="sm" className="gap-1.5">
+                  <Button 
+                    type="submit" 
+                    disabled={!newMessage.trim() || sending} 
+                    size="default"
+                    className="gap-2 h-[44px] px-4"
+                  >
                     {sending ? (
-                      <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                      <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
-                      <Send className="h-3.5 w-3.5" />
+                      <Send className="h-4 w-4" />
                     )}
-                    Send
+                    <span className="hidden sm:inline">Send</span>
                   </Button>
                 </form>
+                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                  Press Enter to send, Shift+Enter for new line
+                </p>
               </div>
             </>
           ) : (
