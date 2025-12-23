@@ -192,12 +192,23 @@ export async function POST(req: NextRequest) {
   let body: any = null
 
   try {
+    console.log('📥 WhatsApp webhook POST received')
+    
     // Get raw body for signature verification
     rawBody = await req.text()
     
     try {
       body = JSON.parse(rawBody)
+      console.log('✅ Parsed webhook body:', {
+        hasEntry: !!body.entry,
+        entryCount: body.entry?.length || 0,
+        firstEntryHasChanges: !!body.entry?.[0]?.changes,
+        firstChangeHasValue: !!body.entry?.[0]?.changes?.[0]?.value,
+        hasMessages: !!body.entry?.[0]?.changes?.[0]?.value?.messages,
+        hasStatuses: !!body.entry?.[0]?.changes?.[0]?.value?.statuses,
+      })
     } catch {
+      console.error('❌ Failed to parse webhook JSON')
       return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
     }
 
@@ -378,6 +389,8 @@ export async function POST(req: NextRequest) {
 
     // Handle incoming messages (IMPROVED - create contacts/leads if needed)
     if (value?.messages) {
+      console.log(`📨 Processing ${value.messages.length} incoming message(s)`)
+      
       for (const message of value.messages) {
         const from = message.from // Phone number without + (e.g., "971501234567")
         const messageId = message.id
@@ -385,6 +398,8 @@ export async function POST(req: NextRequest) {
         const timestamp = message.timestamp
           ? new Date(parseInt(message.timestamp) * 1000)
           : new Date()
+        
+        console.log(`📨 Processing message ${messageId} from ${from}, type: ${messageType}`)
         
         // Extract message text/content and media info
         let messageText = message.text?.body || ''
@@ -416,6 +431,13 @@ export async function POST(req: NextRequest) {
           const phoneNumberId = value.metadata?.phone_number_id
           const externalId = buildWhatsAppExternalId(phoneNumberId, from)
 
+          console.log(`🔄 Calling handleInboundMessage for ${from}`, {
+            externalId,
+            messageId,
+            messageText: messageText.substring(0, 50),
+            phoneNumberId,
+          })
+
           const result = await handleInboundMessage({
             channel: 'WHATSAPP',
             externalId: externalId,
@@ -426,6 +448,13 @@ export async function POST(req: NextRequest) {
             receivedAt: timestamp,
             mediaUrl: mediaUrl,
             mediaMimeType: mediaMimeType,
+          })
+
+          console.log(`✅ Successfully processed inbound message`, {
+            messageId,
+            conversationId: result.conversation.id,
+            leadId: result.lead.id,
+            contactId: result.contact.id,
           })
 
           // Update conversation with WhatsApp-specific fields (if schema supports them)
