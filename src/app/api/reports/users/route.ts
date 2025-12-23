@@ -18,9 +18,40 @@ export async function GET(req: NextRequest) {
     const users = await prisma.user.findMany({
       include: {
         assignedLeads: {
+          select: {
+            id: true,
+            contactId: true,
+            stage: true,
+            pipelineStage: true,
+            leadType: true,
+            serviceTypeId: true,
+            priority: true,
+            aiScore: true,
+            nextFollowUpAt: true,
+            lastContactAt: true,
+            expiryDate: true,
+            createdAt: true,
+            updatedAt: true,
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+          },
           include: {
-            contact: true,
-            tasks: true,
+            contact: {
+              select: {
+                id: true,
+                fullName: true,
+                phone: true,
+                email: true,
+              },
+            },
+            tasks: {
+              select: {
+                id: true,
+                title: true,
+                status: true,
+                dueAt: true,
+                createdAt: true,
+              },
+            },
             conversations: {
               include: {
                 messages: {
@@ -32,13 +63,34 @@ export async function GET(req: NextRequest) {
                     ],
                     createdAt: { gte: thirtyDaysAgo },
                   },
+                  select: {
+                    id: true,
+                    direction: true,
+                    createdAt: true,
+                  },
                 },
               },
             },
           },
         },
-        assignedTasks: true,
-        createdTasks: true,
+        assignedTasks: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            dueAt: true,
+            createdAt: true,
+          },
+        },
+        createdTasks: {
+          select: {
+            id: true,
+            title: true,
+            status: true,
+            dueAt: true,
+            createdAt: true,
+          },
+        },
       },
     }).catch((err) => {
       console.error('Error fetching users in reports route:', err)
