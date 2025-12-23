@@ -9,7 +9,7 @@
 
 import { useState, useEffect } from 'react'
 import { MainLayout } from '@/components/layout/MainLayout'
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card'
+import { BentoCard } from '@/components/dashboard/BentoCard'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Input } from '@/components/ui/input'
@@ -17,6 +17,7 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { FileText, Upload, Trash2, BookOpen, Sparkles, Save } from 'lucide-react'
+import { BentoCard } from '@/components/dashboard/BentoCard'
 
 interface TrainingDocument {
   id: number
