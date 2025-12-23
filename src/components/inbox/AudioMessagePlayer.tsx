@@ -62,39 +62,64 @@ export function AudioMessagePlayer({ mediaId, mimeType, messageId, className }: 
   // Audio event handlers
   useEffect(() => {
     const audio = audioRef.current
-    if (!audio) return
+    if (!audio || !audioUrl) return
 
     const updateTime = () => setCurrentTime(audio.currentTime)
-    const updateDuration = () => setDuration(audio.duration)
+    const updateDuration = () => {
+      if (audio.duration && !isNaN(audio.duration)) {
+        setDuration(audio.duration)
+      }
+    }
+    const handlePlay = () => setIsPlaying(true)
+    const handlePause = () => setIsPlaying(false)
     const handleEnded = () => setIsPlaying(false)
-    const handleError = () => {
-      setError('Failed to play audio')
+    const handleError = (e: any) => {
+      console.error('Audio playback error:', e)
+      setError('Failed to play audio. The file may be corrupted or in an unsupported format.')
       setIsPlaying(false)
     }
 
     audio.addEventListener('timeupdate', updateTime)
     audio.addEventListener('loadedmetadata', updateDuration)
+    audio.addEventListener('canplay', updateDuration)
+    audio.addEventListener('play', handlePlay)
+    audio.addEventListener('pause', handlePause)
     audio.addEventListener('ended', handleEnded)
     audio.addEventListener('error', handleError)
+
+    // Try to load the audio
+    if (audioUrl) {
+      audio.load()
+    }
 
     return () => {
       audio.removeEventListener('timeupdate', updateTime)
       audio.removeEventListener('loadedmetadata', updateDuration)
+      audio.removeEventListener('canplay', updateDuration)
+      audio.removeEventListener('play', handlePlay)
+      audio.removeEventListener('pause', handlePause)
       audio.removeEventListener('ended', handleEnded)
       audio.removeEventListener('error', handleError)
     }
   }, [audioUrl])
 
-  const togglePlay = () => {
+  const togglePlay = async () => {
     const audio = audioRef.current
     if (!audio || !audioUrl) return
 
-    if (isPlaying) {
-      audio.pause()
-    } else {
-      audio.play()
+    try {
+      if (isPlaying) {
+        audio.pause()
+        setIsPlaying(false)
+      } else {
+        await audio.play()
+        setIsPlaying(true)
+      }
+    } catch (error: any) {
+      console.error('Error toggling audio playback:', error)
+      setError('Failed to play audio. Please try again.')
+      setIsPlaying(false)
     }
-    setIsPlaying(!isPlaying)
   }
 
   const handleDownload = () => {

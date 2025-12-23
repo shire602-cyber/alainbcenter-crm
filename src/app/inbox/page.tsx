@@ -565,11 +565,13 @@ function InboxPageContent() {
                       )}
                       onClick={() => handleSelectConversation(conv)}
                     >
-                      <Avatar fallback={conv.contact.fullName || conv.contact.phone} size="sm" />
+                      <Avatar fallback={conv.contact.fullName && !conv.contact.fullName.includes('Unknown') ? conv.contact.fullName : conv.contact.phone} size="sm" />
                         <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
                           <p className="font-medium text-xs truncate text-slate-900 dark:text-slate-100">
-                              {conv.contact.fullName || conv.contact.phone}
+                              {conv.contact.fullName && !conv.contact.fullName.includes('Unknown') 
+                                ? conv.contact.fullName 
+                                : conv.contact.phone}
                             </p>
                           <div className="flex items-center gap-1 shrink-0">
                             <ChannelIcon className="h-3 w-3 text-slate-400" />
@@ -605,11 +607,17 @@ function InboxPageContent() {
                   <Avatar fallback={selectedConversation.contact.fullName || selectedConversation.contact.phone} size="md" />
                     <div>
                     <h3 className="text-sm font-semibold tracking-tight">
-                      {selectedConversation.contact.fullName || selectedConversation.contact.phone}
+                      {selectedConversation.contact.fullName && 
+                       !selectedConversation.contact.fullName.includes('Unknown') 
+                        ? selectedConversation.contact.fullName 
+                        : selectedConversation.contact.phone}
                     </h3>
-                    <p className="text-xs text-slate-500 dark:text-slate-400">
-                            {selectedConversation.contact.phone}
-                    </p>
+                    {selectedConversation.contact.fullName && 
+                     !selectedConversation.contact.fullName.includes('Unknown') && (
+                      <p className="text-xs text-slate-500 dark:text-400">
+                        {selectedConversation.contact.phone}
+                      </p>
+                    )}
                     </div>
                   </div>
                   {selectedLead && (
