@@ -158,64 +158,60 @@ export default function AITrainingPage() {
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
           {/* Left: Document List */}
-          <Card className="lg:col-span-1">
-            <CardHeader>
-              <CardTitle>Training Documents</CardTitle>
-              <CardDescription>
-                {documents.length} document{documents.length !== 1 ? 's' : ''} available
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loading ? (
-                <div className="space-y-2">
-                  <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
-                  <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
-                </div>
-              ) : documents.length === 0 ? (
-                <div className="text-center py-8 text-muted-foreground">
-                  <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                  <p>No documents yet</p>
-                  <p className="text-sm">Create your first training document</p>
-                </div>
-              ) : (
-                <div className="space-y-2">
-                  {documents.map((doc) => (
-                    <div
-                      key={doc.id}
-                      onClick={() => selectDocument(doc)}
-                      className={`p-3 rounded-lg border cursor-pointer transition-colors ${
-                        selectedDoc?.id === doc.id
-                          ? 'bg-primary/10 border-primary'
-                          : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
-                      }`}
-                    >
-                      <div className="flex items-start justify-between gap-2">
-                        <div className="flex-1 min-w-0">
-                          <h3 className="font-medium text-sm truncate">{doc.title}</h3>
-                          <div className="flex items-center gap-2 mt-1">
-                            <Badge variant="outline" className="text-xs">
-                              {typeLabels[doc.type]}
-                            </Badge>
-                          </div>
+          <BentoCard className="lg:col-span-1" title="Training Documents">
+            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+              {documents.length} document{documents.length !== 1 ? 's' : ''} available
+            </p>
+            {loading ? (
+              <div className="space-y-2">
+                <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+              </div>
+            ) : documents.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <FileText className="h-12 w-12 mx-auto mb-2 opacity-50" />
+                <p className="text-sm">No documents yet</p>
+                <p className="text-xs text-slate-500">Create your first training document</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
+                {documents.map((doc) => (
+                  <div
+                    key={doc.id}
+                    onClick={() => selectDocument(doc)}
+                    className={`p-3 rounded-lg border cursor-pointer transition-colors ${
+                      selectedDoc?.id === doc.id
+                        ? 'bg-primary/10 border-primary'
+                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    }`}
+                  >
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="flex-1 min-w-0">
+                        <h3 className="font-medium text-sm truncate">{doc.title}</h3>
+                        <div className="flex items-center gap-2 mt-1">
+                          <Badge variant="outline" className="text-xs">
+                            {typeLabels[doc.type]}
+                          </Badge>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={(e) => {
-                            e.stopPropagation()
-                            deleteDocument(doc.id)
-                          }}
-                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
-                        >
-                          <Trash2 className="h-3 w-3" />
-                        </Button>
                       </div>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={(e) => {
+                          e.stopPropagation()
+                          deleteDocument(doc.id)
+                        }}
+                        className="h-6 w-6 p-0 text-red-600 hover:text-red-700"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </Button>
                     </div>
-                  ))}
-                </div>
-              )}
+                  </div>
+                ))}
+              </div>
+            )}
           </BentoCard>
 
           {/* Right: Editor */}
