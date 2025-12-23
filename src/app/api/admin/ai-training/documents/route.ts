@@ -10,9 +10,23 @@ export async function GET(req: NextRequest) {
   try {
     await requireAdminApi()
 
-    const documents = await prisma.aITrainingDocument.findMany({
-      orderBy: { updatedAt: 'desc' },
-    })
+    // Check if table exists before querying (defensive)
+    let documents: any[] = []
+    try {
+      documents = await prisma.aITrainingDocument.findMany({
+        orderBy: { updatedAt: 'desc' },
+      })
+    } catch (error: any) {
+      // Table doesn't exist yet - return empty array
+      if (error.code === 'P2021' || error.message?.includes('does not exist')) {
+        console.warn('AITrainingDocument table does not exist yet, returning empty array')
+        return NextResponse.json({
+          ok: true,
+          documents: [],
+        })
+      }
+      throw error
+    }
 
     return NextResponse.json({
       ok: true,
@@ -45,14 +59,26 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const document = await prisma.aITrainingDocument.create({
-      data: {
-        title: title.trim(),
-        content: content.trim(),
-        type,
-        createdByUserId: user.id,
-      },
-    })
+    let document
+    try {
+      document = await prisma.aITrainingDocument.create({
+        data: {
+          title: title.trim(),
+          content: content.trim(),
+          type,
+          createdByUserId: user.id,
+        },
+      })
+    } catch (error: any) {
+      // Table doesn't exist yet
+      if (error.code === 'P2021' || error.message?.includes('does not exist')) {
+        return NextResponse.json(
+          { ok: false, error: 'AI Training table does not exist. Please run database migration first.' },
+          { status: 503 }
+        )
+      }
+      throw error
+    }
 
     return NextResponse.json({
       ok: true,
@@ -85,14 +111,26 @@ export async function PUT(req: NextRequest) {
       )
     }
 
-    const document = await prisma.aITrainingDocument.update({
-      where: { id: parseInt(id) },
-      data: {
-        title: title.trim(),
-        content: content.trim(),
-        type,
-      },
-    })
+    let document
+    try {
+      document = await prisma.aITrainingDocument.update({
+        where: { id: parseInt(id) },
+        data: {
+          title: title.trim(),
+          content: content.trim(),
+          type,
+        },
+      })
+    } catch (error: any) {
+      // Table doesn't exist yet
+      if (error.code === 'P2021' || error.message?.includes('does not exist')) {
+        return NextResponse.json(
+          { ok: false, error: 'AI Training table does not exist. Please run database migration first.' },
+          { status: 503 }
+        )
+      }
+      throw error
+    }
 
     return NextResponse.json({
       ok: true,
