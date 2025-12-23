@@ -179,6 +179,24 @@ export function buildModeSpecificDraftPrompt(
 - Offers to customize based on their needs
 - Includes a clear next step (e.g., "Schedule a call" or "Reply for detailed quote")`
       break
+    case 'REMIND':
+      modeInstructions = `Generate a REMINDER message that:
+- Gently reminds them about an upcoming deadline, follow-up, or action item
+- Creates appropriate urgency without being pushy
+- Offers assistance if they need help
+- Provides clear next steps
+- Is friendly and supportive
+`
+      break
+    case 'BOOK_CALL':
+      modeInstructions = `Generate a CALL BOOKING message that:
+- Invites them to schedule a call or consultation
+- Highlights the benefits of speaking directly
+- Makes it easy to book (e.g., "Reply with your preferred time" or "Click here to book")
+- Suggests available time slots if possible
+- Is warm and inviting, not salesy
+`
+      break
   }
 
   let prompt = `${getSystemPrompt()}
