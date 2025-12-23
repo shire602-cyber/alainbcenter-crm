@@ -252,7 +252,7 @@ export async function handleInboundMessage(
         unreadCount: 1,
       },
     })
-    console.log(`✅ Created new conversation: ${conversation.id}`)
+    console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}`)
   } else {
     // Update conversation
     await prisma.conversation.update({
@@ -266,6 +266,7 @@ export async function handleInboundMessage(
         ...(externalId && !conversation.externalId ? { externalId } : {}),
       },
     })
+    console.log(`✅ Updated conversation: ${conversation.id} - unreadCount incremented`)
   }
 
   // Step 6: Create Message record

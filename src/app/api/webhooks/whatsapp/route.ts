@@ -513,17 +513,32 @@ export async function POST(req: NextRequest) {
           if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
             console.log(`⚠️ Duplicate message ${messageId} detected via constraint`)
           } else {
-            console.error(`❌ Error creating communication log:`, error)
-            // Log error
+            console.error(`❌ Error processing inbound message:`, {
+              error: error.message,
+              stack: error.stack,
+              messageId,
+              from,
+              errorCode: error.code,
+            })
+            // Log error with full details
             try {
               await prisma.externalEventLog.create({
                 data: {
                   provider: 'whatsapp',
-                  externalId: `error-${Date.now()}`,
-                  payload: JSON.stringify({ error: error.message, messageId }).substring(0, 20000),
+                  externalId: `error-${Date.now()}-${messageId}`,
+                  payload: JSON.stringify({ 
+                    error: error.message, 
+                    stack: error.stack,
+                    messageId,
+                    from,
+                    errorCode: error.code,
+                    timestamp: new Date().toISOString(),
+                  }).substring(0, 20000),
                 },
               })
-            } catch {}
+            } catch (logError) {
+              console.error('Failed to log error:', logError)
+            }
           }
         }
       }
