@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
           status: result.ok ? 'SUCCESS' : 'FAILED',
           message: result.ok 
             ? `Manual run: ${result.totals?.rules || 0} rules, ${result.totals?.sent || 0} sent, ${result.totals?.skipped || 0} skipped`
-            : result.error || 'Run failed',
+            : 'Run failed',
           details: JSON.stringify({
             totals: result.totals,
             mode: dryRun ? 'dry-run' : 'live',
