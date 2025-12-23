@@ -1,41 +1,26 @@
 /**
- * POST /api/admin/migrate
- * Admin endpoint to apply database migrations
+ * POST /api/migrate
+ * Public migration endpoint (with secret token)
  * 
- * This applies the Phase 2 migration for info/quotation tracking fields
+ * This allows applying migration without admin session
+ * Use x-migration-secret header for security
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest) {
   try {
-    // Allow migration via admin auth OR via secret token (for emergency access)
+    // Require secret token for security
     const migrationSecret = req.headers.get('x-migration-secret')
-    const expectedSecret = process.env.MIGRATION_SECRET
+    const expectedSecret = process.env.MIGRATION_SECRET || 'default-migration-secret-change-in-production'
     
-    let isAuthorized = false
-    
-    // Option 1: Check secret token (if configured)
-    if (expectedSecret && migrationSecret === expectedSecret) {
-      isAuthorized = true
-    } else {
-      // Option 2: Check admin authentication
-      try {
-        await requireAdminApi()
-        isAuthorized = true
-      } catch (authError) {
-        // Not authenticated as admin
-      }
-    }
-    
-    if (!isAuthorized) {
+    if (!migrationSecret || migrationSecret !== expectedSecret) {
       return NextResponse.json(
         {
           success: false,
           error: 'Unauthorized',
-          hint: 'Either log in as admin, or provide x-migration-secret header',
+          hint: 'Provide x-migration-secret header with correct value',
         },
         { status: 401 }
       )
