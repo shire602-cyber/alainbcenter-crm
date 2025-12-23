@@ -39,6 +39,7 @@ model User {
   assignedTasks         Task[]             @relation("AssignedTasks")
   createdTasks          Task[]             @relation("CreatedTasks")
   uploadedDocuments     Document[]         @relation("UploadedDocuments")
+  createdAITrainingDocs AITrainingDocument[]
 }
 
 model ServiceType {
