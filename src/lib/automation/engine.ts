@@ -751,23 +751,15 @@ async function findRuleCandidates(rule: any, now: Date): Promise<any[]> {
     const endDate = new Date(targetDate)
     endDate.setDate(endDate.getDate() + 1)
 
-    // Use raw query for new fields until migration is applied
-    const leadIds = await prisma.$queryRaw<Array<{ id: number }>>`
-      SELECT id FROM "Lead"
-      WHERE "infoSharedAt" IS NOT NULL
-      AND "infoSharedAt" >= ${startDate}
-      AND "infoSharedAt" <= ${endDate}
-      AND "autopilotEnabled" != 0
-      AND "stage" NOT IN ('COMPLETED_WON', 'LOST')
-    `
-
-    if (leadIds.length === 0) {
-      return []
-    }
-
+    // Migration applied - can use Prisma directly
     return await prisma.lead.findMany({
       where: {
-        id: { in: leadIds.map(r => r.id) },
+        autopilotEnabled: { not: false },
+        stage: { notIn: ['COMPLETED_WON', 'LOST'] },
+        infoSharedAt: {
+          gte: startDate,
+          lte: endDate,
+        },
       },
       include: {
         contact: true,
@@ -824,6 +816,9 @@ async function findRuleCandidates(rule: any, now: Date): Promise<any[]> {
           orderBy: { createdAt: 'desc' },
           take: 5,
         },
+        expiryItems: {
+          orderBy: { expiryDate: 'asc' },
+        },
       },
     })
 
@@ -846,10 +841,7 @@ async function findRuleCandidates(rule: any, now: Date): Promise<any[]> {
       return !hasOutboundAfter
     })
 
-    return leadsNeedingEscalation.map((lead) => ({
-      ...lead,
-      expiryItems: [],
-    }))
+    return leadsNeedingEscalation
   }
 
   if (trigger === 'FOLLOWUP_OVERDUE') {

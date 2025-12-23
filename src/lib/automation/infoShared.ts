@@ -7,7 +7,6 @@
 
 import { prisma } from '../prisma'
 import { runRuleOnLead, AutomationContext } from './engine'
-import { Prisma } from '@prisma/client'
 
 /**
  * Detect if a message contains info/quotation keywords
@@ -67,26 +66,11 @@ export async function markInfoShared(
     updateData.quotationSentAt = now
   }
 
-  // Use $executeRaw for now until migration is applied, or use update with type assertion
-  try {
-    await prisma.lead.update({
-      where: { id: leadId },
-      data: updateData as any, // Type assertion until migration applied
-    })
-  } catch (error: any) {
-    // If fields don't exist yet, use raw SQL
-    if (error.message?.includes('Unknown column') || error.message?.includes('no such column')) {
-      await prisma.$executeRaw`
-        UPDATE "Lead" 
-        SET "infoSharedAt" = ${now}, 
-            "lastInfoSharedType" = ${infoType}
-            ${infoType === 'quotation' ? Prisma.sql`, "quotationSentAt" = ${now}` : Prisma.empty}
-        WHERE id = ${leadId}
-      `
-    } else {
-      throw error
-    }
-  }
+  // Migration applied - fields now exist in schema
+  await prisma.lead.update({
+    where: { id: leadId },
+    data: updateData,
+  })
 
   console.log(`✅ Marked info shared for lead ${leadId}: ${infoType}`)
 

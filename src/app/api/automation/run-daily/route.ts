@@ -477,19 +477,22 @@ export async function POST(req: NextRequest) {
     const infoSharedRules = activeRules.filter((r) => r.trigger === 'INFO_SHARED')
 
     if (infoSharedRules.length > 0) {
-      // Find leads where info was shared (using raw query for now until Prisma client regenerated)
-      const leadsWithInfoShared = await prisma.$queryRaw<Array<{
-        id: number
-        infoSharedAt: Date | null
-        lastInfoSharedType: string | null
-        contactId: number
-        pipelineStage: string
-      }>>`
-        SELECT id, "infoSharedAt", "lastInfoSharedType", "contactId", "pipelineStage"
-        FROM "Lead"
-        WHERE "infoSharedAt" IS NOT NULL
-        AND "pipelineStage" NOT IN ('completed', 'lost')
-      `
+      // Find leads where info was shared - migration applied, can use Prisma directly
+      const leadsWithInfoShared = await prisma.lead.findMany({
+        where: {
+          infoSharedAt: { not: null },
+          pipelineStage: {
+            notIn: ['completed', 'lost'],
+          },
+        },
+        select: {
+          id: true,
+          infoSharedAt: true,
+          lastInfoSharedType: true,
+          contactId: true,
+          pipelineStage: true,
+        },
+      })
 
       for (const leadRow of leadsWithInfoShared) {
         if (!leadRow.infoSharedAt) continue
@@ -547,17 +550,13 @@ export async function POST(req: NextRequest) {
               throw error
             }
 
-            // Build context and run rule
-            // Cast lead to include new fields (will be available after migration)
-            const leadWithNewFields = lead as any & {
-              infoSharedAt: Date | null
-              lastInfoSharedType: string | null
-            }
-            leadWithNewFields.infoSharedAt = leadRow.infoSharedAt
-            leadWithNewFields.lastInfoSharedType = leadRow.lastInfoSharedType
-
+            // Build context and run rule - migration applied, fields available
             const context = {
-              lead: leadWithNewFields,
+              lead: {
+                ...lead,
+                infoSharedAt: leadRow.infoSharedAt,
+                lastInfoSharedType: leadRow.lastInfoSharedType,
+              },
               contact: lead.contact,
               expiries: lead.expiryItems,
               recentMessages: lead.messages,
