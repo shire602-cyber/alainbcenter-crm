@@ -269,27 +269,49 @@ export async function handleInboundMessage(
     console.log(`✅ Updated conversation: ${conversation.id} - unreadCount incremented`)
   }
 
-  // Step 6: Create Message record
-  const message = await prisma.message.create({
-    data: {
-      conversationId: conversation.id,
-      leadId: lead.id,
-      contactId: contact.id,
-      direction: 'inbound', // Use lowercase to match inbox expectations
-      channel: channelLower,
-      type: 'text',
-      body: body || null,
-      mediaUrl: mediaUrl || null,
-      mediaMimeType: mediaMimeType || null,
-      providerMessageId: externalMessageId || null,
-      status: 'RECEIVED',
-      payload: rawPayload ? JSON.stringify(rawPayload) : null,
-      rawPayload: rawPayload ? JSON.stringify(rawPayload) : null,
-      createdAt: timestamp,
-    },
-  })
-  
-  console.log(`✅ Created inbound message ${message.id} for conversation ${conversation.id}`)
+  // Step 6: Create Message record (with idempotency check via providerMessageId)
+  let message
+  try {
+    message = await prisma.message.create({
+      data: {
+        conversationId: conversation.id,
+        leadId: lead.id,
+        contactId: contact.id,
+        direction: 'inbound', // Use lowercase to match inbox expectations
+        channel: channelLower,
+        type: 'text',
+        body: body || null,
+        mediaUrl: mediaUrl || null,
+        mediaMimeType: mediaMimeType || null,
+        providerMessageId: externalMessageId || null,
+        status: 'RECEIVED',
+        payload: rawPayload ? JSON.stringify(rawPayload) : null,
+        rawPayload: rawPayload ? JSON.stringify(rawPayload) : null,
+        createdAt: timestamp,
+      },
+    })
+    console.log(`✅ Created inbound message ${message.id} for conversation ${conversation.id}`)
+  } catch (error: any) {
+    // Handle duplicate message (idempotency)
+    if (error.code === 'P2002' && externalMessageId && error.meta?.target?.includes('providerMessageId')) {
+      console.log(`⚠️ Duplicate message detected (providerMessageId: ${externalMessageId}), fetching existing`)
+      message = await prisma.message.findUnique({
+        where: { providerMessageId: externalMessageId },
+      })
+      if (!message) {
+        throw new Error('Duplicate message detected but could not fetch existing message')
+      }
+      console.log(`✅ Using existing message ${message.id}`)
+    } else {
+      console.error(`❌ Failed to create message:`, {
+        error: error.message,
+        code: error.code,
+        externalMessageId,
+        conversationId: conversation.id,
+      })
+      throw error
+    }
+  }
 
   // Create initial status event
   try {
