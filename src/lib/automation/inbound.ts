@@ -122,6 +122,37 @@ export async function runInboundAutomationsForMessage(
       return
     }
 
+    // Phase 4: Check for human agent request (before AI processing)
+    if (message.body && message.body.trim().length > 0) {
+      const { detectHumanAgentRequest, createAgentTask } = await import('./agentFallback')
+      const humanRequest = detectHumanAgentRequest(message.body)
+      
+      if (humanRequest.isRequestingHuman && humanRequest.confidence >= 50) {
+        // Customer wants human agent - create task immediately
+        try {
+          await createAgentTask(lead.id, 'human_request', {
+            messageId: message.id,
+            messageText: message.body,
+            confidence: humanRequest.confidence,
+          })
+          
+          // Also update lead to indicate human intervention needed
+          await prisma.lead.update({
+            where: { id: lead.id },
+            data: {
+              notes: lead.notes 
+                ? `${lead.notes}\n\n[System]: Customer requested human agent on ${new Date().toISOString()}`
+                : `[System]: Customer requested human agent on ${new Date().toISOString()}`,
+            },
+          })
+          
+          console.log(`⚠️ Human agent requested for lead ${lead.id} - task created`)
+        } catch (error: any) {
+          console.error('Failed to create agent task for human request:', error.message)
+        }
+      }
+    }
+
     // Phase 1: Extract data from message using AI (non-blocking)
     if (message.body && message.body.trim().length > 0) {
       try {

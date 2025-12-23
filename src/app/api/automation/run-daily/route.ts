@@ -584,7 +584,78 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================
-    // PART C: Follow-up Reminders
+    // PART C: Escalation Checks (Phase 4)
+    // ========================================
+    const { checkLeadNeedsEscalation, createAgentTask } = await import('@/lib/automation/agentFallback')
+    
+    // Check all active leads for escalation needs
+    const activeLeads = await prisma.lead.findMany({
+      where: {
+        pipelineStage: {
+          notIn: ['completed', 'lost'],
+        },
+      },
+      include: {
+        contact: true,
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+        tasks: {
+          where: {
+            status: { not: 'COMPLETED' },
+            meta: {
+              contains: 'autoCreated',
+            },
+          },
+          take: 1,
+        },
+      },
+    })
+
+    for (const lead of activeLeads) {
+      // Skip if already has an active escalation task
+      if (lead.tasks && lead.tasks.length > 0) {
+        continue
+      }
+
+      const escalation = await checkLeadNeedsEscalation(lead.id)
+      
+      if (escalation.needsEscalation) {
+        try {
+          // Determine reason from escalation reason
+          let reason: 'no_reply_sla' | 'overdue_followup' | 'stale_lead' | 'complex_query' = 'complex_query'
+          if (escalation.reason?.includes('SLA')) {
+            reason = 'no_reply_sla'
+          } else if (escalation.reason?.includes('overdue')) {
+            reason = 'overdue_followup'
+          } else if (escalation.reason?.includes('inactive')) {
+            reason = 'stale_lead'
+          }
+
+          const lastInbound = lead.messages.find(
+            (m) => m.direction === 'INBOUND' || m.direction === 'IN'
+          )
+          const daysSinceContact = lastInbound
+            ? Math.floor(
+                (today.getTime() - lastInbound.createdAt.getTime()) / (1000 * 60 * 60 * 24)
+              )
+            : null
+
+          await createAgentTask(lead.id, reason, {
+            messageText: lastInbound?.body || undefined,
+            daysSinceLastContact: daysSinceContact || undefined,
+          })
+
+          results.followUpsSent++ // Count as action taken
+        } catch (error: any) {
+          results.errors.push(`Lead ${lead.id} (escalation): ${error.message}`)
+        }
+      }
+    }
+
+    // ========================================
+    // PART D: Follow-up Reminders
     // ========================================
     const followupRules = activeRules.filter((r) => r.type === 'followup_due')
 

@@ -215,7 +215,7 @@ async function runFollowupDueRule(
     // Build variables
     const variables = {
       name: (() => {
-        const { getGreetingName } = require('./message-utils')
+        const { getGreetingName } = require('../message-utils')
         return getGreetingName(lead.contact) || 'there'
       })(),
       service: lead.serviceType?.name || lead.leadType || 'service',
@@ -392,7 +392,7 @@ async function runExpiry90Rule(
     // Build variables
     const variables = {
       name: (() => {
-        const { getGreetingName } = require('./message-utils')
+        const { getGreetingName } = require('../message-utils')
         return getGreetingName(lead.contact) || 'there'
       })(),
       service: lead.serviceType?.name || lead.leadType || 'service',
@@ -567,7 +567,7 @@ async function runOverdueRule(
     // Build variables
     const variables = {
       name: (() => {
-        const { getGreetingName } = require('./message-utils')
+        const { getGreetingName } = require('../message-utils')
         return getGreetingName(lead.contact) || 'there'
       })(),
       service: lead.serviceType?.name || lead.leadType || 'service',

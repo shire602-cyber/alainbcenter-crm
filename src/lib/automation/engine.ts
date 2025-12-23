@@ -14,7 +14,7 @@ export type AutomationTrigger =
   | 'LEAD_CREATED'
   | 'NO_ACTIVITY'
   | 'INBOUND_MESSAGE'
-  | 'NO_REPLY_SLA'
+  | 'NO_REPLY_SLA' // Phase 4: No reply within SLA threshold
   | 'FOLLOWUP_DUE'
   | 'FOLLOWUP_OVERDUE'
   | 'INFO_SHARED' // Phase 3: Triggered when info/quotation is shared with customer
@@ -517,6 +517,49 @@ async function evaluateConditions(
     }
   }
 
+  if (rule.trigger === 'NO_REPLY_SLA') {
+    // Phase 4: Check if no reply within SLA
+    const { slaMinutes = 15, escalateAfterMinutes = 60 } = conditions || {}
+    
+    if (!recentMessages || recentMessages.length === 0) {
+      return { met: false, reason: 'No messages found' }
+    }
+
+    const lastInbound = recentMessages.find(
+      (m: any) => m.direction === 'INBOUND' || m.direction === 'IN'
+    )
+
+    if (!lastInbound) {
+      return { met: false, reason: 'No inbound message found' }
+    }
+
+    const now = new Date()
+    const minutesSinceInbound = Math.floor(
+      (now.getTime() - new Date(lastInbound.createdAt).getTime()) / (1000 * 60)
+    )
+
+    // Check if there's an outbound after the last inbound
+    const hasOutboundAfter = recentMessages.some(
+      (m: any) =>
+        (m.direction === 'OUTBOUND' || m.direction === 'OUT') &&
+        new Date(m.createdAt) > new Date(lastInbound.createdAt)
+    )
+
+    if (hasOutboundAfter) {
+      return { met: false, reason: 'Reply already sent' }
+    }
+
+    // Escalate if past escalateAfterMinutes
+    const shouldEscalate = minutesSinceInbound >= escalateAfterMinutes
+
+    return {
+      met: shouldEscalate,
+      reason: !shouldEscalate
+        ? `Only ${minutesSinceInbound} minutes since last inbound (SLA: ${slaMinutes} min, escalate after: ${escalateAfterMinutes} min)`
+        : undefined,
+    }
+  }
+
   if (rule.trigger === 'INBOUND_MESSAGE') {
     const {
       channels = [],
@@ -758,6 +801,55 @@ async function findRuleCandidates(rule: any, now: Date): Promise<any[]> {
         },
       },
     })
+  }
+
+  if (trigger === 'NO_REPLY_SLA') {
+    // Phase 4: Find leads with no reply SLA breach
+    const { escalateAfterMinutes = 60 } = conditions
+      ? (typeof conditions === 'string' ? JSON.parse(conditions) : conditions)
+      : { escalateAfterMinutes: 60 }
+
+    const cutoffTime = new Date(now)
+    cutoffTime.setMinutes(cutoffTime.getMinutes() - escalateAfterMinutes)
+
+    // Get all active leads with recent inbound messages
+    const allLeads = await prisma.lead.findMany({
+      where: {
+        autopilotEnabled: { not: false },
+        stage: { notIn: ['COMPLETED_WON', 'LOST'] },
+      },
+      include: {
+        contact: true,
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 5,
+        },
+      },
+    })
+
+    // Filter leads where last inbound is past SLA and no outbound after
+    const leadsNeedingEscalation = allLeads.filter((lead) => {
+      const lastInbound = lead.messages.find(
+        (m) => m.direction === 'INBOUND' || m.direction === 'IN'
+      )
+
+      if (!lastInbound || lastInbound.createdAt > cutoffTime) {
+        return false
+      }
+
+      const hasOutboundAfter = lead.messages.some(
+        (m) =>
+          (m.direction === 'OUTBOUND' || m.direction === 'OUT') &&
+          m.createdAt > lastInbound.createdAt
+      )
+
+      return !hasOutboundAfter
+    })
+
+    return leadsNeedingEscalation.map((lead) => ({
+      ...lead,
+      expiryItems: [],
+    }))
   }
 
   if (trigger === 'FOLLOWUP_OVERDUE') {

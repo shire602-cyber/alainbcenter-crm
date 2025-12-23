@@ -89,6 +89,9 @@ async function executeAction(
     case 'EXTRACT_AND_UPDATE_LEAD_DATA':
       return await executeExtractAndUpdateLeadData(action, context)
 
+    case 'CREATE_AGENT_TASK':
+      return await executeCreateAgentTask(action, context)
+
     default:
       return {
         success: false,
@@ -439,9 +442,32 @@ async function executeSendAIReply(
   const aiResult = await generateAIAutoresponse(aiContext)
 
   if (!aiResult.success || !aiResult.text) {
+    // Phase 4: If AI fails, create agent task
+    try {
+      const { createAgentTask } = await import('./agentFallback')
+      await createAgentTask(lead.id, 'complex_query', {
+        messageText: recentMessages[0]?.body || 'Unknown',
+      })
+    } catch (error: any) {
+      console.error('Failed to create agent task after AI failure:', error.message)
+    }
+
     return {
       success: false,
       error: aiResult.error || 'Failed to generate AI reply',
+    }
+  }
+
+  // Phase 4: Check AI confidence - if low, create agent task
+  if (aiResult.confidence !== undefined && aiResult.confidence < 70) {
+    try {
+      const { createAgentTask } = await import('./agentFallback')
+      await createAgentTask(lead.id, 'low_confidence', {
+        confidence: aiResult.confidence,
+        messageText: recentMessages[0]?.body || 'Unknown',
+      })
+    } catch (error: any) {
+      console.warn('Failed to create agent task for low confidence:', error.message)
     }
   }
 
@@ -916,6 +942,63 @@ async function executeExtractAndUpdateLeadData(
     return {
       success: false,
       error: error.message || 'Failed to extract and update lead data',
+    }
+  }
+}
+
+/**
+ * Create agent task (Phase 4)
+ */
+async function executeCreateAgentTask(
+  action: any,
+  context: AutomationContext
+): Promise<ActionResult> {
+  const { lead, triggerData } = context
+
+  try {
+    const { createAgentTask } = await import('./agentFallback')
+    
+    const reason = action.reason || 'complex_query'
+    const priority = action.priority || 'NORMAL'
+    
+    // Extract details from trigger data
+    const details: any = {}
+    if (triggerData?.lastMessage) {
+      details.messageId = triggerData.lastMessage.id
+      details.messageText = triggerData.lastMessage.body
+    }
+    if (triggerData?.daysSinceLastContact) {
+      details.daysSinceLastContact = triggerData.daysSinceLastContact
+    }
+    if (triggerData?.hoursOverdue) {
+      details.daysOverdue = Math.floor(triggerData.hoursOverdue / 24)
+    }
+    if (triggerData?.confidence) {
+      details.confidence = triggerData.confidence
+    }
+
+    const taskId = await createAgentTask(lead.id, reason, details)
+
+    // Update task priority if specified
+    if (priority !== 'NORMAL') {
+      await prisma.task.update({
+        where: { id: taskId },
+        data: { priority },
+      })
+    }
+
+    return {
+      success: true,
+      data: {
+        taskId,
+        leadId: lead.id,
+        reason,
+      },
+    }
+  } catch (error: any) {
+    return {
+      success: false,
+      error: error.message || 'Failed to create agent task',
     }
   }
 }
