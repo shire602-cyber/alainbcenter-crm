@@ -2,6 +2,7 @@
 // Wraps whatsappMeta.ts with error handling
 
 import { getWhatsAppMetaConfig, sendWhatsAppViaMeta } from './whatsappMeta'
+import { sendTemplateMessage } from './whatsapp'
 
 export type SendResult = {
   ok: boolean
@@ -14,12 +15,46 @@ export type SendResult = {
  * Send WhatsApp message via Meta Cloud API
  * Reads config from IntegrationSettings or env vars fallback
  * Never throws - always returns result object
+ * 
+ * @param phoneNumber - Phone number in E.164 format
+ * @param message - Message text (for free-form) OR template name (if templateName is provided)
+ * @param options - Optional: templateName, templateParams, language
  */
 export async function sendWhatsAppMessage(
   phoneNumber: string,
-  message: string
+  message: string,
+  options?: {
+    templateName?: string
+    templateParams?: string[]
+    language?: string
+  }
 ): Promise<SendResult> {
   try {
+    // If template name is provided, use template message (works outside 24-hour window)
+    if (options?.templateName) {
+      try {
+        const result = await sendTemplateMessage(
+          phoneNumber,
+          options.templateName,
+          options.language || 'en_US',
+          options.templateParams || []
+        )
+        
+        return {
+          ok: true,
+          externalId: result.messageId,
+          raw: { messageId: result.messageId, waId: result.waId },
+        }
+      } catch (error: any) {
+        console.error('WhatsApp template sender error:', error)
+        return {
+          ok: false,
+          error: error.message || 'Failed to send WhatsApp template message',
+        }
+      }
+    }
+
+    // Otherwise, send free-form text message (only works within 24-hour window)
     // Get config from database
     const config = await getWhatsAppMetaConfig()
 
@@ -77,6 +112,7 @@ export async function sendWhatsAppMessage(
     }
   }
 }
+
 
 
 
