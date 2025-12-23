@@ -74,19 +74,25 @@ export function AutomationRulesManager() {
     setRunResult(null)
 
     try {
-      const res = await fetch('/api/automation/run-daily', {
+      // Use the autopilot run endpoint which handles all automation rules
+      const res = await fetch('/api/autopilot/run', {
         method: 'POST',
         credentials: 'include',
         headers: {
           'Content-Type': 'application/json',
-          'x-autopilot-mode': 'draft', // Use draft mode for safety
         },
       })
 
       const data = await res.json()
 
-      if (res.ok) {
-        setRunResult(data)
+      if (res.ok && data.ok) {
+        setRunResult({
+          success: true,
+          rulesRun: data.totals?.rules || 0,
+          draftsCreated: data.totals?.sent || 0,
+          skipped: data.totals?.skipped || 0,
+          errors: [],
+        })
         await loadStats() // Reload stats after run
       } else {
         setRunResult({
@@ -95,6 +101,7 @@ export function AutomationRulesManager() {
         })
       }
     } catch (error: any) {
+      console.error('Run automation error:', error)
       setRunResult({
         success: false,
         errors: [error.message || 'Failed to run automation'],
