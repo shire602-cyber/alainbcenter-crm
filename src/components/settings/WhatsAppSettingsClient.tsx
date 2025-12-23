@@ -134,7 +134,11 @@ export function WhatsAppSettingsClient() {
   }
 
   const isConfigured = config?.configured.accessToken && config?.configured.phoneNumberId
-  const webhookUrl = process.env.NEXT_PUBLIC_APP_URL
+  
+  // Get webhook URL - use current origin (works on Vercel automatically)
+  const webhookUrl = typeof window !== 'undefined'
+    ? `${window.location.origin}/api/webhooks/whatsapp`
+    : process.env.NEXT_PUBLIC_APP_URL
     ? `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
     : 'https://your-domain.com/api/webhooks/whatsapp'
 
