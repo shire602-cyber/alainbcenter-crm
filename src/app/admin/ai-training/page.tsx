@@ -17,7 +17,6 @@ import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
 import { FileText, Upload, Trash2, BookOpen, Sparkles, Save } from 'lucide-react'
-import { BentoCard } from '@/components/dashboard/BentoCard'
 
 interface TrainingDocument {
   id: number
