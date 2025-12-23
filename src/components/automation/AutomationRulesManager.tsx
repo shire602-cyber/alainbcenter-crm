@@ -86,15 +86,13 @@ export function AutomationRulesManager() {
       const data = await res.json()
 
       if (res.ok && data.ok) {
-        // Store data for display
-        const runData = {
+        setRunResult({
           success: true,
           rulesRun: data.totals?.rules || 0,
           draftsCreated: data.totals?.sent || 0,
+          skippedDuplicates: data.totals?.skipped || 0,
           errors: [],
-          totals: data.totals, // Store full totals for skipped count
-        }
-        setRunResult(runData)
+        })
         await loadStats() // Reload stats after run
       } else {
         setRunResult({
