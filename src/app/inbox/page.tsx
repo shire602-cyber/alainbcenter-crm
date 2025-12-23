@@ -34,6 +34,7 @@ import {
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { AudioMessagePlayer } from '@/components/inbox/AudioMessagePlayer'
 
 type Contact = {
   id: number
@@ -163,6 +164,21 @@ export default function InboxPage() {
   useEffect(() => {
     loadConversations()
   }, [activeChannel])
+
+  // Auto-refresh: Poll for new messages every 3 seconds
+  useEffect(() => {
+    const interval = setInterval(() => {
+      // Refresh conversations list
+      loadConversations()
+      
+      // Refresh messages if a conversation is selected
+      if (selectedConversation) {
+        loadMessages(selectedConversation.id)
+      }
+    }, 3000) // Poll every 3 seconds
+
+    return () => clearInterval(interval)
+  }, [selectedConversation, activeChannel])
 
   async function loadMessages(conversationId: number) {
     try {
@@ -468,29 +484,84 @@ export default function InboxPage() {
                       >
                         <div
                           className={cn(
-                            'max-w-[70%] p-2 rounded-lg text-xs',
+                            'max-w-[75%] p-3 rounded-2xl text-sm shadow-sm transition-all hover:shadow-md',
                             isInbound
-                              ? 'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 rounded-bl-none'
-                              : 'bg-primary text-primary-foreground rounded-br-none'
+                              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700'
+                              : 'bg-primary text-primary-foreground ml-auto'
                           )}
                         >
                           {msg.type === 'text' ? (
-                            <p className="text-sm whitespace-pre-wrap break-words">
+                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
                               {msg.body || '[No content]'}
                             </p>
-                          ) : msg.mediaUrl ? (
-                            <div className="space-y-1">
-                              <p className="text-xs opacity-75">
-                                {msg.type === 'image' && '📷 Image'}
-                                {msg.type === 'audio' && '🎵 Audio'}
-                                {msg.type === 'document' && '📄 Document'}
-                                {msg.type === 'video' && '🎥 Video'}
-                                {!['image', 'audio', 'document', 'video'].includes(msg.type) &&
-                                  `[${msg.type}]`}
-                              </p>
-                              {msg.body && (
+                          ) : msg.type === 'audio' && msg.mediaUrl ? (
+                            <div className="space-y-2">
+                              <AudioMessagePlayer
+                                mediaId={msg.mediaUrl}
+                                mimeType={msg.mediaMimeType}
+                                messageId={msg.id}
+                                className="w-full"
+                              />
+                              {msg.body && msg.body !== '[audio]' && (
+                                <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
+                              )}
+                            </div>
+                          ) : msg.type === 'image' && msg.mediaUrl ? (
+                            <div className="space-y-2">
+                              <div className="relative group">
+                                <img
+                                  src={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                  alt={msg.body || 'Image'}
+                                  className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                  onError={(e) => {
+                                    e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
+                                  }}
+                                />
+                                <a
+                                  href={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
+                                >
+                                  <ImageIcon className="h-6 w-6 text-white" />
+                                </a>
+                              </div>
+                              {msg.body && msg.body !== '[image]' && (
                                 <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
                               )}
+                            </div>
+                          ) : msg.type === 'video' && msg.mediaUrl ? (
+                            <div className="space-y-2">
+                              <div className="relative group">
+                                <video
+                                  src={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                  controls
+                                  className="max-w-full h-auto rounded-lg"
+                                  preload="metadata"
+                                />
+                              </div>
+                              {msg.body && msg.body !== '[video]' && (
+                                <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                              )}
+                            </div>
+                          ) : msg.type === 'document' && msg.mediaUrl ? (
+                            <div className="space-y-2">
+                              <a
+                                href={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                target="_blank"
+                                rel="noopener noreferrer"
+                                className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                              >
+                                <FileText className="h-5 w-5" />
+                                <span className="text-sm font-medium">{msg.body || 'Document'}</span>
+                              </a>
+                            </div>
+                          ) : msg.mediaUrl ? (
+                            <div className="space-y-1">
+                              <p className="text-xs opacity-75 flex items-center gap-1">
+                                {msg.type === 'location' && <MapPin className="h-3 w-3" />}
+                                {msg.body || `[${msg.type}]`}
+                              </p>
                             </div>
                           ) : (
                             <p className="text-sm opacity-75">[Media message]</p>
