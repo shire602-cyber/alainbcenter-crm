@@ -1,6 +1,7 @@
 'use client'
 
-import { useEffect, useState, useRef, FormEvent } from 'react'
+import { useEffect, useState, useRef, FormEvent, Suspense } from 'react'
+import { useSearchParams } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { BentoCard } from '@/components/dashboard/BentoCard'
 import { Button } from '@/components/ui/button'
@@ -126,7 +127,7 @@ const CHANNELS = [
   { value: 'webchat', label: 'Web Chat', icon: Globe },
 ] as const
 
-export default function InboxPage() {
+function InboxPageContent() {
   const searchParams = useSearchParams()
   const phoneParam = searchParams?.get('phone')
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -917,5 +918,22 @@ export default function InboxPage() {
         </BentoCard>
       </div>
     </MainLayout>
+  )
+}
+
+export default function InboxPage() {
+  return (
+    <Suspense fallback={
+      <MainLayout>
+        <div className="flex items-center justify-center h-screen">
+          <div className="text-center">
+            <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-primary mx-auto mb-4"></div>
+            <p className="text-muted-foreground">Loading inbox...</p>
+          </div>
+        </div>
+      </MainLayout>
+    }>
+      <InboxPageContent />
+    </Suspense>
   )
 }
