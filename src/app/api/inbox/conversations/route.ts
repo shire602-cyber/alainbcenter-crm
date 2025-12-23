@@ -99,7 +99,7 @@ export async function GET(req: NextRequest) {
           
           // Compute flags from already-fetched data
           const UNREAD = conv.unreadCount > 0
-          const NEEDS_REPLY = lastMessage?.direction === 'IN' && 
+          const NEEDS_REPLY = (lastMessage?.direction === 'inbound' || lastMessage?.direction === 'IN' || lastMessage?.direction === 'INBOUND') && 
             minutesSinceLastInbound !== null &&
             minutesSinceLastInbound >= NEEDS_REPLY_THRESHOLD_MINUTES &&
             (!conv.lastOutboundAt || conv.lastOutboundAt < conv.lastInboundAt!)
