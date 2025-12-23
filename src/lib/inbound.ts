@@ -271,6 +271,7 @@ export async function handleInboundMessage(
 
   // Step 6: Create Message record (with idempotency check via providerMessageId)
   let message
+  let isDuplicate = false
   try {
     message = await prisma.message.create({
       data: {
@@ -295,6 +296,7 @@ export async function handleInboundMessage(
     // Handle duplicate message (idempotency)
     if (error.code === 'P2002' && externalMessageId && error.meta?.target?.includes('providerMessageId')) {
       console.log(`⚠️ Duplicate message detected (providerMessageId: ${externalMessageId}), fetching existing`)
+      isDuplicate = true
       message = await prisma.message.findUnique({
         where: { providerMessageId: externalMessageId },
       })
@@ -302,6 +304,20 @@ export async function handleInboundMessage(
         throw new Error('Duplicate message detected but could not fetch existing message')
       }
       console.log(`✅ Using existing message ${message.id}`)
+      
+      // Even for duplicates, update conversation timestamps if this message is newer
+      // This handles cases where webhook retries with same message ID
+      if (message.createdAt < timestamp) {
+        console.log(`📝 Updating conversation timestamps for duplicate message (newer timestamp)`)
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastMessageAt: timestamp,
+            lastInboundAt: timestamp,
+            // Don't increment unreadCount for duplicates
+          },
+        })
+      }
     } else {
       console.error(`❌ Failed to create message:`, {
         error: error.message,
@@ -311,6 +327,22 @@ export async function handleInboundMessage(
       })
       throw error
     }
+  }
+  
+  // Only update conversation if this is NOT a duplicate (duplicates handled above)
+  if (!isDuplicate) {
+    // Conversation was already updated in Step 5, but ensure it's current
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        unreadCount: {
+          increment: 1,
+        },
+      },
+    })
+    console.log(`✅ Updated conversation ${conversation.id} timestamps and unreadCount`)
   }
 
   // Create initial status event
