@@ -23,14 +23,38 @@ export async function GET(
       )
     }
 
+    // Use select instead of include for lead to avoid loading fields that may not exist yet (infoSharedAt, etc.)
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
       include: {
         contact: true,
         lead: {
-          include: {
-            contact: true,
-            serviceType: true,
+          select: {
+            id: true,
+            stage: true,
+            pipelineStage: true,
+            leadType: true,
+            serviceTypeId: true,
+            priority: true,
+            aiScore: true,
+            notes: true,
+            nextFollowUpAt: true,
+            expiryDate: true,
+            assignedUserId: true,
+            contact: {
+              select: {
+                id: true,
+                fullName: true,
+                phone: true,
+                email: true,
+              },
+            },
+            serviceType: {
+              select: {
+                id: true,
+                name: true,
+              },
+            },
             assignedUser: {
               select: {
                 id: true,
@@ -41,7 +65,14 @@ export async function GET(
             expiryItems: {
               orderBy: { expiryDate: 'asc' },
               take: 5,
+              select: {
+                id: true,
+                type: true,
+                expiryDate: true,
+              },
             },
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+            // These will be available after migration is run
           },
         },
         assignedUser: {
