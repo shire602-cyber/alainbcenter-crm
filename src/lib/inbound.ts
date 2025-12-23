@@ -117,10 +117,15 @@ export async function handleInboundMessage(
                 lastContactAt: true,
                 expiryDate: true,
                 autopilotEnabled: true,
+                contact: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    phone: true,
+                    email: true,
+                  },
+                },
                 // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
-              },
-              include: {
-                contact: true,
               },
             },
           },
