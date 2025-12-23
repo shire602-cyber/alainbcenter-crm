@@ -58,8 +58,10 @@ export function interpolateTemplate(
     : null
 
   // Replacement map
+  // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
+  const { getGreetingName } = require('./message-utils')
   const replacements: Record<string, string> = {
-    name: actualContact.fullName || 'there',
+    name: getGreetingName(actualContact) || 'there',
     phone: actualContact.phone || '',
     email: actualContact.email || '',
     service: lead.serviceType?.name || lead.serviceTypeEnum || 'service',

@@ -214,7 +214,10 @@ async function runFollowupDueRule(
 
     // Build variables
     const variables = {
-      name: lead.contact.fullName,
+      name: (() => {
+        const { getGreetingName } = require('./message-utils')
+        return getGreetingName(lead.contact) || 'there'
+      })(),
       service: lead.serviceType?.name || lead.leadType || 'service',
       phone: lead.contact.phone,
       company: 'Alain Business Center',
@@ -388,7 +391,10 @@ async function runExpiry90Rule(
 
     // Build variables
     const variables = {
-      name: lead.contact.fullName,
+      name: (() => {
+        const { getGreetingName } = require('./message-utils')
+        return getGreetingName(lead.contact) || 'there'
+      })(),
       service: lead.serviceType?.name || lead.leadType || 'service',
       phone: lead.contact.phone,
       daysToExpiry,
@@ -560,7 +566,10 @@ async function runOverdueRule(
 
     // Build variables
     const variables = {
-      name: lead.contact.fullName,
+      name: (() => {
+        const { getGreetingName } = require('./message-utils')
+        return getGreetingName(lead.contact) || 'there'
+      })(),
       service: lead.serviceType?.name || lead.leadType || 'service',
       phone: lead.contact.phone,
       company: 'Alain Business Center',

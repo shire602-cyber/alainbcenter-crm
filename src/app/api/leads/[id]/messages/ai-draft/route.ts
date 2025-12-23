@@ -272,7 +272,10 @@ Alain Business Center`
                 createdAt: m.createdAt,
               })),
               contact: {
-                name: lead.contact?.fullName || 'Unknown',
+                name: (() => {
+                  const { getGreetingName } = require('@/lib/message-utils')
+                  return getGreetingName(lead.contact) || 'there'
+                })(),
                 phone: lead.contact?.phone || '',
                 email: lead.contact?.email || null,
                 nationality: lead.contact?.nationality || null,

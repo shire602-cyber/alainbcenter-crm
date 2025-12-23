@@ -17,6 +17,7 @@ export type AutomationTrigger =
   | 'NO_REPLY_SLA'
   | 'FOLLOWUP_DUE'
   | 'FOLLOWUP_OVERDUE'
+  | 'INFO_SHARED' // Phase 3: Triggered when info/quotation is shared with customer
 
 export type AutomationStatus = 'SUCCESS' | 'SKIPPED' | 'ERROR'
 
@@ -466,6 +467,56 @@ async function evaluateConditions(
     }
   }
 
+  if (rule.trigger === 'INFO_SHARED') {
+    // Phase 3: Check if info was shared and follow-up is due
+    const { daysAfter = 2, infoType } = conditions || {}
+    
+    // Type assertion for new fields (will be available after migration)
+    const leadWithNewFields = lead as any & {
+      infoSharedAt: Date | null
+      lastInfoSharedType: string | null
+    }
+    
+    if (!leadWithNewFields.infoSharedAt) {
+      return { met: false, reason: 'No info shared timestamp found' }
+    }
+
+    // Check info type filter if specified
+    if (infoType && leadWithNewFields.lastInfoSharedType !== infoType) {
+      return { met: false, reason: `Info type '${leadWithNewFields.lastInfoSharedType}' doesn't match required '${infoType}'` }
+    }
+
+    const now = new Date()
+    const sharedDate = new Date(leadWithNewFields.infoSharedAt!)
+    const daysSinceShared = Math.floor(
+      (now.getTime() - sharedDate.getTime()) / (1000 * 60 * 60 * 24)
+    )
+
+    // Check if we're within the follow-up window (daysAfter ± 1 day)
+    const shouldFollowUp = daysSinceShared >= (daysAfter - 1) && daysSinceShared <= (daysAfter + 1)
+
+    // Also check if we already sent a follow-up for this info sharing event
+    // We use infoSharedAt as a unique identifier for this sharing event
+    const actionKey = `info_followup_${lead.id}_${sharedDate.toISOString().split('T')[0]}`
+    const existingLog = await prisma.automationRunLog.findFirst({
+      where: {
+        leadId: lead.id,
+        actionKey,
+      },
+    })
+
+    if (existingLog) {
+      return { met: false, reason: 'Follow-up already sent for this info sharing event' }
+    }
+
+    return {
+      met: shouldFollowUp,
+      reason: !shouldFollowUp 
+        ? `Info shared ${daysSinceShared} days ago, follow-up due after ${daysAfter} days`
+        : undefined,
+    }
+  }
+
   if (rule.trigger === 'INBOUND_MESSAGE') {
     const {
       channels = [],
@@ -640,6 +691,52 @@ async function findRuleCandidates(rule: any, now: Date): Promise<any[]> {
     })
 
     return leads
+  }
+
+  if (trigger === 'INFO_SHARED') {
+    // Phase 3: Find leads where info was shared and follow-up is due
+    const { daysAfter = 2 } = conditions
+      ? (typeof conditions === 'string' ? JSON.parse(conditions) : conditions)
+      : { daysAfter: 2 }
+
+    const targetDate = new Date(now)
+    targetDate.setDate(targetDate.getDate() - daysAfter)
+
+    // Find leads where infoSharedAt is around the target date (within ±1 day)
+    const startDate = new Date(targetDate)
+    startDate.setDate(startDate.getDate() - 1)
+    const endDate = new Date(targetDate)
+    endDate.setDate(endDate.getDate() + 1)
+
+    // Use raw query for new fields until migration is applied
+    const leadIds = await prisma.$queryRaw<Array<{ id: number }>>`
+      SELECT id FROM "Lead"
+      WHERE "infoSharedAt" IS NOT NULL
+      AND "infoSharedAt" >= ${startDate}
+      AND "infoSharedAt" <= ${endDate}
+      AND "autopilotEnabled" != 0
+      AND "stage" NOT IN ('COMPLETED_WON', 'LOST')
+    `
+
+    if (leadIds.length === 0) {
+      return []
+    }
+
+    return await prisma.lead.findMany({
+      where: {
+        id: { in: leadIds.map(r => r.id) },
+      },
+      include: {
+        contact: true,
+        expiryItems: {
+          orderBy: { expiryDate: 'asc' },
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 10,
+        },
+      },
+    })
   }
 
   if (trigger === 'FOLLOWUP_DUE') {

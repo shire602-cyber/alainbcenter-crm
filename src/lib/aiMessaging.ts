@@ -9,18 +9,20 @@ import { prisma } from './prisma'
  * Build WhatsApp template message for expiry reminders
  */
 export function buildWhatsAppTemplateForExpiry(lead: any, daysBefore: number): string {
-  const contactName = lead.contact?.fullName || 'Valued Client'
+  // Use helper to get proper greeting (never "Unknown WHATSAPP User")
+  const { getGreeting } = require('./message-utils')
+  const greeting = getGreeting(lead.contact, 'casual')
   const expiryType = lead.leadType || 'service'
   const expiryDate = lead.expiryDate ? new Date(lead.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'soon'
   
   if (daysBefore === 7) {
-    return `Hi ${contactName}, urgent reminder: Your ${expiryType} expires in 7 days (${expiryDate}). Please contact us immediately to renew. We're here to help!`
+    return `${greeting}, urgent reminder: Your ${expiryType} expires in 7 days (${expiryDate}). Please contact us immediately to renew. We're here to help!`
   } else if (daysBefore === 30) {
-    return `Hi ${contactName}, your ${expiryType} expires in 30 days (${expiryDate}). Let's schedule your renewal to avoid any delays. Reply to this message to get started!`
+    return `${greeting}, your ${expiryType} expires in 30 days (${expiryDate}). Let's schedule your renewal to avoid any delays. Reply to this message to get started!`
   } else if (daysBefore === 60) {
-    return `Hi ${contactName}, friendly reminder: Your ${expiryType} expires in 60 days (${expiryDate}). We can help you renew smoothly. Would you like to schedule a call?`
+    return `${greeting}, friendly reminder: Your ${expiryType} expires in 60 days (${expiryDate}). We can help you renew smoothly. Would you like to schedule a call?`
   } else {
-    return `Hi ${contactName}, your ${expiryType} expires in ${daysBefore} days (${expiryDate}). We're here to assist with your renewal. Please let us know if you have any questions!`
+    return `${greeting}, your ${expiryType} expires in ${daysBefore} days (${expiryDate}). We're here to assist with your renewal. Please let us know if you have any questions!`
   }
 }
 
@@ -28,11 +30,13 @@ export function buildWhatsAppTemplateForExpiry(lead: any, daysBefore: number): s
  * Build email template for expiry reminders
  */
 export function buildEmailTemplateForExpiry(lead: any, daysBefore: number): string {
-  const contactName = lead.contact?.fullName || 'Valued Client'
+  // Use helper to get proper greeting (never "Unknown WHATSAPP User")
+  const { getGreeting } = require('./message-utils')
+  const greeting = getGreeting(lead.contact, 'formal')
   const expiryType = lead.leadType || 'service'
   const expiryDate = lead.expiryDate ? new Date(lead.expiryDate).toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' }) : 'soon'
   
-  return `Dear ${contactName},
+  return `${greeting},
 
 This is a reminder that your ${expiryType} expires in ${daysBefore} days (${expiryDate}).
 

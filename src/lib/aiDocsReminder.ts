@@ -41,7 +41,9 @@ export async function generateDocsReminderMessage(
   const compliance = await getLeadComplianceStatus(leadId)
 
   // Build context for AI
-  const contactName = lead.contact?.fullName || 'Valued Client'
+  // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
+  const { getGreetingName } = require('./message-utils')
+  const contactName = getGreetingName(lead.contact) || 'Valued Client'
   const serviceType = lead.serviceTypeEnum || lead.serviceType?.name || 'service'
 
   // Build prompt
@@ -128,13 +130,16 @@ function generateFallbackReminder(
   compliance: any,
   channel: 'WHATSAPP' | 'EMAIL'
 ): string {
-  const contactName = lead.contact?.fullName || 'Valued Client'
+  // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
+  const { getGreetingName, getGreeting } = require('./message-utils')
+  const contactName = getGreetingName(lead.contact) || 'Valued Client'
   const serviceType = lead.serviceTypeEnum || lead.serviceType?.name || 'service'
 
   let message = ''
 
   if (channel === 'WHATSAPP') {
-    message = `Hello ${contactName.split(' ')[0] || 'there'}! 👋\n\n`
+    const greetingName = getGreetingName(lead.contact) || 'there'
+    message = `Hello ${greetingName === 'Dear' ? 'there' : greetingName}! 👋\n\n`
     message += `We hope you're doing well. To proceed with your ${serviceType} application, we need the following documents:\n\n`
 
     if (compliance.missingMandatory.length > 0) {
@@ -165,8 +170,9 @@ function generateFallbackReminder(
     message += `Thank you! 🙏`
   } else {
     // Email format
+    const emailGreeting = getGreeting(lead.contact, 'formal')
     message = `Subject: Document Request - ${serviceType} Application\n\n`
-    message += `Dear ${contactName},\n\n`
+    message += `${emailGreeting},\n\n`
     message += `I hope this message finds you well.\n\n`
     message += `To proceed with your ${serviceType} application, we require the following documents:\n\n`
 
@@ -201,4 +207,5 @@ function generateFallbackReminder(
 
   return message
 }
+
 

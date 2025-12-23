@@ -4,6 +4,7 @@ import { sendWhatsApp, sendEmail } from '@/lib/messaging'
 import { generateExpiryReminderMessage, generateFollowUpMessage } from '@/lib/aiMessageGeneration'
 import { getExpiriesInWindow, getOverdueExpiries } from '@/lib/expiry-helpers'
 import { requireAdminOrManagerApi } from '@/lib/authApi'
+import { runRuleOnLead } from '@/lib/automation/engine'
 /**
  * POST /api/automation/run-daily
  * Secure automation runner - requires CRON_SECRET header
@@ -471,7 +472,119 @@ export async function POST(req: NextRequest) {
     }
 
     // ========================================
-    // PART B: Follow-up Reminders
+    // PART B: Info/Quotation Follow-ups (Phase 3)
+    // ========================================
+    const infoSharedRules = activeRules.filter((r) => r.trigger === 'INFO_SHARED')
+
+    if (infoSharedRules.length > 0) {
+      // Find leads where info was shared (using raw query for now until Prisma client regenerated)
+      const leadsWithInfoShared = await prisma.$queryRaw<Array<{
+        id: number
+        infoSharedAt: Date | null
+        lastInfoSharedType: string | null
+        contactId: number
+        pipelineStage: string
+      }>>`
+        SELECT id, "infoSharedAt", "lastInfoSharedType", "contactId", "pipelineStage"
+        FROM "Lead"
+        WHERE "infoSharedAt" IS NOT NULL
+        AND "pipelineStage" NOT IN ('completed', 'lost')
+      `
+
+      for (const leadRow of leadsWithInfoShared) {
+        if (!leadRow.infoSharedAt) continue
+
+        // Load full lead with relations
+        const lead = await prisma.lead.findUnique({
+          where: { id: leadRow.id },
+          include: {
+            contact: true,
+            expiryItems: {
+              orderBy: { expiryDate: 'asc' },
+            },
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            },
+          },
+        })
+
+        if (!lead) continue
+
+        for (const rule of infoSharedRules) {
+          try {
+            const conditions = rule.conditions 
+              ? (typeof rule.conditions === 'string' ? JSON.parse(rule.conditions) : rule.conditions)
+              : {}
+            const daysAfter = conditions.daysAfter || 2
+
+            const sharedDate = new Date(leadRow.infoSharedAt!)
+            const daysSinceShared = Math.floor(
+              (today.getTime() - sharedDate.getTime()) / (1000 * 60 * 60 * 24)
+            )
+
+            // Check if we're in the follow-up window (daysAfter ± 1 day)
+            if (daysSinceShared < (daysAfter - 1) || daysSinceShared > (daysAfter + 1)) {
+              continue
+            }
+
+            // Idempotency: Check if already processed
+            const actionKey = `info_followup_${lead.id}_${sharedDate.toISOString().split('T')[0]}`
+            try {
+              await prisma.automationRunLog.create({
+                data: {
+                  dateKey,
+                  ruleId: rule.id,
+                  leadId: lead.id,
+                  actionKey,
+                },
+              })
+            } catch (error: any) {
+              if (error.code === 'P2002') {
+                results.skippedDuplicates++
+                continue
+              }
+              throw error
+            }
+
+            // Build context and run rule
+            // Cast lead to include new fields (will be available after migration)
+            const leadWithNewFields = lead as any & {
+              infoSharedAt: Date | null
+              lastInfoSharedType: string | null
+            }
+            leadWithNewFields.infoSharedAt = leadRow.infoSharedAt
+            leadWithNewFields.lastInfoSharedType = leadRow.lastInfoSharedType
+
+            const context = {
+              lead: leadWithNewFields,
+              contact: lead.contact,
+              expiries: lead.expiryItems,
+              recentMessages: lead.messages,
+              triggerData: {
+                infoType: leadRow.lastInfoSharedType || 'details',
+                sharedAt: leadRow.infoSharedAt,
+              },
+            }
+
+            const ruleResult = await runRuleOnLead(rule, context)
+            
+            if (ruleResult.status === 'SUCCESS') {
+              results.followUpsSent++
+            } else if (ruleResult.status === 'SKIPPED') {
+              results.skippedDuplicates++
+            } else {
+              results.errors.push(`Lead ${lead.id}: ${ruleResult.reason || 'Unknown error'}`)
+            }
+          } catch (error: any) {
+            results.errors.push(`Lead ${lead.id} (INFO_SHARED): ${error.message}`)
+          }
+        }
+      }
+    }
+
+    // ========================================
+    // PART C: Follow-up Reminders
     // ========================================
     const followupRules = activeRules.filter((r) => r.type === 'followup_due')
 
