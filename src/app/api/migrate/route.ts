@@ -11,19 +11,26 @@ import { prisma } from '@/lib/prisma'
 
 export async function POST(req: NextRequest) {
   try {
-    // Require secret token for security
+    // EMERGENCY: Allow migration without secret if MIGRATION_SECRET is not set
+    // This is temporary - set MIGRATION_SECRET in production for security
     const migrationSecret = req.headers.get('x-migration-secret')
-    const expectedSecret = process.env.MIGRATION_SECRET || 'default-migration-secret-change-in-production'
+    const expectedSecret = process.env.MIGRATION_SECRET
     
-    if (!migrationSecret || migrationSecret !== expectedSecret) {
-      return NextResponse.json(
-        {
-          success: false,
-          error: 'Unauthorized',
-          hint: 'Provide x-migration-secret header with correct value',
-        },
-        { status: 401 }
-      )
+    if (expectedSecret) {
+      // Secret is configured - require it
+      if (!migrationSecret || migrationSecret !== expectedSecret) {
+        return NextResponse.json(
+          {
+            success: false,
+            error: 'Unauthorized',
+            hint: 'Provide x-migration-secret header with correct value',
+          },
+          { status: 401 }
+        )
+      }
+    } else {
+      // No secret configured - allow without auth (EMERGENCY MODE)
+      console.warn('⚠️ MIGRATION_SECRET not set - allowing migration without auth (EMERGENCY MODE)')
     }
 
     // Check if migration is already applied
