@@ -4,6 +4,7 @@
  */
 
 import { normalizeToE164 } from './phone'
+import { prisma } from './prisma'
 
 const WHATSAPP_API_VERSION = 'v21.0'
 
@@ -23,13 +24,45 @@ interface WhatsAppError {
   }
 }
 
-function getWhatsAppCredentials() {
-  const accessToken = process.env.WHATSAPP_ACCESS_TOKEN
-  const phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+async function getWhatsAppCredentials() {
+  // PRIORITY: Check Integration model first (database), then fallback to env vars
+  let accessToken: string | null = null
+  let phoneNumberId: string | null = null
+
+  try {
+    const integration = await prisma.integration.findUnique({
+      where: { name: 'whatsapp' },
+    })
+
+    if (integration) {
+      // Get from config JSON
+      if (integration.config) {
+        try {
+          const config = typeof integration.config === 'string'
+            ? JSON.parse(integration.config)
+            : integration.config
+          
+          accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
+          phoneNumberId = config.phoneNumberId || null
+        } catch (e) {
+          console.warn('Failed to parse integration config:', e)
+        }
+      } else {
+        // Fallback to direct fields
+        accessToken = integration.accessToken || integration.apiKey || null
+      }
+    }
+  } catch (e) {
+    console.warn('Could not fetch integration from DB:', e)
+  }
+
+  // Fallback to environment variables if not found in database
+  if (!accessToken) accessToken = process.env.WHATSAPP_ACCESS_TOKEN || null
+  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
 
   if (!accessToken || !phoneNumberId) {
     throw new Error(
-      'WhatsApp not configured. Please set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID in .env.local'
+      'WhatsApp not configured. Please configure it in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables'
     )
   }
 
@@ -47,7 +80,7 @@ export async function sendTextMessage(
   toE164: string,
   body: string
 ): Promise<{ messageId: string; waId?: string }> {
-  const { accessToken, phoneNumberId } = getWhatsAppCredentials()
+  const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
 
   const normalizedPhone = normalizeToE164(toE164)
 
@@ -118,7 +151,7 @@ export async function sendTemplateMessage(
   language: string = 'en_US',
   params: string[] = []
 ): Promise<{ messageId: string; waId?: string }> {
-  const { accessToken, phoneNumberId } = getWhatsAppCredentials()
+  const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
 
   const normalizedPhone = normalizeToE164(toE164)
 
