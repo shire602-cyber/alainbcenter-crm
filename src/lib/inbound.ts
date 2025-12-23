@@ -102,8 +102,26 @@ export async function handleInboundMessage(
       include: {
         conversation: {
           include: {
+            contact: true,
             lead: {
-              include: { contact: true },
+              select: {
+                id: true,
+                contactId: true,
+                stage: true,
+                pipelineStage: true,
+                leadType: true,
+                serviceTypeId: true,
+                priority: true,
+                aiScore: true,
+                nextFollowUpAt: true,
+                lastContactAt: true,
+                expiryDate: true,
+                autopilotEnabled: true,
+                // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+              },
+              include: {
+                contact: true,
+              },
             },
           },
         },

@@ -54,6 +54,23 @@ export async function findOrCreateLeadFromPhone(
           },
           orderBy: { createdAt: 'desc' },
           take: 1,
+          select: {
+            id: true,
+            contactId: true,
+            stage: true,
+            pipelineStage: true,
+            leadType: true,
+            serviceTypeId: true,
+            priority: true,
+            aiScore: true,
+            nextFollowUpAt: true,
+            lastContactAt: true,
+            expiryDate: true,
+            autopilotEnabled: true,
+            createdAt: true,
+            updatedAt: true,
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+          },
         },
       },
     })
