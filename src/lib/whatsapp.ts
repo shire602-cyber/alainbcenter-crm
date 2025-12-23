@@ -24,7 +24,7 @@ interface WhatsAppError {
   }
 }
 
-async function getWhatsAppCredentials() {
+export async function getWhatsAppCredentials() {
   // PRIORITY: Check Integration model first (database), then fallback to env vars
   let accessToken: string | null = null
   let phoneNumberId: string | null = null
