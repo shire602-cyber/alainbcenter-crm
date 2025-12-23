@@ -254,19 +254,9 @@ export async function handleInboundMessage(
     })
     console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}`)
   } else {
-    // Update conversation
-    await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: {
-        lastMessageAt: timestamp,
-        lastInboundAt: timestamp,
-        unreadCount: {
-          increment: 1,
-        },
-        ...(externalId && !conversation.externalId ? { externalId } : {}),
-      },
-    })
-    console.log(`✅ Updated conversation: ${conversation.id} - unreadCount incremented`)
+    // Don't update conversation here - will be updated after message creation
+    // This prevents race conditions with duplicate detection
+    console.log(`📋 Found existing conversation: ${conversation.id}`)
   }
 
   // Step 6: Create Message record (with idempotency check via providerMessageId)
