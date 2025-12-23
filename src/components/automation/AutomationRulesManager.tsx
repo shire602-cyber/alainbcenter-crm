@@ -139,11 +139,17 @@ export function AutomationRulesManager() {
   async function loadStats() {
     try {
       setLoadingStats(true)
-      // Load recent run logs
-      const logsRes = await fetch('/api/automation/logs?limit=10')
+      // Load recent run logs - filter for summary runs (autopilot_manual_run or autopilot_daily_run)
+      const logsRes = await fetch('/api/automation/logs?limit=20')
       if (logsRes.ok) {
         const logsData = await logsRes.json()
-        setRunLogs(logsData.logs || [])
+        // Filter to show only summary runs (not individual rule executions)
+        const summaryLogs = (logsData.logs || []).filter((log: any) => 
+          log.ruleKey === 'autopilot_manual_run' || 
+          log.ruleKey === 'autopilot_daily_run' ||
+          log.ruleKey === null // Include logs without ruleKey as they might be summaries
+        )
+        setRunLogs(summaryLogs.slice(0, 10)) // Show last 10 summary runs
       }
       
       // Load draft count
@@ -182,12 +188,18 @@ export function AutomationRulesManager() {
       if (res.ok && data.ok) {
         setRunResult({
           success: true,
+          timestamp: data.timestamp || new Date().toISOString(),
           rulesRun: data.totals?.rules || 0,
-          draftsCreated: data.totals?.sent || 0,
+          expiryRemindersSent: data.totals?.expiryRemindersSent || 0,
+          followUpsSent: data.totals?.followUpsSent || 0,
+          draftsCreated: data.totals?.draftsCreated || data.totals?.sent || 0,
           skippedDuplicates: data.totals?.skipped || 0,
           errors: [],
         })
-        await loadStats() // Reload stats after run
+        // Reload stats after a short delay to ensure log is saved
+        setTimeout(() => {
+          loadStats()
+        }, 1000)
       } else {
         setRunResult({
           success: false,
@@ -408,17 +420,19 @@ export function AutomationRulesManager() {
               {runLogs.slice(0, 5).map((log) => (
                 <div key={log.id} className="flex items-center justify-between text-xs">
                   <div className="flex items-center gap-1.5">
-                    {log.status === 'success' ? (
+                    {log.status === 'success' || log.status === 'SUCCESS' ? (
                       <CheckCircle2 className="h-3 w-3 text-green-600" />
                     ) : (
                       <XCircle className="h-3 w-3 text-red-600" />
                     )}
                     <span className="text-slate-600 dark:text-slate-400">
-                      {log.ruleKey || 'Unknown rule'}
+                      {log.ruleKey === 'autopilot_manual_run' ? 'Manual Run' :
+                       log.ruleKey === 'autopilot_daily_run' ? 'Daily Cron' :
+                       log.message || log.ruleKey || 'Automation Run'}
                     </span>
                   </div>
                   <span className="text-xs text-slate-500 dark:text-slate-500">
-                    {new Date(log.ranAt).toLocaleDateString()}
+                    {new Date(log.ranAt || log.createdAt).toLocaleString()}
                   </span>
                 </div>
               ))}
