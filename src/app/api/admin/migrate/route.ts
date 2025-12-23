@@ -9,7 +9,16 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 
+// Support both GET and POST for easier browser access
+export async function GET(req: NextRequest) {
+  return await handleMigration(req)
+}
+
 export async function POST(req: NextRequest) {
+  return await handleMigration(req)
+}
+
+async function handleMigration(req: NextRequest) {
   try {
     // EMERGENCY: Allow migration without auth if MIGRATION_SECRET is not set
     // This is a temporary measure to fix production issues
