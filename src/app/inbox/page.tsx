@@ -127,6 +127,8 @@ const CHANNELS = [
 ] as const
 
 export default function InboxPage() {
+  const searchParams = useSearchParams()
+  const phoneParam = searchParams?.get('phone')
   const [conversations, setConversations] = useState<Conversation[]>([])
   const [selectedConversation, setSelectedConversation] = useState<Conversation | null>(null)
   const [selectedLead, setSelectedLead] = useState<Lead | null>(null)
