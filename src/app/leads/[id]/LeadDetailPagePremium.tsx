@@ -11,6 +11,7 @@
  */
 
 import { useState, useEffect, useRef, FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
@@ -558,9 +559,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     showToast(`${label} copied to clipboard`, 'success')
   }
 
+  const router = useRouter()
+  
   function openWhatsApp(phone: string, text?: string) {
-    const encodedText = text ? encodeURIComponent(text) : ''
-    window.open(`https://wa.me/${phone.replace(/[^0-9]/g, '')}${encodedText ? `?text=${encodedText}` : ''}`, '_blank')
+    // Navigate to inbox with this contact's conversation instead of external WhatsApp
+    const cleanPhone = phone.replace(/[^0-9]/g, '')
+    router.push(`/inbox?phone=${encodeURIComponent(cleanPhone)}`)
   }
 
   function formatMessageTime(dateString: string) {

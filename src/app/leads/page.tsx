@@ -286,9 +286,9 @@ function LeadsPageContent() {
   }
 
   function getWhatsAppLink(phone: string, name: string) {
+    // Navigate to inbox instead of external WhatsApp
     const cleanPhone = phone.replace(/[^0-9]/g, '')
-    const message = encodeURIComponent(`Hello ${name}, this is Alain Business Center. How can we assist you today?`)
-    return `https://wa.me/${cleanPhone}?text=${message}`
+    return `/inbox?phone=${encodeURIComponent(cleanPhone)}`
   }
 
   function formatDate(date: string | null) {
