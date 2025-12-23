@@ -18,6 +18,9 @@ export interface ActionResult {
   success: boolean
   error?: string
   data?: any
+  hint?: string // Additional guidance for errors
+  requiresTemplate?: boolean // Indicates template is required (for WhatsApp)
+  hoursSinceLastInbound?: number | null // Hours since last inbound message (for WhatsApp)
 }
 
 /**
