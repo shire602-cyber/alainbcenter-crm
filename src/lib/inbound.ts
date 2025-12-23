@@ -111,26 +111,21 @@ export async function handleInboundMessage(
                 pipelineStage: true,
                 leadType: true,
                 serviceTypeId: true,
-                serviceTypeEnum: true, // Added for Phase 1 extraction
                 priority: true,
                 aiScore: true,
                 nextFollowUpAt: true,
                 lastContactAt: true,
                 expiryDate: true,
                 autopilotEnabled: true,
-                urgency: true, // Added for Phase 1 extraction
-                infoSharedAt: true, // Phase 2 fields - migration applied
-                quotationSentAt: true,
-                lastInfoSharedType: true,
                 contact: {
                   select: {
                     id: true,
                     fullName: true,
                     phone: true,
                     email: true,
-                    nationality: true, // Added for Phase 1 extraction
                   },
                 },
+                // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
               },
             },
           },
@@ -246,7 +241,6 @@ export async function handleInboundMessage(
       pipelineStage: true,
       leadType: true,
       serviceTypeId: true,
-      serviceTypeEnum: true, // Added for Phase 1 extraction
       priority: true,
       aiScore: true,
       nextFollowUpAt: true,
@@ -255,12 +249,9 @@ export async function handleInboundMessage(
       autopilotEnabled: true,
       status: true,
       notes: true,
-      urgency: true, // Added for Phase 1 extraction
       createdAt: true,
       updatedAt: true,
-      infoSharedAt: true, // Phase 2 fields - migration applied
-      quotationSentAt: true,
-      lastInfoSharedType: true,
+      // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
     },
   })
 
@@ -558,9 +549,37 @@ export async function handleInboundMessage(
   )
 
   // Reload lead with contact for return
+  // Use select to avoid loading missing columns
   const leadWithContact = await prisma.lead.findUnique({
     where: { id: lead.id },
-    include: { contact: true },
+    select: {
+      id: true,
+      contactId: true,
+      stage: true,
+      pipelineStage: true,
+      leadType: true,
+      serviceTypeId: true,
+      priority: true,
+      aiScore: true,
+      nextFollowUpAt: true,
+      lastContactAt: true,
+      expiryDate: true,
+      autopilotEnabled: true,
+      status: true,
+      notes: true,
+      createdAt: true,
+      updatedAt: true,
+      contact: {
+        select: {
+          id: true,
+          fullName: true,
+          phone: true,
+          email: true,
+          nationality: true,
+        },
+      },
+      // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+    },
   })
 
   return {
