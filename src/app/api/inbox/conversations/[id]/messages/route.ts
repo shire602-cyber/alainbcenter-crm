@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuthApi } from '@/lib/authApi'
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp'
+import { sendTextMessage, sendTemplateMessage, sendMediaMessage } from '@/lib/whatsapp'
 
 /**
  * POST /api/inbox/conversations/[id]/messages
@@ -26,14 +26,25 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { text, templateName, templateParams } = body
+    const { text, templateName, templateParams, mediaUrl, mediaType, mediaCaption, mediaFilename } = body
 
-    // Validate: either text (for within 24h) or template (for outside 24h)
-    if (!text && !templateName) {
+    // Validate: either text, template, or media
+    if (!text && !templateName && !mediaUrl) {
       return NextResponse.json(
-        { ok: false, error: 'Either text message or template name is required' },
+        { ok: false, error: 'Either text message, template name, or media URL is required' },
         { status: 400 }
       )
+    }
+
+    // Validate media type if media URL provided
+    if (mediaUrl && mediaType) {
+      const allowedMediaTypes = ['image', 'document', 'video', 'audio']
+      if (!allowedMediaTypes.includes(mediaType)) {
+        return NextResponse.json(
+          { ok: false, error: `Invalid media type. Must be one of: ${allowedMediaTypes.join(', ')}` },
+          { status: 400 }
+        )
+      }
     }
 
     // Get conversation with contact
@@ -118,7 +129,23 @@ export async function POST(
     let messageContent = text || ''
 
     try {
-      if (templateName) {
+      if (mediaUrl && mediaType) {
+        // Send media message (works within 24-hour window)
+        if (!within24HourWindow) {
+          throw new Error('Media messages can only be sent within 24-hour window. Use templates for outside 24 hours.')
+        }
+        const result = await sendMediaMessage(
+          normalizedPhone,
+          mediaType as 'image' | 'document' | 'video' | 'audio',
+          mediaUrl,
+          {
+            caption: mediaCaption,
+            filename: mediaFilename,
+          }
+        )
+        whatsappMessageId = result.messageId
+        messageContent = mediaCaption || `[${mediaType}]`
+      } else if (templateName) {
         // Send template message (works outside 24-hour window)
         const result = await sendTemplateMessage(
           normalizedPhone,
@@ -151,8 +178,10 @@ export async function POST(
         contactId: conversation.contactId,
         direction: 'outbound', // Direction: OUT for outbound
         channel: 'whatsapp',
-        type: templateName ? 'template' : 'text',
+        type: mediaType || (templateName ? 'template' : 'text'),
         body: messageContent,
+        mediaUrl: mediaUrl || null,
+        mediaMimeType: mediaType ? (mediaType === 'image' ? 'image/jpeg' : mediaType === 'video' ? 'video/mp4' : mediaType === 'audio' ? 'audio/ogg' : 'application/octet-stream') : null,
         providerMessageId: whatsappMessageId || null,
         status: messageStatus,
         sentAt: sentAt,

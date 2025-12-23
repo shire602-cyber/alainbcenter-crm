@@ -220,3 +220,95 @@ export async function sendTemplateMessage(
   }
 }
 
+/**
+ * Send a media message (image, document, video, audio) via WhatsApp Cloud API
+ * 
+ * @param toE164 - Phone number in E.164 format
+ * @param mediaType - Type of media: 'image', 'document', 'video', 'audio'
+ * @param mediaUrl - Public URL of the media file (must be HTTPS and accessible by Meta)
+ * @param caption - Optional caption for image/video
+ * @param filename - Optional filename for document
+ * @returns WhatsApp message ID
+ */
+export async function sendMediaMessage(
+  toE164: string,
+  mediaType: 'image' | 'document' | 'video' | 'audio',
+  mediaUrl: string,
+  options?: {
+    caption?: string
+    filename?: string
+  }
+): Promise<{ messageId: string; waId?: string }> {
+  const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
+
+  const normalizedPhone = normalizeToE164(toE164)
+
+  const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`
+
+  // Build payload based on media type
+  let payload: any = {
+    messaging_product: 'whatsapp',
+    recipient_type: 'individual',
+    to: normalizedPhone,
+    type: mediaType,
+  }
+
+  if (mediaType === 'image') {
+    payload.image = {
+      link: mediaUrl,
+      ...(options?.caption ? { caption: options.caption } : {}),
+    }
+  } else if (mediaType === 'video') {
+    payload.video = {
+      link: mediaUrl,
+      ...(options?.caption ? { caption: options.caption } : {}),
+    }
+  } else if (mediaType === 'document') {
+    payload.document = {
+      link: mediaUrl,
+      ...(options?.filename ? { filename: options.filename } : {}),
+    }
+  } else if (mediaType === 'audio') {
+    payload.audio = {
+      link: mediaUrl,
+    }
+  }
+
+  try {
+    const response = await fetch(url, {
+      method: 'POST',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify(payload),
+    })
+
+    const data = await response.json()
+
+    if (!response.ok) {
+      const error = data as WhatsAppError
+      throw new Error(
+        error.error?.message || `WhatsApp API error: ${response.status} ${response.statusText}`
+      )
+    }
+
+    const result = data as WhatsAppResponse
+    const messageId = result.messages?.[0]?.id
+
+    if (!messageId) {
+      throw new Error('WhatsApp API did not return a message ID')
+    }
+
+    return {
+      messageId,
+      waId: result.contacts?.[0]?.wa_id,
+    }
+  } catch (error: any) {
+    if (error.message.includes('WhatsApp')) {
+      throw error
+    }
+    throw new Error(`Failed to send WhatsApp media: ${error.message}`)
+  }
+}
+

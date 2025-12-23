@@ -139,7 +139,7 @@ Provide top 5 actions in JSON format:
  */
 export function buildModeSpecificDraftPrompt(
   context: ConversationContext,
-  mode: 'FOLLOW_UP' | 'RENEWAL' | 'DOCS' | 'PRICING',
+  mode: 'FOLLOW_UP' | 'RENEWAL' | 'DOCS' | 'PRICING' | 'REMIND' | 'BOOK_CALL',
   tone: 'professional' | 'friendly' | 'short' = 'friendly',
   language: 'en' | 'ar' = 'en'
 ): string {
@@ -229,6 +229,7 @@ Reply only with the message text, no explanations or metadata.`
 
   return prompt
 }
+
 
 
 

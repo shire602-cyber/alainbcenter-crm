@@ -42,7 +42,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    const validObjectives = ['qualify', 'renewal', 'followup', 'pricing', 'docs_request']
+    const validObjectives = ['qualify', 'renewal', 'followup', 'pricing', 'docs_request', 'remind', 'book_call']
     if (!validObjectives.includes(objective)) {
       return NextResponse.json(
         { error: `objective must be one of: ${validObjectives.join(', ')}` },
@@ -207,6 +207,29 @@ export async function POST(req: NextRequest) {
           'Do you have all required documents?',
           'When can you provide the documents?',
           'Do you need help with any specific document?'
+        ]
+        break
+      
+      case 'remind':
+        const nearestExpiryRemind = contextSummary.structured.expiries?.[0]
+        if (nearestExpiryRemind) {
+          draftText = `Hi ${contactName}, this is a friendly reminder about your upcoming ${nearestExpiryRemind.type} expiry. We're here to help you renew on time. Would you like to proceed?`
+        } else {
+          draftText = `Hi ${contactName}, this is a friendly reminder about your pending follow-up. Is there anything we can help you with today?`
+        }
+        nextQuestions = [
+          'Would you like to proceed?',
+          'Do you have any questions?',
+          'What is the best time to reach you?'
+        ]
+        break
+      
+      case 'book_call':
+        draftText = `Hi ${contactName}, I'd love to schedule a call with you to discuss your needs in detail. Would you be available for a quick call? Please let me know your preferred time, and I'll arrange it.`
+        nextQuestions = [
+          'What is your preferred time?',
+          'Which day works best for you?',
+          'Do you prefer morning or afternoon?'
         ]
         break
     }
