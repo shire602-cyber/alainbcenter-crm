@@ -1,13 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
-import { writeFile, mkdir } from 'fs/promises'
-import { join } from 'path'
-import { existsSync } from 'fs'
+import { uploadMediaToMeta } from '@/lib/whatsapp-media-upload'
 
 /**
  * POST /api/upload
- * Upload a file and return a public URL
- * For WhatsApp media, files need to be publicly accessible via HTTPS
+ * Upload a file to Meta's servers and return a media ID
+ * For WhatsApp, we upload directly to Meta instead of storing locally
+ * This works on Vercel serverless functions (read-only filesystem)
  */
 export async function POST(req: NextRequest) {
   try {
@@ -53,6 +52,7 @@ export async function POST(req: NextRequest) {
       'audio/mp4',
       'audio/amr',
       'audio/mpeg',
+      'audio/webm', // Added for recorded audio
     ]
 
     if (!allowedTypes.includes(file.type)) {
@@ -62,34 +62,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Create uploads directory if it doesn't exist
-    const uploadsDir = join(process.cwd(), 'public', 'uploads')
-    if (!existsSync(uploadsDir)) {
-      await mkdir(uploadsDir, { recursive: true })
-    }
-
-    // Generate unique filename
-    const timestamp = Date.now()
-    const randomStr = Math.random().toString(36).substring(2, 15)
-    const extension = file.name.split('.').pop() || 'bin'
-    const filename = `${timestamp}-${randomStr}.${extension}`
-    const filepath = join(uploadsDir, filename)
-
-    // Save file
+    // Read file as buffer
     const bytes = await file.arrayBuffer()
     const buffer = Buffer.from(bytes)
-    await writeFile(filepath, buffer)
 
-    // Return public URL
-    // In production, this should be your actual domain
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-    
-    const publicUrl = `${baseUrl}/uploads/${filename}`
+    // Upload to Meta's servers (works on Vercel)
+    const mediaId = await uploadMediaToMeta(buffer, file.type)
 
+    // Return media ID (not a URL - we'll use this ID to send the message)
     return NextResponse.json({
       success: true,
-      url: publicUrl,
+      mediaId, // Meta media ID
       filename: file.name,
       size: file.size,
       type: file.type,

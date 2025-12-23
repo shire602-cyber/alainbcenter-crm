@@ -341,7 +341,11 @@ function InboxPageContent() {
       setUploadProgress(50)
 
       const uploadData = await uploadRes.json()
-      const mediaUrl = uploadData.url
+      const mediaId = uploadData.mediaId // Meta media ID (not URL)
+
+      if (!mediaId) {
+        throw new Error('Upload succeeded but no media ID returned')
+      }
 
       // Step 2: Determine media type
       let mediaType: 'image' | 'document' | 'video' | 'audio' = 'document'
@@ -355,12 +359,12 @@ function InboxPageContent() {
 
       setUploadProgress(75)
 
-      // Step 3: Send media message
+      // Step 3: Send media message using media ID
       const res = await fetch(`/api/inbox/conversations/${selectedConversation.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          mediaUrl,
+          mediaId, // Use media ID instead of URL
           mediaType,
           mediaCaption: newMessage.trim() || undefined,
           mediaFilename: selectedFile.name,
