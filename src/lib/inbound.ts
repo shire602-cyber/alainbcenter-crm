@@ -111,21 +111,26 @@ export async function handleInboundMessage(
                 pipelineStage: true,
                 leadType: true,
                 serviceTypeId: true,
+                serviceTypeEnum: true, // Added for Phase 1 extraction
                 priority: true,
                 aiScore: true,
                 nextFollowUpAt: true,
                 lastContactAt: true,
                 expiryDate: true,
                 autopilotEnabled: true,
+                urgency: true, // Added for Phase 1 extraction
+                infoSharedAt: true, // Phase 2 fields - migration applied
+                quotationSentAt: true,
+                lastInfoSharedType: true,
                 contact: {
                   select: {
                     id: true,
                     fullName: true,
                     phone: true,
                     email: true,
+                    nationality: true, // Added for Phase 1 extraction
                   },
                 },
-                // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
               },
             },
           },
@@ -241,6 +246,7 @@ export async function handleInboundMessage(
       pipelineStage: true,
       leadType: true,
       serviceTypeId: true,
+      serviceTypeEnum: true, // Added for Phase 1 extraction
       priority: true,
       aiScore: true,
       nextFollowUpAt: true,
@@ -249,9 +255,12 @@ export async function handleInboundMessage(
       autopilotEnabled: true,
       status: true,
       notes: true,
+      urgency: true, // Added for Phase 1 extraction
       createdAt: true,
       updatedAt: true,
-      // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+      infoSharedAt: true, // Phase 2 fields - migration applied
+      quotationSentAt: true,
+      lastInfoSharedType: true,
     },
   })
 
