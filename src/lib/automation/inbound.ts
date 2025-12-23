@@ -23,25 +23,76 @@ export async function runInboundAutomationsForMessage(
 ): Promise<void> {
   try {
     // Load lead with all necessary relations
+    // Use select to avoid loading missing columns (infoSharedAt, etc.)
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
-      include: {
-        contact: true,
+      select: {
+        id: true,
+        contactId: true,
+        stage: true,
+        pipelineStage: true,
+        leadType: true,
+        serviceTypeId: true,
+        serviceTypeEnum: true,
+        priority: true,
+        urgency: true,
+        aiScore: true,
+        nextFollowUpAt: true,
+        lastContactAt: true,
+        expiryDate: true,
+        autopilotEnabled: true,
+        status: true,
+        notes: true,
+        createdAt: true,
+        updatedAt: true,
+        contact: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+            nationality: true,
+          },
+        },
         expiryItems: {
           orderBy: { expiryDate: 'asc' },
+          select: {
+            id: true,
+            type: true,
+            expiryDate: true,
+            renewalStatus: true,
+          },
         },
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 10,
+          select: {
+            id: true,
+            direction: true,
+            channel: true,
+            body: true,
+            createdAt: true,
+          },
         },
         conversations: {
-          include: {
+          select: {
+            id: true,
+            channel: true,
+            status: true,
+            lastMessageAt: true,
             messages: {
               orderBy: { createdAt: 'desc' },
               take: 5,
+              select: {
+                id: true,
+                direction: true,
+                body: true,
+                createdAt: true,
+              },
             },
           },
         },
+        // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
       },
     })
 
