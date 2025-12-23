@@ -57,7 +57,7 @@ export function buildEmailSubjectForExpiry(daysBefore: number, serviceType: stri
   }
 }
 
-export type AIMessageMode = 'FOLLOW_UP' | 'QUALIFY' | 'RENEWAL' | 'GENERIC' | 'PRICING' | 'DOCS'
+export type AIMessageMode = 'FOLLOW_UP' | 'QUALIFY' | 'RENEWAL' | 'GENERIC' | 'PRICING' | 'DOCS' | 'REMIND' | 'BOOK_CALL'
 
 export interface AIMessageContext {
   lead: any
@@ -105,6 +105,8 @@ export async function generateAIAutoresponse(
       RENEWAL: 'renewal',
       PRICING: 'pricing',
       DOCS: 'docs_request',
+      REMIND: 'remind',
+      BOOK_CALL: 'book_call',
       GENERIC: 'followup',
     }
 

@@ -30,16 +30,20 @@ export function AudioMessagePlayer({ mediaId, mimeType, messageId, className }: 
       setError(null)
       
       try {
-        const res = await fetch(`/api/whatsapp/media/${mediaId}?messageId=${messageId}`)
+        const res = await fetch(`/api/whatsapp/media/${encodeURIComponent(mediaId)}?messageId=${messageId}`)
         if (!res.ok) {
-          throw new Error('Failed to fetch audio')
+          const errorData = await res.json().catch(() => ({}))
+          throw new Error(errorData.error || `Failed to fetch audio: ${res.status}`)
         }
         const blob = await res.blob()
+        if (blob.size === 0) {
+          throw new Error('Audio file is empty')
+        }
         const url = URL.createObjectURL(blob)
         setAudioUrl(url)
       } catch (err: any) {
         console.error('Failed to fetch audio:', err)
-        setError(err.message || 'Failed to load audio')
+        setError(err.message || 'Failed to load audio. Media may have expired or be unavailable.')
       } finally {
         setIsLoading(false)
       }

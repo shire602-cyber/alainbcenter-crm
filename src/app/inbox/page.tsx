@@ -34,6 +34,9 @@ import {
   FileText,
   Video,
   MapPin,
+  Paperclip,
+  X,
+  Sparkles as SparklesIcon,
 } from 'lucide-react'
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -137,6 +140,14 @@ export default function InboxPage() {
   const [success, setSuccess] = useState<string | null>(null)
   const [generatingDraft, setGeneratingDraft] = useState(false)
   const [activeChannel, setActiveChannel] = useState<string>('all')
+  const [uploading, setUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
+  const [uploading, setUploading] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
@@ -222,9 +233,110 @@ export default function InboxPage() {
     await loadMessages(conversation.id)
   }
 
+  async function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    // Validate file size (16MB max for WhatsApp)
+    const maxSize = 16 * 1024 * 1024
+    if (file.size > maxSize) {
+      setError(`File size exceeds 16MB limit. Selected file: ${(file.size / 1024 / 1024).toFixed(2)}MB`)
+      return
+    }
+
+    setSelectedFile(file)
+    setError(null)
+  }
+
+  async function handleUploadFile() {
+    if (!selectedFile || !selectedConversation) return
+
+    setUploading(true)
+    setError(null)
+    setSuccess(null)
+    setUploadProgress(0)
+
+    try {
+      // Step 1: Upload file to get public URL
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+
+      const uploadRes = await fetch('/api/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      if (!uploadRes.ok) {
+        const error = await uploadRes.json()
+        throw new Error(error.error || 'Failed to upload file')
+      }
+
+      setUploadProgress(50)
+
+      const uploadData = await uploadRes.json()
+      const mediaUrl = uploadData.url
+
+      // Step 2: Determine media type
+      let mediaType: 'image' | 'document' | 'video' | 'audio' = 'document'
+      if (selectedFile.type.startsWith('image/')) {
+        mediaType = 'image'
+      } else if (selectedFile.type.startsWith('video/')) {
+        mediaType = 'video'
+      } else if (selectedFile.type.startsWith('audio/')) {
+        mediaType = 'audio'
+      }
+
+      setUploadProgress(75)
+
+      // Step 3: Send media message
+      const res = await fetch(`/api/inbox/conversations/${selectedConversation.id}/messages`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          mediaUrl,
+          mediaType,
+          mediaCaption: newMessage.trim() || undefined,
+          mediaFilename: selectedFile.name,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.ok) {
+        setSuccess('Media sent successfully!')
+        setNewMessage('')
+        setSelectedFile(null)
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        await loadMessages(selectedConversation.id)
+        await loadConversations()
+      } else {
+        setError(data.error || 'Failed to send media')
+        if (data.hint) {
+          setError(`${data.error}\n💡 ${data.hint}`)
+        }
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to upload and send file')
+      console.error(err)
+    } finally {
+      setUploading(false)
+      setUploadProgress(0)
+    }
+  }
+
   async function handleSendMessage(e: FormEvent) {
     e.preventDefault()
-    if (!selectedConversation || !newMessage.trim()) return
+    if (!selectedConversation) return
+
+    // If file is selected, upload it instead
+    if (selectedFile) {
+      await handleUploadFile()
+      return
+    }
+
+    if (!newMessage.trim()) return
 
     setSending(true)
     setError(null)
@@ -615,17 +727,82 @@ export default function InboxPage() {
 
               {/* Message Input */}
               <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+                {/* File Preview */}
+                {selectedFile && (
+                  <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-between">
+                    <div className="flex items-center gap-2 flex-1 min-w-0">
+                      <Paperclip className="h-4 w-4 text-slate-500 flex-shrink-0" />
+                      <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                        {selectedFile.name}
+                      </span>
+                      <span className="text-xs text-slate-500">
+                        ({(selectedFile.size / 1024).toFixed(1)} KB)
+                      </span>
+                    </div>
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedFile(null)
+                        if (fileInputRef.current) {
+                          fileInputRef.current.value = ''
+                        }
+                      }}
+                      className="h-6 w-6 p-0"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {/* Upload Progress */}
+                {uploading && uploadProgress > 0 && (
+                  <div className="mb-3">
+                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                      <div
+                        className="h-full bg-primary transition-all duration-300"
+                        style={{ width: `${uploadProgress}%` }}
+                      />
+                    </div>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      Uploading... {uploadProgress}%
+                    </p>
+                  </div>
+                )}
+
                 <form onSubmit={handleSendMessage} className="flex gap-2 items-end">
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
+                    onChange={handleFileSelect}
+                    className="hidden"
+                    disabled={sending || uploading}
+                  />
+                  
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="default"
+                    onClick={() => fileInputRef.current?.click()}
+                    disabled={sending || uploading}
+                    className="h-[44px] px-3"
+                    title="Attach file"
+                  >
+                    <Paperclip className="h-4 w-4" />
+                  </Button>
+
                   <Textarea
                     value={newMessage}
                     onChange={(e) => setNewMessage(e.target.value)}
-                    placeholder="Type your message..."
+                    placeholder={selectedFile ? "Add a caption (optional)..." : "Type your message..."}
                     className="flex-1 min-h-[44px] max-h-32 text-sm resize-none"
-                    disabled={sending}
+                    disabled={sending || uploading}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
-                        if (newMessage.trim() && !sending) {
+                        if ((newMessage.trim() || selectedFile) && !sending && !uploading) {
                           handleSendMessage(e as any)
                         }
                       }
@@ -634,11 +811,11 @@ export default function InboxPage() {
                   />
                   <Button 
                     type="submit" 
-                    disabled={!newMessage.trim() || sending} 
+                    disabled={(!newMessage.trim() && !selectedFile) || sending || uploading} 
                     size="default"
                     className="gap-2 h-[44px] px-4"
                   >
-                    {sending ? (
+                    {(sending || uploading) ? (
                       <Loader2 className="h-4 w-4 animate-spin" />
                     ) : (
                       <Send className="h-4 w-4" />
@@ -647,7 +824,9 @@ export default function InboxPage() {
                   </Button>
                 </form>
                 <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
-                  Press Enter to send, Shift+Enter for new line
+                  {selectedFile 
+                    ? 'File ready to send. Add a caption or click Send.'
+                    : 'Press Enter to send, Shift+Enter for new line, or attach a file'}
                 </p>
               </div>
             </>
