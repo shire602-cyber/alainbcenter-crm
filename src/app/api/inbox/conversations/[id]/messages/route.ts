@@ -5,7 +5,7 @@ import { requireAuthApi } from '@/lib/authApi'
 /**
  * POST /api/inbox/conversations/[id]/messages
  * Sends a WhatsApp reply via Meta Graph API and logs outbound Message(OUT)
- * Uses env vars: WHATSAPP_ACCESS_TOKEN, WHATSAPP_PHONE_NUMBER_ID
+ * Reads credentials from Integration model (database) first, then falls back to env vars
  */
 export async function POST(
   req: NextRequest,
