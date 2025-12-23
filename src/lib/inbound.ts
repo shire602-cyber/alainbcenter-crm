@@ -224,6 +224,7 @@ export async function handleInboundMessage(
   }
 
   // Step 4: Find or create Lead
+  // Use select to avoid loading missing columns (infoSharedAt, etc.)
   let lead = await prisma.lead.findFirst({
     where: {
       contactId: contact.id,
@@ -233,6 +234,25 @@ export async function handleInboundMessage(
       ],
     },
     orderBy: { createdAt: 'desc' },
+    select: {
+      id: true,
+      contactId: true,
+      stage: true,
+      pipelineStage: true,
+      leadType: true,
+      serviceTypeId: true,
+      priority: true,
+      aiScore: true,
+      nextFollowUpAt: true,
+      lastContactAt: true,
+      expiryDate: true,
+      autopilotEnabled: true,
+      status: true,
+      notes: true,
+      createdAt: true,
+      updatedAt: true,
+      // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+    },
   })
 
   if (!lead) {
