@@ -274,7 +274,7 @@ export async function handleInboundMessage(
       conversationId: conversation.id,
       leadId: lead.id,
       contactId: contact.id,
-      direction: 'INBOUND',
+      direction: 'inbound', // Use lowercase to match inbox expectations
       channel: channelLower,
       type: 'text',
       body: body || null,
@@ -287,6 +287,8 @@ export async function handleInboundMessage(
       createdAt: timestamp,
     },
   })
+  
+  console.log(`✅ Created inbound message ${message.id} for conversation ${conversation.id}`)
 
   // Create initial status event
   try {
