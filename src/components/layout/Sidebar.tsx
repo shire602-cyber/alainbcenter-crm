@@ -40,6 +40,7 @@ const adminNavigation = [
   { name: 'Integrations', href: '/admin/integrations', icon: Plug2, description: 'WhatsApp, Meta, Email' },
   { name: 'Users & Roles', href: '/admin/users', icon: Shield, description: 'Manage users' },
   { name: 'Services', href: '/admin/services', icon: FolderOpen, description: 'Service types' },
+  { name: 'AI Training', href: '/admin/ai-training', icon: Sparkles, description: 'Train AI autopilot' },
   { name: 'Settings', href: '/settings/whatsapp', icon: Settings, description: 'WhatsApp & AI' },
 ]
 
