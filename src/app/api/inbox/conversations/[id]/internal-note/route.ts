@@ -35,11 +35,30 @@ export async function POST(
     }
 
     // Verify conversation exists
+    // Use select instead of include for lead to avoid loading fields that may not exist yet
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
-      include: {
-        contact: true,
-        lead: true,
+      select: {
+        id: true,
+        contactId: true,
+        leadId: true,
+        channel: true,
+        contact: {
+          select: {
+            id: true,
+            fullName: true,
+            phone: true,
+            email: true,
+          },
+        },
+        lead: {
+          select: {
+            id: true,
+            stage: true,
+            serviceTypeId: true,
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+          },
+        },
       },
     })
 
