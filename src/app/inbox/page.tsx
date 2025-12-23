@@ -176,24 +176,65 @@ export default function InboxPage() {
     loadConversations()
   }, [activeChannel])
 
-  // Auto-refresh: Poll for new messages every 3 seconds
+  // Auto-refresh: Poll for new messages every 3 seconds (silent background refresh)
   useEffect(() => {
     const interval = setInterval(() => {
-      // Refresh conversations list
-      loadConversations()
+      // Silent background refresh - don't show loading states
+      const channelParam = activeChannel === 'all' ? 'channel=all' : `channel=${activeChannel}`
+      fetch(`/api/inbox/conversations?${channelParam}`)
+        .then(res => res.json())
+        .then(data => {
+          if (data.ok) {
+            // Smoothly update conversations without jarring transitions
+            setConversations(prev => {
+              // Merge new conversations with existing ones to maintain scroll position
+              const existingMap = new Map(prev.map(c => [c.id, c]))
+              const newConversations = (data.conversations || []).map((newConv: Conversation) => {
+                const existing = existingMap.get(newConv.id)
+                // Preserve selection state
+                return existing && existing.id === selectedConversation?.id 
+                  ? { ...newConv, ...existing }
+                  : newConv
+              })
+              return newConversations
+            })
+          }
+        })
+        .catch(() => {}) // Silent fail for background refresh
       
-      // Refresh messages if a conversation is selected
+      // Refresh messages if a conversation is selected (silent)
       if (selectedConversation) {
-        loadMessages(selectedConversation.id)
+        fetch(`/api/inbox/conversations/${selectedConversation.id}`)
+          .then(res => res.json())
+          .then(data => {
+            if (data.ok && data.conversation) {
+              // Smoothly update messages without clearing the list
+              setMessages(prev => {
+                const existingMap = new Map(prev.map(m => [m.id, m]))
+                const newMessages = (data.conversation.messages || []).map((newMsg: Message) => {
+                  const existing = existingMap.get(newMsg.id)
+                  return existing || newMsg
+                })
+                // Only update if there are actually new messages
+                if (newMessages.length !== prev.length || 
+                    newMessages.some((m, i) => m.id !== prev[i]?.id)) {
+                  return newMessages
+                }
+                return prev
+              })
+              setSelectedLead(data.conversation.lead)
+            }
+          })
+          .catch(() => {}) // Silent fail
       }
     }, 3000) // Poll every 3 seconds
 
     return () => clearInterval(interval)
   }, [selectedConversation, activeChannel])
 
-  async function loadMessages(conversationId: number) {
+  async function loadMessages(conversationId: number, silent: boolean = false) {
     try {
-      setLoadingMessages(true)
+      if (!silent) setLoadingMessages(true)
       setError(null)
 
       await fetch(`/api/inbox/conversations/${conversationId}/read`, {
@@ -204,7 +245,16 @@ export default function InboxPage() {
       const data = await res.json()
 
       if (data.ok && data.conversation) {
-        setMessages(data.conversation.messages || [])
+        // Smooth transition - preserve existing messages and fade in new ones
+        setMessages(prev => {
+          const newMessages = data.conversation.messages || []
+          // If messages are the same, don't update to prevent flicker
+          if (prev.length === newMessages.length && 
+              prev.every((m, i) => m.id === newMessages[i]?.id)) {
+            return prev
+          }
+          return newMessages
+        })
         setSelectedLead(data.conversation.lead)
         setConversations((prev) =>
           prev.map((c) =>
@@ -214,13 +264,13 @@ export default function InboxPage() {
           )
         )
       } else {
-        setError(data.error || 'Failed to load messages')
+        if (!silent) setError(data.error || 'Failed to load messages')
       }
     } catch (err: any) {
-      setError('Failed to load messages')
+      if (!silent) setError('Failed to load messages')
       console.error(err)
     } finally {
-      setLoadingMessages(false)
+      if (!silent) setLoadingMessages(false)
     }
   }
 
@@ -573,33 +623,37 @@ export default function InboxPage() {
               )}
 
               {/* Messages */}
-              <div className="flex-1 overflow-y-auto p-3 space-y-2">
-                {loadingMessages ? (
-                  <div className="space-y-2">
+              <div className="flex-1 overflow-y-auto p-4 space-y-3">
+                {loadingMessages && messages.length === 0 ? (
+                  <div className="space-y-3">
                     <div className="flex justify-start">
-                      <Skeleton className="h-10 w-2/3 rounded-lg" />
+                      <Skeleton className="h-12 w-2/3 rounded-2xl" />
                     </div>
                     <div className="flex justify-end">
-                      <Skeleton className="h-10 w-2/3 rounded-lg" />
-                  </div>
+                      <Skeleton className="h-12 w-2/3 rounded-2xl" />
+                    </div>
+                    <div className="flex justify-start">
+                      <Skeleton className="h-12 w-1/2 rounded-2xl" />
+                    </div>
                   </div>
                 ) : (
-                  messages.map((msg) => {
+                  messages.map((msg, index) => {
                     const isInbound = msg.direction === 'inbound'
                     return (
                       <div
                         key={msg.id}
                         className={cn(
-                          'flex',
+                          'flex animate-in fade-in slide-in-from-bottom-2 duration-300',
                           isInbound ? 'justify-start' : 'justify-end'
                         )}
+                        style={{ animationDelay: `${index * 50}ms` }}
                       >
                         <div
                           className={cn(
-                            'max-w-[75%] p-3 rounded-2xl text-sm shadow-sm transition-all hover:shadow-md',
+                            'max-w-[75%] p-4 rounded-2xl text-sm shadow-md transition-all hover:shadow-lg',
                             isInbound
                               ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700'
-                              : 'bg-primary text-primary-foreground ml-auto'
+                              : 'bg-primary text-primary-foreground ml-auto shadow-primary/20'
                           )}
                         >
                           {msg.type === 'text' ? (
@@ -608,34 +662,40 @@ export default function InboxPage() {
                             </p>
                           ) : msg.type === 'audio' && msg.mediaUrl ? (
                             <div className="space-y-2">
-                              <AudioMessagePlayer
-                                mediaId={msg.mediaUrl}
-                                mimeType={msg.mediaMimeType}
-                                messageId={msg.id}
-                                className="w-full"
-                              />
+                              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                <AudioMessagePlayer
+                                  mediaId={msg.mediaUrl}
+                                  mimeType={msg.mediaMimeType}
+                                  messageId={msg.id}
+                                  className="w-full"
+                                />
+                              </div>
                               {msg.body && msg.body !== '[audio]' && (
                                 <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
                               )}
                             </div>
                           ) : msg.type === 'image' && msg.mediaUrl ? (
                             <div className="space-y-2">
-                              <div className="relative group">
+                              <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                                 <img
-                                  src={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
-                                  alt={msg.body || 'Image'}
-                                  className="max-w-full h-auto rounded-lg cursor-pointer hover:opacity-90 transition-opacity"
+                                  src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+                                  alt={msg.body || 'Image message'}
+                                  className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
+                                  loading="lazy"
                                   onError={(e) => {
-                                    e.currentTarget.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
+                                    const target = e.currentTarget
+                                    target.onerror = null
+                                    target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
                                   }}
                                 />
                                 <a
-                                  href={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="absolute inset-0 flex items-center justify-center bg-black/50 opacity-0 group-hover:opacity-100 transition-opacity rounded-lg"
+                                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                                  title="Open image in new tab"
                                 >
-                                  <ImageIcon className="h-6 w-6 text-white" />
+                                  <ImageIcon className="h-8 w-8 text-white" />
                                 </a>
                               </div>
                               {msg.body && msg.body !== '[image]' && (
