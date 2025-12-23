@@ -41,26 +41,41 @@ export async function uploadMediaToMeta(
   // Convert ArrayBuffer to Buffer if needed
   const buffer = fileBuffer instanceof Buffer ? fileBuffer : Buffer.from(fileBuffer)
   
-  // Create form data for multipart upload
-  // On server-side (Node.js), we need to use form-data library or manual multipart
-  // For Vercel serverless, we'll use a different approach
-  const FormData = (await import('form-data')).default
-  const formData = new FormData()
-  formData.append('file', buffer, {
-    filename: `media.${getExtensionFromMime(mimeType)}`,
-    contentType: mimeType,
-  })
-  formData.append('messaging_product', 'whatsapp')
-  formData.append('type', getMediaTypeFromMime(mimeType))
+  // Create multipart form data manually for server-side
+  // Meta requires multipart/form-data with specific fields
+  const boundary = `----WebKitFormBoundary${Math.random().toString(36).substring(2, 15)}`
+  const CRLF = '\r\n'
+  
+  let formData = ''
+  
+  // Add messaging_product field
+  formData += `--${boundary}${CRLF}`
+  formData += `Content-Disposition: form-data; name="messaging_product"${CRLF}${CRLF}`
+  formData += `whatsapp${CRLF}`
+  
+  // Add type field
+  formData += `--${boundary}${CRLF}`
+  formData += `Content-Disposition: form-data; name="type"${CRLF}${CRLF}`
+  formData += `${getMediaTypeFromMime(mimeType)}${CRLF}`
+  
+  // Add file field
+  formData += `--${boundary}${CRLF}`
+  formData += `Content-Disposition: form-data; name="file"; filename="media.${getExtensionFromMime(mimeType)}"${CRLF}`
+  formData += `Content-Type: ${mimeType}${CRLF}${CRLF}`
+  
+  // Combine text parts with binary buffer
+  const textPart = Buffer.from(formData, 'utf-8')
+  const endBoundary = Buffer.from(`${CRLF}--${boundary}--${CRLF}`, 'utf-8')
+  const fullBody = Buffer.concat([textPart, buffer, endBoundary])
 
   try {
     const response = await fetch(uploadUrl, {
       method: 'POST',
       headers: {
         Authorization: `Bearer ${accessToken}`,
-        ...formData.getHeaders(), // Get proper multipart headers
+        'Content-Type': `multipart/form-data; boundary=${boundary}`,
       },
-      body: formData as any,
+      body: fullBody,
     })
 
     const data = await response.json()

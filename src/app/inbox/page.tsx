@@ -313,6 +313,23 @@ function InboxPageContent() {
 
     setSelectedFile(file)
     setError(null)
+    setShowAudioRecorder(false) // Hide recorder if file selected
+  }
+
+  async function handleAudioRecordingComplete(audioBlob: Blob) {
+    // Create a File object from the blob
+    const audioFile = new File([audioBlob], `recording-${Date.now()}.webm`, {
+      type: 'audio/webm',
+    })
+    
+    setSelectedFile(audioFile)
+    setShowAudioRecorder(false)
+    setError(null)
+    
+    // Auto-upload and send the recording
+    setTimeout(() => {
+      handleUploadFile()
+    }, 100)
   }
 
   async function handleUploadFile() {
