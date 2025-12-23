@@ -80,6 +80,7 @@ export async function generateAIAutoresponse(
   text: string
   success: boolean
   error?: string
+  confidence?: number // Phase 4: AI confidence score (0-100)
 }> {
   try {
     const { lead, contact, recentMessages = [], mode, channel } = context
@@ -179,9 +180,29 @@ export async function generateAIAutoresponse(
       ? draftText.substring(0, maxLength - 3) + '...'
       : draftText
 
+    // Phase 4: Estimate confidence based on message quality and context
+    let confidence = 75 // Default confidence
+    if (!lead || !lead.serviceType) {
+      confidence -= 10 // Lower confidence if lead info missing
+    }
+    if (recentMessages.length === 0) {
+      confidence -= 5 // Lower confidence if no conversation history
+    }
+    if (truncatedText.length < 50) {
+      confidence -= 15 // Lower confidence if message is too short
+    }
+    if (truncatedText.length > 600) {
+      confidence -= 10 // Lower confidence if message is too long
+    }
+    // Higher confidence if lead is qualified
+    if (lead.aiScore && lead.aiScore >= 70) {
+      confidence += 10
+    }
+    
     return {
       text: truncatedText.trim(),
       success: true,
+      confidence: Math.max(0, Math.min(100, confidence)), // Clamp between 0-100
     }
   } catch (error: any) {
     console.error('Error generating AI autoresponse:', error)
@@ -189,6 +210,7 @@ export async function generateAIAutoresponse(
       text: '',
       success: false,
       error: error.message || 'Failed to generate AI reply',
+      confidence: 0, // No confidence on error
     }
   }
 }

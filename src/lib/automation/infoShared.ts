@@ -5,7 +5,7 @@
  * and triggers follow-up automation
  */
 
-import { prisma } from './prisma'
+import { prisma } from '../prisma'
 import { runRuleOnLead, AutomationContext } from './engine'
 import { Prisma } from '@prisma/client'
 
@@ -147,3 +147,4 @@ export async function markInfoShared(
     console.error(`Error triggering INFO_SHARED automation for lead ${leadId}:`, error.message)
   }
 }
+
