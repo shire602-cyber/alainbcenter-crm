@@ -38,6 +38,100 @@ export function AutomationRulesManager() {
   const [draftCount, setDraftCount] = useState(0)
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<{ success: boolean; message?: string } | null>(null)
+  
+  async function handleSeedInbound() {
+    if (!confirm('Seed INBOUND_MESSAGE automation rules? This will create rules for auto-replying to incoming messages.')) {
+      return
+    }
+    
+    setSeeding(true)
+    setSeedResult(null)
+    
+    try {
+      const res = await fetch('/api/admin/automation/seed-inbound', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      
+      const data = await res.json()
+      
+      if (res.ok && data.ok) {
+        setSeedResult({ success: true, message: data.message || 'Inbound rules seeded successfully' })
+        // Reload page after 2 seconds to show new rules
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setSeedResult({ success: false, message: data.error || 'Failed to seed inbound rules' })
+      }
+    } catch (error: any) {
+      setSeedResult({ success: false, message: error.message || 'Failed to seed inbound rules' })
+    } finally {
+      setSeeding(false)
+    }
+  }
+  
+  async function handleSeedInfoFollowup() {
+    if (!confirm('Seed info/quotation follow-up automation rules?')) {
+      return
+    }
+    
+    setSeeding(true)
+    setSeedResult(null)
+    
+    try {
+      const res = await fetch('/api/admin/automation/seed-info-followup', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      
+      const data = await res.json()
+      
+      if (res.ok && data.ok) {
+        setSeedResult({ success: true, message: data.message || 'Info follow-up rules seeded successfully' })
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setSeedResult({ success: false, message: data.error || 'Failed to seed info follow-up rules' })
+      }
+    } catch (error: any) {
+      setSeedResult({ success: false, message: error.message || 'Failed to seed info follow-up rules' })
+    } finally {
+      setSeeding(false)
+    }
+  }
+  
+  async function handleSeedEscalation() {
+    if (!confirm('Seed escalation automation rules?')) {
+      return
+    }
+    
+    setSeeding(true)
+    setSeedResult(null)
+    
+    try {
+      const res = await fetch('/api/admin/automation/seed-escalation', {
+        method: 'POST',
+        credentials: 'include',
+      })
+      
+      const data = await res.json()
+      
+      if (res.ok && data.ok) {
+        setSeedResult({ success: true, message: data.message || 'Escalation rules seeded successfully' })
+        setTimeout(() => {
+          window.location.reload()
+        }, 2000)
+      } else {
+        setSeedResult({ success: false, message: data.error || 'Failed to seed escalation rules' })
+      }
+    } catch (error: any) {
+      setSeedResult({ success: false, message: error.message || 'Failed to seed escalation rules' })
+    } finally {
+      setSeeding(false)
+    }
+  }
   useEffect(() => {
     loadStats()
   }, [])
@@ -344,6 +438,89 @@ export function AutomationRulesManager() {
           </p>
         </BentoCard>
       </div>
+
+      {/* Seed Rules Section */}
+      <BentoCard
+        title="Seed Automation Rules"
+        icon={<Zap className="h-4 w-4" />}
+      >
+        <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+          Create default automation rules for your system. Click the buttons below to seed different rule types.
+        </p>
+        
+        <div className="flex flex-wrap gap-2 mb-3">
+          <Button
+            onClick={handleSeedInbound}
+            disabled={seeding}
+            variant="outline"
+            size="sm"
+            className="text-xs"
+          >
+            {seeding ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Seeding...
+              </>
+            ) : (
+              'Seed Inbound Rules'
+            )}
+          </Button>
+          
+          <Button
+            onClick={handleSeedInfoFollowup}
+            disabled={seeding}
+            variant="outline"
+            size="sm"
+            className="text-xs"
+          >
+            {seeding ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Seeding...
+              </>
+            ) : (
+              'Seed Info Follow-up'
+            )}
+          </Button>
+          
+          <Button
+            onClick={handleSeedEscalation}
+            disabled={seeding}
+            variant="outline"
+            size="sm"
+            className="text-xs"
+          >
+            {seeding ? (
+              <>
+                <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                Seeding...
+              </>
+            ) : (
+              'Seed Escalation'
+            )}
+          </Button>
+        </div>
+        
+        {seedResult && (
+          <div className={`text-xs p-2 rounded ${
+            seedResult.success
+              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
+              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+          }`}>
+            {seedResult.success ? (
+              <div className="flex items-center gap-1">
+                <CheckCircle2 className="h-3 w-3" />
+                {seedResult.message}
+              </div>
+            ) : (
+              <div className="flex items-center gap-1">
+                <XCircle className="h-3 w-3" />
+                {seedResult.message}
+              </div>
+            )}
+          </div>
+        )}
+      </BentoCard>
 
       {/* Rules Management */}
       <BentoCard
