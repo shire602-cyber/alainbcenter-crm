@@ -449,10 +449,7 @@ async function executeSendAIReply(
     }
 
     try {
-      // Send via WhatsApp Cloud API
-      const result = await sendTextMessage(contact.phone, aiResult.text)
-
-      // Get or create conversation
+      // Get or create conversation to check 24-hour window
       let conversation = await prisma.conversation.findFirst({
         where: {
           contactId: contact.id,
@@ -471,6 +468,38 @@ async function executeSendAIReply(
           },
         })
       }
+
+      // Check 24-hour messaging window for WhatsApp
+      // WhatsApp Business API only allows free-form messages within 24 hours of customer's last message
+      const now = new Date()
+      const lastInboundAt = conversation.lastInboundAt || null
+      
+      let within24HourWindow = false
+      if (lastInboundAt) {
+        const hoursSinceLastInbound = (now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)
+        within24HourWindow = hoursSinceLastInbound <= 24
+      } else {
+        // If no inbound message, we can send (first message to customer)
+        within24HourWindow = true
+      }
+
+      // If outside 24-hour window, cannot send free-form AI message
+      if (!within24HourWindow) {
+        return {
+          success: false,
+          error: 'Cannot send AI-generated message outside 24-hour window',
+          hint: `WhatsApp Business API requires pre-approved templates for messages sent more than 24 hours after the customer's last message. Last inbound message was ${lastInboundAt ? Math.round((now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)) : 'never'} hours ago. Please use a template message instead.`,
+          requiresTemplate: true,
+          hoursSinceLastInbound: lastInboundAt 
+            ? Math.round((now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60))
+            : null,
+        }
+      }
+
+      // Send via WhatsApp Cloud API (within 24-hour window)
+      const result = await sendTextMessage(contact.phone, aiResult.text)
+
+      // Conversation already retrieved above for 24-hour check
 
       // Create message record
       await prisma.message.create({
