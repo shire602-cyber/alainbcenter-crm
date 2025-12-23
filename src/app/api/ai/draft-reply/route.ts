@@ -62,7 +62,22 @@ export async function POST(req: NextRequest) {
         where: { id: parseInt(conversationId) },
         include: {
           contact: true,
-          lead: true
+          lead: {
+            select: {
+              id: true,
+              stage: true,
+              pipelineStage: true,
+              leadType: true,
+              serviceTypeId: true,
+              priority: true,
+              aiScore: true,
+              aiNotes: true,
+              nextFollowUpAt: true,
+              lastContactAt: true,
+              expiryDate: true,
+              // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+            },
+          }
         }
       })
       
