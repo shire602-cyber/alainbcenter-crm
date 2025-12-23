@@ -789,6 +789,26 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // Create summary log entry for daily cron run
+    try {
+      await prisma.automationRunLog.create({
+        data: {
+          ruleKey: 'autopilot_daily_run',
+          status: 'SUCCESS',
+          message: `Daily cron: ${results.rulesRun || 0} rules, ${results.expiryRemindersSent || 0} reminders, ${results.followUpsSent || 0} follow-ups, ${results.draftsCreated || 0} drafts`,
+          details: JSON.stringify({
+            totals: results,
+            timestamp: now.toISOString(),
+            mode: draftMode ? 'draft' : 'send',
+          }),
+          ranAt: now,
+        },
+      })
+    } catch (logError: any) {
+      // Don't fail the whole request if logging fails
+      console.warn('Failed to log daily cron run summary:', logError)
+    }
+
     return NextResponse.json({
       success: true,
       timestamp: now.toISOString(),
