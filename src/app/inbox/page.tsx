@@ -30,10 +30,15 @@ import {
   Globe,
   Eye,
   Users,
+  Image as ImageIcon,
+  FileText,
+  Video,
+  MapPin,
 } from 'lucide-react'
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
+import { AudioMessagePlayer } from '@/components/inbox/AudioMessagePlayer'
 import { AudioMessagePlayer } from '@/components/inbox/AudioMessagePlayer'
 
 type Contact = {
