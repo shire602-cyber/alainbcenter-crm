@@ -10,7 +10,15 @@ export async function GET(req: NextRequest) {
     const messages = await prisma.chatMessage.findMany({
       include: {
         contact: true,
-        lead: true,
+        lead: {
+          select: {
+            id: true,
+            stage: true,
+            aiScore: true,
+            nextFollowUpAt: true,
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+          },
+        },
       },
       orderBy: { createdAt: 'desc' },
     })

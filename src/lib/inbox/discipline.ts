@@ -138,7 +138,15 @@ async function createSlaBreachTask(conversationId: number): Promise<void> {
     where: { id: conversationId },
     include: {
       contact: true,
-      lead: true,
+      lead: {
+        select: {
+          id: true,
+          stage: true,
+          aiScore: true,
+          nextFollowUpAt: true,
+          // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+        },
+      },
     },
   })
 
