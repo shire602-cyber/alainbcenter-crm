@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuthApi } from '@/lib/authApi'
+import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp'
 
 /**
  * POST /api/inbox/conversations/[id]/messages
@@ -25,11 +26,12 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { text } = body
+    const { text, templateName, templateParams } = body
 
-    if (!text || !text.trim()) {
+    // Validate: either text (for within 24h) or template (for outside 24h)
+    if (!text && !templateName) {
       return NextResponse.json(
-        { ok: false, error: 'Text is required' },
+        { ok: false, error: 'Either text message or template name is required' },
         { status: 400 }
       )
     }
@@ -72,49 +74,34 @@ export async function POST(
       )
     }
 
-    // PRIORITY: Get WhatsApp credentials from Integration model first, then fallback to env vars
-    let accessToken: string | null = null
-    let phoneNumberId: string | null = null
-
-    try {
-      const integration = await prisma.integration.findUnique({
-        where: { name: 'whatsapp' },
-      })
-
-      if (integration) {
-        // Get from config JSON
-        if (integration.config) {
-          try {
-            const config = typeof integration.config === 'string'
-              ? JSON.parse(integration.config)
-              : integration.config
-            
-            accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
-            phoneNumberId = config.phoneNumberId || null
-          } catch (e) {
-            console.warn('Failed to parse integration config:', e)
-          }
-        } else {
-          // Fallback to direct fields
-          accessToken = integration.accessToken || integration.apiKey || null
-        }
-      }
-    } catch (e) {
-      console.warn('Could not fetch integration from DB:', e)
+    // Check 24-hour messaging window for WhatsApp
+    // WhatsApp Business API only allows free-form messages within 24 hours of customer's last message
+    // Outside 24 hours, MUST use pre-approved templates
+    const now = new Date()
+    const lastInboundAt = conversation.lastInboundAt || null
+    
+    let within24HourWindow = false
+    if (lastInboundAt) {
+      const hoursSinceLastInbound = (now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)
+      within24HourWindow = hoursSinceLastInbound <= 24
+    } else {
+      // If no inbound message, we can send (first message to customer)
+      within24HourWindow = true
     }
 
-    // Fallback to environment variables if not found in database
-    if (!accessToken) accessToken = process.env.WHATSAPP_ACCESS_TOKEN || null
-    if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
-
-    if (!accessToken || !phoneNumberId) {
+    // If trying to send free-form text outside 24-hour window, require template instead
+    if (text && !templateName && !within24HourWindow) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'WhatsApp configuration missing',
-          hint: 'Configure WhatsApp in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables',
+          error: 'Cannot send free-form message outside 24-hour window',
+          hint: 'WhatsApp Business API requires pre-approved templates for messages sent more than 24 hours after the customer\'s last message. Please use a template message instead.',
+          requiresTemplate: true,
+          hoursSinceLastInbound: lastInboundAt 
+            ? Math.round((now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60))
+            : null,
         },
-        { status: 500 }
+        { status: 400 }
       )
     }
 
@@ -128,42 +115,26 @@ export async function POST(
     const sentAt = new Date()
     let whatsappMessageId: string | null = null
     let sendError: any = null
+    let messageContent = text || ''
 
     try {
-      const url = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`
-
-      const payload = {
-        messaging_product: 'whatsapp',
-        recipient_type: 'individual',
-        to: normalizedPhone,
-        type: 'text',
-        text: {
-          preview_url: false,
-          body: text.trim(),
-        },
-      }
-
-      const response = await fetch(url, {
-        method: 'POST',
-        headers: {
-          Authorization: `Bearer ${accessToken}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(payload),
-      })
-
-      const data = await response.json()
-
-      if (!response.ok) {
-        throw new Error(
-          data.error?.message || `WhatsApp API error: ${response.status}`
+      if (templateName) {
+        // Send template message (works outside 24-hour window)
+        const result = await sendTemplateMessage(
+          normalizedPhone,
+          templateName,
+          'en_US', // Default language, can be made configurable
+          templateParams || []
         )
-      }
-
-      whatsappMessageId = data.messages?.[0]?.id || null
-
-      if (!whatsappMessageId) {
-        throw new Error('WhatsApp API did not return a message ID')
+        whatsappMessageId = result.messageId
+        messageContent = `Template: ${templateName}`
+      } else if (text && within24HourWindow) {
+        // Send free-form text message (only within 24-hour window)
+        const result = await sendTextMessage(normalizedPhone, text.trim())
+        whatsappMessageId = result.messageId
+        messageContent = text.trim()
+      } else {
+        throw new Error('Invalid message type or outside 24-hour window')
       }
     } catch (error: any) {
       console.error('WhatsApp send error:', error)
@@ -180,8 +151,8 @@ export async function POST(
         contactId: conversation.contactId,
         direction: 'outbound', // Direction: OUT for outbound
         channel: 'whatsapp',
-        type: 'text',
-        body: text.trim(),
+        type: templateName ? 'template' : 'text',
+        body: messageContent,
         providerMessageId: whatsappMessageId || null,
         status: messageStatus,
         sentAt: sentAt,
