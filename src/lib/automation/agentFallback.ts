@@ -8,7 +8,7 @@
  * - Overdue follow-ups → Task for agent
  */
 
-import { prisma } from './prisma'
+import { prisma } from '../prisma'
 
 /**
  * Detect if customer is requesting to speak to a human agent
@@ -292,3 +292,4 @@ export async function checkLeadNeedsEscalation(leadId: number): Promise<{
 
   return { needsEscalation: false, reason: null, priority: 'NORMAL' }
 }
+
