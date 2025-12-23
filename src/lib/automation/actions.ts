@@ -574,6 +574,8 @@ async function executeSendAIReply(
         RENEWAL: 'Renewal reminder from Alain Business Center',
         PRICING: 'Pricing information',
         DOCS: 'Document Request - Alain Business Center',
+        REMIND: 'Reminder from Alain Business Center',
+        BOOK_CALL: 'Schedule a call with us',
         GENERIC: 'Message from Alain Business Center',
       }
       const subject = subjectMap[mode] || 'Message from Alain Business Center'
