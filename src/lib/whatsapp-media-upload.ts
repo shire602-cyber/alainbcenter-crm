@@ -39,7 +39,14 @@ export async function uploadMediaToMeta(
   const uploadUrl = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/media`
   
   // Convert ArrayBuffer to Buffer if needed
-  const buffer = fileBuffer instanceof Buffer ? fileBuffer : Buffer.from(fileBuffer)
+  let buffer: Buffer
+  if (fileBuffer instanceof Buffer) {
+    buffer = fileBuffer
+  } else if (fileBuffer instanceof ArrayBuffer) {
+    buffer = Buffer.from(new Uint8Array(fileBuffer))
+  } else {
+    buffer = Buffer.from(fileBuffer as any)
+  }
   
   // Create multipart form data manually for server-side
   // Meta requires multipart/form-data with specific fields
