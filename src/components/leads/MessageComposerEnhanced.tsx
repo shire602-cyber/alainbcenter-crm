@@ -181,8 +181,8 @@ export function MessageComposerEnhanced({
           value={value}
           onChange={(e) => onChange(e.target.value)}
           placeholder={placeholder}
-          rows={3}
-          className="resize-none"
+          rows={4}
+          className="resize-none min-h-[100px]"
           onKeyDown={(e) => {
             // Ctrl+Enter or Cmd+Enter to send
             if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
