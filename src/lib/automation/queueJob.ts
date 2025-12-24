@@ -28,7 +28,7 @@ export async function queueAutomationJob(
   const job = await prisma.automationJob.create({
     data: {
       type,
-      data,
+      data: JSON.stringify(data), // Store as JSON string for SQLite compatibility
       priority,
       maxRetries,
       status: 'PENDING',

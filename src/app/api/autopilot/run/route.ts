@@ -14,7 +14,9 @@ export async function POST(req: NextRequest) {
     const user = await requireAdminApi()
 
     const body = await req.json().catch(() => ({}))
+    // Default to false (actually send messages) unless explicitly set to dryRun
     const dryRun = body.dryRun === true
+    console.log('🔧 Autopilot run mode:', dryRun ? 'DRY RUN (no messages sent)' : 'LIVE (messages will be sent)')
 
     // Update status to "Processing" in database
     try {
