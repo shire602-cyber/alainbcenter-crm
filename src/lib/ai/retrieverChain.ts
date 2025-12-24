@@ -160,9 +160,11 @@ export async function markLeadRequiresHuman(
     // Create agent task if task system exists
     try {
       const { createAgentTask } = await import('../automation/agentFallback')
-      await createAgentTask(leadId, 'out_of_training', {
+      // Use 'complex_query' as fallback since 'out_of_training' may not be a valid task type
+      await createAgentTask(leadId, 'complex_query', {
         reason,
         query: query || 'Unknown',
+        note: 'Query is out of AI training scope',
       })
     } catch (taskError) {
       // Task system might not be available, continue
