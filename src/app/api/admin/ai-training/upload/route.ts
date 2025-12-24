@@ -174,7 +174,8 @@ export async function POST(req: NextRequest) {
     }
 
     // Index document in vector store (async, don't wait)
-    import('@/lib/ai/vectorStore')
+    // Use void to explicitly mark as fire-and-forget
+    void import('@/lib/ai/vectorStore')
       .then(({ indexTrainingDocument }) => indexTrainingDocument(document.id))
       .catch(err => console.warn('Failed to index document in vector store:', err))
 

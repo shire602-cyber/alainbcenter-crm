@@ -12,32 +12,37 @@ export async function POST(req: NextRequest) {
     const body = await req.json().catch(() => ({}))
     const dryRun = body.dryRun === true
 
-    const result = await runAutopilot({ dryRun })
-
-    // Create a summary log entry so it persists and shows in "Recent Runs"
+    // Update status to "Processing" in database
     try {
       await prisma.automationRunLog.create({
         data: {
           ruleKey: 'autopilot_manual_run',
-          status: result.ok ? 'SUCCESS' : 'FAILED',
-          message: result.ok 
-            ? `Manual run: ${result.totals?.rules || 0} rules, ${result.totals?.sent || 0} sent, ${result.totals?.skipped || 0} skipped`
-            : 'Run failed',
-          details: JSON.stringify({
-            totals: result.totals,
-            mode: dryRun ? 'dry-run' : 'live',
-            timestamp: new Date().toISOString(),
-          }),
+          status: 'PROCESSING',
+          message: 'Automation run queued',
           userId: user.id,
           ranAt: new Date(),
         },
       })
-    } catch (logError: any) {
-      // Don't fail the whole request if logging fails
-      console.warn('Failed to log autopilot run summary:', logError)
+    } catch (logError) {
+      console.warn('Failed to create processing log:', logError)
     }
 
-    return NextResponse.json(result)
+    // Queue the job instead of running synchronously
+    const { enqueueAutomation } = await import('@/lib/queue/automationQueue')
+    const jobId = await enqueueAutomation('autopilot_run', { dryRun, userId: user.id }, {
+      priority: 10, // High priority for manual runs
+    })
+
+    // Return immediately with job ID and processing status
+    return NextResponse.json({
+      ok: true,
+      jobId,
+      message: 'Automation run queued successfully',
+      status: 'queued',
+      processing: true, // Indicate that processing is in progress
+      timestamp: new Date().toISOString(),
+      totals: null, // Don't return zeros - indicate results are pending
+    })
   } catch (error: any) {
     console.error('Autopilot run error:', error)
     return NextResponse.json(
