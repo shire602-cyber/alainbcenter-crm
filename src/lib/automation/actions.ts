@@ -614,13 +614,22 @@ async function executeSendAIReply(
 
       // Send via WhatsApp Cloud API (within 24-hour window)
       console.log(`📤 Sending WhatsApp message to ${contact.phone} (${aiResult.text.substring(0, 50)}...)`)
-      const result = await sendTextMessage(contact.phone, aiResult.text)
-
-      if (!result || !result.messageId) {
-        console.error('❌ WhatsApp send failed:', result)
+      let result: { messageId: string; waId?: string }
+      try {
+        result = await sendTextMessage(contact.phone, aiResult.text)
+      } catch (error: any) {
+        console.error('❌ WhatsApp send failed:', error)
         return {
           success: false,
-          error: result?.error || 'Failed to send WhatsApp message - no message ID returned',
+          error: error.message || 'Failed to send WhatsApp message',
+        }
+      }
+
+      if (!result || !result.messageId) {
+        console.error('❌ WhatsApp send failed: No message ID returned', result)
+        return {
+          success: false,
+          error: 'Failed to send WhatsApp message - no message ID returned',
         }
       }
 
