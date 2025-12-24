@@ -61,7 +61,10 @@ export async function buildDraftReplyPrompt(
         
         searchResults.documents.forEach((doc, idx) => {
           const similarity = searchResults.scores[idx] || 0
-          trainingContext += `[${doc.metadata.type.toUpperCase()}] ${doc.metadata.title} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
+          // Defensive checks for metadata fields (should always exist per VectorDocument type, but safe to check)
+          const docType = doc.metadata?.type || 'guidance'
+          const docTitle = doc.metadata?.title || 'Untitled Document'
+          trainingContext += `[${docType.toUpperCase()}] ${docTitle} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
           trainingContext += `${doc.content.substring(0, 800)}\n\n`
         })
         

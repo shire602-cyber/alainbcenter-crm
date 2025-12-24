@@ -65,6 +65,13 @@ export async function GET(req: NextRequest) {
             },
           },
         },
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
       orderBy: {
         lastMessageAt: 'desc',
@@ -180,14 +187,16 @@ export async function GET(req: NextRequest) {
           }
         })
     
-        // Sort by lastMessageAt desc (most recent first), then priorityScore desc as tiebreaker
+        // Sort by priorityScore desc (highest priority first), then lastMessageAt desc as tiebreaker
         formatted.sort((a: { lastMessageAt: string; priorityScore: number }, b: { lastMessageAt: string; priorityScore: number }) => {
+          // Primary sort: priorityScore (descending - higher priority first)
+          if (b.priorityScore !== a.priorityScore) {
+            return b.priorityScore - a.priorityScore
+          }
+          // Tiebreaker: lastMessageAt (descending - most recent first)
           const timeA = new Date(a.lastMessageAt).getTime()
           const timeB = new Date(b.lastMessageAt).getTime()
-          if (timeB !== timeA) {
-            return timeB - timeA
-          }
-          return b.priorityScore - a.priorityScore
+          return timeB - timeA
         })
 
     return NextResponse.json({ ok: true, conversations: formatted })

@@ -163,12 +163,17 @@ export async function POST(req: NextRequest) {
 
     // RETRIEVER-FIRST CHAIN: Check if AI can respond to this query
     // Get the user's query from recent messages
+    // Check for both 'INBOUND' and 'inbound' for backward compatibility with existing data
     let userQuery = ''
     if (resolvedConversationId) {
       const lastMessage = await prisma.message.findFirst({
         where: { 
           conversationId: resolvedConversationId,
-          direction: 'INBOUND',
+          OR: [
+            { direction: 'INBOUND' },
+            { direction: 'inbound' },
+            { direction: 'IN' }, // Legacy support
+          ],
         },
         orderBy: { createdAt: 'desc' },
         select: { body: true },

@@ -11,6 +11,7 @@ import { runAutopilot } from '../autopilot/runAutopilot'
 
 class AutomationWorker {
   private isRunning = false
+  private isProcessing = false // Flag to prevent concurrent processing
   private processingInterval: NodeJS.Timeout | null = null
   private readonly POLL_INTERVAL = 5000 // 5 seconds
   private readonly BATCH_SIZE = 10
@@ -28,12 +29,13 @@ class AutomationWorker {
     this.isRunning = true
     console.log('🚀 Automation Worker started - processing jobs every 5 seconds')
 
-    // Process jobs immediately
-    this.processJobs()
+    // Process jobs immediately (fire-and-forget, explicitly voided)
+    void this.processJobs()
 
     // Then poll every 5 seconds
     this.processingInterval = setInterval(() => {
-      this.processJobs()
+      // Fire-and-forget, explicitly voided to prevent unhandled promise rejections
+      void this.processJobs()
     }, this.POLL_INTERVAL)
   }
 
@@ -147,6 +149,13 @@ class AutomationWorker {
 
   private async processJobs() {
     if (!this.isRunning) return
+    
+    // Prevent concurrent execution - if already processing, skip this cycle
+    if (this.isProcessing) {
+      return
+    }
+
+    this.isProcessing = true
 
     try {
       // Get pending jobs from database
@@ -172,6 +181,8 @@ class AutomationWorker {
       await Promise.allSettled(promises)
     } catch (error: any) {
       console.error('❌ Worker error:', error.message)
+    } finally {
+      this.isProcessing = false
     }
   }
 

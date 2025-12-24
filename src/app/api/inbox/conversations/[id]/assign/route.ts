@@ -1,104 +1,98 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAuthApi } from '@/lib/authApi'
+import { getCurrentUser } from '@/lib/auth-server'
 import { prisma } from '@/lib/prisma'
 
 /**
  * POST /api/inbox/conversations/[id]/assign
- * Assigns conversation to a user
- * Body: { userId: number | null } (null to unassign)
+ * Assign a conversation to a user or AI
  */
 export async function POST(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const user = await requireAuthApi()
-
-    const resolvedParams = await params
-    const conversationId = parseInt(resolvedParams.id)
-
-    if (isNaN(conversationId)) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid conversation ID' },
-        { status: 400 }
-      )
-    }
-
+    const currentUser = await getCurrentUser()
+    const { id } = await params
+    const conversationId = parseInt(id)
     const body = await req.json()
-    const { userId } = body
+    const { assignedUserId, assignedToAI } = body
 
-    // Validate userId if provided
-    if (userId !== null && userId !== undefined) {
-      const assignee = await prisma.user.findUnique({
-        where: { id: parseInt(userId) },
-      })
-
-      if (!assignee) {
-        return NextResponse.json(
-          { ok: false, error: 'User not found' },
-          { status: 404 }
-        )
-      }
-    }
-
+    // Get conversation
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
     })
 
     if (!conversation) {
       return NextResponse.json(
-        { ok: false, error: 'Conversation not found' },
+        { error: 'Conversation not found' },
         { status: 404 }
       )
     }
 
-    // Update assignment
-    const updated = await prisma.conversation.update({
+    // If assigning to AI, set assignedUserId to null
+    // null assignedUserId = AI assignment
+    let finalAssignedUserId: number | null = null
+
+    if (assignedToAI === true) {
+      // Explicitly assign to AI (null = AI)
+      finalAssignedUserId = null
+      console.log(`🤖 Assigning conversation ${conversationId} to AI`)
+    } else if (assignedUserId) {
+      // Verify user exists and check permissions
+      // Allow ADMIN and MANAGER to assign to anyone, regular users can only assign to themselves
+      if (!currentUser) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        )
+      }
+      if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER' && assignedUserId !== currentUser.id) {
+        return NextResponse.json(
+          { error: 'You can only assign to yourself or AI' },
+          { status: 403 }
+        )
+      }
+
+      const targetUser = await prisma.user.findUnique({
+        where: { id: assignedUserId },
+      })
+
+      if (!targetUser) {
+        return NextResponse.json(
+          { error: 'User not found' },
+          { status: 404 }
+        )
+      }
+
+      finalAssignedUserId = assignedUserId
+      console.log(`👤 Assigning conversation ${conversationId} to user ${targetUser.name} (${targetUser.id})`)
+    } else {
+      // Unassign (also sets to AI by default)
+      finalAssignedUserId = null
+      console.log(`🔄 Unassigning conversation ${conversationId} (defaults to AI)`)
+    }
+
+    // Update conversation
+    await prisma.conversation.update({
       where: { id: conversationId },
       data: {
-        assignedUserId: userId === null || userId === undefined ? null : parseInt(userId),
-      },
-      include: {
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
+        assignedUserId: finalAssignedUserId,
       },
     })
 
     return NextResponse.json({
       ok: true,
-      conversation: {
-        id: updated.id,
-        assignedUser: updated.assignedUser,
-      },
+      message: assignedToAI 
+        ? 'Conversation assigned to AI' 
+        : finalAssignedUserId 
+          ? 'Conversation assigned successfully' 
+          : 'Conversation unassigned',
     })
   } catch (error: any) {
     console.error('POST /api/inbox/conversations/[id]/assign error:', error)
     return NextResponse.json(
-      { ok: false, error: error.message || 'Failed to assign conversation' },
-      { status: error.statusCode || 500 }
+      { error: error.message || 'Failed to assign conversation' },
+      { status: 500 }
     )
   }
 }
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-

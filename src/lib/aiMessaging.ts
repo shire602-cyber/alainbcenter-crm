@@ -73,6 +73,127 @@ export interface AIMessageContext {
 }
 
 /**
+ * Analyze conversation state to determine what information is missing
+ */
+function analyzeConversationState(lead: any, contact: any, recentMessages: any[]): {
+  hasService: boolean
+  hasNationality: boolean
+  hasExpiryInfo: boolean
+  hasLocation: boolean
+  nextStep: 'service' | 'nationality' | 'other_info' | 'book_call' | 'assign_human'
+} {
+  // Extract all inbound message text
+  const allInboundMessages = recentMessages
+    .filter(m => (m.direction === 'INBOUND' || m.direction === 'inbound'))
+    .map(m => (m.body || '').toLowerCase())
+    .join(' ')
+  
+  // Check if service is known (from lead or mentioned in messages)
+  const serviceKeywords = [
+    'visa', 'family visa', 'employment visa', 'work visa', 'business setup', 'company setup',
+    'renewal', 'freelance', 'investor', 'golden visa', 'emirates id', 'medical',
+    'تأشيرة', 'عائلية', 'عمل', 'شركة', 'تجديد', 'هوية'
+  ]
+  const hasServiceInLead = !!(lead.serviceType || lead.serviceTypeEnum || lead.leadType)
+  const hasServiceInMessages = serviceKeywords.some(keyword => allInboundMessages.includes(keyword.toLowerCase()))
+  const hasService = hasServiceInLead || hasServiceInMessages
+  
+  // Check if nationality is known (from contact or mentioned in messages)
+  const nationalityKeywords = [
+    'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian',
+    'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian',
+    'هندي', 'باكستاني', 'فلبيني', 'مصري', 'بريطاني', 'أمريكي'
+  ]
+  const hasNationalityInContact = !!contact?.nationality
+  const hasNationalityInMessages = nationalityKeywords.some(keyword => allInboundMessages.includes(keyword.toLowerCase()))
+  const hasNationality = hasNationalityInContact || hasNationalityInMessages
+  
+  // Check if expiry info is known (from lead or mentioned in messages)
+  const expiryPattern = /(expir|expir|ends?|due|valid until|valid till|expiry date|expires?|ينتهي|تاريخ انتهاء)/i
+  const hasExpiryInfo = !!lead.expiryDate || expiryPattern.test(allInboundMessages)
+  
+  // Check if location is mentioned in messages
+  const locationKeywords = [
+    'uae', 'dubai', 'abu dhabi', 'sharjah', 'inside', 'outside', 'in uae', 'out of uae',
+    'داخل', 'خارج', 'الإمارات', 'دبي', 'أبو ظبي', 'الشارقة'
+  ]
+  const hasLocation = locationKeywords.some(keyword => allInboundMessages.includes(keyword.toLowerCase()))
+  
+  // Determine next step based on what's missing
+  if (!hasService) {
+    return { hasService: false, hasNationality, hasExpiryInfo, hasLocation, nextStep: 'service' }
+  }
+  if (!hasNationality) {
+    return { hasService: true, hasNationality: false, hasExpiryInfo, hasLocation, nextStep: 'nationality' }
+  }
+  if (!hasExpiryInfo && !hasLocation) {
+    return { hasService: true, hasNationality: true, hasExpiryInfo: false, hasLocation: false, nextStep: 'other_info' }
+  }
+  // If we have service, nationality, and some other info, offer to book call
+  if (hasService && hasNationality && (hasExpiryInfo || hasLocation)) {
+    return { hasService: true, hasNationality: true, hasExpiryInfo, hasLocation, nextStep: 'book_call' }
+  }
+  
+  return { hasService, hasNationality, hasExpiryInfo, hasLocation, nextStep: 'other_info' }
+}
+
+/**
+ * Generate qualification message based on conversation state
+ */
+function generateQualificationMessage(
+  analysis: ReturnType<typeof analyzeConversationState>,
+  language: 'en' | 'ar',
+  contactName: string
+): string {
+  const { nextStep, hasService, hasNationality, hasExpiryInfo, hasLocation } = analysis
+  
+  if (language === 'ar') {
+    switch (nextStep) {
+      case 'service':
+        return `مرحباً ${contactName}، شكراً لتواصلك معنا! 🌟\n\nما هي الخدمة التي تحتاجها؟\n\nمثلاً:\n• تأشيرة عائلية\n• تأشيرة عمل\n• تأسيس شركة\n• تجديد تأشيرة\n\nأخبرني بما تحتاجه وسأساعدك!`
+      case 'nationality':
+        return `ممتاز! 👍\n\nما هي جنسيتك؟ هذا يساعدني في تقديم المعلومات الصحيحة لك.`
+      case 'other_info':
+        let otherInfoAr = `شكراً! 📝\n\nللمتابعة، أحتاج بعض المعلومات:\n\n`
+        if (!hasExpiryInfo) {
+          otherInfoAr += `• متى تنتهي تأشيرتك الحالية؟ (إن وجدت)\n`
+        }
+        if (!hasLocation) {
+          otherInfoAr += `• هل أنت داخل الإمارات أم خارجها؟\n`
+        }
+        otherInfoAr += `\nهذه المعلومات تساعدنا في تقديم أفضل خدمة لك.`
+        return otherInfoAr
+      case 'book_call':
+        return `ممتاز! لدينا كل المعلومات الأساسية. 🎯\n\nهل تريد حجز مكالمة مع أحد مستشارينا لمناقشة تفاصيل خدمتك؟\n\nأو يمكنك إخباري بأي أسئلة إضافية لديك.`
+      default:
+        return `مرحباً ${contactName}، كيف يمكنني مساعدتك اليوم؟`
+    }
+  } else {
+    // English
+    switch (nextStep) {
+      case 'service':
+        return `Hi ${contactName}, thanks for reaching out! 🌟\n\nWhat service do you need?\n\nFor example:\n• Family Visa\n• Employment Visa\n• Business Setup\n• Visa Renewal\n\nLet me know what you need and I'll help you!`
+      case 'nationality':
+        return `Great! 👍\n\nWhat's your nationality? This helps me provide the right information for you.`
+      case 'other_info':
+        let otherInfoEn = `Thanks! 📝\n\nTo proceed, I need a few details:\n\n`
+        if (!hasExpiryInfo) {
+          otherInfoEn += `• When does your current visa expire? (if applicable)\n`
+        }
+        if (!hasLocation) {
+          otherInfoEn += `• Are you inside UAE or outside?\n`
+        }
+        otherInfoEn += `\nThis information helps us provide the best service for you.`
+        return otherInfoEn
+      case 'book_call':
+        return `Perfect! We have all the basic information. 🎯\n\nWould you like to book a call with one of our consultants to discuss your service details?\n\nOr you can let me know if you have any additional questions.`
+      default:
+        return `Hi ${contactName}, how can I assist you today?`
+    }
+  }
+}
+
+/**
  * Generate AI reply text for automation
  */
 export async function generateAIAutoresponse(
@@ -137,7 +258,7 @@ export async function generateAIAutoresponse(
       }
     }
 
-    // Generate simple template-based reply (avoid HTTP call in serverless)
+    // Generate structured conversation flow reply
     // Check if this is first message
     const outboundCount = await prisma.message.count({
       where: {
@@ -147,7 +268,7 @@ export async function generateAIAutoresponse(
     })
     
     const isFirstMessage = outboundCount === 0
-    const contactName = lead.contact?.fullName || 'there'
+    const contactName = lead.contact?.fullName || contact?.fullName || 'there'
     
     // Detect language from recent messages or use preferred language
     let detectedLanguage = preferredLanguage
@@ -162,16 +283,24 @@ export async function generateAIAutoresponse(
     }
     console.log(`🌐 Using language for reply: ${detectedLanguage} (preferred: ${preferredLanguage})`)
     
+    // Analyze conversation to determine what information is missing
+    const conversationAnalysis = analyzeConversationState(lead, contact, recentMessages)
+    console.log(`📊 Conversation state for lead ${lead.id}:`, conversationAnalysis)
+    
     let draftText = ''
     
     if (isFirstMessage && objective === 'qualify') {
-      // First message - always greet and collect info (multi-language)
+      // First message - always greet with Hamdi introduction (multi-language)
       if (detectedLanguage === 'ar') {
-        draftText = `مرحباً! 👋 أهلاً بك في مركز العين للأعمال. أنا هنا لمساعدتك في خدمات تأسيس الأعمال وتأشيرات الإمارات.\n\nللبدء، يرجى مشاركة:\n1. اسمك الكامل\n2. ما هي الخدمة التي تحتاجها؟ (مثل: تأشيرة عائلية، تأسيس شركة، تأشيرة عمل)\n3. جنسيتك\n\nسأقوم بتوصيلك مع المختص المناسب!`
+        draftText = `مرحباً! 👋 أهلاً بك في مركز العين للأعمال. اسمي حمدي، كيف يمكنني مساعدتك؟`
       } else {
-        draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!`
+        draftText = `Hi welcome to alain business center my name is Hamdi, how can i help?`
       }
       console.log(`✅ First message greeting generated for lead ${lead.id} (language: ${detectedLanguage})`)
+    } else if (objective === 'qualify') {
+      // Structured qualification flow: service → nationality → other info → book call
+      draftText = generateQualificationMessage(conversationAnalysis, detectedLanguage, contactName)
+      console.log(`✅ Qualification message generated for lead ${lead.id} (step: ${conversationAnalysis.nextStep})`)
     } else {
       // For follow-up messages, use simple template (multi-language)
       switch (objective) {
