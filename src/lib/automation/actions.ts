@@ -447,6 +447,27 @@ async function executeSendAIReply(
         // Mark lead as requiring human intervention
         await markLeadRequiresHuman(lead.id, retrievalResult.reason, userQuery)
 
+        // Notify all users that AI cannot respond
+        try {
+          const { notifyAIUntrainedSubject } = await import('../notifications')
+          const conversation = await prisma.conversation.findFirst({
+            where: {
+              contactId: contact.id,
+              leadId: lead.id,
+              channel: channel.toLowerCase(),
+            },
+          })
+          await notifyAIUntrainedSubject(
+            lead.id,
+            conversation?.id || null,
+            userQuery,
+            retrievalResult.reason
+          )
+        } catch (notifyError: any) {
+          console.warn('Failed to create notification:', notifyError.message)
+          // Non-critical, continue
+        }
+
         // DO NOT send any message automatically - AI should only respond when it can directly answer
         // Human agent will handle this lead
         console.log(`⚠️ AI cannot respond to query: "${userQuery.substring(0, 50)}..." - Lead ${lead.id} marked for human intervention`)

@@ -47,6 +47,7 @@ const adminNavigation = [
 export function Sidebar() {
   const pathname = usePathname()
   const [userRole, setUserRole] = useState<string | null>(null)
+  const [unrepliedCount, setUnrepliedCount] = useState(0)
   const { isOpen, toggle } = useSidebar()
 
   useEffect(() => {
@@ -54,6 +55,19 @@ export function Sidebar() {
       .then(res => res.json())
       .then(data => setUserRole(data.user?.role || null))
       .catch(() => {})
+
+    // Fetch unreplied message count
+    const fetchUnrepliedCount = () => {
+      fetch('/api/inbox/unreplied-count')
+        .then(res => res.json())
+        .then(data => setUnrepliedCount(data.count || 0))
+        .catch(() => setUnrepliedCount(0))
+    }
+
+    fetchUnrepliedCount()
+    // Poll every 30 seconds for updates
+    const interval = setInterval(fetchUnrepliedCount, 30000)
+    return () => clearInterval(interval)
   }, [])
 
 
@@ -112,25 +126,31 @@ export function Sidebar() {
                   return null
                 }
                 const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
+                const showUnrepliedDot = item.name === 'Inbox' && unrepliedCount > 0
                 return (
                   <li key={item.name}>
                     <Link
                       href={item.href}
                       className={cn(
-                        "group flex gap-x-3 rounded-lg px-3 py-2 text-sm font-medium leading-normal transition-all duration-200",
+                        "group flex gap-x-3 rounded-lg px-3 py-2 text-sm font-medium leading-normal transition-all duration-200 relative",
                         isActive
                           ? "bg-primary text-primary-foreground shadow-sm"
                           : "text-foreground/70 hover:bg-secondary hover:text-foreground"
                       )}
                       title={item.description}
                     >
-                      <item.icon
-                        className={cn(
-                          "h-4 w-4 shrink-0",
-                          isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
+                      <div className="relative">
+                        <item.icon
+                          className={cn(
+                            "h-4 w-4 shrink-0",
+                            isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
+                          )}
+                          aria-hidden="true"
+                        />
+                        {showUnrepliedDot && (
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
                         )}
-                        aria-hidden="true"
-                      />
+                      </div>
                       <div className="flex-1">
                         <div>{item.name}</div>
                         {item.description && (
