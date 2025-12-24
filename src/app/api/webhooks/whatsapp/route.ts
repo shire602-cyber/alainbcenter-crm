@@ -546,27 +546,9 @@ export async function POST(req: NextRequest) {
         } catch (error: any) {
           // Handle unique constraint violation (duplicate message)
           if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
-            console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint`)
-            // Even for duplicates, try to trigger auto-reply if message exists
-            try {
-              const existingMessage = await prisma.message.findFirst({
-                where: { providerMessageId: messageId },
-                include: {
-                  lead: { include: { contact: true } },
-                  conversation: true,
-                },
-              })
-              
-              if (existingMessage && existingMessage.body && existingMessage.body.trim().length > 0) {
-                console.log(`🔄 [WEBHOOK] Duplicate message found - attempting auto-reply anyway`)
-                const { handleInboundAutoReply } = await import('@/lib/autoReply')
-                const replyResult = await handleInboundAutoReply({
-                  leadId: existingMessage.leadId!,
-                  messageId: existingMessage.id,
-                  messageText: existingMessage.body,
-                  channel: existingMessage.channel,
-                  contactId: existingMessage.contactId!,
-                })
+            console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint - NO auto-reply for duplicates`)
+            // NO auto-reply for duplicates - user requirement
+            // Just log and return success
                 console.log(`📊 [WEBHOOK] Auto-reply result for duplicate:`, replyResult)
               }
             } catch (autoReplyError: any) {
