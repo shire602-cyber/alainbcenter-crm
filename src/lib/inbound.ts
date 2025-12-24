@@ -534,7 +534,6 @@ export async function handleInboundMessage(
 
   // Step 9: Trigger automation (non-blocking)
   // Run in background to keep response fast
-  // Note: Automation is already triggered in handleInboundMessage, but we ensure it's called
   // The automation handler will check for INBOUND_MESSAGE rules and execute them
   runInboundAutomationsForMessage(lead.id, {
     id: message.id,
@@ -543,7 +542,22 @@ export async function handleInboundMessage(
     body: message.body,
     createdAt: message.createdAt,
   }).catch((err) => {
-    console.error('Background automation error:', err)
+    console.error('❌ Background automation error for lead', lead.id, ':', err.message, err.stack)
+    // Log to database for monitoring (fire and forget, don't await)
+    prisma.externalEventLog.create({
+      data: {
+        provider: channel.toLowerCase(),
+        externalId: `automation-error-${Date.now()}`,
+        payload: JSON.stringify({
+          error: err.message,
+          leadId: lead.id,
+          messageId: message.id,
+        }),
+      },
+    }).catch((logError) => {
+      // Silently ignore logging errors to prevent unhandled rejections
+      console.warn('Failed to log automation error to database:', logError)
+    })
   })
 
   console.log(

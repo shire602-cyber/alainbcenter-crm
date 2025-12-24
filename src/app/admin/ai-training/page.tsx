@@ -7,7 +7,7 @@
  * to follow when generating responses.
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useRef } from 'react'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { BentoCard } from '@/components/dashboard/BentoCard'
 import { Button } from '@/components/ui/button'
@@ -37,6 +37,9 @@ export default function AITrainingPage() {
   const [content, setContent] = useState('')
   const [type, setType] = useState<'guidance' | 'examples' | 'policies' | 'scripts'>('guidance')
   const [uploading, setUploading] = useState(false)
+  const [uploadingFile, setUploadingFile] = useState(false)
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     loadDocuments()
@@ -130,6 +133,85 @@ export default function AITrainingPage() {
     setTitle('')
     setContent('')
     setType('guidance')
+    setSelectedFile(null)
+  }
+
+  async function handleFileUpload() {
+    if (!selectedFile || !title.trim()) {
+      showToast('Please select a file and provide a title', 'error')
+      return
+    }
+
+    try {
+      setUploadingFile(true)
+      const formData = new FormData()
+      formData.append('file', selectedFile)
+      formData.append('title', title.trim())
+      formData.append('type', type)
+
+      const res = await fetch('/api/admin/ai-training/upload', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      if (res.ok && data.ok) {
+        showToast('File uploaded and processed successfully', 'success')
+        setTitle('')
+        setContent('')
+        setSelectedFile(null)
+        setSelectedDoc(null)
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        await loadDocuments()
+      } else {
+        const errorMsg = data.error || `Upload failed: ${res.status} ${res.statusText}`
+        console.error('Upload error:', errorMsg, data)
+        showToast(errorMsg, 'error')
+      }
+    } catch (error: any) {
+      console.error('Upload exception:', error)
+      showToast(error.message || 'Failed to upload file. Please check the console for details.', 'error')
+    } finally {
+      setUploadingFile(false)
+    }
+  }
+
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0]
+    if (file) {
+      // Validate file type
+      const allowedExtensions = ['.pdf', '.txt', '.doc', '.docx', '.md']
+      const fileName = file.name.toLowerCase()
+      const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
+      
+      if (!hasValidExtension) {
+        showToast('File type not supported. Please select a PDF, TXT, DOC, DOCX, or MD file.', 'error')
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
+      
+      // Validate file size (5MB max)
+      const maxSize = 5 * 1024 * 1024
+      if (file.size > maxSize) {
+        showToast('File size exceeds 5MB limit. Please select a smaller file.', 'error')
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
+      
+      setSelectedFile(file)
+      // Auto-fill title if empty
+      if (!title.trim()) {
+        setTitle(file.name.replace(/\.[^/.]+$/, '')) // Remove extension
+      }
+    }
   }
 
   const typeLabels = {
@@ -141,24 +223,24 @@ export default function AITrainingPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header - matching other admin pages */}
-        <div className="flex items-center justify-between mb-2">
+      <div className="space-y-4">
+        {/* Header - matching other admin pages */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               AI Training Area
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               Upload guidance documents and training materials for the AI autopilot
             </p>
           </div>
-          <Button onClick={newDocument} size="sm" className="gap-1.5 text-xs">
-            <BookOpen className="h-3.5 w-3.5" />
+          <Button onClick={newDocument} size="sm" className="gap-1.5">
+            <BookOpen className="h-4 w-4" />
             New Document
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Document List */}
           <BentoCard className="lg:col-span-1" title="Training Documents">
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
@@ -249,25 +331,72 @@ export default function AITrainingPage() {
 
               <div className="space-y-2">
                 <Label htmlFor="content">Content</Label>
-                <Textarea
-                  id="content"
-                  value={content}
-                  onChange={(e) => setContent(e.target.value)}
-                  placeholder="Enter training content here. This will be used to guide the AI autopilot when generating responses..."
-                  rows={20}
-                  className="font-mono text-sm"
-                />
-                <p className="text-xs text-muted-foreground">
-                  This content will be used to guide the AI when generating responses. Be specific and clear.
-                </p>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <input
+                      type="file"
+                      ref={fileInputRef}
+                      onChange={handleFileSelect}
+                      accept=".txt,.md,.pdf,.doc,.docx"
+                      className="hidden"
+                      id="file-upload"
+                    />
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={uploadingFile}
+                    >
+                      <Upload className="h-4 w-4 mr-2" />
+                      {selectedFile ? selectedFile.name : 'Upload File'}
+                    </Button>
+                    {selectedFile && (
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedFile(null)}
+                      >
+                        Clear
+                      </Button>
+                    )}
+                  </div>
+                  {selectedFile && (
+                    <p className="text-xs text-muted-foreground">
+                      File selected: {selectedFile.name} ({(selectedFile.size / 1024).toFixed(1)} KB)
+                    </p>
+                  )}
+                  <Textarea
+                    id="content"
+                    value={content}
+                    onChange={(e) => setContent(e.target.value)}
+                    placeholder="Enter training content here, or upload a file above..."
+                    rows={20}
+                    className="font-mono text-sm"
+                    disabled={!!selectedFile}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    {selectedFile 
+                      ? 'File selected. Click "Upload File" to process it, or clear to enter text manually.'
+                      : 'This content will be used to guide the AI when generating responses. Be specific and clear.'}
+                  </p>
+                </div>
               </div>
 
               <div className="flex items-center gap-2">
-                <Button onClick={saveDocument} disabled={saving || !title.trim() || !content.trim()}>
-                  <Save className="h-4 w-4 mr-2" />
-                  {saving ? 'Saving...' : selectedDoc ? 'Update' : 'Save'}
-                </Button>
-                {selectedDoc && (
+                {selectedFile ? (
+                  <Button onClick={handleFileUpload} disabled={uploadingFile || !title.trim()}>
+                    <Upload className="h-4 w-4 mr-2" />
+                    {uploadingFile ? 'Uploading...' : 'Upload File'}
+                  </Button>
+                ) : (
+                  <Button onClick={saveDocument} disabled={saving || !title.trim() || !content.trim()}>
+                    <Save className="h-4 w-4 mr-2" />
+                    {saving ? 'Saving...' : selectedDoc ? 'Update' : 'Save'}
+                  </Button>
+                )}
+                {(selectedDoc || selectedFile) && (
                   <Button variant="outline" onClick={newDocument}>
                     Cancel
                   </Button>

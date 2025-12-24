@@ -166,14 +166,14 @@ export default function UsersPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header */}
-        <div className="flex items-center justify-between mb-2">
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               User Management
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               View and manage user accounts and roles
             </p>
           </div>
@@ -184,7 +184,7 @@ export default function UsersPage() {
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KPICard
             title="Total Users"
             value={users.length}

@@ -40,6 +40,9 @@
   "exclude": [
     "node_modules",
     "scripts/**/*",
-    "src/scripts/**/*"
+    "src/scripts/**/*",
+    "vitest.config.ts",
+    "**/*.test.ts",
+    "**/__tests__/**"
   ]
 }

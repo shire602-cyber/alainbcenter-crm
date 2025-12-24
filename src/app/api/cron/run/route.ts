@@ -10,28 +10,49 @@ import { runScheduledRules } from '@/lib/automation/engine'
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify cron secret
+    // Verify cron secret - Vercel cron sends x-vercel-cron header, or check Authorization
+    const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET || 'change-me-in-production'
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    // Allow Vercel cron (has x-vercel-cron header) OR valid CRON_SECRET
+    let isAuthorized = false
+    
+    if (vercelCronHeader) {
+      // Vercel cron request - automatically authorized
+      isAuthorized = true
+      console.log('✅ Vercel cron request detected')
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+      if (token === cronSecret) {
+        isAuthorized = true
+        console.log('✅ Authorized via CRON_SECRET')
+      }
+    }
+
+    if (!isAuthorized) {
       return NextResponse.json(
-        { ok: false, error: 'Missing authorization header' },
+        { ok: false, error: 'Unauthorized: Missing or invalid authorization' },
         { status: 401 }
       )
     }
 
-    const token = authHeader.substring(7)
-    if (token !== cronSecret) {
-      return NextResponse.json(
-        { ok: false, error: 'Invalid cron secret' },
-        { status: 401 }
-      )
-    }
-
-    // Get schedule type from query or body
+    // Get schedule type from query, body, or default to hourly for cron calls
     const { searchParams } = new URL(req.url)
-    const schedule = searchParams.get('schedule') || 'daily'
+    let schedule = searchParams.get('schedule')
+    
+    // If no query param, try to get from body (for manual calls)
+    if (!schedule) {
+      try {
+        const body = await req.json().catch(() => ({}))
+        schedule = body.schedule
+      } catch {
+        // Body parsing failed, use default
+      }
+    }
+    
+    // Default to hourly for automated cron calls (Vercel cron)
+    schedule = schedule || 'hourly'
     
     if (schedule !== 'daily' && schedule !== 'hourly') {
       return NextResponse.json(
@@ -40,8 +61,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    console.log(`🕐 Running ${schedule} scheduled automation rules...`)
+    
     // Run scheduled rules
     const result = await runScheduledRules(schedule as 'daily' | 'hourly')
+    
+    console.log(`✅ ${schedule} automation completed:`, {
+      rulesRun: result.rulesRun,
+      leadsProcessed: result.leadsProcessed,
+      actionsExecuted: result.actionsExecuted,
+      errors: result.errors.length,
+    })
 
     return NextResponse.json({
       ok: true,

@@ -119,24 +119,21 @@ export default async function AdminPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className="p-1.5 rounded-lg bg-primary/10">
-            <Shield className="h-5 w-5 text-primary" />
-          </div>
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Admin Dashboard
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               Manage services, users, integrations, and system settings
             </p>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
@@ -168,7 +165,7 @@ export default async function AdminPage() {
 
         {/* Quick Links Grid */}
         <BentoCard title="Quick Links" icon={<Zap className="h-4 w-4" />}>
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {quickLinks.map((link) => {
               const Icon = link.icon
               return (

@@ -160,11 +160,55 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // RETRIEVER-FIRST CHAIN: Check if AI can respond to this query
+    // Get the user's query from recent messages
+    let userQuery = ''
+    if (resolvedConversationId) {
+      const lastMessage = await prisma.message.findFirst({
+        where: { 
+          conversationId: resolvedConversationId,
+          direction: 'INBOUND',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { body: true },
+      })
+      userQuery = lastMessage?.body || ''
+    }
+    if (!userQuery) {
+      userQuery = contextSummary.structured.lead?.notes || contextSummary.text || ''
+    }
+
+    // Use retriever-first chain to check if we can respond
+    const { retrieveAndGuard, markLeadRequiresHuman } = await import('@/lib/ai/retrieverChain')
+    const retrievalResult = await retrieveAndGuard(userQuery, {
+      similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
+      topK: 5,
+    })
+
+    // If AI cannot respond, mark lead and return polite message
+    if (!retrievalResult.canRespond) {
+      if (resolvedLeadId) {
+        await markLeadRequiresHuman(resolvedLeadId, retrievalResult.reason, userQuery)
+      }
+
+      return NextResponse.json({
+        error: retrievalResult.reason,
+        requiresTraining: true,
+        requiresHuman: true,
+        suggestedResponse: retrievalResult.suggestedResponse || "I'm only trained to assist with specific business topics. Let me get a human agent for you.",
+      }, { status: 400 })
+    }
+
     // Determine tone and language based on objective
     let tone = 'professional'
     if (objective === 'followup' || objective === 'qualify') {
       tone = 'friendly'
     }
+
+    // Build training context from retrieved documents
+    const relevantTraining = retrievalResult.relevantDocuments
+      .map(doc => `${doc.title} (${doc.type}, similarity: ${doc.similarity.toFixed(2)}):\n${doc.content}`)
+      .join('\n\n---\n\n')
 
     // Generate draft based on objective
     let draftText = ''
@@ -174,9 +218,14 @@ export async function POST(req: NextRequest) {
     const contactName = contextSummary.structured.contact?.name || 'there'
     const leadStage = contextSummary.structured.lead?.stage || 'NEW'
     
+    // Use training documents to enhance the response
+    const trainingContext = relevantTraining 
+      ? `\n\nTraining Guidelines:\n${relevantTraining}\n\nUse the above training to guide your response.`
+      : ''
+
     switch (objective) {
       case 'qualify':
-        draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n3. Do you have any specific requirements?\n\nLooking forward to helping you!`
+        draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n3. Do you have any specific requirements?\n\nLooking forward to helping you!${trainingContext}`
         nextQuestions = [
           'What specific service are you interested in?',
           'What is your timeline?',

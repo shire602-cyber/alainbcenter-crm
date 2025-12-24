@@ -19,6 +19,8 @@ type RunResult = {
   draftsCreated?: number
   skippedDuplicates?: number
   errors?: string[]
+  processing?: boolean
+  message?: string
 }
 
 type RunLog = {
@@ -186,15 +188,39 @@ export function AutomationRulesManager() {
       const data = await res.json()
 
       if (res.ok && data.ok) {
+        // Check if job is queued/processing
+        if (data.status === 'queued' || data.processing) {
+          setRunResult({
+            success: true,
+            timestamp: data.timestamp || new Date().toISOString(),
+            rulesRun: 0,
+            expiryRemindersSent: 0,
+            followUpsSent: 0,
+            draftsCreated: 0,
+            skippedDuplicates: 0,
+            errors: [],
+            processing: true, // Indicate processing state
+            message: data.message || 'Automation run queued and processing...',
+          })
+          // Poll for results after a delay
+          setTimeout(() => {
+            // Optionally poll the job status endpoint if available
+            loadStats() // Reload stats to see updated logs
+          }, 3000)
+          return
+        }
+        
+        // Map autopilot response to UI format (for completed runs)
+        const totals = data.totals || {}
         setRunResult({
           success: true,
           timestamp: data.timestamp || new Date().toISOString(),
-          rulesRun: data.totals?.rules || 0,
-          expiryRemindersSent: data.totals?.expiryRemindersSent || 0,
-          followUpsSent: data.totals?.followUpsSent || 0,
-          draftsCreated: data.totals?.draftsCreated || data.totals?.sent || 0,
-          skippedDuplicates: data.totals?.skipped || 0,
-          errors: [],
+          rulesRun: totals.rules || 0,
+          expiryRemindersSent: totals.sent || 0, // Autopilot uses 'sent' for all sent messages
+          followUpsSent: totals.sent || 0,
+          draftsCreated: totals.sent || 0,
+          skippedDuplicates: totals.skipped || 0,
+          errors: totals.failed > 0 ? [`${totals.failed} rule(s) failed`] : [],
         })
         // Reload stats after a short delay to ensure log is saved
         setTimeout(() => {
@@ -253,15 +279,15 @@ export function AutomationRulesManager() {
   }
 
   return (
-    <div className="space-y-2">
-      {/* Compact Header */}
-      <div className="flex items-center justify-between mb-2">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Autopilot Automation
           </h1>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-            Configure automated messages for expiry reminders and follow-ups
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure automated messages for expiry reminders and follow-ups. Automation runs automatically in the background via scheduled cron jobs.
           </p>
         </div>
         <div className="flex gap-2">
@@ -321,16 +347,43 @@ export function AutomationRulesManager() {
       {/* Run Results */}
       {runResult && (
         <BentoCard 
-          title={runResult.success ? "Automation Run Completed" : "Automation Run Failed"}
-          icon={runResult.success ? <CheckCircle2 className="h-4 w-4 text-green-600" /> : <XCircle className="h-4 w-4 text-red-600" />}
-          className={runResult.success ? 'border-green-500' : 'border-red-500'}
+          title={
+            runResult.processing 
+              ? "Automation Run Processing" 
+              : runResult.success 
+                ? "Automation Run Completed" 
+                : "Automation Run Failed"
+          }
+          icon={
+            runResult.processing 
+              ? <Loader2 className="h-4 w-4 text-blue-600 animate-spin" />
+              : runResult.success 
+                ? <CheckCircle2 className="h-4 w-4 text-green-600" /> 
+                : <XCircle className="h-4 w-4 text-red-600" />
+          }
+          className={
+            runResult.processing 
+              ? 'border-blue-500' 
+              : runResult.success 
+                ? 'border-green-500' 
+                : 'border-red-500'
+          }
         >
           {runResult.timestamp && (
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
-              Ran at: {new Date(runResult.timestamp).toLocaleString()}
+              {runResult.processing ? 'Queued at' : 'Ran at'}: {new Date(runResult.timestamp).toLocaleString()}
             </p>
           )}
-          {runResult.success ? (
+          {runResult.processing ? (
+            <div className="space-y-3">
+              <p className="text-sm text-slate-700 dark:text-slate-300">
+                {runResult.message || 'Automation run is queued and processing in the background. Results will appear in the logs below.'}
+              </p>
+              <p className="text-xs text-slate-500 dark:text-slate-400">
+                Check the "Recent Runs" section below for updates.
+              </p>
+            </div>
+          ) : runResult.success ? (
             <div className="space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
                 <KPICard

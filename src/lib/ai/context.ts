@@ -158,8 +158,9 @@ export async function buildConversationContext(
   summaryParts.push(`\nRecent Messages (last ${allMessages.length}):`)
   allMessages.forEach((msg, idx) => {
     const time = format(msg.createdAt, 'MMM d, HH:mm')
+    const messageText = (msg.message || '').substring(0, 150)
     summaryParts.push(
-      `${idx + 1}. [${msg.direction.toUpperCase()}] ${time} (${msg.channel}): ${msg.message.substring(0, 150)}`
+      `${idx + 1}. [${msg.direction.toUpperCase()}] ${time} (${msg.channel}): ${messageText}`
     )
   })
 
@@ -297,8 +298,9 @@ export async function buildConversationContextFromLead(
   summaryParts.push(`\nRecent Messages (last ${allMessages.length}):`)
   allMessages.forEach((msg, idx) => {
     const time = format(msg.createdAt, 'MMM d, HH:mm')
+    const messageText = (msg.message || '').substring(0, 150)
     summaryParts.push(
-      `${idx + 1}. [${msg.direction.toUpperCase()}] ${time} (${msg.channel}): ${msg.message.substring(0, 150)}`
+      `${idx + 1}. [${msg.direction.toUpperCase()}] ${time} (${msg.channel}): ${messageText}`
     )
   })
 

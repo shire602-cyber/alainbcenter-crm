@@ -128,14 +128,14 @@ export default function ServicesPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header */}
-        <div className="flex items-center justify-between mb-2">
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Service Types
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               Manage business services (Business Setup, Visas, etc.)
             </p>
           </div>
@@ -164,7 +164,7 @@ export default function ServicesPage() {
 
         {/* Services Grid */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {[1, 2, 3, 4, 5, 6].map((i) => (
               <Skeleton key={i} className="h-32 rounded-xl" />
             ))}
@@ -182,7 +182,7 @@ export default function ServicesPage() {
             }
           />
         ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
             {services.map((service) => (
               <BentoCard
                 key={service.id}
