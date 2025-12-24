@@ -48,6 +48,14 @@ export async function handleInboundMessage(
   message: any
   contact: any
 }> {
+  console.log(`📥 [INBOUND] handleInboundMessage called`, {
+    channel: input.channel,
+    fromAddress: input.fromAddress,
+    hasBody: !!input.body && input.body.trim().length > 0,
+    bodyLength: input.body?.length || 0,
+    externalMessageId: input.externalMessageId,
+  })
+
   const {
     channel,
     externalId,
