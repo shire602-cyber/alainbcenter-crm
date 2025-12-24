@@ -22,6 +22,9 @@ class AutomationWorker {
       return
     }
 
+    // Persist state to database
+    await this.saveWorkerState(true)
+
     this.isRunning = true
     console.log('🚀 Automation Worker started - processing jobs every 5 seconds')
 
@@ -40,6 +43,10 @@ class AutomationWorker {
       clearInterval(this.processingInterval)
       this.processingInterval = null
     }
+    
+    // Persist state to database
+    await this.saveWorkerState(false)
+    
     console.log('🛑 Automation Worker stopped')
   }
 
@@ -47,29 +54,107 @@ class AutomationWorker {
     return this.isRunning
   }
 
-  async checkIfRunning(): Promise<boolean> {
-    // Check if worker is actually running by looking for recent activity
-    // If jobs are being processed, worker is effectively running
+  private async saveWorkerState(running: boolean): Promise<void> {
     try {
-      const recentProcessing = await prisma.automationJob.findFirst({
+      // Use a simple key-value approach with ExternalEventLog
+      // First, try to find existing record
+      const existing = await prisma.externalEventLog.findFirst({
         where: {
-          status: 'PROCESSING',
-          startedAt: {
-            gte: new Date(Date.now() - 60000), // Last minute
-          },
+          provider: 'system',
+          externalId: this.WORKER_STATE_KEY,
         },
+        orderBy: { receivedAt: 'desc' },
       })
-      
-      // Also check if there are pending jobs (worker should be running)
+
+      const payload = JSON.stringify({ 
+        running, 
+        timestamp: new Date().toISOString(),
+        updatedBy: 'worker_api'
+      })
+
+      if (existing) {
+        // Update existing
+        await prisma.externalEventLog.update({
+          where: { id: existing.id },
+          data: {
+            payload,
+            receivedAt: new Date(),
+          },
+        })
+      } else {
+        // Create new
+        await prisma.externalEventLog.create({
+          data: {
+            provider: 'system',
+            externalId: this.WORKER_STATE_KEY,
+            payload,
+            receivedAt: new Date(),
+          },
+        })
+      }
+    } catch (error: any) {
+      // If ExternalEventLog doesn't exist or has issues, use a fallback
+      console.warn('Failed to save worker state to database:', error.message)
+    }
+  }
+
+  async loadWorkerState(): Promise<boolean> {
+    try {
+      const stateLog = await prisma.externalEventLog.findFirst({
+        where: {
+          provider: 'system',
+          externalId: this.WORKER_STATE_KEY,
+        },
+        orderBy: { receivedAt: 'desc' },
+      })
+
+      if (stateLog) {
+        const payload = JSON.parse(stateLog.payload || '{}')
+        // If state says running and is less than 5 minutes old, restore it
+        const age = Date.now() - stateLog.receivedAt.getTime()
+        if (payload.running === true && age < 300000) { // 5 minutes
+          return true
+        }
+      }
+      return false
+    } catch (error: any) {
+      console.warn('Failed to load worker state from database:', error.message)
+      return false
+    }
+  }
+
+  async checkIfRunning(): Promise<boolean> {
+    // First check in-memory state
+    if (this.isRunning) {
+      return true
+    }
+
+    // Then check persisted state
+    const persistedState = await this.loadWorkerState()
+    if (persistedState && !this.isRunning) {
+      // State says running but worker isn't - restore it
+      console.log('🔄 Restoring worker state from database...')
+      await this.start()
+      return true
+    }
+
+    // Also check if there are pending jobs (worker should be running)
+    try {
       const pendingCount = await prisma.automationJob.count({
         where: { status: 'PENDING' },
       })
       
-      // If jobs are processing or pending, worker should be running
-      return this.isRunning || !!recentProcessing || pendingCount > 0
+      if (pendingCount > 0 && !this.isRunning) {
+        // There are pending jobs but worker isn't running - start it
+        console.log(`🔄 Found ${pendingCount} pending jobs, starting worker...`)
+        await this.start()
+        return true
+      }
     } catch (error) {
-      return this.isRunning
+      // Ignore errors
     }
+
+    return this.isRunning
   }
 
   private async processJobs() {
@@ -207,12 +292,14 @@ class AutomationWorker {
   }
 
   async getStats() {
-    const [pending, processing, completed, failed, isActuallyRunning] = await Promise.all([
+    // Check if worker should be running (restore if needed)
+    const isActuallyRunning = await this.checkIfRunning()
+    
+    const [pending, processing, completed, failed] = await Promise.all([
       prisma.automationJob.count({ where: { status: 'PENDING' } }),
       prisma.automationJob.count({ where: { status: 'PROCESSING' } }),
       prisma.automationJob.count({ where: { status: 'COMPLETED' } }),
       prisma.automationJob.count({ where: { status: 'FAILED' } }),
-      this.checkIfRunning(),
     ])
 
     return {
@@ -235,17 +322,28 @@ export function getAutomationWorker(): AutomationWorker {
   return workerInstance
 }
 
-// Auto-start worker in server environment (only in production or when explicitly enabled)
+// Auto-restore worker state on server startup
 if (typeof window === 'undefined') {
-  // Only auto-start if AUTOPILOT_WORKER_AUTO_START is enabled
+  // Restore worker state from database on module load
+  const worker = getAutomationWorker()
+  
+  // Check if worker should be running (either auto-start enabled OR persisted state says running)
   const autoStart = process.env.AUTOPILOT_WORKER_AUTO_START === 'true'
   
   if (autoStart) {
-    const worker = getAutomationWorker()
+    // Auto-start if enabled
     worker.start().catch(console.error)
-    console.log('✅ Automation Worker auto-started')
+    console.log('✅ Automation Worker auto-started (AUTOPILOT_WORKER_AUTO_START=true)')
   } else {
-    console.log('ℹ️ Automation Worker not auto-started (set AUTOPILOT_WORKER_AUTO_START=true to enable)')
+    // Otherwise, restore from persisted state
+    worker.loadWorkerState().then((shouldRun) => {
+      if (shouldRun) {
+        worker.start().catch(console.error)
+        console.log('🔄 Automation Worker restored from persisted state')
+      } else {
+        console.log('ℹ️ Automation Worker not running (start via UI or set AUTOPILOT_WORKER_AUTO_START=true)')
+      }
+    }).catch(console.error)
   }
 }
 
