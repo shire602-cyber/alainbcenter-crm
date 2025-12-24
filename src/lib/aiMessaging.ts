@@ -69,6 +69,7 @@ export interface AIMessageContext {
   recentMessages?: any[]
   mode: AIMessageMode
   channel: 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
+  language?: 'en' | 'ar' // Preferred language for response
 }
 
 /**
