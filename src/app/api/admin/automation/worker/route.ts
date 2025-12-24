@@ -51,10 +51,6 @@ export async function POST(req: NextRequest) {
 export async function GET() {
   try {
     const worker = getAutomationWorker()
-    
-    // Initialize worker state from database
-    await worker.initialize()
-    
     const stats = await worker.getStats()
     
     return NextResponse.json({ 
