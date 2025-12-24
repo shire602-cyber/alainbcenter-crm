@@ -110,9 +110,8 @@ class AutomationWorker {
 
       if (stateLog) {
         const payload = JSON.parse(stateLog.payload || '{}')
-        // If state says running and is less than 5 minutes old, restore it
-        const age = Date.now() - stateLog.receivedAt.getTime()
-        if (payload.running === true && age < 300000) { // 5 minutes
+        // If state says running, restore it (no time limit - persists until explicitly stopped)
+        if (payload.running === true) {
           return true
         }
       }
@@ -129,29 +128,18 @@ class AutomationWorker {
       return true
     }
 
-    // Then check persisted state
+    // Then check persisted state - if it says running, restore it immediately
     const persistedState = await this.loadWorkerState()
     if (persistedState && !this.isRunning) {
       // State says running but worker isn't - restore it
-      console.log('🔄 Restoring worker state from database...')
+      console.log('🔄 Restoring worker state from database (persisted state says running)...')
       await this.start()
       return true
     }
 
-    // Also check if there are pending jobs (worker should be running)
-    try {
-      const pendingCount = await prisma.automationJob.count({
-        where: { status: 'PENDING' },
-      })
-      
-      if (pendingCount > 0 && !this.isRunning) {
-        // There are pending jobs but worker isn't running - start it
-        console.log(`🔄 Found ${pendingCount} pending jobs, starting worker...`)
-        await this.start()
-        return true
-      }
-    } catch (error) {
-      // Ignore errors
+    // If persisted state says stopped, respect that (don't auto-start)
+    if (!persistedState && !this.isRunning) {
+      return false
     }
 
     return this.isRunning
@@ -292,7 +280,8 @@ class AutomationWorker {
   }
 
   async getStats() {
-    // Check if worker should be running (restore if needed)
+    // ALWAYS check persisted state first and restore if needed
+    // This ensures worker state persists across page refreshes and serverless restarts
     const isActuallyRunning = await this.checkIfRunning()
     
     const [pending, processing, completed, failed] = await Promise.all([
