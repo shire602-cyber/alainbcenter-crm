@@ -51,12 +51,14 @@ async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false):
     allowOutsideHours: lead.allowOutsideHours,
   })
 
-  // Check if auto-reply is enabled (treat NULL as true for backward compatibility)
+  // Check if auto-reply is enabled (treat NULL/undefined as true for backward compatibility)
+  // Default to true if not explicitly set to false
   if (lead.autoReplyEnabled === false) {
     console.log(`⏭️ Auto-reply disabled for lead ${leadId}`)
     return { shouldReply: false, reason: 'Auto-reply disabled for this lead' }
   }
   // If NULL or undefined, default to true (for leads created before migration)
+  console.log(`✅ Auto-reply enabled for lead ${leadId} (autoReplyEnabled: ${lead.autoReplyEnabled ?? 'null/undefined - defaulting to true'})`)
 
   // Check if muted
   if (lead.mutedUntil && lead.mutedUntil > new Date()) {

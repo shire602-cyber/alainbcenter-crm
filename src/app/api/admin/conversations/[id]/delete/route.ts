@@ -44,8 +44,33 @@ export async function DELETE(
     }
 
     // Delete all related data in transaction
+    // IMPORTANT: Delete in correct order to respect foreign key constraints
     await prisma.$transaction(async (tx) => {
-      // Delete messages
+      // First, get all message IDs for this conversation (needed for MessageStatusEvent deletion)
+      const messages = await tx.message.findMany({
+        where: { conversationId: conversationId },
+        select: { id: true },
+      })
+      const messageIds = messages.map(m => m.id)
+
+      // Delete message status events FIRST (they reference messages via messageId)
+      if (messageIds.length > 0) {
+        await tx.messageStatusEvent.deleteMany({
+          where: { 
+            OR: [
+              { conversationId: conversationId },
+              { messageId: { in: messageIds } }
+            ]
+          },
+        })
+      } else {
+        // Also delete by conversationId if no messages found
+        await tx.messageStatusEvent.deleteMany({
+          where: { conversationId: conversationId },
+        })
+      }
+
+      // Now delete messages (MessageStatusEvents are already deleted)
       await tx.message.deleteMany({
         where: { conversationId: conversationId },
       })
@@ -62,11 +87,6 @@ export async function DELETE(
 
       // Delete AI action logs
       await tx.aIActionLog.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete message status events
-      await tx.messageStatusEvent.deleteMany({
         where: { conversationId: conversationId },
       })
 
