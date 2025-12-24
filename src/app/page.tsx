@@ -558,6 +558,13 @@ export default async function DashboardPage() {
       </MainLayout>
     )
   } catch (error: any) {
+    // NEXT_REDIRECT is not a real error - it's how Next.js handles redirects
+    // Re-throw it so Next.js can handle the redirect properly
+    if (error?.digest?.startsWith('NEXT_REDIRECT')) {
+      throw error
+    }
+    
+    // Only log actual errors, not redirects
     console.error('Dashboard page error:', error)
     return (
       <MainLayout>
