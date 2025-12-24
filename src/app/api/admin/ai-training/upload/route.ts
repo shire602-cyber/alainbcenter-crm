@@ -12,6 +12,10 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 
+// Configure for Vercel serverless (allow larger files)
+export const runtime = 'nodejs'
+export const maxDuration = 60 // 60 seconds for file processing
+
 /**
  * Extract text from PDF with exponential backoff retry
  */
