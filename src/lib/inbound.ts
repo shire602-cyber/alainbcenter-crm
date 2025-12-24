@@ -471,7 +471,7 @@ export async function handleInboundMessage(
         // Update lead if we have better info
         if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
           // Try to find matching ServiceType
-          // SQLite doesn't support case-insensitive mode, use contains (case-sensitive)
+          // Use contains for text search (works for both SQLite and PostgreSQL)
           const serviceType = await prisma.serviceType.findFirst({
             where: {
               OR: [
