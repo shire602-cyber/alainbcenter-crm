@@ -76,29 +76,35 @@ async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false):
 
   // Business hours check:
   // - First contact: 24/7 (important for marketing campaigns)
-  // - Follow-ups and customer support: 7 AM - 9:30 PM Dubai time
+  // - Follow-ups: 24/7 if allowOutsideHours=true (for sales), otherwise 7 AM - 9:30 PM Dubai time
   if (!isFirstMessage) {
-    const now = new Date()
-    const utcHour = now.getUTCHours()
-    const utcMinutes = now.getUTCMinutes()
-    
-    // Dubai is UTC+4
-    // 7 AM Dubai = 3 AM UTC (03:00)
-    // 9:30 PM Dubai = 5:30 PM UTC (17:30)
-    const dubaiHour = (utcHour + 4) % 24
-    const dubaiMinutes = utcMinutes
-    const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
-    const startTime = 7 * 60 // 7:00 AM = 420 minutes
-    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
-    
-    console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
-    
-    if (dubaiTime < startTime || dubaiTime >= endTime) {
-      console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
-      return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+    // Check if lead has allowOutsideHours enabled (for sales - 24/7 support)
+    if (lead.allowOutsideHours) {
+      console.log(`✅ allowOutsideHours=true - 24/7 auto-reply enabled for follow-ups (sales mode)`)
+    } else {
+      // Apply business hours restriction for customer support
+      const now = new Date()
+      const utcHour = now.getUTCHours()
+      const utcMinutes = now.getUTCMinutes()
+      
+      // Dubai is UTC+4
+      // 7 AM Dubai = 3 AM UTC (03:00)
+      // 9:30 PM Dubai = 5:30 PM UTC (17:30)
+      const dubaiHour = (utcHour + 4) % 24
+      const dubaiMinutes = utcMinutes
+      const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
+      const startTime = 7 * 60 // 7:00 AM = 420 minutes
+      const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
+      
+      console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
+      
+      if (dubaiTime < startTime || dubaiTime >= endTime) {
+        console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+        return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+      }
+      
+      console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
     }
-    
-    console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
   } else {
     console.log(`✅ First contact - 24/7 auto-reply enabled`)
   }

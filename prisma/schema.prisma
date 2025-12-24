@@ -81,14 +81,14 @@ model Reminder {
   id          Int       @id @default(autoincrement())
   lead        Lead      @relation(fields: [leadId], references: [id])
   leadId      Int
-  type        String    // FOLLOW_UP | EXPIRY | DOCUMENT_REQUEST | CUSTOM
-  scheduledAt DateTime  // When to send the reminder
+  type        String // FOLLOW_UP | EXPIRY | DOCUMENT_REQUEST | CUSTOM
+  scheduledAt DateTime // When to send the reminder
   channel     String    @default("WHATSAPP") // WHATSAPP | EMAIL
-  templateKey String?   // WhatsApp template key (if using template)
-  message     String?   // Custom message (if not using template)
+  templateKey String? // WhatsApp template key (if using template)
+  message     String? // Custom message (if not using template)
   sent        Boolean   @default(false)
   sentAt      DateTime?
-  error       String?   // Error message if send failed
+  error       String? // Error message if send failed
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -144,13 +144,13 @@ model Lead {
 
   // Automation control
   autopilotEnabled Boolean @default(true) // Lead-level autopilot toggle
-  
+
   // Auto-reply settings (simplified autopilot)
-  autoReplyEnabled      Boolean  @default(true) // Enable auto-reply for this lead
-  autoReplyMode         String?  // AI_ONLY | TEMPLATES_FIRST | OFF
-  mutedUntil            DateTime? // Mute auto-replies until this date
-  lastAutoReplyAt       DateTime? // Last auto-reply timestamp (for rate limiting)
-  allowOutsideHours     Boolean  @default(false) // Allow replies outside business hours
+  autoReplyEnabled  Boolean   @default(true) // Enable auto-reply for this lead
+  autoReplyMode     String? // AI_ONLY | TEMPLATES_FIRST | OFF
+  mutedUntil        DateTime? // Mute auto-replies until this date
+  lastAutoReplyAt   DateTime? // Last auto-reply timestamp (for rate limiting)
+  allowOutsideHours Boolean   @default(false) // Allow replies outside business hours
 
   // Info/Quotation sharing tracking (Phase 2)
   infoSharedAt       DateTime? // When information was shared with customer
@@ -566,15 +566,15 @@ model AITrainingDocument {
 }
 
 model AutomationJob {
-  id          String   @id @default(cuid())
-  type        String   // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
-  data        String   // Job payload (JSON stored as string - works for both SQLite and PostgreSQL)
-  status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
-  priority    Int      @default(0)
+  id          String    @id @default(cuid())
+  type        String // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
+  data        String // Job payload (JSON stored as string - works for both SQLite and PostgreSQL)
+  status      String    @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  priority    Int       @default(0)
   error       String?
-  retryCount  Int      @default(0)
-  maxRetries  Int      @default(3)
-  createdAt   DateTime @default(now())
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+  createdAt   DateTime  @default(now())
   startedAt   DateTime?
   completedAt DateTime?
 
@@ -583,17 +583,17 @@ model AutomationJob {
 }
 
 model Notification {
-  id          Int       @id @default(autoincrement())
-  type        String    // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'system'
-  title       String
-  message     String
-  lead        Lead?     @relation(fields: [leadId], references: [id])
-  leadId      Int?
-  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  id             Int           @id @default(autoincrement())
+  type           String // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'system'
+  title          String
+  message        String
+  lead           Lead?         @relation(fields: [leadId], references: [id])
+  leadId         Int?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
   conversationId Int?
-  isRead      Boolean   @default(false)
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
+  isRead         Boolean       @default(false)
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
 
   @@index([isRead, createdAt])
   @@index([leadId])

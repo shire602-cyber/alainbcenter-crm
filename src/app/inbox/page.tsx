@@ -39,6 +39,8 @@ import {
   X,
   Sparkles as SparklesIcon,
   UserPlus,
+  Trash2,
+  AlertTriangle,
 } from 'lucide-react'
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -157,6 +159,7 @@ function InboxPageContent() {
   const [users, setUsers] = useState<Array<{ id: number; name: string; email: string; role: string }>>([])
   const [user, setUser] = useState<{ id: number; name: string; email: string; role: string } | null>(null)
   const [assigning, setAssigning] = useState(false)
+  const [deleting, setDeleting] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -749,6 +752,47 @@ function InboxPageContent() {
                         View Lead
                       </Button>
                     </Link>
+                    )}
+                    {user?.role === 'ADMIN' && selectedConversation && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={async () => {
+                          if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
+                            return
+                          }
+                          try {
+                            setDeleting(true)
+                            setError(null)
+                            const res = await fetch(`/api/admin/conversations/${selectedConversation.id}/delete`, {
+                              method: 'DELETE',
+                              credentials: 'include',
+                            })
+                            const data = await res.json()
+                            if (data.ok) {
+                              setSuccess(`Deleted conversation and ${data.deletedMessages} messages`)
+                              setSelectedConversation(null)
+                              setMessages([])
+                              await loadConversations()
+                            } else {
+                              setError(data.error || 'Failed to delete conversation')
+                            }
+                          } catch (err: any) {
+                            setError('Failed to delete conversation')
+                          } finally {
+                            setDeleting(false)
+                          }
+                        }}
+                        disabled={deleting}
+                      >
+                        {deleting ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Delete Chat
+                      </Button>
                     )}
                   </div>
               </div>
