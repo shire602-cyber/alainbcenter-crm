@@ -31,14 +31,46 @@ Tone guidelines:
 - Short: One-liner + 2 key questions maximum`
 }
 
-export function buildDraftReplyPrompt(
+export async function buildDraftReplyPrompt(
   context: ConversationContext,
   tone: 'professional' | 'friendly' | 'short',
   language: 'en' | 'ar'
-): string {
+): Promise<string> {
   const { contact, lead, messages } = context
 
-  let prompt = `${getSystemPrompt()}
+  // Load relevant training documents using vector search
+  let trainingContext = ''
+  try {
+    const { searchTrainingDocuments } = await import('./vectorStore')
+    const lastMessage = messages[messages.length - 1]?.message || ''
+    
+    if (lastMessage && lastMessage.trim().length > 0) {
+      const searchResults = await searchTrainingDocuments(lastMessage, {
+        topK: 5,
+        similarityThreshold: 0.6,
+      })
+      
+      if (searchResults.hasRelevantTraining && searchResults.documents.length > 0) {
+        trainingContext = '\n\n--- AI TRAINING GUIDELINES ---\n'
+        trainingContext += 'Use these guidelines when generating your response:\n\n'
+        
+        searchResults.documents.forEach((doc, idx) => {
+          const similarity = searchResults.scores[idx] || 0
+          trainingContext += `[${doc.metadata.type.toUpperCase()}] ${doc.metadata.title} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
+          trainingContext += `${doc.content.substring(0, 800)}\n\n`
+        })
+        
+        trainingContext += '--- END TRAINING GUIDELINES ---\n\n'
+        trainingContext += 'IMPORTANT: Follow the training guidelines above when crafting your response. '
+        trainingContext += 'If the guidelines conflict with general instructions, prioritize the training guidelines.\n\n'
+      }
+    }
+  } catch (error: any) {
+    // Don't fail if training documents can't be loaded
+    console.warn('Failed to load training documents for prompt:', error.message)
+  }
+
+  let prompt = `${getSystemPrompt()}${trainingContext}
 
 Generate a WhatsApp reply in ${language === 'ar' ? 'Arabic' : 'English'} with ${tone} tone.
 
