@@ -176,6 +176,8 @@ export function AutomationRulesManager() {
     setRunResult(null)
 
     try {
+      console.log('🚀 Starting automation run...')
+      
       // Use the autopilot run endpoint which handles all automation rules
       const res = await fetch('/api/autopilot/run', {
         method: 'POST',
@@ -185,11 +187,23 @@ export function AutomationRulesManager() {
         },
       })
 
-      const data = await res.json()
+      console.log('📡 Response status:', res.status, res.statusText)
 
-      if (res.ok && data.ok) {
+      // Check if response is OK before parsing JSON
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('❌ API error:', errorText)
+        throw new Error(`Server error: ${res.status} ${res.statusText}`)
+      }
+
+      const data = await res.json()
+      console.log('📦 Response data:', data)
+
+      if (data.ok) {
         // Autopilot now runs synchronously and returns results immediately
         const totals = data.totals || {}
+        console.log('✅ Automation completed:', totals)
+        
         setRunResult({
           success: true,
           timestamp: data.timestamp || new Date().toISOString(),
@@ -206,16 +220,17 @@ export function AutomationRulesManager() {
           loadStats()
         }, 1000)
       } else {
+        console.error('❌ Automation failed:', data.error)
         setRunResult({
           success: false,
           errors: [data.error || 'Failed to run automation'],
         })
       }
     } catch (error: any) {
-      console.error('Run automation error:', error)
+      console.error('❌ Run automation error:', error)
       setRunResult({
         success: false,
-        errors: [error.message || 'Failed to run automation'],
+        errors: [error.message || 'Failed to run automation. Check console for details.'],
       })
     } finally {
       setRunning(false)

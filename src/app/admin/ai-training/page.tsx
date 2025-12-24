@@ -143,6 +143,13 @@ export default function AITrainingPage() {
     }
 
     try {
+      console.log('🚀 Starting file upload...', {
+        fileName: selectedFile.name,
+        fileSize: selectedFile.size,
+        title: title.trim(),
+        type,
+      })
+      
       setUploadingFile(true)
       const formData = new FormData()
       formData.append('file', selectedFile)
@@ -151,11 +158,30 @@ export default function AITrainingPage() {
 
       const res = await fetch('/api/admin/ai-training/upload', {
         method: 'POST',
+        credentials: 'include', // CRITICAL: Include credentials for auth
         body: formData,
       })
 
+      console.log('📡 Upload response status:', res.status, res.statusText)
+
+      // Check if response is OK before parsing JSON
+      if (!res.ok) {
+        const errorText = await res.text()
+        console.error('❌ Upload API error:', errorText)
+        let errorData
+        try {
+          errorData = JSON.parse(errorText)
+        } catch {
+          errorData = { error: errorText || `Upload failed: ${res.status} ${res.statusText}` }
+        }
+        throw new Error(errorData.error || `Upload failed: ${res.status} ${res.statusText}`)
+      }
+
       const data = await res.json()
-      if (res.ok && data.ok) {
+      console.log('📦 Upload response data:', data)
+
+      if (data.ok) {
+        console.log('✅ Upload successful:', data.document)
         showToast('File uploaded and processed successfully', 'success')
         setTitle('')
         setContent('')
@@ -167,12 +193,12 @@ export default function AITrainingPage() {
         }
         await loadDocuments()
       } else {
-        const errorMsg = data.error || `Upload failed: ${res.status} ${res.statusText}`
-        console.error('Upload error:', errorMsg, data)
+        const errorMsg = data.error || 'Upload failed'
+        console.error('❌ Upload failed:', errorMsg, data)
         showToast(errorMsg, 'error')
       }
     } catch (error: any) {
-      console.error('Upload exception:', error)
+      console.error('❌ Upload exception:', error)
       showToast(error.message || 'Failed to upload file. Please check the console for details.', 'error')
     } finally {
       setUploadingFile(false)
