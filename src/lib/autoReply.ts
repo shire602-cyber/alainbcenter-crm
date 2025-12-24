@@ -11,6 +11,7 @@ import type { AIMessageContext } from './aiMessaging'
 import { retrieveAndGuard, markLeadRequiresHuman } from './ai/retrieverChain'
 import { notifyAIUntrainedSubject } from './notifications'
 import { createAgentTask } from './automation/agentFallback'
+import { detectLanguage } from './utils/languageDetection'
 
 interface AutoReplyOptions {
   leadId: number
@@ -146,7 +147,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: 'Lead or contact not found' }
     }
 
-    // Step 4: Check if AI can respond (retriever-first chain)
+    // Step 4: Detect language from message
+    const detectedLanguage = detectLanguage(messageText)
+
+    // Step 5: Check if AI can respond (retriever-first chain)
     const retrievalResult = await retrieveAndGuard(messageText, {
       similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
       topK: 5,

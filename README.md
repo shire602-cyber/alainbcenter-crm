@@ -94,6 +94,8 @@ Alain CRM features an intuitive, Odoo-inspired navigation structure designed for
    - Service analytics
    - Channel performance
 
+**Note:** The automation page has been removed. Auto-reply is now configured per-lead on the Lead detail page. See [SIMPLIFIED_AUTOPILOT.md](./SIMPLIFIED_AUTOPILOT.md) for details.
+
 ### Administration Section
 
 7. **Integrations** (`/admin/integrations`) - Admin only
