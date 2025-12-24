@@ -5,7 +5,7 @@
       "schedule": "0 9 * * *"
     },
     {
-      "path": "/api/cron/run?schedule=hourly",
+      "path": "/api/cron/run",
       "schedule": "0 * * * *"
     }
   ],
