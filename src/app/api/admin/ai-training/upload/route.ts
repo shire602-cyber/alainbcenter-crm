@@ -55,9 +55,18 @@ export async function POST(req: NextRequest) {
     const user = await requireAdminApi()
 
     const formData = await req.formData()
-    const file = formData.get('file') as File
-    const title = formData.get('title') as string
-    const type = formData.get('type') as string
+    const file = formData.get('file') as File | null
+    const title = formData.get('title') as string | null
+    const type = formData.get('type') as string | null
+
+    console.log('Upload request received:', {
+      hasFile: !!file,
+      fileName: file?.name,
+      fileSize: file?.size,
+      fileType: file?.type,
+      title,
+      type,
+    })
 
     if (!file) {
       return NextResponse.json(
@@ -66,9 +75,16 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    if (!title || !type) {
+    if (!title || !title.trim()) {
       return NextResponse.json(
-        { ok: false, error: 'Title and type are required' },
+        { ok: false, error: 'Title is required' },
+        { status: 400 }
+      )
+    }
+
+    if (!type || !type.trim()) {
+      return NextResponse.json(
+        { ok: false, error: 'Type is required' },
         { status: 400 }
       )
     }
@@ -82,7 +98,7 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Validate file type
+    // Validate file type - check both MIME type and extension
     const allowedTypes = [
       'application/pdf',
       'text/plain',
@@ -90,8 +106,19 @@ export async function POST(req: NextRequest) {
       'application/vnd.openxmlformats-officedocument.wordprocessingml.document',
       'text/markdown',
     ]
+    
+    const allowedExtensions = ['.pdf', '.txt', '.doc', '.docx', '.md']
+    const fileName = file.name.toLowerCase()
+    const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
+    const hasValidMimeType = allowedTypes.includes(file.type)
 
-    if (!allowedTypes.includes(file.type)) {
+    if (!hasValidMimeType && !hasValidExtension) {
+      console.warn('File type validation failed:', {
+        fileName: file.name,
+        mimeType: file.type,
+        hasValidExtension,
+        hasValidMimeType,
+      })
       return NextResponse.json(
         { ok: false, error: 'File type not supported. Only PDF, TXT, DOC, DOCX, and MD files are allowed.' },
         { status: 400 }
@@ -155,6 +182,13 @@ export async function POST(req: NextRequest) {
     // Create training document
     let document
     try {
+      console.log('Creating training document:', {
+        title: title.trim(),
+        type,
+        contentLength: content.trim().length,
+        userId: user.id,
+      })
+      
       document = await prisma.aITrainingDocument.create({
         data: {
           title: title.trim(),
@@ -163,25 +197,62 @@ export async function POST(req: NextRequest) {
           createdByUserId: user.id,
         },
       })
+      
+      console.log('✅ Training document created:', document.id)
     } catch (error: any) {
+      console.error('❌ Failed to create training document:', {
+        error: error.message,
+        code: error.code,
+        meta: error.meta,
+      })
+      
       if (error.code === 'P2021' || error.message?.includes('does not exist')) {
         return NextResponse.json(
           { ok: false, error: 'AI Training table does not exist. Please run database migration first.' },
           { status: 503 }
         )
       }
+      
+      // More specific error messages
+      if (error.code === 'P2002') {
+        return NextResponse.json(
+          { ok: false, error: 'A document with this title already exists. Please use a different title.' },
+          { status: 409 }
+        )
+      }
+      
       throw error
     }
 
     // Index document in vector store (async, don't wait)
     // Use void to explicitly mark as fire-and-forget
     void import('@/lib/ai/vectorStore')
-      .then(({ indexTrainingDocument }) => indexTrainingDocument(document.id))
-      .catch(err => console.warn('Failed to index document in vector store:', err))
+      .then(({ indexTrainingDocument }) => {
+        console.log('🔄 Indexing document in vector store:', document.id)
+        return indexTrainingDocument(document.id)
+      })
+      .then(() => {
+        console.log('✅ Document indexed in vector store:', document.id)
+      })
+      .catch(err => {
+        console.error('❌ Failed to index document in vector store:', err)
+      })
+
+    console.log('✅ Upload completed successfully:', {
+      documentId: document.id,
+      title: document.title,
+      type: document.type,
+    })
 
     return NextResponse.json({
       ok: true,
-      document,
+      document: {
+        id: document.id,
+        title: document.title,
+        type: document.type,
+        createdAt: document.createdAt,
+        updatedAt: document.updatedAt,
+      },
     })
   } catch (error: any) {
     console.error('POST /api/admin/ai-training/upload error:', error)

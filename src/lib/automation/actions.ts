@@ -575,20 +575,32 @@ async function executeSendAIReply(
 
       // Check 24-hour messaging window for WhatsApp
       // WhatsApp Business API only allows free-form messages within 24 hours of customer's last message
+      // BUT: For INBOUND_MESSAGE triggers, we're responding to a message that just arrived, so we're always within window
+      const isInboundTrigger = context.triggerData?.lastMessage?.direction === 'INBOUND' || 
+                                context.triggerData?.lastMessage?.direction === 'IN'
+      
       const now = new Date()
       const lastInboundAt = conversation.lastInboundAt || null
       
       let within24HourWindow = false
-      if (lastInboundAt) {
+      
+      // If this is an inbound message trigger, we're definitely within the 24-hour window
+      if (isInboundTrigger) {
+        within24HourWindow = true
+        console.log('✅ INBOUND_MESSAGE trigger - within 24-hour window (responding to just-received message)')
+      } else if (lastInboundAt) {
         const hoursSinceLastInbound = (now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)
         within24HourWindow = hoursSinceLastInbound <= 24
+        console.log(`⏰ Checking 24-hour window: ${Math.round(hoursSinceLastInbound * 10) / 10} hours since last inbound`)
       } else {
         // If no inbound message, we can send (first message to customer)
         within24HourWindow = true
+        console.log('✅ No previous inbound messages - can send')
       }
 
       // If outside 24-hour window, cannot send free-form AI message
       if (!within24HourWindow) {
+        console.warn(`⚠️ Outside 24-hour window: ${lastInboundAt ? Math.round((now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)) : 'never'} hours since last inbound`)
         return {
           success: false,
           error: 'Cannot send AI-generated message outside 24-hour window',
@@ -601,7 +613,18 @@ async function executeSendAIReply(
       }
 
       // Send via WhatsApp Cloud API (within 24-hour window)
+      console.log(`📤 Sending WhatsApp message to ${contact.phone} (${aiResult.text.substring(0, 50)}...)`)
       const result = await sendTextMessage(contact.phone, aiResult.text)
+
+      if (!result || !result.messageId) {
+        console.error('❌ WhatsApp send failed:', result)
+        return {
+          success: false,
+          error: result?.error || 'Failed to send WhatsApp message - no message ID returned',
+        }
+      }
+
+      console.log(`✅ WhatsApp message sent successfully: ${result.messageId}`)
 
       // Conversation already retrieved above for 24-hour check
 
@@ -623,10 +646,13 @@ async function executeSendAIReply(
             mode,
             aiGenerated: true,
             channel: 'WHATSAPP',
+            confidence: aiResult.confidence,
           }),
           sentAt: new Date(),
         },
       })
+      
+      console.log(`✅ Message record created in database`)
 
       // Update conversation
       await prisma.conversation.update({

@@ -155,18 +155,25 @@ export default function AITrainingPage() {
       })
 
       const data = await res.json()
-      if (data.ok) {
+      if (res.ok && data.ok) {
         showToast('File uploaded and processed successfully', 'success')
         setTitle('')
         setContent('')
         setSelectedFile(null)
         setSelectedDoc(null)
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
         await loadDocuments()
       } else {
-        showToast(data.error || 'Failed to upload file', 'error')
+        const errorMsg = data.error || `Upload failed: ${res.status} ${res.statusText}`
+        console.error('Upload error:', errorMsg, data)
+        showToast(errorMsg, 'error')
       }
-    } catch (error) {
-      showToast('Failed to upload file', 'error')
+    } catch (error: any) {
+      console.error('Upload exception:', error)
+      showToast(error.message || 'Failed to upload file. Please check the console for details.', 'error')
     } finally {
       setUploadingFile(false)
     }
@@ -175,6 +182,30 @@ export default function AITrainingPage() {
   function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
+      // Validate file type
+      const allowedExtensions = ['.pdf', '.txt', '.doc', '.docx', '.md']
+      const fileName = file.name.toLowerCase()
+      const hasValidExtension = allowedExtensions.some(ext => fileName.endsWith(ext))
+      
+      if (!hasValidExtension) {
+        showToast('File type not supported. Please select a PDF, TXT, DOC, DOCX, or MD file.', 'error')
+        // Reset file input
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
+      
+      // Validate file size (5MB max)
+      const maxSize = 5 * 1024 * 1024
+      if (file.size > maxSize) {
+        showToast('File size exceeds 5MB limit. Please select a smaller file.', 'error')
+        if (fileInputRef.current) {
+          fileInputRef.current.value = ''
+        }
+        return
+      }
+      
       setSelectedFile(file)
       // Auto-fill title if empty
       if (!title.trim()) {
@@ -192,24 +223,24 @@ export default function AITrainingPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header - matching other admin pages */}
-        <div className="flex items-center justify-between mb-2">
+      <div className="space-y-4">
+        {/* Header - matching other admin pages */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               AI Training Area
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               Upload guidance documents and training materials for the AI autopilot
             </p>
           </div>
-          <Button onClick={newDocument} size="sm" className="gap-1.5 text-xs">
-            <BookOpen className="h-3.5 w-3.5" />
+          <Button onClick={newDocument} size="sm" className="gap-1.5">
+            <BookOpen className="h-4 w-4" />
             New Document
           </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Document List */}
           <BentoCard className="lg:col-span-1" title="Training Documents">
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">

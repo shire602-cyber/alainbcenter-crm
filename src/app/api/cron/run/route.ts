@@ -10,21 +10,29 @@ import { runScheduledRules } from '@/lib/automation/engine'
 
 export async function POST(req: NextRequest) {
   try {
-    // Verify cron secret
+    // Verify cron secret - Vercel cron sends x-vercel-cron header, or check Authorization
+    const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
     const cronSecret = process.env.CRON_SECRET || 'change-me-in-production'
 
-    if (!authHeader || !authHeader.startsWith('Bearer ')) {
-      return NextResponse.json(
-        { ok: false, error: 'Missing authorization header' },
-        { status: 401 }
-      )
+    // Allow Vercel cron (has x-vercel-cron header) OR valid CRON_SECRET
+    let isAuthorized = false
+    
+    if (vercelCronHeader) {
+      // Vercel cron request - automatically authorized
+      isAuthorized = true
+      console.log('✅ Vercel cron request detected')
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+      if (token === cronSecret) {
+        isAuthorized = true
+        console.log('✅ Authorized via CRON_SECRET')
+      }
     }
 
-    const token = authHeader.substring(7)
-    if (token !== cronSecret) {
+    if (!isAuthorized) {
       return NextResponse.json(
-        { ok: false, error: 'Invalid cron secret' },
+        { ok: false, error: 'Unauthorized: Missing or invalid authorization' },
         { status: 401 }
       )
     }

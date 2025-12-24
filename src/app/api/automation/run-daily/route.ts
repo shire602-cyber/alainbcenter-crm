@@ -12,7 +12,8 @@ import { runRuleOnLead } from '@/lib/automation/engine'
  */
 export async function POST(req: NextRequest) {
   try {
-       // Security: Require CRON_SECRET header OR authenticated ADMIN/MANAGER user
+       // Security: Allow Vercel cron, CRON_SECRET header, OR authenticated ADMIN/MANAGER user
+       const vercelCronHeader = req.headers.get('x-vercel-cron')
        const cronSecret = req.headers.get('x-cron-secret')
        const expectedSecret = process.env.CRON_SECRET
    
@@ -22,12 +23,24 @@ export async function POST(req: NextRequest) {
          const user = await requireAdminOrManagerApi()
          if (user) {
            isAuthorized = true
+           console.log('✅ Authorized via user authentication')
          }
        } catch (authError) {
-         // User is not authenticated as ADMIN/MANAGER, check CRON_SECRET instead
+         // User is not authenticated as ADMIN/MANAGER, check other methods
        }
    
-       // If not authorized via user auth, check CRON_SECRET
+       // If not authorized via user auth, check Vercel cron or CRON_SECRET
+       if (!isAuthorized) {
+         if (vercelCronHeader) {
+           // Vercel cron request - automatically authorized
+           isAuthorized = true
+           console.log('✅ Authorized via Vercel cron')
+         } else if (expectedSecret && cronSecret && cronSecret === expectedSecret) {
+           isAuthorized = true
+           console.log('✅ Authorized via CRON_SECRET')
+         }
+       }
+   
        if (!isAuthorized) {
          if (!expectedSecret) {
            return NextResponse.json(
@@ -36,12 +49,10 @@ export async function POST(req: NextRequest) {
            )
          }
    
-         if (!cronSecret || cronSecret !== expectedSecret) {
-           return NextResponse.json(
-             { error: 'Unauthorized: Invalid or missing x-cron-secret header' },
-             { status: 401 }
-           )
-         }
+         return NextResponse.json(
+           { error: 'Unauthorized: Invalid or missing authorization' },
+           { status: 401 }
+         )
        }
 
     const today = new Date()
