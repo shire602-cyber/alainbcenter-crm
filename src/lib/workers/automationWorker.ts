@@ -311,33 +311,7 @@ export function getAutomationWorker(): AutomationWorker {
   return workerInstance
 }
 
-// Auto-restore worker state on server startup
-if (typeof window === 'undefined') {
-  // Use a small delay to ensure Prisma is initialized
-  setTimeout(async () => {
-    const worker = getAutomationWorker()
-    
-    // Check if worker should be running (either auto-start enabled OR persisted state says running)
-    const autoStart = process.env.AUTOPILOT_WORKER_AUTO_START === 'true'
-    
-    if (autoStart) {
-      // Auto-start if enabled
-      await worker.start().catch(console.error)
-      console.log('✅ Automation Worker auto-started (AUTOPILOT_WORKER_AUTO_START=true)')
-    } else {
-      // Otherwise, restore from persisted state
-      try {
-        const shouldRun = await worker.loadWorkerState()
-        if (shouldRun && !worker.isActive()) {
-          await worker.start().catch(console.error)
-          console.log('🔄 Automation Worker restored from persisted state')
-        } else if (!shouldRun) {
-          console.log('ℹ️ Automation Worker not running (start via UI or set AUTOPILOT_WORKER_AUTO_START=true)')
-        }
-      } catch (error) {
-        console.warn('Failed to restore worker state:', error)
-      }
-    }
-  }, 1000) // 1 second delay to ensure Prisma is ready
-}
+// NOTE: Worker system is deprecated. Auto-reply now happens immediately in webhook handlers.
+// This file is kept for backward compatibility but worker is no longer used.
+// Auto-reply is handled by src/lib/autoReply.ts in webhook handlers.
 

@@ -1,16 +1,12 @@
 {
   "crons": [
     {
-      "path": "/api/automation/run-daily",
-      "schedule": "0 9 * * *"
-    },
-    {
-      "path": "/api/cron/run",
-      "schedule": "0 * * * *"
-    },
-    {
-      "path": "/api/cron/process-jobs",
+      "path": "/api/cron/run-reminders",
       "schedule": "*/5 * * * *"
+    },
+    {
+      "path": "/api/cron/expiry-sweeper",
+      "schedule": "0 9 * * *"
     }
   ],
   "buildCommand": "npm run build",
