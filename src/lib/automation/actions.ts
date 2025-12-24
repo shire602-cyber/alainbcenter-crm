@@ -447,49 +447,9 @@ async function executeSendAIReply(
         // Mark lead as requiring human intervention
         await markLeadRequiresHuman(lead.id, retrievalResult.reason, userQuery)
 
-        // Send polite message to user
-        const politeMessage = retrievalResult.suggestedResponse || 
-          "I'm only trained to assist with specific business topics. Let me get a human agent for you."
-
-        // Send the polite message via the channel
-        if (channel === 'WHATSAPP' && contact.phone) {
-          try {
-            const { sendTextMessage } = await import('../whatsapp')
-            await sendTextMessage(contact.phone, politeMessage)
-            
-            // Create message record
-            const conversation = await prisma.conversation.findFirst({
-              where: {
-                contactId: contact.id,
-                channel: 'whatsapp',
-                leadId: lead.id,
-              },
-            })
-
-            if (conversation) {
-              await prisma.message.create({
-                data: {
-                  conversationId: conversation.id,
-                  leadId: lead.id,
-                  contactId: contact.id,
-                  direction: 'OUTBOUND',
-                  channel: 'whatsapp',
-                  type: 'text',
-                  body: politeMessage,
-                  status: 'SENT',
-                  rawPayload: JSON.stringify({
-                    automation: true,
-                    requiresHuman: true,
-                    reason: retrievalResult.reason,
-                  }),
-                  sentAt: new Date(),
-                },
-              })
-            }
-          } catch (error: any) {
-            console.error('Failed to send polite message:', error)
-          }
-        }
+        // DO NOT send any message automatically - AI should only respond when it can directly answer
+        // Human agent will handle this lead
+        console.log(`⚠️ AI cannot respond to query: "${userQuery.substring(0, 50)}..." - Lead ${lead.id} marked for human intervention`)
 
         return {
           success: false,
