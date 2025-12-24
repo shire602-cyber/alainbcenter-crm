@@ -14,11 +14,19 @@ class AutomationWorker {
   private processingInterval: NodeJS.Timeout | null = null
   private readonly POLL_INTERVAL = 5000 // 5 seconds
   private readonly BATCH_SIZE = 10
+  private readonly WORKER_STATE_KEY = 'automation_worker_running'
 
   async start() {
     if (this.isRunning) {
       console.log('⚠️ Automation Worker already running')
       return
+    }
+
+    // Persist state to database for serverless environments
+    try {
+      await this.setWorkerState(true)
+    } catch (error) {
+      console.warn('Failed to persist worker state:', error)
     }
 
     this.isRunning = true
@@ -39,7 +47,90 @@ class AutomationWorker {
       clearInterval(this.processingInterval)
       this.processingInterval = null
     }
+    
+    // Persist state to database
+    try {
+      await this.setWorkerState(false)
+    } catch (error) {
+      console.warn('Failed to persist worker state:', error)
+    }
+    
     console.log('🛑 Automation Worker stopped')
+  }
+
+  async initialize() {
+    // Load persisted state from database
+    try {
+      const state = await this.getWorkerState()
+      if (state) {
+        this.isRunning = true
+        console.log('🔄 Restored worker state: running')
+        // Restart polling
+        this.processingInterval = setInterval(() => {
+          this.processJobs()
+        }, this.POLL_INTERVAL)
+        // Process jobs immediately
+        this.processJobs()
+      }
+    } catch (error) {
+      console.warn('Failed to restore worker state:', error)
+    }
+  }
+
+  private async getWorkerState(): Promise<boolean> {
+    // In serverless, check if there are recent processing jobs
+    // If jobs are being processed, worker is effectively "running"
+    const recentJob = await prisma.automationJob.findFirst({
+      where: {
+        status: { in: ['PENDING', 'PROCESSING'] },
+        type: { not: 'worker_heartbeat' },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    // Also check for a worker setting in a simpler way
+    // Use ExternalEventLog as a key-value store for worker state
+    const stateLog = await prisma.externalEventLog.findFirst({
+      where: {
+        provider: 'system',
+        externalId: 'automation_worker_running',
+      },
+      orderBy: { receivedAt: 'desc' },
+    })
+    
+    if (stateLog) {
+      const payload = JSON.parse(stateLog.payload || '{}')
+      const age = Date.now() - stateLog.receivedAt.getTime()
+      // If state says running and is less than 2 minutes old, worker is active
+      if (payload.running === true && age < 120000) {
+        return true
+      }
+    }
+    
+    // If there are pending/processing jobs, worker should be running
+    return !!recentJob
+  }
+
+  private async setWorkerState(running: boolean) {
+    // Store state in ExternalEventLog as a simple key-value store
+    await prisma.externalEventLog.upsert({
+      where: {
+        provider_externalId: {
+          provider: 'system',
+          externalId: 'automation_worker_running',
+        },
+      },
+      create: {
+        provider: 'system',
+        externalId: 'automation_worker_running',
+        payload: JSON.stringify({ running, timestamp: new Date().toISOString() }),
+        receivedAt: new Date(),
+      },
+      update: {
+        payload: JSON.stringify({ running, timestamp: new Date().toISOString() }),
+        receivedAt: new Date(),
+      },
+    })
   }
 
   isActive(): boolean {
@@ -50,10 +141,11 @@ class AutomationWorker {
     if (!this.isRunning) return
 
     try {
-      // Get pending jobs from database
+      // Get pending jobs from database (exclude heartbeat jobs)
       const jobs = await prisma.automationJob.findMany({
         where: {
           status: 'PENDING',
+          type: { not: 'worker_heartbeat' }, // Exclude heartbeat jobs
         },
         orderBy: [
           { priority: 'desc' },
