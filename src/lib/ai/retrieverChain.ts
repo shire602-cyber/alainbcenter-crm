@@ -105,14 +105,16 @@ export async function retrieveAndGuard(
     }
 
     // Step 5: AI can respond - return relevant context
+    // Ensure documents and scores arrays are aligned
+    const minLength = Math.min(searchResults.documents.length, searchResults.scores.length)
     return {
       canRespond: true,
-      reason: `Found ${searchResults.documents.length} relevant training document(s) with similarity >= ${similarityThreshold}`,
-      relevantDocuments: searchResults.documents.map((doc, idx) => ({
-        title: doc.metadata.title,
-        content: doc.content.substring(0, 1000), // Limit content length
-        type: doc.metadata.type,
-        similarity: searchResults.scores[idx],
+      reason: `Found ${minLength} relevant training document(s) with similarity >= ${similarityThreshold}`,
+      relevantDocuments: searchResults.documents.slice(0, minLength).map((doc, idx) => ({
+        title: doc.metadata.title || 'Untitled',
+        content: (doc.content || '').substring(0, 1000), // Limit content length
+        type: doc.metadata.type || 'unknown',
+        similarity: searchResults.scores[idx] || 0,
       })),
       requiresHuman: false,
     }

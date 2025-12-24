@@ -112,6 +112,9 @@ async function generateEmbedding(text: string): Promise<number[]> {
     }
 
     const data = await response.json()
+    if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+      throw new Error('Invalid embedding response: missing or empty data array')
+    }
     return data.data[0].embedding
   } catch (error: any) {
     console.error('Embedding generation error:', error)
