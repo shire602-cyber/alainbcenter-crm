@@ -33,15 +33,37 @@ export async function POST(req: NextRequest) {
 
     // Execute autopilot directly - don't use queue for manual runs
     // This ensures we get immediate results and proper error handling
-    console.log('🚀 Running autopilot directly (manual trigger)')
-    const result = await runAutopilot({ dryRun })
+    console.log('🚀 Running autopilot directly (manual trigger)', { dryRun, userId: user.id })
     
-    console.log('✅ Autopilot run completed:', {
-      rules: result.totals.rules,
-      sent: result.totals.sent,
-      skipped: result.totals.skipped,
-      failed: result.totals.failed,
-    })
+    let result
+    try {
+      result = await runAutopilot({ dryRun })
+      console.log('✅ Autopilot run completed:', {
+        rules: result.totals.rules,
+        sent: result.totals.sent,
+        skipped: result.totals.skipped,
+        failed: result.totals.failed,
+      })
+    } catch (autopilotError: any) {
+      console.error('❌ Autopilot execution failed:', autopilotError)
+      // Update log status to failed
+      try {
+        await prisma.automationRunLog.updateMany({
+          where: {
+            ruleKey: 'autopilot_manual_run',
+            status: 'PROCESSING',
+            userId: user.id,
+          },
+          data: {
+            status: 'FAILED',
+            message: `Failed: ${autopilotError.message || 'Unknown error'}`,
+          },
+        })
+      } catch (logError) {
+        console.warn('Failed to update log status:', logError)
+      }
+      throw autopilotError // Re-throw to be caught by outer catch
+    }
 
     // Update log status to completed
     try {
