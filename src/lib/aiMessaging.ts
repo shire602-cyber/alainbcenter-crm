@@ -154,27 +154,47 @@ export async function generateAIAutoresponse(
       draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!`
       console.log(`✅ First message greeting generated for lead ${lead.id}`)
     } else {
-      // For follow-up messages, use simple template
+      // For follow-up messages, use simple template (multi-language)
       switch (objective) {
         case 'qualify':
-          draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n\nLooking forward to helping you!`
+          if (detectedLanguage === 'ar') {
+            draftText = `مرحباً ${contactName}، شكراً لاهتمامك بخدماتنا. لمساعدتك بشكل أفضل، يرجى مشاركة:\n\n1. ما هي الخدمة المحددة التي تبحث عنها؟\n2. ما هو الجدول الزمني الخاص بك؟\n\nنتطلع لمساعدتك!`
+          } else {
+            draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n\nLooking forward to helping you!`
+          }
           break
         case 'followup':
-          draftText = `Hi ${contactName}, I wanted to follow up on our previous conversation. How can we assist you further? Please let me know if you have any questions.`
+          if (detectedLanguage === 'ar') {
+            draftText = `مرحباً ${contactName}، أردت متابعة محادثتنا السابقة. كيف يمكننا مساعدتك أكثر؟ يرجى إعلامي إذا كان لديك أي أسئلة.`
+          } else {
+            draftText = `Hi ${contactName}, I wanted to follow up on our previous conversation. How can we assist you further? Please let me know if you have any questions.`
+          }
           break
         case 'renewal':
           const nearestExpiry = lead.expiryDate
           if (nearestExpiry) {
             const daysUntil = Math.ceil((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-            draftText = `Hi ${contactName}, I hope this message finds you well. I noticed that your service is expiring in ${daysUntil} days. Would you like to proceed with renewal? We can help you complete the process smoothly.`
+            if (detectedLanguage === 'ar') {
+              draftText = `مرحباً ${contactName}، أتمنى أن تكون بخير. لاحظت أن خدمتك ستنتهي خلال ${daysUntil} يوم. هل ترغب في المتابعة مع التجديد؟ يمكننا مساعدتك في إتمام العملية بسلاسة.`
+            } else {
+              draftText = `Hi ${contactName}, I hope this message finds you well. I noticed that your service is expiring in ${daysUntil} days. Would you like to proceed with renewal? We can help you complete the process smoothly.`
+            }
           } else {
-            draftText = `Hi ${contactName}, I wanted to check in regarding your upcoming renewals. Is there anything we can help you with?`
+            if (detectedLanguage === 'ar') {
+              draftText = `مرحباً ${contactName}، أردت التواصل بخصوص تجديداتك القادمة. هل هناك شيء يمكننا مساعدتك فيه؟`
+            } else {
+              draftText = `Hi ${contactName}, I wanted to check in regarding your upcoming renewals. Is there anything we can help you with?`
+            }
           }
           break
         default:
-          draftText = `Hi ${contactName}, thank you for contacting Al Ain Business Center. How can I assist you today?`
+          if (detectedLanguage === 'ar') {
+            draftText = `مرحباً ${contactName}، شكراً لتواصلك مع مركز العين للأعمال. كيف يمكنني مساعدتك اليوم؟`
+          } else {
+            draftText = `Hi ${contactName}, thank you for contacting Al Ain Business Center. How can I assist you today?`
+          }
       }
-      console.log(`✅ Template reply generated for lead ${lead.id} (objective: ${objective})`)
+      console.log(`✅ Template reply generated for lead ${lead.id} (objective: ${objective}, language: ${detectedLanguage})`)
     }
 
     if (!draftText || draftText.trim().length === 0) {
