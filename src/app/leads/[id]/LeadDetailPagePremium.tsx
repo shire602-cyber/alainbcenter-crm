@@ -37,6 +37,8 @@ import { RenewalRevenueCard } from '@/components/leads/RenewalRevenueCard'
 import { DocumentsCardEnhanced } from '@/components/leads/DocumentsCardEnhanced'
 import { InlineEditableField } from '@/components/leads/InlineEditableField'
 import { ExpiryCountdown } from '@/components/leads/ExpiryCountdown'
+import { AutopilotCard } from '@/components/leads/AutopilotCard'
+import { RemindersCard } from '@/components/leads/RemindersCard'
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle'
 import {
   ArrowLeft,
@@ -1263,6 +1265,20 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
               </CardContent>
             </Card>
+
+            {/* Autopilot Card */}
+            <AutopilotCard 
+              leadId={leadId}
+              lead={{
+                autoReplyEnabled: lead.autoReplyEnabled,
+                allowOutsideHours: lead.allowOutsideHours,
+                autoReplyMode: lead.autoReplyMode,
+              }}
+              onUpdate={loadLead}
+            />
+
+            {/* Reminders Card */}
+            <RemindersCard leadId={leadId} />
 
             {/* Documents Card - Enhanced with Compliance */}
             <DocumentsCardEnhanced 
