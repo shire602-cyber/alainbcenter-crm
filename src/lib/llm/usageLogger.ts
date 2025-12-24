@@ -73,14 +73,14 @@ export async function getUsageStats(
         provider: 'llm_usage',
         ...(startDate || endDate
           ? {
-              createdAt: {
+              receivedAt: {
                 ...(startDate ? { gte: startDate } : {}),
                 ...(endDate ? { lte: endDate } : {}),
               },
             }
           : {}),
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { receivedAt: 'desc' },
     })
 
     let totalCost = 0
