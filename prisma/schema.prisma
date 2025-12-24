@@ -534,3 +534,20 @@ model AITrainingDocument {
   @@index([type])
   @@index([createdAt])
 }
+
+model AutomationJob {
+  id          String   @id @default(cuid())
+  type        String   // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
+  data        Json     // Job payload
+  status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  priority    Int      @default(0)
+  error       String?
+  retryCount  Int      @default(0)
+  maxRetries  Int      @default(3)
+  createdAt   DateTime @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([status, priority, createdAt])
+  @@map("automation_jobs")
+}
