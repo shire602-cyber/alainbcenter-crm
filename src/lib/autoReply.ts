@@ -106,6 +106,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 }> {
   const { leadId, messageId, messageText, channel, contactId } = options
 
+  console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
+
   try {
     // Step 1: Check if auto-reply should run
     const shouldReply = await shouldAutoReply(leadId)
