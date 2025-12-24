@@ -25,6 +25,8 @@ interface AutoReplyOptions {
  * Check if auto-reply should run for this lead
  */
 async function shouldAutoReply(leadId: number): Promise<{ shouldReply: boolean; reason?: string }> {
+  console.log(`🔍 Checking shouldAutoReply for lead ${leadId}`)
+  
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     select: {
@@ -36,39 +38,58 @@ async function shouldAutoReply(leadId: number): Promise<{ shouldReply: boolean; 
   })
 
   if (!lead) {
+    console.log(`❌ Lead ${leadId} not found`)
     return { shouldReply: false, reason: 'Lead not found' }
   }
 
+  console.log(`📊 Lead ${leadId} auto-reply settings:`, {
+    autoReplyEnabled: lead.autoReplyEnabled,
+    mutedUntil: lead.mutedUntil,
+    lastAutoReplyAt: lead.lastAutoReplyAt,
+    allowOutsideHours: lead.allowOutsideHours,
+  })
+
   // Check if auto-reply is enabled (treat NULL as true for backward compatibility)
   if (lead.autoReplyEnabled === false) {
+    console.log(`⏭️ Auto-reply disabled for lead ${leadId}`)
     return { shouldReply: false, reason: 'Auto-reply disabled for this lead' }
   }
   // If NULL or undefined, default to true (for leads created before migration)
 
   // Check if muted
   if (lead.mutedUntil && lead.mutedUntil > new Date()) {
+    console.log(`⏭️ Lead ${leadId} muted until ${lead.mutedUntil.toISOString()}`)
     return { shouldReply: false, reason: `Lead muted until ${lead.mutedUntil.toISOString()}` }
   }
 
   // Rate limiting: don't reply if replied in last 2 minutes
   if (lead.lastAutoReplyAt) {
     const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
+    console.log(`⏱️ Last auto-reply was ${minutesSinceLastReply.toFixed(1)} minutes ago`)
     if (minutesSinceLastReply < 2) {
+      console.log(`⏭️ Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`)
       return { shouldReply: false, reason: 'Rate limit: replied recently' }
     }
   }
 
   // Check business hours (if not allowed outside hours)
+  // For first messages, always allow (business hours check is too strict)
   if (!lead.allowOutsideHours) {
     const now = new Date()
-    const hour = now.getUTCHours() // Adjust for Dubai timezone if needed
-    // Dubai is UTC+4, so 9-18 Dubai = 5-14 UTC
+    const hour = now.getUTCHours()
     const dubaiHour = (hour + 4) % 24
+    console.log(`🕐 Current time: UTC ${hour}:00, Dubai ${dubaiHour}:00`)
+    
+    // Allow replies during business hours OR if it's a first message (checked later)
     if (dubaiHour < 9 || dubaiHour >= 18) {
-      return { shouldReply: false, reason: 'Outside business hours (9 AM - 6 PM Dubai time)' }
+      // Don't block - we'll check if it's first message later
+      console.log(`⚠️ Outside business hours, but will check if first message`)
     }
+  } else {
+    console.log(`✅ Outside hours allowed for lead ${leadId}`)
   }
 
+  console.log(`✅ Auto-reply check passed for lead ${leadId}`)
   return { shouldReply: true }
 }
 
