@@ -250,7 +250,7 @@ export async function handleInboundMessage(
       expiryDate: true,
       autopilotEnabled: true,
       // @ts-ignore - autoReplyEnabled exists in schema but Prisma types may be out of sync
-      autoReplyEnabled: true,
+      autoReplyEnabled: true, // Default to enabled for new leads
       // @ts-ignore
       allowOutsideHours: true,
       // @ts-ignore

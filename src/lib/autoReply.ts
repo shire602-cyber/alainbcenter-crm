@@ -149,11 +149,17 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 }> {
   const { leadId, messageId, messageText, channel, contactId } = options
 
+  if (!messageText || !messageText.trim()) {
+    console.log(`⏭️ Auto-reply skipped: Empty message text for lead ${leadId}`)
+    return { replied: false, reason: 'Empty message text' }
+  }
+
   console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
 
   try {
     // Step 1: Check if this is the first message (to pass to shouldAutoReply)
     // Check for both uppercase and lowercase for backward compatibility
+    const channelLower = channel.toLowerCase()
     let messageCount = await prisma.message.count({
       where: {
         leadId: leadId,
@@ -162,11 +168,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           { direction: 'inbound' },
           { direction: 'IN' }, // Legacy support
         ],
-        channel: channel.toLowerCase(),
+        channel: channelLower,
       },
     })
     let isFirstMessage = messageCount <= 1
-    console.log(`📊 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
+    console.log(`📊 Message count for lead ${leadId} on channel ${channelLower}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
     
     // Step 2: Check if auto-reply should run (with first message context)
     const shouldReply = await shouldAutoReply(leadId, isFirstMessage)
@@ -208,8 +214,16 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     })
 
     if (!lead || !lead.contact) {
+      console.error(`❌ Lead ${leadId} or contact not found`)
       return { replied: false, reason: 'Lead or contact not found' }
     }
+
+    if (!lead.contact.phone || !lead.contact.phone.trim()) {
+      console.log(`⏭️ Auto-reply skipped: Contact ${lead.contact.id} has no phone number`)
+      return { replied: false, reason: 'Contact has no phone number' }
+    }
+
+    console.log(`✅ Lead ${leadId} loaded: contact phone=${lead.contact.phone}, autoReplyEnabled=${lead.autoReplyEnabled ?? 'null (defaulting to true)'}`)
 
     // Step 5: Detect language from message
     const detectedLanguage = detectLanguage(messageText)
@@ -294,7 +308,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     }
 
     // Step 9: Send reply immediately
-    if (channel.toUpperCase() === 'WHATSAPP' && lead.contact.phone) {
+    const channelUpper = channel.toUpperCase()
+    console.log(`🔍 Checking channel support: ${channelUpper}, has phone: ${!!lead.contact.phone}`)
+    
+    if (channelUpper === 'WHATSAPP' && lead.contact.phone) {
       try {
         console.log(`📤 Sending WhatsApp message to ${lead.contact.phone} (lead ${leadId})`)
         console.log(`📝 Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
