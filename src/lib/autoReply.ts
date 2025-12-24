@@ -151,32 +151,59 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // Step 4: Detect language from message
     const detectedLanguage = detectLanguage(messageText)
 
-    // Step 5: Check if AI can respond (retriever-first chain)
-    const retrievalResult = await retrieveAndGuard(messageText, {
-      similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
-      topK: 5,
+    // Step 5: Check if this is the first message (always reply to first messages)
+    const messageCount = await prisma.message.count({
+      where: {
+        leadId: leadId,
+        direction: 'INBOUND',
+        channel: channel.toLowerCase(),
+      },
     })
 
-    if (!retrievalResult.canRespond) {
-      // Mark lead and notify users
-      await markLeadRequiresHuman(leadId, retrievalResult.reason, messageText)
-      
-      const conversation = await prisma.conversation.findFirst({
-        where: {
-          contactId: contactId,
-          leadId: leadId,
-          channel: channel.toLowerCase(),
-        },
-      })
-      
-      await notifyAIUntrainedSubject(
-        leadId,
-        conversation?.id || null,
-        messageText,
-        retrievalResult.reason
-      )
-      
-      return { replied: false, reason: 'AI not trained on this subject' }
+    const isFirstMessage = messageCount <= 1
+
+    // Step 6: Check if AI can respond (retriever-first chain)
+    // Skip retriever check for first messages - always greet and collect info
+    let retrievalResult: any = null
+    if (!isFirstMessage) {
+      try {
+        retrievalResult = await retrieveAndGuard(messageText, {
+          similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
+          topK: 5,
+        })
+
+        if (!retrievalResult.canRespond) {
+          // Mark lead and notify users
+          await markLeadRequiresHuman(leadId, retrievalResult.reason, messageText)
+          
+          const conversation = await prisma.conversation.findFirst({
+            where: {
+              contactId: contactId,
+              leadId: leadId,
+              channel: channel.toLowerCase(),
+            },
+          })
+          
+          await notifyAIUntrainedSubject(
+            leadId,
+            conversation?.id || null,
+            messageText,
+            retrievalResult.reason
+          )
+          
+          return { replied: false, reason: 'AI not trained on this subject' }
+        }
+      } catch (retrievalError: any) {
+        // If retrieval fails, log but continue for first messages
+        console.warn('Retriever chain error (non-blocking):', retrievalError.message)
+        if (!isFirstMessage) {
+          // For non-first messages, fail if retrieval errors
+          return { replied: false, reason: 'Failed to check AI training' }
+        }
+      }
+    } else {
+      // First message - always respond with greeting
+      console.log(`👋 First message detected - sending greeting for lead ${leadId}`)
     }
 
     // Step 5: Generate AI reply

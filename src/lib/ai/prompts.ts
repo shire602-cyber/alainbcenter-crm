@@ -108,17 +108,40 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
     prompt += `${idx + 1}. [${msg.direction.toUpperCase()}] ${messageText}\n`
   })
 
-  prompt += `\nGenerate a WhatsApp-ready reply that:
+  // Check if this is first message (no outbound messages yet)
+  const hasOutboundMessages = messages.some(m => m.direction === 'OUTBOUND' || m.direction === 'outbound')
+  
+  if (!hasOutboundMessages) {
+    // FIRST MESSAGE - Always greet and collect basic info
+    prompt += `\nThis is the FIRST message from the customer. Generate a friendly greeting that:
+1. Welcomes them to Al Ain Business Center
+2. Introduces yourself briefly
+3. Asks for 3 pieces of information (in order):
+   - Full name
+   - Service needed (Family Visa, Business Setup, Employment Visa, etc.)
+   - Nationality
+4. Keeps it SHORT (under 250 characters)
+5. Uses friendly, warm tone
+6. NEVER promises approvals or guarantees
+7. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+
+Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm here to help with UAE business setup and visa services. To get started, please share: 1) Your full name 2) What service do you need? 3) Your nationality. I'll connect you with the right specialist!"
+
+Reply only with the message text, no explanations or metadata.`
+  } else {
+    // FOLLOW-UP MESSAGE
+    prompt += `\nGenerate a WhatsApp-ready reply that:
 1. Acknowledges the last message
 2. Asks MAXIMUM 2 qualifying questions if information is missing (NOT 2-4, MAX 2)
 3. Highlights urgency if expiry date is close
 4. Includes a clear CTA (e.g., "Reply with 1/2/3" or "Share passport copy")
-5. Keeps it SHORT (under 300 characters for first message, max 600 total)
+5. Keeps it SHORT (under 300 characters, max 600 total)
 6. NEVER promises approvals, guarantees, or outcomes
 7. Uses ${tone} tone
 8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
 
 Reply only with the message text, no explanations or metadata.`
+  }
 
   return prompt
 }

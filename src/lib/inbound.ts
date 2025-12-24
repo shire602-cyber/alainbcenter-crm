@@ -249,6 +249,7 @@ export async function handleInboundMessage(
       lastContactAt: true,
       expiryDate: true,
       autopilotEnabled: true,
+      autoReplyEnabled: true, // Include for TypeScript
       status: true,
       notes: true,
       createdAt: true,
