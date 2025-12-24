@@ -83,7 +83,8 @@ export async function generateAIAutoresponse(
   confidence?: number // Phase 4: AI confidence score (0-100)
 }> {
   try {
-    const { lead, contact, recentMessages = [], mode, channel } = context
+    const { lead, contact, recentMessages = [], mode, channel, language } = context
+    const preferredLanguage = language || 'en' // Default to English
 
     // Handle DOCS mode specially - use docs reminder helper
     if (mode === 'DOCS') {
