@@ -142,8 +142,11 @@ export async function runInboundAutomationsForMessage(
     })
 
     if (rules.length === 0) {
+      console.log(`⚠️ No active INBOUND_MESSAGE automation rules found for channel ${messageChannel}`)
       return // No rules configured
     }
+    
+    console.log(`🔍 Found ${rules.length} active INBOUND_MESSAGE rule(s) for channel ${messageChannel}, lead ${leadId}`)
 
     // Check if we already sent an autoresponse to this inbound message
     // This prevents duplicate autoresponds if automation runs multiple times
@@ -315,6 +318,7 @@ export async function runInboundAutomationsForMessage(
     // Run each rule (non-blocking, don't throw errors)
     for (const rule of rules) {
       try {
+        console.log(`🔄 Running automation rule "${rule.name}" (${rule.id}) for lead ${leadId}...`)
         const result = await runRuleOnLead(rule, context)
 
         // Log result (runRuleOnLead already logs, but we can add extra logging here)
@@ -335,8 +339,9 @@ export async function runInboundAutomationsForMessage(
       } catch (error: any) {
         // Don't throw - log and continue with other rules
         console.error(
-          `Error running automation rule ${rule.id} for lead ${leadId}:`,
-          error.message
+          `❌ Error running automation rule ${rule.id} for lead ${leadId}:`,
+          error.message,
+          error.stack
         )
       }
     }
