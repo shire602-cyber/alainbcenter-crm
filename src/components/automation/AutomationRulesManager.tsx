@@ -404,6 +404,71 @@ export function AutomationRulesManager() {
         </BentoCard>
       )}
 
+      {/* Worker Status Card */}
+      <BentoCard
+        title="Background Worker"
+        icon={<Activity className="h-4 w-4" />}
+        className={workerRunning ? 'border-green-500' : 'border-yellow-500'}
+      >
+        <div className="space-y-3">
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-semibold">
+                Status: {workerRunning ? (
+                  <span className="text-green-600">🟢 Running</span>
+                ) : (
+                  <span className="text-yellow-600">🟡 Stopped</span>
+                )}
+              </p>
+              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                {workerRunning 
+                  ? 'Automation is processing jobs continuously in the background. Messages will be replied to automatically.'
+                  : 'Automation is not running. Click "Start Worker" to enable set-and-forget automation.'}
+              </p>
+            </div>
+            <Button
+              onClick={toggleWorker}
+              variant={workerRunning ? 'destructive' : 'default'}
+              size="sm"
+              className="gap-1.5"
+            >
+              {workerRunning ? (
+                <>
+                  <XCircle className="h-3.5 w-3.5" />
+                  Stop Worker
+                </>
+              ) : (
+                <>
+                  <Play className="h-3.5 w-3.5" />
+                  Start Worker
+                </>
+              )}
+            </Button>
+          </div>
+
+          {workerStats && (
+            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+              <div className="text-center">
+                <p className="text-lg font-semibold text-yellow-600">{workerStats.pending}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Pending</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-blue-600">{workerStats.processing}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Processing</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-green-600">{workerStats.completed}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Completed</p>
+              </div>
+              <div className="text-center">
+                <p className="text-lg font-semibold text-red-600">{workerStats.failed}</p>
+                <p className="text-xs text-slate-600 dark:text-slate-400">Failed</p>
+              </div>
+            </div>
+          )}
+        </div>
+      </BentoCard>
+
       {/* Run Results */}
       {runResult && (
         <BentoCard 
