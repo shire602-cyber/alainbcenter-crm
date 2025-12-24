@@ -557,46 +557,48 @@ export async function handleInboundMessage(
 
   // Step 9: Immediate auto-reply (no queue, no worker - just reply now)
   // CRITICAL: This must run even if previous steps had errors
-  // Use a separate try-catch to ensure it always attempts
-  try {
-    if (message && message.body && message.body.trim().length > 0) {
+  // Run synchronously (awaited) to ensure it executes, but wrapped in try-catch so it doesn't fail the webhook
+  if (message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
+    try {
       console.log(`🤖 [AUTO-REPLY] Starting auto-reply process for message ${message.id}`)
       console.log(`🤖 [AUTO-REPLY] Lead ID: ${lead.id}, Channel: ${message.channel}, Message: "${message.body.substring(0, 100)}..."`)
+      
+      const { handleInboundAutoReply } = await import('./autoReply')
+      console.log(`📞 [AUTO-REPLY] Calling handleInboundAutoReply...`)
+      
+      const replyResult = await handleInboundAutoReply({
+        leadId: lead.id,
+        messageId: message.id,
+        messageText: message.body,
+        channel: message.channel,
+        contactId: contact.id,
+      })
+      
+      console.log(`📊 [AUTO-REPLY] Result:`, {
+        replied: replyResult.replied,
+        reason: replyResult.reason,
+        error: replyResult.error,
+        leadId: lead.id,
+        messageId: message.id,
+      })
+      
+      if (replyResult.replied) {
+        console.log(`✅ [AUTO-REPLY] SUCCESS: Auto-reply sent for message ${message.id} to lead ${lead.id}`)
+      } else {
+        console.log(`⏭️ [AUTO-REPLY] SKIPPED: ${replyResult.reason || replyResult.error} (lead ${lead.id}, message ${message.id})`)
+      }
+    } catch (error: any) {
+      // Don't fail webhook if auto-reply fails - log and continue
+      console.error('❌ [AUTO-REPLY] ERROR (non-blocking):', {
+        error: error.message,
+        stack: error.stack,
+        leadId: lead.id,
+        messageId: message.id,
+        channel: message.channel,
+      })
+      // Log to database for monitoring
       try {
-        const { handleInboundAutoReply } = await import('./autoReply')
-        console.log(`📞 [AUTO-REPLY] Calling handleInboundAutoReply...`)
-        const replyResult = await handleInboundAutoReply({
-          leadId: lead.id,
-          messageId: message.id,
-          messageText: message.body,
-          channel: message.channel,
-          contactId: contact.id,
-        })
-        
-        console.log(`📊 [AUTO-REPLY] Result:`, {
-          replied: replyResult.replied,
-          reason: replyResult.reason,
-          error: replyResult.error,
-          leadId: lead.id,
-          messageId: message.id,
-        })
-        
-        if (replyResult.replied) {
-          console.log(`✅ [AUTO-REPLY] SUCCESS: Auto-reply sent for message ${message.id} to lead ${lead.id}`)
-        } else {
-          console.log(`⏭️ [AUTO-REPLY] SKIPPED: ${replyResult.reason || replyResult.error} (lead ${lead.id}, message ${message.id})`)
-        }
-      } catch (error: any) {
-        // Don't fail webhook if auto-reply fails - log and continue
-        console.error('❌ [AUTO-REPLY] ERROR (non-blocking):', {
-          error: error.message,
-          stack: error.stack,
-          leadId: lead.id,
-          messageId: message.id,
-          channel: message.channel,
-        })
-        // Log to database for monitoring (fire-and-forget, but explicitly voided to prevent warnings)
-        void prisma.externalEventLog.create({
+        await prisma.externalEventLog.create({
           data: {
             provider: channel.toLowerCase(),
             externalId: `auto-reply-error-${Date.now()}`,
@@ -607,37 +609,19 @@ export async function handleInboundMessage(
               messageId: message.id,
             }),
           },
-        }).catch((logError) => {
-          console.warn('Failed to log auto-reply error:', logError)
         })
+      } catch (logError) {
+        console.warn('Failed to log auto-reply error:', logError)
       }
-    } else {
-      console.log(`⏭️ [AUTO-REPLY] SKIPPED: Message ${message?.id || 'unknown'} has no body text (body: ${message?.body ? 'empty' : 'null'})`)
     }
-  } catch (autoReplyError: any) {
-    // Even if message is null or something else fails, log it
-    console.error('❌ [AUTO-REPLY] CRITICAL ERROR - Could not attempt auto-reply:', {
-      error: autoReplyError.message,
-      stack: autoReplyError.stack,
-      leadId: lead?.id,
-      messageId: message?.id,
+  } else {
+    console.log(`⏭️ [AUTO-REPLY] SKIPPED: Missing required data`, {
       hasMessage: !!message,
       hasBody: !!message?.body,
+      hasLead: !!lead,
+      hasContact: !!contact,
+      bodyLength: message?.body?.length || 0,
     })
-    void prisma.externalEventLog.create({
-      data: {
-        provider: channel.toLowerCase(),
-        externalId: `auto-reply-critical-error-${Date.now()}`,
-        payload: JSON.stringify({
-          error: autoReplyError.message,
-          stack: autoReplyError.stack,
-          leadId: lead?.id,
-          messageId: message?.id,
-          hasMessage: !!message,
-          hasBody: !!message?.body,
-        }),
-      },
-    }).catch(() => {})
   }
 
   console.log(
