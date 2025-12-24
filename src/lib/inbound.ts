@@ -268,17 +268,22 @@ export async function handleInboundMessage(
         notes: `Inbound ${channel} message`,
         lastContactAt: timestamp,
         lastContactChannel: channelLower,
+        autoReplyEnabled: true, // Enable auto-reply by default for new leads
         // source field not in Lead schema - removed
       },
     })
     console.log(`✅ Created new lead: ${lead.id} for contact ${contact.id}`)
   } else {
-    // Update existing lead
+    // Update existing lead - ensure autoReplyEnabled is set if NULL
     await prisma.lead.update({
       where: { id: lead.id },
       data: {
         lastContactAt: timestamp,
         lastContactChannel: channelLower,
+        // Set autoReplyEnabled to true if it's NULL (for leads created before migration)
+        ...(lead.autoReplyEnabled === null || lead.autoReplyEnabled === undefined 
+          ? { autoReplyEnabled: true } 
+          : {}),
       },
     })
   }
