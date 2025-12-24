@@ -155,7 +155,9 @@ export function AutomationRulesManager() {
 
   async function checkWorkerStatus() {
     try {
-      const res = await fetch('/api/admin/automation/worker')
+      const res = await fetch('/api/admin/automation/worker', {
+        credentials: 'include',
+      })
       const data = await res.json()
       if (data.ok) {
         setWorkerRunning(data.isRunning || false)
@@ -176,6 +178,7 @@ export function AutomationRulesManager() {
       const action = workerRunning ? 'stop' : 'start'
       const res = await fetch('/api/admin/automation/worker', {
         method: 'POST',
+        credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ action }),
       })
@@ -183,6 +186,8 @@ export function AutomationRulesManager() {
       if (data.ok) {
         setWorkerRunning(data.running || false)
         await checkWorkerStatus()
+      } else {
+        console.error('Failed to toggle worker:', data.error)
       }
     } catch (error) {
       console.error('Failed to toggle worker:', error)
