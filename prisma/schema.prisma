@@ -117,7 +117,7 @@ model Lead {
   isRenewal             Boolean     @default(false)
   originalExpiryItemId  Int? // If this lead came from a renewal
   originalExpiryItem    ExpiryItem? @relation("OriginalExpiryLeads", fields: [originalExpiryItemId], references: [id])
-  estimatedValue        String? // Decimal stored as string for SQLite
+  estimatedValue        String? // Decimal stored as string (works for both SQLite and PostgreSQL)
   estimatedRenewalValue String? // Renewal revenue estimate
   renewalProbability    Int? // 0-100 probability of renewal
   renewalNotes          String? // AI-generated renewal insights
@@ -156,7 +156,7 @@ model ExpiryItem {
   leadId               Int?
   type                 String // VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | etc.
   expiryDate           DateTime
-  reminderScheduleDays String    @default("[90,60,30,7]") // JSON array as string for SQLite
+  reminderScheduleDays String    @default("[90,60,30,7]") // JSON array as string (works for both SQLite and PostgreSQL)
   lastReminderSentAt   DateTime?
   notes                String? // Optional notes about the expiry
   assignedUserId       Int?
@@ -234,7 +234,7 @@ model Message {
   mediaMimeType     String? // MIME type for media
   providerMessageId String?      @unique // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
   status            String       @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED | PENDING
-  payload           String? // JSON: Provider-specific payload/metadata (stored as string in SQLite)
+  payload           String? // JSON: Provider-specific payload/metadata (stored as string - works for both SQLite and PostgreSQL)
   meta              String? // Legacy field - JSON for provider IDs and metadata (kept for backward compatibility)
   rawPayload        String? // JSON: Full webhook payload for debugging
   sentAt            DateTime? // When message was sent (for outbound)
@@ -538,7 +538,7 @@ model AITrainingDocument {
 model AutomationJob {
   id          String   @id @default(cuid())
   type        String   // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
-  data        String   // Job payload (JSON stored as string for SQLite compatibility)
+  data        String   // Job payload (JSON stored as string - works for both SQLite and PostgreSQL)
   status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
   priority    Int      @default(0)
   error       String?

@@ -104,7 +104,16 @@ class AutomationWorker {
 
   private async processJob(job: any) {
     try {
-      // Mark as processing
+      // Mark as processing (check if job still exists first)
+      const existingJob = await prisma.automationJob.findUnique({
+        where: { id: job.id },
+      })
+      
+      if (!existingJob || existingJob.status !== 'PENDING') {
+        // Job was already processed or doesn't exist
+        return
+      }
+
       await prisma.automationJob.update({
         where: { id: job.id },
         data: { 
@@ -116,16 +125,21 @@ class AutomationWorker {
       // Execute job
       await this.executeJob(job)
 
-      // Mark as completed
-      await prisma.automationJob.update({
+      // Mark as completed (check job still exists)
+      const jobStillExists = await prisma.automationJob.findUnique({
         where: { id: job.id },
-        data: { 
-          status: 'COMPLETED', 
-          completedAt: new Date() 
-        },
       })
-
-      console.log(`✅ Job ${job.id} (${job.type}) completed`)
+      
+      if (jobStillExists) {
+        await prisma.automationJob.update({
+          where: { id: job.id },
+          data: { 
+            status: 'COMPLETED', 
+            completedAt: new Date() 
+          },
+        })
+        console.log(`✅ Job ${job.id} (${job.type}) completed`)
+      }
     } catch (error: any) {
       console.error(`❌ Job ${job.id} failed:`, error.message)
       
