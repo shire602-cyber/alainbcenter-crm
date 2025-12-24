@@ -37,9 +37,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Get schedule type from query or body
+    // Get schedule type from query, body, or default to hourly for cron calls
     const { searchParams } = new URL(req.url)
-    const schedule = searchParams.get('schedule') || 'daily'
+    let schedule = searchParams.get('schedule')
+    
+    // If no query param, try to get from body (for manual calls)
+    if (!schedule) {
+      try {
+        const body = await req.json().catch(() => ({}))
+        schedule = body.schedule
+      } catch {
+        // Body parsing failed, use default
+      }
+    }
+    
+    // Default to hourly for automated cron calls (Vercel cron)
+    schedule = schedule || 'hourly'
     
     if (schedule !== 'daily' && schedule !== 'hourly') {
       return NextResponse.json(
@@ -48,8 +61,17 @@ export async function POST(req: NextRequest) {
       )
     }
 
+    console.log(`🕐 Running ${schedule} scheduled automation rules...`)
+    
     // Run scheduled rules
     const result = await runScheduledRules(schedule as 'daily' | 'hourly')
+    
+    console.log(`✅ ${schedule} automation completed:`, {
+      rulesRun: result.rulesRun,
+      leadsProcessed: result.leadsProcessed,
+      actionsExecuted: result.actionsExecuted,
+      errors: result.errors.length,
+    })
 
     return NextResponse.json({
       ok: true,
