@@ -196,6 +196,7 @@ export default function AITrainingPage() {
         setContent('')
         setSelectedFile(null)
         setSelectedDoc(null)
+        setTableError(null) // Clear any previous errors
         // Reset file input
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
@@ -205,6 +206,10 @@ export default function AITrainingPage() {
         const errorMsg = data.error || 'Upload failed'
         console.error('❌ Upload failed:', errorMsg, data)
         showToast(errorMsg, 'error')
+        // Show error banner if it's a table error
+        if (errorMsg.includes('does not exist')) {
+          setTableError(errorMsg)
+        }
       }
     } catch (error: any) {
       console.error('❌ Upload exception:', error)
