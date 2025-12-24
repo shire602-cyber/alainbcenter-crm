@@ -23,9 +23,11 @@ interface AutoReplyOptions {
 
 /**
  * Check if auto-reply should run for this lead
+ * @param leadId - Lead ID
+ * @param isFirstMessage - Whether this is the first message from the customer
  */
-async function shouldAutoReply(leadId: number): Promise<{ shouldReply: boolean; reason?: string }> {
-  console.log(`🔍 Checking shouldAutoReply for lead ${leadId}`)
+async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false): Promise<{ shouldReply: boolean; reason?: string }> {
+  console.log(`🔍 Checking shouldAutoReply for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
   
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
@@ -72,9 +74,36 @@ async function shouldAutoReply(leadId: number): Promise<{ shouldReply: boolean; 
     }
   }
 
-  // Business hours check removed - auto-reply works 24/7
-  // This is especially important for marketing campaigns where first contact can happen anytime
-  console.log(`✅ Auto-reply check passed for lead ${leadId} (24/7 enabled)`)
+  // Business hours check:
+  // - First contact: 24/7 (important for marketing campaigns)
+  // - Follow-ups and customer support: 7 AM - 9:30 PM Dubai time
+  if (!isFirstMessage) {
+    const now = new Date()
+    const utcHour = now.getUTCHours()
+    const utcMinutes = now.getUTCMinutes()
+    
+    // Dubai is UTC+4
+    // 7 AM Dubai = 3 AM UTC (03:00)
+    // 9:30 PM Dubai = 5:30 PM UTC (17:30)
+    const dubaiHour = (utcHour + 4) % 24
+    const dubaiMinutes = utcMinutes
+    const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
+    const startTime = 7 * 60 // 7:00 AM = 420 minutes
+    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
+    
+    console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
+    
+    if (dubaiTime < startTime || dubaiTime >= endTime) {
+      console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+      return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+    }
+    
+    console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+  } else {
+    console.log(`✅ First contact - 24/7 auto-reply enabled`)
+  }
+
+  console.log(`✅ Auto-reply check passed for lead ${leadId}`)
   return { shouldReply: true }
 }
 
