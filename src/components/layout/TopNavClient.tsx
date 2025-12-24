@@ -13,6 +13,7 @@ import { useRouter } from 'next/navigation'
 export function TopNavClient() {
   const [user, setUser] = useState<{ name?: string; email?: string; role?: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [unrepliedCount, setUnrepliedCount] = useState(0)
   const { toggle, isOpen } = useSidebar()
   const router = useRouter()
 
@@ -22,6 +23,19 @@ export function TopNavClient() {
       .then(res => res.json())
       .then(data => setUser(data.user))
       .catch(() => {})
+
+    // Fetch unreplied message count
+    const fetchUnrepliedCount = () => {
+      fetch('/api/inbox/unreplied-count')
+        .then(res => res.json())
+        .then(data => setUnrepliedCount(data.count || 0))
+        .catch(() => setUnrepliedCount(0))
+    }
+
+    fetchUnrepliedCount()
+    // Poll every 30 seconds for updates
+    const interval = setInterval(fetchUnrepliedCount, 30000)
+    return () => clearInterval(interval)
   }, [])
 
   const handleSearch = (e: KeyboardEvent<HTMLInputElement>) => {
@@ -87,6 +101,9 @@ export function TopNavClient() {
           <Link href="/inbox">
             <Button variant="ghost" size="icon" className="relative" title="Inbox">
               <MessageSquare className="h-5 w-5" />
+              {unrepliedCount > 0 && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
+              )}
             </Button>
           </Link>
 

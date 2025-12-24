@@ -146,6 +146,7 @@ model Lead {
   automationRunLogs  AutomationRunLog[]
   aiDrafts           AIDraft[]
   aiActionLogs       AIActionLog[]
+  notifications      Notification[]
 }
 
 model ExpiryItem {
@@ -210,6 +211,7 @@ model Conversation {
   aiActionLogs      AIActionLog[]
   statusEvents      MessageStatusEvent[]
   tasks             Task[]               @relation("ConversationTasks")
+  notifications     Notification[]
 
   @@unique([contactId, channel])
   @@index([channel, lastMessageAt])
@@ -550,4 +552,23 @@ model AutomationJob {
 
   @@index([status, priority, createdAt])
   @@map("automation_jobs")
+}
+
+model Notification {
+  id          Int       @id @default(autoincrement())
+  type        String    // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'system'
+  title       String
+  message     String
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  leadId      Int?
+  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId Int?
+  isRead      Boolean   @default(false)
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+
+  @@index([isRead, createdAt])
+  @@index([leadId])
+  @@index([conversationId])
+  @@index([type, createdAt])
 }
