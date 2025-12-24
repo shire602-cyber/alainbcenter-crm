@@ -3,6 +3,10 @@ import { requireAdminApi } from '@/lib/authApi'
 import { runAutopilot } from '@/lib/autopilot/runAutopilot'
 import { prisma } from '@/lib/prisma'
 
+// Configure for Vercel serverless
+export const runtime = 'nodejs'
+export const maxDuration = 300 // 5 minutes for automation runs
+
 // POST /api/autopilot/run
 // Manual trigger for autopilot (admin only)
 export async function POST(req: NextRequest) {
