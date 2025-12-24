@@ -86,7 +86,9 @@ async function initializeQueue() {
         switch (job.name) {
           case 'autopilot_run':
             const { runAutopilot } = await import('../autopilot/runAutopilot')
-            return await runAutopilot({ dryRun: false })
+            // Use dryRun from job data, default to false if not specified
+            const dryRun = job.data?.dryRun ?? false
+            return await runAutopilot({ dryRun })
           default:
             throw new Error(`Unknown job type: ${job.name}`)
         }
