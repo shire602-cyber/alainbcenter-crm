@@ -80,7 +80,7 @@ export async function GET(req: NextRequest) {
         const EXPIRY_SOON_DAYS = 90
         const HOT_SCORE_THRESHOLD = 70
     
-        const formatted = conversations.map((conv) => {
+        const formatted = conversations.map((conv: (typeof conversations)[0]) => {
           const lastMessage = conv.messages[0]
           
           // Calculate metrics from already-fetched data
@@ -180,12 +180,14 @@ export async function GET(req: NextRequest) {
           }
         })
     
-        // Sort by priorityScore desc, then lastMessageAt desc
-        formatted.sort((a, b) => {
-          if (b.priorityScore !== a.priorityScore) {
-            return b.priorityScore - a.priorityScore
+        // Sort by lastMessageAt desc (most recent first), then priorityScore desc as tiebreaker
+        formatted.sort((a: { lastMessageAt: string; priorityScore: number }, b: { lastMessageAt: string; priorityScore: number }) => {
+          const timeA = new Date(a.lastMessageAt).getTime()
+          const timeB = new Date(b.lastMessageAt).getTime()
+          if (timeB !== timeA) {
+            return timeB - timeA
           }
-          return new Date(b.lastMessageAt).getTime() - new Date(a.lastMessageAt).getTime()
+          return b.priorityScore - a.priorityScore
         })
 
     return NextResponse.json({ ok: true, conversations: formatted })

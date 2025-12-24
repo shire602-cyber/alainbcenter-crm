@@ -583,9 +583,21 @@ async function evaluateConditions(
       return { met: false, reason: `Channel ${messageChannel} not in allowed list` }
     }
 
-    // Stage match
-    if (matchStages.length > 0 && !matchStages.includes(lead.stage)) {
-      return { met: false, reason: `Lead stage ${lead.stage} not in allowed stages` }
+    // Stage match - check both stage and pipelineStage (case-insensitive)
+    if (matchStages.length > 0) {
+      const leadStage = (lead.stage || '').toUpperCase()
+      const leadPipelineStage = ((lead as any).pipelineStage || '').toUpperCase()
+      const allowedStages = matchStages.map((s: string) => s.toUpperCase())
+      
+      const stageMatches = allowedStages.includes(leadStage)
+      const pipelineStageMatches = allowedStages.includes(leadPipelineStage)
+      
+      if (!stageMatches && !pipelineStageMatches) {
+        return { 
+          met: false, 
+          reason: `Lead stage "${lead.stage}" (pipelineStage: "${(lead as any).pipelineStage}") not in allowed stages: ${matchStages.join(', ')}` 
+        }
+      }
     }
 
     // Hot lead requirement
