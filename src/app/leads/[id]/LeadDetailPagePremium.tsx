@@ -728,7 +728,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
         </div>
 
         {/* Main 3-Column Layout */}
-        <div className="flex-1 overflow-hidden grid grid-cols-12 gap-6 p-6 relative">
+        <div className="flex-1 overflow-hidden grid grid-cols-12 gap-6 p-6 relative min-h-0">
           {/* LEFT COLUMN: Lead Snapshot */}
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
             {/* Contact Card */}
@@ -866,9 +866,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           </div>
 
           {/* MIDDLE COLUMN: Conversation + Activity */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col gap-3 overflow-hidden">
+          <div className="col-span-12 lg:col-span-6 flex flex-col gap-4 overflow-hidden">
             {/* Conversation Tabs */}
-            <Card className="rounded-2xl glass-medium shadow-conversation flex-1 flex flex-col overflow-hidden">
+            <Card className="rounded-2xl glass-medium shadow-conversation flex-[2] flex flex-col overflow-hidden min-h-0">
               <CardHeader className="pb-3 flex-shrink-0 p-0">
                 <div className="sticky top-16 z-20 glass-medium border-b px-4 py-2">
                   <Tabs value={activeChannel} onValueChange={setActiveChannel}>
@@ -898,11 +898,11 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 </div>
               </CardHeader>
 
-              <CardContent className="flex-1 flex flex-col overflow-hidden p-0">
-                <Tabs value={activeChannel} onValueChange={setActiveChannel} className="flex-1 flex flex-col overflow-hidden">
+              <CardContent className="flex-1 flex flex-col overflow-hidden p-0 min-h-0">
+                <Tabs value={activeChannel} onValueChange={setActiveChannel} className="flex-1 flex flex-col overflow-hidden min-h-0">
                   {/* WhatsApp Tab */}
-                  <TabsContent value="whatsapp" className="flex-1 flex flex-col overflow-hidden m-0">
-                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4" ref={(el) => {
+                  <TabsContent value="whatsapp" className="flex-1 flex flex-col overflow-hidden m-0 min-h-0">
+                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 min-h-0" style={{ maxHeight: 'calc(100vh - 400px)' }} ref={(el) => {
                       // Auto-scroll to bottom
                       if (el && messages.length > 0) {
                         setTimeout(() => {
@@ -984,7 +984,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
 
                     {/* Message Composer */}
-                    <div className="border-t p-3 bg-card/50">
+                    <div className="border-t p-4 bg-card/50 flex-shrink-0">
                       <MessageComposerEnhanced
                         value={messageText}
                         onChange={setMessageText}
@@ -1000,8 +1000,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </TabsContent>
 
                   {/* Email Tab */}
-                  <TabsContent value="email" className="flex-1 flex flex-col overflow-hidden m-0">
-                    <div className="flex-1 overflow-y-auto px-6 py-5 space-y-4">
+                  <TabsContent value="email" className="flex-1 flex flex-col overflow-hidden m-0 min-h-0">
+                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 min-h-0" style={{ maxHeight: 'calc(100vh - 400px)' }}>
                       {loadingMessages ? (
                         <div className="text-center py-4 text-muted-foreground">
                           <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
@@ -1073,7 +1073,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       )}
                     </div>
                     {/* Email Composer */}
-                    <div className="border-t p-3 bg-card/50">
+                    <div className="border-t p-4 bg-card/50 flex-shrink-0">
                       <MessageComposerEnhanced
                         value={messageText}
                         onChange={setMessageText}
@@ -1121,12 +1121,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             </Card>
 
             {/* Activity Timeline */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot">
-              <CardHeader className="pb-4 pt-4 px-5">
+            <Card className="rounded-2xl glass-soft shadow-snapshot flex-1 flex flex-col overflow-hidden min-h-0">
+              <CardHeader className="pb-4 pt-4 px-5 flex-shrink-0">
                 <CardTitle className="text-base font-semibold text-section-header">Activity Timeline</CardTitle>
               </CardHeader>
-              <CardContent className="px-5 pb-6">
-                <div className="max-h-64 overflow-y-auto space-y-3">
+              <CardContent className="px-5 pb-6 flex-1 overflow-y-auto min-h-0">
+                <div className="space-y-3">
                   <ActivityTimeline activities={activities} />
                 </div>
               </CardContent>

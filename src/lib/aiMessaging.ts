@@ -135,44 +135,47 @@ export async function generateAIAutoresponse(
       }
     }
 
-    // Call AI draft endpoint (internal HTTP call)
-    // Use CRON_SECRET for authentication if available, otherwise will require session
-    const baseUrl = process.env.NEXT_PUBLIC_APP_URL || 
-      (process.env.VERCEL_URL ? `https://${process.env.VERCEL_URL}` : 'http://localhost:3000')
-    const cronSecret = process.env.CRON_SECRET
-
-    const response = await fetch(`${baseUrl}/api/ai/draft-reply`, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        ...(cronSecret ? { 'x-cron-secret': cronSecret } : {}),
-      },
-      body: JSON.stringify({
+    // Generate simple template-based reply (avoid HTTP call in serverless)
+    // Check if this is first message
+    const outboundCount = await prisma.message.count({
+      where: {
         conversationId: conversation.id,
-        leadId: lead.id,
-        objective,
-      }),
+        direction: 'OUTBOUND',
+      },
     })
-
-    if (!response.ok) {
-      const errorText = await response.text().catch(() => 'Unknown error')
-      let error: any
-      try {
-        error = JSON.parse(errorText)
-      } catch {
-        error = { error: errorText }
+    
+    const isFirstMessage = outboundCount === 0
+    const contactName = lead.contact?.fullName || 'there'
+    
+    let draftText = ''
+    
+    if (isFirstMessage && objective === 'qualify') {
+      // First message - always greet and collect info
+      draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!`
+      console.log(`✅ First message greeting generated for lead ${lead.id}`)
+    } else {
+      // For follow-up messages, use simple template
+      switch (objective) {
+        case 'qualify':
+          draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n\nLooking forward to helping you!`
+          break
+        case 'followup':
+          draftText = `Hi ${contactName}, I wanted to follow up on our previous conversation. How can we assist you further? Please let me know if you have any questions.`
+          break
+        case 'renewal':
+          const nearestExpiry = lead.expiryDate
+          if (nearestExpiry) {
+            const daysUntil = Math.ceil((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
+            draftText = `Hi ${contactName}, I hope this message finds you well. I noticed that your service is expiring in ${daysUntil} days. Would you like to proceed with renewal? We can help you complete the process smoothly.`
+          } else {
+            draftText = `Hi ${contactName}, I wanted to check in regarding your upcoming renewals. Is there anything we can help you with?`
+          }
+          break
+        default:
+          draftText = `Hi ${contactName}, thank you for contacting Al Ain Business Center. How can I assist you today?`
       }
-      console.error(`❌ AI draft endpoint failed: ${response.status} - ${error.error || errorText}`)
-      return {
-        text: '',
-        success: false,
-        error: error.error || errorText || 'Failed to generate AI reply',
-      }
+      console.log(`✅ Template reply generated for lead ${lead.id} (objective: ${objective})`)
     }
-
-    const data = await response.json()
-    const draftText = data.draftText || data.draft || ''
-    console.log(`✅ AI draft generated: ${draftText.substring(0, 100)}...`)
 
     if (!draftText || draftText.trim().length === 0) {
       return {
