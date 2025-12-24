@@ -5,6 +5,8 @@ import {
   buildSummaryPrompt,
   buildNextActionsPrompt,
 } from './prompts'
+import { generateCompletion } from '@/lib/llm'
+import type { LLMMessage } from '@/lib/llm/types'
 
 interface DraftReplyResult {
   text: string
@@ -38,48 +40,37 @@ export async function generateDraftReply(
   tone: 'professional' | 'friendly' | 'short',
   language: 'en' | 'ar' = 'en'
 ): Promise<DraftReplyResult> {
+  // Check if any LLM is configured
   const config = await getAIConfig()
   if (!config) {
-    throw new Error('OpenAI API key not configured. Please set it in Integrations or OPENAI_API_KEY environment variable.')
+    throw new Error('AI not configured. Please set GROQ_API_KEY or OPENAI_API_KEY, or configure integrations.')
   }
 
   const prompt = buildDraftReplyPrompt(context, tone, language)
 
   try {
-    const response = await fetch('https://api.openai.com/v1/chat/completions', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        Authorization: `Bearer ${config.apiKey}`,
+    // Use intelligent routing (Llama 3 for simple, GPT-4o for complex)
+    const messages: LLMMessage[] = [
+      {
+        role: 'system',
+        content: 'You are a helpful assistant for a UAE business center. Generate WhatsApp messages that are professional, compliant, and effective.',
       },
-      body: JSON.stringify({
-        model: 'gpt-4o-mini', // Using cost-effective model
-        messages: [
-          {
-            role: 'system',
-            content: 'You are a helpful assistant for a UAE business center. Generate WhatsApp messages that are professional, compliant, and effective.',
-          },
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-        temperature: 0.7,
-        max_tokens: 300,
-      }),
+      {
+        role: 'user',
+        content: prompt,
+      },
+    ]
+
+    const result = await generateCompletion(messages, {
+      temperature: 0.7,
+      maxTokens: 300,
+    }, {
+      leadStage: context.lead?.stage,
+      conversationLength: context.messages?.length,
+      hasMultipleQuestions: prompt.includes('?') && (prompt.match(/\?/g) || []).length > 1,
     })
 
-    if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      throw new Error(error.error?.message || 'Failed to generate draft reply')
-    }
-
-    const data = await response.json()
-    const text = data.choices[0]?.message?.content?.trim() || ''
-
-    if (!text) {
-      throw new Error('Empty response from OpenAI')
-    }
+    const text = result.text
 
     // Extract suggested follow-up date if mentioned (simple heuristic)
     let suggestedNextFollowUpAt: string | undefined
@@ -103,7 +94,7 @@ export async function generateDraftReply(
       suggestedNextFollowUpAt,
     }
   } catch (error: any) {
-    console.error(`${config.provider} API error:`, error)
+    console.error('LLM routing error:', error)
     throw new Error(error.message || 'Failed to generate draft reply')
   }
 }
