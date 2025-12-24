@@ -558,8 +558,6 @@ export async function POST(req: NextRequest) {
               from,
               errorCode: error.code,
             })
-            return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
-          }
             // Log error with full details
             try {
               await prisma.externalEventLog.create({
@@ -579,6 +577,7 @@ export async function POST(req: NextRequest) {
             } catch (logError) {
               console.error('Failed to log error:', logError)
             }
+            return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
           }
         }
       }
