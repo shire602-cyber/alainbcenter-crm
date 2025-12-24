@@ -152,12 +152,19 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 }> {
   const { leadId, messageId, messageText, channel, contactId } = options
 
+  console.log(`🤖 [AUTO-REPLY] handleInboundAutoReply called`, {
+    leadId,
+    messageId,
+    contactId,
+    channel,
+    messageTextLength: messageText?.length || 0,
+    messageTextPreview: messageText?.substring(0, 50) || 'empty',
+  })
+
   if (!messageText || !messageText.trim()) {
-    console.log(`⏭️ Auto-reply skipped: Empty message text for lead ${leadId}`)
+    console.log(`⏭️ [AUTO-REPLY] Skipped: Empty message text for lead ${leadId}`)
     return { replied: false, reason: 'Empty message text' }
   }
-
-  console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
 
   // Log auto-reply attempt to database for debugging
   const logId = `auto-reply-${leadId}-${messageId}-${Date.now()}`

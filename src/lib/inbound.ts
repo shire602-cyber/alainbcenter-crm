@@ -233,6 +233,17 @@ export async function handleInboundMessage(
       data: contactData,
     })
     console.log(`✅ Created new contact: ${contact.id} for ${channel} user`)
+  } else {
+    // CRITICAL: Update existing contact with phone number if missing (for WhatsApp)
+    // This ensures auto-reply can always find the phone number
+    if (channel === 'WHATSAPP' && contactLookupField === 'phone' && normalizedAddress && (!contact.phone || !contact.phone.trim())) {
+      console.log(`📞 Updating existing contact ${contact.id} with phone number ${normalizedAddress}`)
+      contact = await prisma.contact.update({
+        where: { id: contact.id },
+        data: { phone: normalizedAddress },
+      })
+      console.log(`✅ Updated contact ${contact.id} with phone number`)
+    }
   }
 
   // Step 4: Find or create Lead
