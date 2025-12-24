@@ -46,7 +46,7 @@ export async function generateDraftReply(
     throw new Error('AI not configured. Please set GROQ_API_KEY or OPENAI_API_KEY, or configure integrations.')
   }
 
-  const prompt = buildDraftReplyPrompt(context, tone, language)
+  const prompt = await buildDraftReplyPrompt(context, tone, language)
 
   try {
     // Use intelligent routing (Llama 3 for simple, GPT-4o for complex)
