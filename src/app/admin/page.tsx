@@ -92,14 +92,6 @@ export default async function AdminPage() {
       bgColor: 'bg-green-50 dark:bg-green-900/10',
     },
     {
-      title: 'Automation Rules',
-      description: 'Configure automated messages and reminders',
-      icon: Zap,
-      href: '/admin/automation',
-      color: 'text-orange-600',
-      bgColor: 'bg-orange-50 dark:bg-orange-900/10',
-    },
-    {
       title: 'Reports',
       description: 'View lead statistics and analytics',
       icon: BarChart3,

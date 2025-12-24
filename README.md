@@ -88,12 +88,7 @@ Alain CRM features an intuitive, Odoo-inspired navigation structure designed for
 
 ### Secondary Navigation
 
-5. **Automation** (`/automation`) - Admin/Manager only
-   - Configure Autopilot rules
-   - View automation logs
-   - Test automation triggers
-
-6. **Reports** (`/reports`)
+5. **Reports** (`/reports`)
    - Industry-specific KPIs
    - User performance metrics
    - Service analytics
@@ -116,7 +111,8 @@ Alain CRM features an intuitive, Odoo-inspired navigation structure designed for
 10. **Settings** (`/settings/whatsapp`) - Admin only
     - WhatsApp templates
     - AI configuration
-    - Automation preferences
+
+**Note:** Autopilot is now webhook + cron based. No worker required. Auto-reply settings are configured per-lead on the Lead detail page.
 
 ### Top Navigation Bar
 

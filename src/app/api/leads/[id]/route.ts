@@ -227,6 +227,19 @@ export async function PATCH(
       updateData.autopilotEnabled = body.autopilotEnabled
     }
     
+    // Auto-reply settings
+    if (body.autoReplyEnabled !== undefined) {
+      updateData.autoReplyEnabled = body.autoReplyEnabled
+    }
+    
+    if (body.allowOutsideHours !== undefined) {
+      updateData.allowOutsideHours = body.allowOutsideHours
+    }
+    
+    if (body.autoReplyMode !== undefined) {
+      updateData.autoReplyMode = body.autoReplyMode || null
+    }
+    
     if (body.estimatedRenewalValue !== undefined) {
       updateData.estimatedRenewalValue = body.estimatedRenewalValue || null
     }
