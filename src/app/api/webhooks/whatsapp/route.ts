@@ -462,7 +462,7 @@ export async function POST(req: NextRequest) {
             leadId: result.lead.id,
             contactId: result.contact.id,
             messageCreated: !!result.message,
-            messageId: result.message?.id,
+            createdMessageId: result.message?.id,
             messageBody: result.message?.body?.substring(0, 50),
           })
 
