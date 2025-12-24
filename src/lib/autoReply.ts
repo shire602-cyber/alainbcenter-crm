@@ -67,13 +67,16 @@ async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false):
   }
 
   // Rate limiting: don't reply if replied in last 2 minutes
-  if (lead.lastAutoReplyAt) {
+  // BUT: Always allow first message replies (24/7, no rate limit)
+  if (!isFirstMessage && lead.lastAutoReplyAt) {
     const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
     console.log(`⏱️ Last auto-reply was ${minutesSinceLastReply.toFixed(1)} minutes ago`)
     if (minutesSinceLastReply < 2) {
       console.log(`⏭️ Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`)
       return { shouldReply: false, reason: 'Rate limit: replied recently' }
     }
+  } else if (isFirstMessage) {
+    console.log(`✅ First message - rate limit bypassed`)
   }
 
   // Business hours check:
@@ -182,6 +185,46 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // Step 1: Check if this is the first message (to pass to shouldAutoReply)
     // Check for both uppercase and lowercase for backward compatibility
     const channelLower = channel.toLowerCase()
+    
+    // CRITICAL: Check if we already replied to THIS specific inbound message
+    // This prevents duplicate replies when webhook retries the same message
+    const conversations = await prisma.conversation.findMany({
+      where: { leadId: leadId, channel: channelLower },
+      select: { id: true },
+    })
+    const conversationIds = conversations.map(c => c.id)
+    
+    if (conversationIds.length > 0) {
+      // Check for any outbound auto-reply message created within 5 minutes of this inbound message
+      const inboundMessage = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: { createdAt: true },
+      })
+      
+      if (inboundMessage) {
+        const fiveMinutesAfter = new Date(inboundMessage.createdAt.getTime() + 5 * 60 * 1000)
+        const existingReply = await prisma.message.findFirst({
+          where: {
+            conversationId: { in: conversationIds },
+            direction: 'OUTBOUND',
+            channel: channelLower,
+            rawPayload: {
+              contains: '"autoReply":true',
+            },
+            createdAt: {
+              gte: inboundMessage.createdAt,
+              lte: fiveMinutesAfter,
+            },
+          },
+        })
+        
+        if (existingReply) {
+          console.log(`⏭️ Auto-reply already sent for message ${messageId} (found existing reply ${existingReply.id})`)
+          return { replied: false, reason: 'Already replied to this message' }
+        }
+      }
+    }
+    
     let messageCount = await prisma.message.count({
       where: {
         leadId: leadId,
