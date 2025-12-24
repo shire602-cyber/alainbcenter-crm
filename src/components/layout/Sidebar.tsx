@@ -32,7 +32,6 @@ const mainNavigation = [
 ]
 
 const secondaryNavigation = [
-  { name: 'Automation', href: '/automation', icon: Sparkles, description: 'Autopilot rules', adminOnly: true },
   { name: 'Reports', href: '/reports', icon: BarChart3, description: 'Analytics & KPIs' },
 ]
 
@@ -174,9 +173,6 @@ export function Sidebar() {
               
               {/* Secondary Navigation */}
               {secondaryNavigation.map((item) => {
-                if (item.adminOnly && userRole?.toUpperCase() !== 'ADMIN' && userRole?.toUpperCase() !== 'MANAGER') {
-                  return null
-                }
                 const isActive = pathname === item.href || (item.href !== '/' && pathname?.startsWith(item.href))
                 return (
                   <li key={item.name}>

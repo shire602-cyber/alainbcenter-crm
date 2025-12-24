@@ -532,44 +532,41 @@ export async function handleInboundMessage(
     }
   }
 
-  // Step 9: Queue automation job (instead of running directly)
-  // This ensures automation runs even if user leaves the page - truly "set and forget"
-  try {
-    const { queueInboundMessageJob } = await import('./automation/queueJob')
-    await queueInboundMessageJob(lead.id, {
-      id: message.id,
-      direction: message.direction,
-      channel: message.channel,
-      body: message.body,
-      createdAt: message.createdAt,
-    })
-    console.log(`✅ Queued automation job for inbound message ${message.id}`)
-  } catch (error: any) {
-    console.error('❌ Failed to queue automation job:', error.message)
-    // Fallback: run directly if queue fails (shouldn't happen, but safety net)
-    runInboundAutomationsForMessage(lead.id, {
-      id: message.id,
-      direction: message.direction,
-      channel: message.channel,
-      body: message.body,
-      createdAt: message.createdAt,
-    }).catch((err) => {
-      console.error('❌ Background automation error:', err.message)
+  // Step 9: Immediate auto-reply (no queue, no worker - just reply now)
+  if (message.body && message.body.trim().length > 0) {
+    try {
+      const { handleInboundAutoReply } = await import('./autoReply')
+      const replyResult = await handleInboundAutoReply({
+        leadId: lead.id,
+        messageId: message.id,
+        messageText: message.body,
+        channel: message.channel,
+        contactId: contact.id,
+      })
+      
+      if (replyResult.replied) {
+        console.log(`✅ Auto-reply sent for message ${message.id}`)
+      } else {
+        console.log(`⏭️ Auto-reply skipped: ${replyResult.reason || replyResult.error}`)
+      }
+    } catch (error: any) {
+      // Don't fail webhook if auto-reply fails - log and continue
+      console.error('❌ Auto-reply error (non-blocking):', error.message)
       // Log to database for monitoring
       prisma.externalEventLog.create({
         data: {
           provider: channel.toLowerCase(),
-          externalId: `automation-error-${Date.now()}`,
+          externalId: `auto-reply-error-${Date.now()}`,
           payload: JSON.stringify({
-            error: err.message,
+            error: error.message,
             leadId: lead.id,
             messageId: message.id,
           }),
         },
       }).catch((logError) => {
-        console.warn('Failed to log automation error to database:', logError)
+        console.warn('Failed to log auto-reply error:', logError)
       })
-    })
+    }
   }
 
   console.log(
