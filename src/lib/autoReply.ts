@@ -156,6 +156,28 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 
   console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
 
+  // Log auto-reply attempt to database for debugging
+  const logId = `auto-reply-${leadId}-${messageId}-${Date.now()}`
+  try {
+    await prisma.externalEventLog.create({
+      data: {
+        provider: 'auto-reply',
+        externalId: logId,
+        payload: JSON.stringify({
+          leadId,
+          messageId,
+          contactId,
+          channel,
+          messageText: messageText.substring(0, 200),
+          timestamp: new Date().toISOString(),
+          status: 'started',
+        }),
+      },
+    })
+  } catch (logError: any) {
+    console.warn('Failed to log auto-reply start:', logError.message)
+  }
+
   try {
     // Step 1: Check if this is the first message (to pass to shouldAutoReply)
     // Check for both uppercase and lowercase for backward compatibility
@@ -178,6 +200,29 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     const shouldReply = await shouldAutoReply(leadId, isFirstMessage)
     if (!shouldReply.shouldReply) {
       console.log(`⏭️ Skipping auto-reply for lead ${leadId}: ${shouldReply.reason}`)
+      
+      // Log skip reason to database
+      try {
+        await prisma.externalEventLog.create({
+          data: {
+            provider: 'auto-reply',
+            externalId: `auto-reply-skip-${leadId}-${Date.now()}`,
+            payload: JSON.stringify({
+              leadId,
+              messageId,
+              contactId,
+              channel,
+              status: 'skipped',
+              reason: shouldReply.reason,
+              isFirstMessage,
+              timestamp: new Date().toISOString(),
+            }),
+          },
+        })
+      } catch (logError: any) {
+        console.warn('Failed to log auto-reply skip:', logError.message)
+      }
+      
       return { replied: false, reason: shouldReply.reason }
     }
     
@@ -376,6 +421,28 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         })
 
         console.log(`✅ Auto-reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
+        
+        // Log success to database
+        try {
+          await prisma.externalEventLog.create({
+            data: {
+              provider: 'auto-reply',
+              externalId: `auto-reply-success-${leadId}-${Date.now()}`,
+              payload: JSON.stringify({
+                leadId,
+                messageId,
+                contactId,
+                channel,
+                whatsappMessageId: result.messageId,
+                status: 'success',
+                timestamp: new Date().toISOString(),
+              }),
+            },
+          })
+        } catch (logError: any) {
+          console.warn('Failed to log auto-reply success:', logError.message)
+        }
+        
         return { replied: true }
       } catch (error: any) {
         console.error(`❌ Failed to send auto-reply to lead ${leadId}:`, {
@@ -399,9 +466,54 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       }
     }
 
+    // Log unsupported channel to database
+    try {
+      await prisma.externalEventLog.create({
+        data: {
+          provider: 'auto-reply',
+          externalId: `auto-reply-unsupported-${leadId}-${Date.now()}`,
+          payload: JSON.stringify({
+            leadId,
+            messageId,
+            contactId,
+            channel,
+            status: 'unsupported',
+            reason: 'Channel not supported or no phone number',
+            hasPhone: !!lead?.contact?.phone,
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      })
+    } catch (logError: any) {
+      console.warn('Failed to log auto-reply unsupported:', logError.message)
+    }
+    
     return { replied: false, reason: 'Channel not supported or no phone number' }
   } catch (error: any) {
     console.error('Auto-reply error:', error)
+    
+    // Log error to database
+    try {
+      await prisma.externalEventLog.create({
+        data: {
+          provider: 'auto-reply',
+          externalId: `auto-reply-error-${leadId}-${Date.now()}`,
+          payload: JSON.stringify({
+            leadId,
+            messageId,
+            contactId,
+            channel,
+            status: 'error',
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      })
+    } catch (logError: any) {
+      console.warn('Failed to log auto-reply error:', logError.message)
+    }
+    
     return { replied: false, error: error.message }
   }
 }
