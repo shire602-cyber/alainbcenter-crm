@@ -149,12 +149,29 @@ export async function generateAIAutoresponse(
     const isFirstMessage = outboundCount === 0
     const contactName = lead.contact?.fullName || 'there'
     
+    // Detect language from recent messages or use preferred language
+    let detectedLanguage = preferredLanguage
+    if (!detectedLanguage || detectedLanguage === 'en') {
+      const recentInboundMessages = recentMessages
+        .filter((m: any) => m.direction === 'INBOUND' || m.direction === 'inbound')
+        .map((m: any) => m.body || '')
+        .join(' ')
+      
+      const { detectLanguage: detectLang } = await import('./utils/languageDetection')
+      detectedLanguage = detectLang(recentInboundMessages || '')
+    }
+    console.log(`🌐 Using language for reply: ${detectedLanguage} (preferred: ${preferredLanguage})`)
+    
     let draftText = ''
     
     if (isFirstMessage && objective === 'qualify') {
-      // First message - always greet and collect info
-      draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!`
-      console.log(`✅ First message greeting generated for lead ${lead.id}`)
+      // First message - always greet and collect info (multi-language)
+      if (detectedLanguage === 'ar') {
+        draftText = `مرحباً! 👋 أهلاً بك في مركز العين للأعمال. أنا هنا لمساعدتك في خدمات تأسيس الأعمال وتأشيرات الإمارات.\n\nللبدء، يرجى مشاركة:\n1. اسمك الكامل\n2. ما هي الخدمة التي تحتاجها؟ (مثل: تأشيرة عائلية، تأسيس شركة، تأشيرة عمل)\n3. جنسيتك\n\nسأقوم بتوصيلك مع المختص المناسب!`
+      } else {
+        draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!`
+      }
+      console.log(`✅ First message greeting generated for lead ${lead.id} (language: ${detectedLanguage})`)
     } else {
       // For follow-up messages, use simple template (multi-language)
       switch (objective) {
