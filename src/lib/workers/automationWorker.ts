@@ -22,13 +22,6 @@ class AutomationWorker {
       return
     }
 
-    // Persist state to database for serverless environments
-    try {
-      await this.setWorkerState(true)
-    } catch (error) {
-      console.warn('Failed to persist worker state:', error)
-    }
-
     this.isRunning = true
     console.log('🚀 Automation Worker started - processing jobs every 5 seconds')
 
@@ -47,105 +40,46 @@ class AutomationWorker {
       clearInterval(this.processingInterval)
       this.processingInterval = null
     }
-    
-    // Persist state to database
-    try {
-      await this.setWorkerState(false)
-    } catch (error) {
-      console.warn('Failed to persist worker state:', error)
-    }
-    
     console.log('🛑 Automation Worker stopped')
-  }
-
-  async initialize() {
-    // Load persisted state from database
-    try {
-      const state = await this.getWorkerState()
-      if (state) {
-        this.isRunning = true
-        console.log('🔄 Restored worker state: running')
-        // Restart polling
-        this.processingInterval = setInterval(() => {
-          this.processJobs()
-        }, this.POLL_INTERVAL)
-        // Process jobs immediately
-        this.processJobs()
-      }
-    } catch (error) {
-      console.warn('Failed to restore worker state:', error)
-    }
-  }
-
-  private async getWorkerState(): Promise<boolean> {
-    // In serverless, check if there are recent processing jobs
-    // If jobs are being processed, worker is effectively "running"
-    const recentJob = await prisma.automationJob.findFirst({
-      where: {
-        status: { in: ['PENDING', 'PROCESSING'] },
-        type: { not: 'worker_heartbeat' },
-      },
-      orderBy: { createdAt: 'desc' },
-    })
-    
-    // Also check for a worker setting in a simpler way
-    // Use ExternalEventLog as a key-value store for worker state
-    const stateLog = await prisma.externalEventLog.findFirst({
-      where: {
-        provider: 'system',
-        externalId: 'automation_worker_running',
-      },
-      orderBy: { receivedAt: 'desc' },
-    })
-    
-    if (stateLog) {
-      const payload = JSON.parse(stateLog.payload || '{}')
-      const age = Date.now() - stateLog.receivedAt.getTime()
-      // If state says running and is less than 2 minutes old, worker is active
-      if (payload.running === true && age < 120000) {
-        return true
-      }
-    }
-    
-    // If there are pending/processing jobs, worker should be running
-    return !!recentJob
-  }
-
-  private async setWorkerState(running: boolean) {
-    // Store state in ExternalEventLog as a simple key-value store
-    await prisma.externalEventLog.upsert({
-      where: {
-        provider_externalId: {
-          provider: 'system',
-          externalId: 'automation_worker_running',
-        },
-      },
-      create: {
-        provider: 'system',
-        externalId: 'automation_worker_running',
-        payload: JSON.stringify({ running, timestamp: new Date().toISOString() }),
-        receivedAt: new Date(),
-      },
-      update: {
-        payload: JSON.stringify({ running, timestamp: new Date().toISOString() }),
-        receivedAt: new Date(),
-      },
-    })
   }
 
   isActive(): boolean {
     return this.isRunning
   }
 
+  async checkIfRunning(): Promise<boolean> {
+    // Check if worker is actually running by looking for recent activity
+    // If jobs are being processed, worker is effectively running
+    try {
+      const recentProcessing = await prisma.automationJob.findFirst({
+        where: {
+          status: 'PROCESSING',
+          startedAt: {
+            gte: new Date(Date.now() - 60000), // Last minute
+          },
+        },
+      })
+      
+      // Also check if there are pending jobs (worker should be running)
+      const pendingCount = await prisma.automationJob.count({
+        where: { status: 'PENDING' },
+      })
+      
+      // If jobs are processing or pending, worker should be running
+      return this.isRunning || !!recentProcessing || pendingCount > 0
+    } catch (error) {
+      return this.isRunning
+    }
+  }
+
   private async processJobs() {
     if (!this.isRunning) return
 
     try {
-      // Get pending jobs from database (exclude heartbeat jobs)
+      // Get pending jobs from database
       const jobs = await prisma.automationJob.findMany({
         where: {
           status: 'PENDING',
-          type: { not: 'worker_heartbeat' }, // Exclude heartbeat jobs
         },
         orderBy: [
           { priority: 'desc' },
@@ -259,11 +193,12 @@ class AutomationWorker {
   }
 
   async getStats() {
-    const [pending, processing, completed, failed] = await Promise.all([
+    const [pending, processing, completed, failed, isActuallyRunning] = await Promise.all([
       prisma.automationJob.count({ where: { status: 'PENDING' } }),
       prisma.automationJob.count({ where: { status: 'PROCESSING' } }),
       prisma.automationJob.count({ where: { status: 'COMPLETED' } }),
       prisma.automationJob.count({ where: { status: 'FAILED' } }),
+      this.checkIfRunning(),
     ])
 
     return {
@@ -271,7 +206,7 @@ class AutomationWorker {
       processing,
       completed,
       failed,
-      isRunning: this.isRunning,
+      isRunning: isActuallyRunning,
     }
   }
 }
