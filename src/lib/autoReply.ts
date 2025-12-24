@@ -39,10 +39,11 @@ async function shouldAutoReply(leadId: number): Promise<{ shouldReply: boolean; 
     return { shouldReply: false, reason: 'Lead not found' }
   }
 
-  // Check if auto-reply is enabled
-  if (!lead.autoReplyEnabled) {
+  // Check if auto-reply is enabled (treat NULL as true for backward compatibility)
+  if (lead.autoReplyEnabled === false) {
     return { shouldReply: false, reason: 'Auto-reply disabled for this lead' }
   }
+  // If NULL or undefined, default to true (for leads created before migration)
 
   // Check if muted
   if (lead.mutedUntil && lead.mutedUntil > new Date()) {
