@@ -22,7 +22,8 @@ async function extractPDFWithRetry(
   // Check if pdf-parse is available
   let pdfParse: any = null
   try {
-    pdfParse = await import('pdf-parse')
+    // Use dynamic import with type assertion to avoid TypeScript errors
+    pdfParse = await import('pdf-parse' as any)
   } catch {
     // pdf-parse not installed, return empty immediately
     console.warn('pdf-parse not installed. PDF extraction unavailable.')
@@ -32,7 +33,9 @@ async function extractPDFWithRetry(
   // If pdf-parse is available, use it with retry logic
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
-      const data = await pdfParse.default(buffer)
+      // pdf-parse exports a default function
+      const pdfParseFn = pdfParse.default || pdfParse
+      const data = await pdfParseFn(buffer)
       return data.text || ''
     } catch (error: any) {
       if (attempt === maxRetries) {
