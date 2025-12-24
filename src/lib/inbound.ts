@@ -540,14 +540,22 @@ export async function handleInboundMessage(
 
   // Step 9: Immediate auto-reply (no queue, no worker - just reply now)
   if (message.body && message.body.trim().length > 0) {
+    console.log(`🤖 Starting auto-reply process for message ${message.id} (lead ${lead.id}, channel: ${message.channel})`)
     try {
       const { handleInboundAutoReply } = await import('./autoReply')
+      console.log(`📞 Calling handleInboundAutoReply...`)
       const replyResult = await handleInboundAutoReply({
         leadId: lead.id,
         messageId: message.id,
         messageText: message.body,
         channel: message.channel,
         contactId: contact.id,
+      })
+      
+      console.log(`📊 Auto-reply result:`, {
+        replied: replyResult.replied,
+        reason: replyResult.reason,
+        error: replyResult.error,
       })
       
       if (replyResult.replied) {
