@@ -20,8 +20,31 @@ class InMemoryQueue {
   async add(job: QueueJob): Promise<string> {
     this.jobs.push(job)
     this.jobs.sort((a, b) => (b.priority || 0) - (a.priority || 0))
-    this.processQueue()
+    // In serverless, execute immediately instead of queuing
+    // This ensures jobs run even if the function instance is destroyed
+    this.executeJobImmediately(job).catch(error => {
+      console.error(`Job ${job.id} failed:`, error)
+    })
     return job.id
+  }
+
+  private async executeJobImmediately(job: QueueJob) {
+    console.log(`🚀 Executing job ${job.id} immediately (serverless mode)`)
+    switch (job.type) {
+      case 'autopilot_run':
+        const { runAutopilot } = await import('../autopilot/runAutopilot')
+        // Use dryRun from job data, default to false if not specified
+        const dryRun = job.data?.dryRun ?? false
+        const result = await runAutopilot({ dryRun })
+        console.log(`✅ Autopilot run completed:`, result)
+        return result
+      case 'followup_scheduled':
+        // Handle scheduled follow-up
+        break
+      case 'expiry_reminder':
+        // Handle expiry reminder
+        break
+    }
   }
 
   private async processQueue() {
