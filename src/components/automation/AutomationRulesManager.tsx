@@ -279,15 +279,15 @@ export function AutomationRulesManager() {
   }
 
   return (
-    <div className="space-y-2">
-      {/* Compact Header */}
-      <div className="flex items-center justify-between mb-2">
+    <div className="space-y-4">
+      {/* Header */}
+      <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          <h1 className="text-2xl font-semibold tracking-tight text-foreground">
             Autopilot Automation
           </h1>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-            Configure automated messages for expiry reminders and follow-ups
+          <p className="text-sm text-muted-foreground mt-1">
+            Configure automated messages for expiry reminders and follow-ups. Automation runs automatically in the background via scheduled cron jobs.
           </p>
         </div>
         <div className="flex gap-2">

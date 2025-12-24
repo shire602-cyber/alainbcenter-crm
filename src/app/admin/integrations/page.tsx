@@ -140,24 +140,21 @@ export default async function IntegrationsPage() {
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header */}
-        <div className="flex items-center gap-2 mb-2">
-          <div className="p-1.5 rounded-lg bg-primary/10">
-            <Plug2 className="h-5 w-5 text-primary" />
-          </div>
+      <div className="space-y-4">
+        {/* Header */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
               Integrations
             </h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-sm text-muted-foreground mt-1">
               Manage API connections for WhatsApp, Email, Social Media, and AI services
             </p>
           </div>
         </div>
 
         {/* Stats */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
           <KPICard
             title="Total Integrations"
             value={integrationTypes.length}
@@ -176,7 +173,7 @@ export default async function IntegrationsPage() {
         </div>
 
         {/* Integration Cards */}
-        <div className="grid gap-2 md:grid-cols-2">
+        <div className="grid gap-4 md:grid-cols-2">
           {integrationTypes.map((type) => {
             const integration = integrations.find((i) => i.name === type.name)
             const isEnabled = integration?.isEnabled || false
