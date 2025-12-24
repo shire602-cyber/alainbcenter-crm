@@ -146,6 +146,25 @@ export async function handleInboundMessage(
       if (!existingMessage.conversation.lead) {
         throw new Error('Message conversation has no associated lead')
       }
+      
+      // CRITICAL: Even for duplicates, trigger auto-reply if message has body
+      if (existingMessage.body && existingMessage.body.trim().length > 0) {
+        console.log(`🔄 [DUPLICATE] Triggering auto-reply for duplicate message ${existingMessage.id}`)
+        try {
+          const { handleInboundAutoReply } = await import('./autoReply')
+          const replyResult = await handleInboundAutoReply({
+            leadId: existingMessage.conversation.lead.id,
+            messageId: existingMessage.id,
+            messageText: existingMessage.body,
+            channel: existingMessage.channel,
+            contactId: existingMessage.conversation.lead.contactId!,
+          })
+          console.log(`📊 [DUPLICATE] Auto-reply result:`, replyResult)
+        } catch (autoReplyError: any) {
+          console.error(`❌ [DUPLICATE] Auto-reply failed:`, autoReplyError.message)
+        }
+      }
+      
       return {
         lead: existingMessage.conversation.lead,
         conversation: existingMessage.conversation,
