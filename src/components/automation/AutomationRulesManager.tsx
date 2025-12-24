@@ -5,7 +5,7 @@ import { BentoCard } from '@/components/dashboard/BentoCard'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
-import { Zap, Play, Loader2, CheckCircle2, XCircle } from 'lucide-react'
+import { Zap, Play, Loader2, CheckCircle2, XCircle, Activity } from 'lucide-react'
 import { AutomationRulesClient } from '@/components/admin/AutomationRulesClient'
 import { Skeleton } from '@/components/ui/skeleton'
 
@@ -40,6 +40,13 @@ export function AutomationRulesManager() {
   const [draftCount, setDraftCount] = useState(0)
   const [seeding, setSeeding] = useState(false)
   const [seedResult, setSeedResult] = useState<{ success: boolean; message?: string } | null>(null)
+  const [workerRunning, setWorkerRunning] = useState(false)
+  const [workerStats, setWorkerStats] = useState<{
+    pending: number
+    processing: number
+    completed: number
+    failed: number
+  } | null>(null)
   
   async function handleSeedInbound() {
     if (!confirm('Seed INBOUND_MESSAGE automation rules? This will create rules for auto-replying to incoming messages.')) {
@@ -136,7 +143,51 @@ export function AutomationRulesManager() {
   }
   useEffect(() => {
     loadStats()
+    checkWorkerStatus()
+    
+    // Check worker status every 10 seconds
+    const interval = setInterval(() => {
+      checkWorkerStatus()
+    }, 10000)
+    
+    return () => clearInterval(interval)
   }, [])
+
+  async function checkWorkerStatus() {
+    try {
+      const res = await fetch('/api/admin/automation/worker')
+      const data = await res.json()
+      if (data.ok) {
+        setWorkerRunning(data.isRunning || false)
+        setWorkerStats({
+          pending: data.pending || 0,
+          processing: data.processing || 0,
+          completed: data.completed || 0,
+          failed: data.failed || 0,
+        })
+      }
+    } catch (error) {
+      console.error('Failed to check worker status:', error)
+    }
+  }
+
+  async function toggleWorker() {
+    try {
+      const action = workerRunning ? 'stop' : 'start'
+      const res = await fetch('/api/admin/automation/worker', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action }),
+      })
+      const data = await res.json()
+      if (data.ok) {
+        setWorkerRunning(data.running || false)
+        await checkWorkerStatus()
+      }
+    } catch (error) {
+      console.error('Failed to toggle worker:', error)
+    }
+  }
 
   async function loadStats() {
     try {
@@ -178,6 +229,10 @@ export function AutomationRulesManager() {
     try {
       console.log('🚀 Starting automation run...')
       
+      // Create abort controller for timeout
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 300000) // 5 minute timeout
+      
       // Use the autopilot run endpoint which handles all automation rules
       const res = await fetch('/api/autopilot/run', {
         method: 'POST',
@@ -185,7 +240,10 @@ export function AutomationRulesManager() {
         headers: {
           'Content-Type': 'application/json',
         },
+        signal: controller.signal,
       })
+      
+      clearTimeout(timeoutId)
 
       console.log('📡 Response status:', res.status, res.statusText)
 
@@ -228,9 +286,17 @@ export function AutomationRulesManager() {
       }
     } catch (error: any) {
       console.error('❌ Run automation error:', error)
+      let errorMessage = 'Failed to run automation. Check console for details.'
+      
+      if (error.name === 'AbortError') {
+        errorMessage = 'Request timed out. The automation may still be running in the background. Check the logs below.'
+      } else if (error.message) {
+        errorMessage = error.message
+      }
+      
       setRunResult({
         success: false,
-        errors: [error.message || 'Failed to run automation. Check console for details.'],
+        errors: [errorMessage],
       })
     } finally {
       setRunning(false)
@@ -439,7 +505,7 @@ export function AutomationRulesManager() {
       )}
 
       {/* Stats Overview */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <BentoCard
           title="Draft Messages"
           icon={<Zap className="h-4 w-4" />}

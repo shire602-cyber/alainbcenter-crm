@@ -532,33 +532,45 @@ export async function handleInboundMessage(
     }
   }
 
-  // Step 9: Trigger automation (non-blocking)
-  // Run in background to keep response fast
-  // The automation handler will check for INBOUND_MESSAGE rules and execute them
-  runInboundAutomationsForMessage(lead.id, {
-    id: message.id,
-    direction: message.direction,
-    channel: message.channel,
-    body: message.body,
-    createdAt: message.createdAt,
-  }).catch((err) => {
-    console.error('❌ Background automation error for lead', lead.id, ':', err.message, err.stack)
-    // Log to database for monitoring (fire and forget, don't await)
-    prisma.externalEventLog.create({
-      data: {
-        provider: channel.toLowerCase(),
-        externalId: `automation-error-${Date.now()}`,
-        payload: JSON.stringify({
-          error: err.message,
-          leadId: lead.id,
-          messageId: message.id,
-        }),
-      },
-    }).catch((logError) => {
-      // Silently ignore logging errors to prevent unhandled rejections
-      console.warn('Failed to log automation error to database:', logError)
+  // Step 9: Queue automation job (instead of running directly)
+  // This ensures automation runs even if user leaves the page - truly "set and forget"
+  try {
+    const { queueInboundMessageJob } = await import('./automation/queueJob')
+    await queueInboundMessageJob(lead.id, {
+      id: message.id,
+      direction: message.direction,
+      channel: message.channel,
+      body: message.body,
+      createdAt: message.createdAt,
     })
-  })
+    console.log(`✅ Queued automation job for inbound message ${message.id}`)
+  } catch (error: any) {
+    console.error('❌ Failed to queue automation job:', error.message)
+    // Fallback: run directly if queue fails (shouldn't happen, but safety net)
+    runInboundAutomationsForMessage(lead.id, {
+      id: message.id,
+      direction: message.direction,
+      channel: message.channel,
+      body: message.body,
+      createdAt: message.createdAt,
+    }).catch((err) => {
+      console.error('❌ Background automation error:', err.message)
+      // Log to database for monitoring
+      prisma.externalEventLog.create({
+        data: {
+          provider: channel.toLowerCase(),
+          externalId: `automation-error-${Date.now()}`,
+          payload: JSON.stringify({
+            error: err.message,
+            leadId: lead.id,
+            messageId: message.id,
+          }),
+        },
+      }).catch((logError) => {
+        console.warn('Failed to log automation error to database:', logError)
+      })
+    })
+  }
 
   console.log(
     `✅ Processed inbound ${channel} message ${externalMessageId || message.id} from ${fromAddress || 'unknown'}`
