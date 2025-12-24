@@ -3,6 +3,7 @@ import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 import { buildConversationContext } from '@/lib/ai/context'
 import { generateDraftReply } from '@/lib/ai/generate'
+import { detectLanguage } from '@/lib/utils/languageDetection'
 
 // POST /api/ai/draft-reply
 // Input: leadId or conversationId, objective (qualify|renewal|followup|pricing|docs_request)
