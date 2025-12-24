@@ -438,6 +438,12 @@ export async function POST(req: NextRequest) {
             phoneNumberId,
           })
 
+          console.log(`🔄 [WEBHOOK] About to call handleInboundMessage for ${from}`, {
+            messageId,
+            messageText: messageText.substring(0, 50),
+            hasBody: !!messageText && messageText.trim().length > 0,
+          })
+
           const result = await handleInboundMessage({
             channel: 'WHATSAPP',
             externalId: externalId,
@@ -450,12 +456,26 @@ export async function POST(req: NextRequest) {
             mediaMimeType: mediaMimeType,
           })
 
-          console.log(`✅ Successfully processed inbound message`, {
+          console.log(`✅ [WEBHOOK] Successfully processed inbound message`, {
             messageId,
             conversationId: result.conversation.id,
             leadId: result.lead.id,
             contactId: result.contact.id,
+            messageCreated: !!result.message,
+            messageId: result.message?.id,
+            messageBody: result.message?.body?.substring(0, 50),
           })
+
+          // CRITICAL: Log if auto-reply should have been attempted
+          if (result.message && result.message.body && result.message.body.trim().length > 0) {
+            console.log(`🤖 [WEBHOOK] Message has body - auto-reply should have been attempted in handleInboundMessage`)
+          } else {
+            console.warn(`⚠️ [WEBHOOK] Message has no body - auto-reply was skipped`, {
+              hasMessage: !!result.message,
+              hasBody: !!result.message?.body,
+              bodyLength: result.message?.body?.length || 0,
+            })
+          }
 
           // Update conversation with WhatsApp-specific fields (if schema supports them)
           const waUserWaId = from
@@ -511,9 +531,34 @@ export async function POST(req: NextRequest) {
         } catch (error: any) {
           // Handle unique constraint violation (duplicate message)
           if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
-            console.log(`⚠️ Duplicate message ${messageId} detected via constraint`)
+            console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint`)
+            // Even for duplicates, try to trigger auto-reply if message exists
+            try {
+              const existingMessage = await prisma.message.findFirst({
+                where: { providerMessageId: messageId },
+                include: {
+                  lead: { include: { contact: true } },
+                  conversation: true,
+                },
+              })
+              
+              if (existingMessage && existingMessage.body && existingMessage.body.trim().length > 0) {
+                console.log(`🔄 [WEBHOOK] Duplicate message found - attempting auto-reply anyway`)
+                const { handleInboundAutoReply } = await import('@/lib/autoReply')
+                const replyResult = await handleInboundAutoReply({
+                  leadId: existingMessage.leadId!,
+                  messageId: existingMessage.id,
+                  messageText: existingMessage.body,
+                  channel: existingMessage.channel,
+                  contactId: existingMessage.contactId!,
+                })
+                console.log(`📊 [WEBHOOK] Auto-reply result for duplicate:`, replyResult)
+              }
+            } catch (autoReplyError: any) {
+              console.error(`❌ [WEBHOOK] Failed to auto-reply for duplicate message:`, autoReplyError.message)
+            }
           } else {
-            console.error(`❌ Error processing inbound message:`, {
+            console.error(`❌ [WEBHOOK] Error processing inbound message:`, {
               error: error.message,
               stack: error.stack,
               messageId,
