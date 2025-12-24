@@ -30,7 +30,7 @@ export async function logUsage(usage: LLMUsageLog): Promise<void> {
       await prisma.externalEventLog.create({
         data: {
           provider: 'llm_usage',
-          externalId: `usage_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+          externalId: `usage_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`,
           payload: JSON.stringify({
             provider: usage.provider,
             model: usage.model,

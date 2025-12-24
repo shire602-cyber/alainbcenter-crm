@@ -67,7 +67,8 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
 
   prompt += `Recent Conversation (last ${messages.length} messages):\n`
   messages.slice(-5).forEach((msg, idx) => {
-    prompt += `${idx + 1}. [${msg.direction.toUpperCase()}] ${msg.message.substring(0, 200)}\n`
+    const messageText = (msg.message || '').substring(0, 200)
+    prompt += `${idx + 1}. [${msg.direction.toUpperCase()}] ${messageText}\n`
   })
 
   prompt += `\nGenerate a WhatsApp-ready reply that:
@@ -98,7 +99,7 @@ Contact: ${contact.name}${contact.nationality ? ` (${contact.nationality})` : ''
 ${lead ? `Lead: ${lead.serviceType || lead.leadType || 'Not specified'} - ${lead.status}` : 'No lead created yet'}
 
 Recent Messages:
-${messages.map((msg, idx) => `${idx + 1}. [${msg.direction}] ${msg.message.substring(0, 150)}`).join('\n')}
+${messages.map((msg, idx) => `${idx + 1}. [${msg.direction}] ${(msg.message || '').substring(0, 150)}`).join('\n')}
 
 Provide your analysis in JSON format:
 {
@@ -122,7 +123,7 @@ Contact: ${contact.name}
 ${lead ? `Lead: ${lead.serviceType || lead.leadType || 'Not specified'} - ${lead.status}` : 'No lead created yet'}
 
 Recent Messages:
-${messages.map((msg, idx) => `${idx + 1}. [${msg.direction}] ${msg.message.substring(0, 150)}`).join('\n')}
+${messages.map((msg, idx) => `${idx + 1}. [${msg.direction}] ${(msg.message || '').substring(0, 150)}`).join('\n')}
 
 Provide top 5 actions in JSON format:
 {
@@ -231,7 +232,8 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
 
   prompt += `Recent Conversation (last ${messages.length} messages):\n`
   messages.slice(-5).forEach((msg, idx) => {
-    prompt += `${idx + 1}. [${msg.direction.toUpperCase()}] ${msg.message.substring(0, 200)}\n`
+    const messageText = (msg.message || '').substring(0, 200)
+    prompt += `${idx + 1}. [${msg.direction.toUpperCase()}] ${messageText}\n`
   })
 
   prompt += `\nGenerate a WhatsApp-ready message that:

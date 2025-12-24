@@ -78,6 +78,12 @@ export class Llama3Provider implements LLMProvider {
       }
 
       const data = await response.json()
+      
+      // Validate response structure
+      if (!data.choices || !Array.isArray(data.choices) || data.choices.length === 0) {
+        throw new Error('Invalid response from Llama 3: missing or empty choices array')
+      }
+      
       const text = data.choices[0]?.message?.content?.trim() || ''
 
       if (!text) {

@@ -119,10 +119,10 @@ export async function enqueueAutomation(
   } = {}
 ): Promise<string> {
   if (!queue) {
-    await initializeQueue()
+    queue = await initializeQueue()
   }
 
-  const jobId = `job_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+  const jobId = `job_${Date.now()}_${Math.random().toString(36).substring(2, 11)}`
   
   if (queue.add) {
     // BullMQ

@@ -21,6 +21,7 @@ export interface ActionResult {
   hint?: string // Additional guidance for errors
   requiresTemplate?: boolean // Indicates template is required (for WhatsApp)
   hoursSinceLastInbound?: number | null // Hours since last inbound message (for WhatsApp)
+  requiresHuman?: boolean // Indicates human intervention is required
 }
 
 /**
@@ -430,8 +431,79 @@ async function executeSendAIReply(
 
   // Get recent messages for context
   const recentMessages = context.recentMessages || []
+  const lastMessage = recentMessages[0] || context.triggerData?.lastMessage
+  const userQuery = lastMessage?.body || ''
 
-  // Generate AI reply
+  // RETRIEVER-FIRST CHAIN: Check if AI can respond before generating reply
+  if (userQuery) {
+    try {
+      const { retrieveAndGuard, markLeadRequiresHuman } = await import('@/lib/ai/retrieverChain')
+      const retrievalResult = await retrieveAndGuard(userQuery, {
+        similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
+        topK: 5,
+      })
+
+      if (!retrievalResult.canRespond) {
+        // Mark lead as requiring human intervention
+        await markLeadRequiresHuman(lead.id, retrievalResult.reason, userQuery)
+
+        // Send polite message to user
+        const politeMessage = retrievalResult.suggestedResponse || 
+          "I'm only trained to assist with specific business topics. Let me get a human agent for you."
+
+        // Send the polite message via the channel
+        if (channel === 'WHATSAPP' && contact.phone) {
+          try {
+            const { sendTextMessage } = await import('../whatsapp')
+            await sendTextMessage(contact.phone, politeMessage)
+            
+            // Create message record
+            const conversation = await prisma.conversation.findFirst({
+              where: {
+                contactId: contact.id,
+                channel: 'whatsapp',
+                leadId: lead.id,
+              },
+            })
+
+            if (conversation) {
+              await prisma.message.create({
+                data: {
+                  conversationId: conversation.id,
+                  leadId: lead.id,
+                  contactId: contact.id,
+                  direction: 'OUTBOUND',
+                  channel: 'whatsapp',
+                  type: 'text',
+                  body: politeMessage,
+                  status: 'SENT',
+                  rawPayload: JSON.stringify({
+                    automation: true,
+                    requiresHuman: true,
+                    reason: retrievalResult.reason,
+                  }),
+                  sentAt: new Date(),
+                },
+              })
+            }
+          } catch (error: any) {
+            console.error('Failed to send polite message:', error)
+          }
+        }
+
+        return {
+          success: false,
+          error: retrievalResult.reason,
+          requiresHuman: true,
+        }
+      }
+    } catch (retrievalError: any) {
+      console.error('Retriever chain error in automation:', retrievalError)
+      // Continue to AI generation if retrieval fails (fail-open for now)
+    }
+  }
+
+  // Generate AI reply (only if retrieval passed)
   const aiContext: AIMessageContext = {
     lead,
     contact,

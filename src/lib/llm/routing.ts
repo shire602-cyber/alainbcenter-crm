@@ -98,19 +98,24 @@ export class RoutingService {
       }
     }
 
-    // Log usage
-    await logUsage({
-      provider: provider.name,
-      model: result.model || provider.model,
-      promptTokens: result.tokensUsed?.prompt || 0,
-      completionTokens: result.tokensUsed?.completion || 0,
-      totalTokens: result.tokensUsed?.total || 0,
-      cost: this.calculateCost(provider, result.tokensUsed || { prompt: 0, completion: 0, total: 0 }),
-      reason: decision.reason,
-      complexity: analysis.level,
-      success: true,
-      timestamp: new Date(),
-    })
+    // Log usage (non-blocking - don't fail if logging fails)
+    try {
+      await logUsage({
+        provider: provider.name,
+        model: result.model || provider.model,
+        promptTokens: result.tokensUsed?.prompt || 0,
+        completionTokens: result.tokensUsed?.completion || 0,
+        totalTokens: result.tokensUsed?.total || 0,
+        cost: this.calculateCost(provider, result.tokensUsed || { prompt: 0, completion: 0, total: 0 }),
+        reason: decision.reason,
+        complexity: analysis.level,
+        success: true,
+        timestamp: new Date(),
+      })
+    } catch (logError) {
+      // Don't fail the request if logging fails
+      console.warn('Failed to log LLM usage:', logError)
+    }
 
     return {
       result,
@@ -134,19 +139,24 @@ export class RoutingService {
 
     const result = await this.openai.complete(messages, options)
 
-    // Log escalation
-    await logUsage({
-      provider: 'openai',
-      model: result.model || this.openai.model,
-      promptTokens: result.tokensUsed?.prompt || 0,
-      completionTokens: result.tokensUsed?.completion || 0,
-      totalTokens: result.tokensUsed?.total || 0,
-      cost: this.calculateCost(this.openai, result.tokensUsed || { prompt: 0, completion: 0, total: 0 }),
-      reason: `Escalated from ${originalDecision.provider.name}: ${originalDecision.reason}`,
-      complexity: originalDecision.complexity,
-      success: true,
-      timestamp: new Date(),
-    })
+    // Log escalation (non-blocking - don't fail if logging fails)
+    try {
+      await logUsage({
+        provider: 'openai',
+        model: result.model || this.openai.model,
+        promptTokens: result.tokensUsed?.prompt || 0,
+        completionTokens: result.tokensUsed?.completion || 0,
+        totalTokens: result.tokensUsed?.total || 0,
+        cost: this.calculateCost(this.openai, result.tokensUsed || { prompt: 0, completion: 0, total: 0 }),
+        reason: `Escalated from ${originalDecision.provider.name}: ${originalDecision.reason}`,
+        complexity: originalDecision.complexity,
+        success: true,
+        timestamp: new Date(),
+      })
+    } catch (logError) {
+      // Don't fail the escalation if logging fails
+      console.warn('Failed to log LLM escalation usage:', logError)
+    }
 
     return result
   }
