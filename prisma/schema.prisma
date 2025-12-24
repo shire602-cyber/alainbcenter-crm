@@ -85,7 +85,7 @@ model Lead {
   serviceTypeId Int? // New relation to ServiceType
   serviceType   ServiceType? @relation(fields: [serviceTypeId], references: [id])
 
-  // Locked enums per spec (stored as strings for SQLite)
+  // Locked enums per spec (stored as strings - works for both SQLite and PostgreSQL)
   stage              String  @default("NEW") // NEW | CONTACTED | ENGAGED | QUALIFIED | PROPOSAL_SENT | IN_PROGRESS | COMPLETED_WON | LOST | ON_HOLD
   serviceTypeEnum    String? // Direct enum field: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | etc.
   priority           String? @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
