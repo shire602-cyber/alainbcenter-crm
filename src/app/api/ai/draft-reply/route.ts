@@ -226,12 +226,34 @@ export async function POST(req: NextRequest) {
 
     switch (objective) {
       case 'qualify':
-        draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n3. Do you have any specific requirements?\n\nLooking forward to helping you!${trainingContext}`
-        nextQuestions = [
-          'What specific service are you interested in?',
-          'What is your timeline?',
-          'Do you have any specific requirements?'
-        ]
+        // Check if this is first message (no previous outbound messages)
+        let outboundCount = 0
+        if (resolvedConversationId) {
+          outboundCount = await prisma.message.count({
+            where: {
+              conversationId: resolvedConversationId,
+              direction: 'OUTBOUND',
+            },
+          })
+        }
+        
+        if (outboundCount === 0) {
+          // First message - greet and collect basic info
+          draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!${trainingContext}`
+          nextQuestions = [
+            'What is your full name?',
+            'What service are you interested in?',
+            'What is your nationality?'
+          ]
+        } else {
+          // Follow-up message
+          draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n3. Do you have any specific requirements?\n\nLooking forward to helping you!${trainingContext}`
+          nextQuestions = [
+            'What specific service are you interested in?',
+            'What is your timeline?',
+            'Do you have any specific requirements?'
+          ]
+        }
         break
       
       case 'renewal':
