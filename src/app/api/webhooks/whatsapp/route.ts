@@ -466,14 +466,29 @@ export async function POST(req: NextRequest) {
             messageBody: result.message?.body?.substring(0, 50),
           })
 
-          // CRITICAL: Log if auto-reply should have been attempted
-          if (result.message && result.message.body && result.message.body.trim().length > 0) {
-            console.log(`🤖 [WEBHOOK] Message has body - auto-reply should have been attempted in handleInboundMessage`)
+          // CRITICAL: Trigger auto-reply from webhook level to ensure it always runs
+          // Even if handleInboundMessage had issues, we still have the result
+          if (result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id) {
+            console.log(`🤖 [WEBHOOK] Triggering auto-reply from webhook level (backup)`)
+            try {
+              const { handleInboundAutoReply } = await import('@/lib/autoReply')
+              const replyResult = await handleInboundAutoReply({
+                leadId: result.lead.id,
+                messageId: result.message.id,
+                messageText: result.message.body,
+                channel: result.message.channel,
+                contactId: result.contact.id,
+              })
+              console.log(`📊 [WEBHOOK] Auto-reply result (webhook level):`, replyResult)
+            } catch (autoReplyError: any) {
+              console.error(`❌ [WEBHOOK] Auto-reply failed at webhook level:`, autoReplyError.message)
+            }
           } else {
-            console.warn(`⚠️ [WEBHOOK] Message has no body - auto-reply was skipped`, {
+            console.warn(`⚠️ [WEBHOOK] Cannot trigger auto-reply - missing data`, {
               hasMessage: !!result.message,
               hasBody: !!result.message?.body,
-              bodyLength: result.message?.body?.length || 0,
+              hasLead: !!result.lead,
+              hasContact: !!result.contact,
             })
           }
 
