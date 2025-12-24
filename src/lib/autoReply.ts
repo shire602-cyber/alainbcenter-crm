@@ -173,6 +173,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 
     // Step 4: Detect language from message
     const detectedLanguage = detectLanguage(messageText)
+    console.log(`🌐 Detected language: ${detectedLanguage}`)
 
     // Step 5: Check if this is the first message (always reply to first messages)
     const messageCount = await prisma.message.count({
@@ -184,6 +185,12 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     })
 
     const isFirstMessage = messageCount <= 1
+    console.log(`📨 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
+    
+    // For first messages, bypass business hours check
+    if (isFirstMessage && !lead.allowOutsideHours) {
+      console.log(`✅ First message detected - bypassing business hours check`)
+    }
 
     // Step 6: Check if AI can respond (retriever-first chain)
     // Skip retriever check for first messages - always greet and collect info
