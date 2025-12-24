@@ -667,10 +667,11 @@ function InboxPageContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Assignment Dropdown */}
-                    <Select
-                      value={selectedConversation.assignedUser?.id?.toString() || 'ai'}
-                      onChange={async (e) => {
+                    {/* Assignment Dropdown - Only show for ADMIN, MANAGER, or if conversation is assigned to current user */}
+                    {(user?.role === 'ADMIN' || user?.role === 'MANAGER' || selectedConversation.assignedUser?.id === user?.id) && (
+                      <Select
+                        value={selectedConversation.assignedUser?.id?.toString() || 'ai'}
+                        onChange={async (e) => {
                         const value = e.target.value
                         if (!selectedConversation) return
                         
@@ -740,6 +741,7 @@ function InboxPageContent() {
                         </option>
                       )}
                     </Select>
+                    )}
                     {selectedLead && (
                     <Link href={`/leads/${selectedLead.id}`} target="_blank">
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs">
