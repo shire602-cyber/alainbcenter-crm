@@ -408,16 +408,20 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     if (channelUpper === 'WHATSAPP' && lead.contact.phone) {
       try {
-        console.log(`📤 Sending WhatsApp message to ${lead.contact.phone} (lead ${leadId})`)
-        console.log(`📝 Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
+        console.log(`📤 [AUTO-REPLY] Sending WhatsApp message to ${lead.contact.phone} (lead ${leadId})`)
+        console.log(`📝 [AUTO-REPLY] Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
+        console.log(`📞 [AUTO-REPLY] Contact phone number: "${lead.contact.phone}" (length: ${lead.contact.phone.length})`)
         
         const result = await sendTextMessage(lead.contact.phone, aiResult.text)
         
-        console.log(`📨 WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
+        console.log(`✅ [AUTO-REPLY] WhatsApp API call successful:`, { messageId: result?.messageId, waId: result?.waId })
         
         if (!result || !result.messageId) {
+          console.error(`❌ [AUTO-REPLY] WhatsApp API did not return message ID. Response:`, result)
           throw new Error('No message ID returned from WhatsApp API')
         }
+        
+        console.log(`✅ [AUTO-REPLY] WhatsApp message sent successfully. Message ID: ${result.messageId}`)
 
         // Step 7: Save outbound message
         const conversation = await prisma.conversation.findFirst({
