@@ -155,16 +155,24 @@ export async function generateAIAutoresponse(
     })
 
     if (!response.ok) {
-      const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+      const errorText = await response.text().catch(() => 'Unknown error')
+      let error: any
+      try {
+        error = JSON.parse(errorText)
+      } catch {
+        error = { error: errorText }
+      }
+      console.error(`❌ AI draft endpoint failed: ${response.status} - ${error.error || errorText}`)
       return {
         text: '',
         success: false,
-        error: error.error || 'Failed to generate AI reply',
+        error: error.error || errorText || 'Failed to generate AI reply',
       }
     }
 
     const data = await response.json()
     const draftText = data.draftText || data.draft || ''
+    console.log(`✅ AI draft generated: ${draftText.substring(0, 100)}...`)
 
     if (!draftText || draftText.trim().length === 0) {
       return {
