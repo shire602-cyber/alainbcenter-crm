@@ -671,13 +671,16 @@ export async function runAutopilot(
 ): Promise<AutopilotResult> {
   const { dryRun = false, now = new Date() } = options
 
-  // Get all enabled rules
+  // Get all enabled and active rules
   const rules = await prisma.automationRule.findMany({
     where: {
       enabled: true,
+      isActive: true, // CRITICAL: Check both enabled AND isActive
       channel: 'whatsapp',
     },
   })
+  
+  console.log(`📋 Found ${rules.length} active automation rules to process`)
 
   const detailsByRule: AutopilotResult['detailsByRule'] = []
   let totalCandidates = 0
