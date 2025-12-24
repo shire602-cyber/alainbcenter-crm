@@ -38,11 +38,13 @@ import {
   Paperclip,
   X,
   Sparkles as SparklesIcon,
+  UserPlus,
 } from 'lucide-react'
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { AudioMessagePlayer } from '@/components/inbox/AudioMessagePlayer'
+import { Select } from '@/components/ui/select'
 
 type Contact = {
   id: number
@@ -65,6 +67,11 @@ type Conversation = {
     createdAt: string
   } | null
   createdAt: string
+  assignedUser: {
+    id: number
+    name: string
+    email: string
+  } | null
 }
 
 type Message = {
@@ -147,6 +154,9 @@ function InboxPageContent() {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [uploadProgress, setUploadProgress] = useState(0)
   const [showAudioRecorder, setShowAudioRecorder] = useState(false)
+  const [users, setUsers] = useState<Array<{ id: number; name: string; email: string; role: string }>>([])
+  const [user, setUser] = useState<{ id: number; name: string; email: string; role: string } | null>(null)
+  const [assigning, setAssigning] = useState(false)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -178,6 +188,20 @@ function InboxPageContent() {
 
   useEffect(() => {
     loadConversations()
+    // Load current user
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => setUser(data.user))
+      .catch(() => {})
+    // Load users for assignment (if admin)
+    fetch('/api/admin/users')
+      .then(res => res.json())
+      .then(data => {
+        if (data.ok && data.users) {
+          setUsers(data.users)
+        }
+      })
+      .catch(() => {})
   }, [activeChannel])
 
   // Auto-refresh: Poll for new messages every 3 seconds (silent background refresh)
@@ -624,11 +648,11 @@ function InboxPageContent() {
         <BentoCard className="flex-1 flex flex-col rounded-none p-0 overflow-hidden">
           {selectedConversation ? (
             <>
-              <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between">
-                <div className="flex items-center gap-2">
+              <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+                <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Avatar fallback={selectedConversation.contact.fullName || selectedConversation.contact.phone} size="md" />
-                    <div>
-                    <h3 className="text-sm font-semibold tracking-tight">
+                    <div className="flex-1 min-w-0">
+                    <h3 className="text-sm font-semibold tracking-tight truncate">
                       {selectedConversation.contact.fullName && 
                        !selectedConversation.contact.fullName.includes('Unknown') 
                         ? selectedConversation.contact.fullName 
@@ -636,20 +660,95 @@ function InboxPageContent() {
                     </h3>
                     {selectedConversation.contact.fullName && 
                      !selectedConversation.contact.fullName.includes('Unknown') && (
-                      <p className="text-xs text-slate-500 dark:text-400">
+                      <p className="text-xs text-slate-500 dark:text-400 truncate">
                         {selectedConversation.contact.phone}
                       </p>
                     )}
                     </div>
                   </div>
-                  {selectedLead && (
-                  <Link href={`/leads/${selectedLead.id}`} target="_blank">
-                    <Button variant="outline" size="sm" className="gap-1.5 text-xs">
-                      <Eye className="h-3.5 w-3.5" />
+                  <div className="flex items-center gap-2 flex-shrink-0">
+                    {/* Assignment Dropdown */}
+                    <Select
+                      value={selectedConversation.assignedUser?.id?.toString() || 'ai'}
+                      onChange={async (e) => {
+                        const value = e.target.value
+                        if (!selectedConversation) return
+                        
+                        setAssigning(true)
+                        try {
+                          const res = await fetch(`/api/inbox/conversations/${selectedConversation.id}/assign`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({
+                              assignedToAI: value === 'ai',
+                              assignedUserId: value === 'ai' ? null : parseInt(value),
+                            }),
+                          })
+                          
+                          const data = await res.json()
+                          if (res.ok) {
+                            setSuccess(data.message || 'Assignment updated')
+                            setError(null)
+                            // Reload conversations to get updated assignment
+                            await loadConversations()
+                            // Reload selected conversation to get updated assignment
+                            const convRes = await fetch(`/api/inbox/conversations/${selectedConversation.id}`)
+                            if (convRes.ok) {
+                              const convData = await convRes.json()
+                              if (convData.ok && convData.conversation) {
+                                // Map the conversation response to match the Conversation type
+                                const updatedConv: Conversation = {
+                                  id: convData.conversation.id,
+                                  contact: convData.conversation.contact,
+                                  channel: convData.conversation.channel,
+                                  status: convData.conversation.status,
+                                  lastMessageAt: convData.conversation.lastMessageAt,
+                                  unreadCount: convData.conversation.unreadCount || 0,
+                                  lastMessage: convData.conversation.lastMessage,
+                                  createdAt: convData.conversation.createdAt,
+                                  assignedUser: convData.conversation.assignedUser || null,
+                                }
+                                setSelectedConversation(updatedConv)
+                                // Also update in conversations list
+                                setConversations(prev => prev.map(c => 
+                                  c.id === selectedConversation.id ? updatedConv : c
+                                ))
+                              }
+                            }
+                          } else {
+                            setError(data.error || 'Failed to assign conversation')
+                            setSuccess(null)
+                          }
+                        } catch (err: any) {
+                          setError('Failed to assign conversation')
+                        } finally {
+                          setAssigning(false)
+                        }
+                      }}
+                      disabled={assigning}
+                      className="h-8 text-xs min-w-[120px]"
+                    >
+                      <option value="ai">🤖 AI</option>
+                      {user?.role === 'ADMIN' && users.map((u) => (
+                        <option key={u.id} value={u.id.toString()}>
+                          {u.name}
+                        </option>
+                      ))}
+                      {user?.role !== 'ADMIN' && user && (
+                        <option value={user.id.toString()}>
+                          {user.name} (Me)
+                        </option>
+                      )}
+                    </Select>
+                    {selectedLead && (
+                    <Link href={`/leads/${selectedLead.id}`} target="_blank">
+                      <Button variant="outline" size="sm" className="gap-1.5 text-xs">
+                        <Eye className="h-3.5 w-3.5" />
                         View Lead
                       </Button>
                     </Link>
-                  )}
+                    )}
+                  </div>
               </div>
 
               {/* Error/Success Messages */}

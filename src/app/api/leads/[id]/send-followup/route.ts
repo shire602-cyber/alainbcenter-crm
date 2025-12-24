@@ -16,6 +16,28 @@ export async function POST(
     await getCurrentUser()
     const { id } = await params
     const leadId = parseInt(id)
+    
+    // Check if within support hours (7am - 9:30pm Dubai time)
+    const now = new Date()
+    const hour = now.getUTCHours()
+    const minute = now.getUTCMinutes()
+    // Dubai is UTC+4, so 7:00-21:30 Dubai = 3:00-17:30 UTC
+    const dubaiHour = (hour + 4) % 24
+    const dubaiMinute = minute
+    const dubaiTime = dubaiHour * 60 + dubaiMinute // Total minutes since midnight
+    const startTime = 7 * 60 // 7:00 AM = 420 minutes
+    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
+    
+    const isWithinHours = dubaiTime >= startTime && dubaiTime < endTime
+    
+    if (!isWithinHours) {
+      return NextResponse.json(
+        { 
+          error: `Outside support hours. Follow-ups can only be sent between 7am-9:30pm Dubai time. Current time: ${dubaiHour}:${dubaiMinute.toString().padStart(2, '0')} Dubai time.` 
+        },
+        { status: 400 }
+      )
+    }
 
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },

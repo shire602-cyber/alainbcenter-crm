@@ -144,14 +144,32 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
   console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
 
   try {
-    // Step 1: Check if auto-reply should run
-    const shouldReply = await shouldAutoReply(leadId)
+    // Step 1: Check if this is the first message (to pass to shouldAutoReply)
+    // Check for both uppercase and lowercase for backward compatibility
+    let messageCount = await prisma.message.count({
+      where: {
+        leadId: leadId,
+        OR: [
+          { direction: 'INBOUND' },
+          { direction: 'inbound' },
+          { direction: 'IN' }, // Legacy support
+        ],
+        channel: channel.toLowerCase(),
+      },
+    })
+    let isFirstMessage = messageCount <= 1
+    console.log(`📊 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
+    
+    // Step 2: Check if auto-reply should run (with first message context)
+    const shouldReply = await shouldAutoReply(leadId, isFirstMessage)
     if (!shouldReply.shouldReply) {
       console.log(`⏭️ Skipping auto-reply for lead ${leadId}: ${shouldReply.reason}`)
       return { replied: false, reason: shouldReply.reason }
     }
+    
+    console.log(`✅ Auto-reply approved for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
 
-    // Step 2: Check if needs human attention
+    // Step 3: Check if needs human attention
     const humanCheck = needsHumanAttention(messageText)
     if (humanCheck.needsHuman) {
       console.log(`⚠️ Human attention needed for lead ${leadId}: ${humanCheck.reason}`)
@@ -169,7 +187,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: humanCheck.reason }
     }
 
-    // Step 3: Load lead and contact
+    // Step 4: Load lead and contact
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
       include: {
@@ -185,28 +203,14 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: 'Lead or contact not found' }
     }
 
-    // Step 4: Detect language from message
+    // Step 5: Detect language from message
     const detectedLanguage = detectLanguage(messageText)
     console.log(`🌐 Detected language: ${detectedLanguage}`)
 
-    // Step 5: Check if this is the first message (always reply to first messages)
-    const messageCount = await prisma.message.count({
-      where: {
-        leadId: leadId,
-        direction: 'INBOUND',
-        channel: channel.toLowerCase(),
-      },
-    })
-
-    const isFirstMessage = messageCount <= 1
+    // Step 6: Log message count (already determined in Step 1)
     console.log(`📨 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
-    
-    // For first messages, bypass business hours check
-    if (isFirstMessage && !lead.allowOutsideHours) {
-      console.log(`✅ First message detected - bypassing business hours check`)
-    }
 
-    // Step 6: Check if AI can respond (retriever-first chain)
+    // Step 7: Check if AI can respond (retriever-first chain)
     // Skip retriever check for first messages - always greet and collect info
     let retrievalResult: any = null
     if (!isFirstMessage) {
@@ -250,7 +254,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       console.log(`👋 First message detected - sending greeting for lead ${leadId}`)
     }
 
-    // Step 5: Generate AI reply (with language detection)
+    // Step 8: Generate AI reply (with language detection)
     // Use detected language from message
     const aiContext: AIMessageContext = {
       lead,
@@ -281,13 +285,18 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, error: aiResult.error || 'Failed to generate AI reply' }
     }
 
-    // Step 6: Send reply immediately
+    // Step 9: Send reply immediately
     if (channel.toUpperCase() === 'WHATSAPP' && lead.contact.phone) {
       try {
+        console.log(`📤 Sending WhatsApp message to ${lead.contact.phone} (lead ${leadId})`)
+        console.log(`📝 Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
+        
         const result = await sendTextMessage(lead.contact.phone, aiResult.text)
         
+        console.log(`📨 WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
+        
         if (!result || !result.messageId) {
-          throw new Error('No message ID returned from WhatsApp')
+          throw new Error('No message ID returned from WhatsApp API')
         }
 
         // Step 7: Save outbound message
@@ -341,21 +350,27 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           },
         })
 
-        console.log(`✅ Auto-reply sent to lead ${leadId} via ${channel}`)
+        console.log(`✅ Auto-reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
         return { replied: true }
       } catch (error: any) {
-        console.error(`❌ Failed to send auto-reply:`, error)
+        console.error(`❌ Failed to send auto-reply to lead ${leadId}:`, {
+          error: error.message,
+          stack: error.stack,
+          phone: lead.contact.phone,
+          channel: channel,
+        })
         
         // Create task for human
         try {
           await createAgentTask(leadId, 'complex_query', {
             messageText: `Failed to send auto-reply: ${error.message}`,
           })
-        } catch (taskError) {
-          console.error('Failed to create task:', taskError)
+          console.log(`✅ Created agent task for failed auto-reply`)
+        } catch (taskError: any) {
+          console.error('❌ Failed to create agent task:', taskError.message)
         }
         
-        return { replied: false, error: error.message }
+        return { replied: false, error: error.message || 'Unknown error sending message' }
       }
     }
 
