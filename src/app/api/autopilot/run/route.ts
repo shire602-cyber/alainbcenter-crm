@@ -27,26 +27,48 @@ export async function POST(req: NextRequest) {
       console.warn('Failed to create processing log:', logError)
     }
 
-    // In serverless, execute immediately (queue executes jobs immediately anyway)
-    // This ensures the job completes before the response is sent
-    const { enqueueAutomation } = await import('@/lib/queue/automationQueue')
-    const jobId = await enqueueAutomation('autopilot_run', { dryRun, userId: user.id }, {
-      priority: 10, // High priority for manual runs
+    // Execute autopilot directly - don't use queue for manual runs
+    // This ensures we get immediate results and proper error handling
+    console.log('🚀 Running autopilot directly (manual trigger)')
+    const result = await runAutopilot({ dryRun })
+    
+    console.log('✅ Autopilot run completed:', {
+      rules: result.totals.rules,
+      sent: result.totals.sent,
+      skipped: result.totals.skipped,
+      failed: result.totals.failed,
     })
 
-    // Wait a moment for the job to start, then return
-    // The job executes immediately in serverless mode
-    await new Promise(resolve => setTimeout(resolve, 500))
+    // Update log status to completed
+    try {
+      await prisma.automationRunLog.updateMany({
+        where: {
+          ruleKey: 'autopilot_manual_run',
+          status: 'PROCESSING',
+          userId: user.id,
+        },
+        data: {
+          status: 'COMPLETED',
+          message: `Completed: ${result.totals.rules} rules, ${result.totals.sent} sent, ${result.totals.skipped} skipped, ${result.totals.failed} failed`,
+        },
+      })
+    } catch (logError) {
+      console.warn('Failed to update log status:', logError)
+    }
 
-    // Return with job ID - job is executing in background
+    // Return results immediately
     return NextResponse.json({
       ok: true,
-      jobId,
-      message: 'Automation run started successfully',
-      status: 'processing',
-      processing: true, // Indicate that processing is in progress
+      message: 'Automation run completed successfully',
+      status: 'completed',
+      processing: false,
       timestamp: new Date().toISOString(),
-      totals: null, // Results will be available in logs
+      totals: {
+        rules: result.totals.rules || 0,
+        sent: result.totals.sent || 0,
+        skipped: result.totals.skipped || 0,
+        failed: result.totals.failed || 0,
+      },
     })
   } catch (error: any) {
     console.error('Autopilot run error:', error)

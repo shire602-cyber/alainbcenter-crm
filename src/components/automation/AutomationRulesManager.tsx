@@ -188,39 +188,18 @@ export function AutomationRulesManager() {
       const data = await res.json()
 
       if (res.ok && data.ok) {
-        // Check if job is queued/processing
-        if (data.status === 'queued' || data.processing) {
-          setRunResult({
-            success: true,
-            timestamp: data.timestamp || new Date().toISOString(),
-            rulesRun: 0,
-            expiryRemindersSent: 0,
-            followUpsSent: 0,
-            draftsCreated: 0,
-            skippedDuplicates: 0,
-            errors: [],
-            processing: true, // Indicate processing state
-            message: data.message || 'Automation run queued and processing...',
-          })
-          // Poll for results after a delay
-          setTimeout(() => {
-            // Optionally poll the job status endpoint if available
-            loadStats() // Reload stats to see updated logs
-          }, 3000)
-          return
-        }
-        
-        // Map autopilot response to UI format (for completed runs)
+        // Autopilot now runs synchronously and returns results immediately
         const totals = data.totals || {}
         setRunResult({
           success: true,
           timestamp: data.timestamp || new Date().toISOString(),
           rulesRun: totals.rules || 0,
-          expiryRemindersSent: totals.sent || 0, // Autopilot uses 'sent' for all sent messages
+          expiryRemindersSent: totals.sent || 0,
           followUpsSent: totals.sent || 0,
           draftsCreated: totals.sent || 0,
           skippedDuplicates: totals.skipped || 0,
           errors: totals.failed > 0 ? [`${totals.failed} rule(s) failed`] : [],
+          message: data.message || 'Automation run completed successfully',
         })
         // Reload stats after a short delay to ensure log is saved
         setTimeout(() => {
