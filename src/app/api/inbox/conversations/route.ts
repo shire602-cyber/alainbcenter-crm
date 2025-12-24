@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: {
-        lastMessageAt: 'desc',
+        lastInboundAt: 'desc', // Sort by last received message (inbound) for proper ordering
       },
       // Add limit to prevent fetching too many conversations at once
       take: 500, // Reasonable limit for inbox view
@@ -164,6 +164,7 @@ export async function GET(req: NextRequest) {
             channel: conv.channel,
             status: conv.status,
             lastMessageAt: conv.lastMessageAt.toISOString(),
+            lastInboundAt: conv.lastInboundAt?.toISOString() || null,
             unreadCount: conv.unreadCount,
             priorityScore: conv.priorityScore || flags.priorityScore,
             flags: {
@@ -187,13 +188,16 @@ export async function GET(req: NextRequest) {
           }
         })
     
-        // Sort by priorityScore desc (highest priority first), then lastMessageAt desc as tiebreaker
-        formatted.sort((a: { lastMessageAt: string; priorityScore: number }, b: { lastMessageAt: string; priorityScore: number }) => {
-          // Primary sort: priorityScore (descending - higher priority first)
-          if (b.priorityScore !== a.priorityScore) {
-            return b.priorityScore - a.priorityScore
+        // Sort by lastInboundAt (last received message) for proper chronological order
+        // This ensures conversations with the most recent inbound messages appear first
+        formatted.sort((a: any, b: any) => {
+          // Primary sort: lastInboundAt (most recent inbound message first)
+          const inboundA = a.lastInboundAt ? new Date(a.lastInboundAt).getTime() : 0
+          const inboundB = b.lastInboundAt ? new Date(b.lastInboundAt).getTime() : 0
+          if (inboundA !== inboundB) {
+            return inboundB - inboundA // Descending - most recent first
           }
-          // Tiebreaker: lastMessageAt (descending - most recent first)
+          // Fallback: lastMessageAt if lastInboundAt is null
           const timeA = new Date(a.lastMessageAt).getTime()
           const timeB = new Date(b.lastMessageAt).getTime()
           return timeB - timeA
