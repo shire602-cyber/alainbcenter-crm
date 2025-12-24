@@ -47,10 +47,16 @@ export async function POST(req: NextRequest) {
 /**
  * GET /api/admin/automation/worker
  * Get worker status and stats
+ * Always checks persisted state and restores worker if needed
  */
 export async function GET() {
   try {
     const worker = getAutomationWorker()
+    
+    // Always check persisted state first - this will restore the worker if it should be running
+    // This ensures the worker persists across page refreshes and serverless restarts
+    await worker.checkIfRunning()
+    
     const stats = await worker.getStats()
     
     return NextResponse.json({ 
