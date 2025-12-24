@@ -65,7 +65,7 @@ export async function generateDraftReply(
       temperature: 0.7,
       maxTokens: 300,
     }, {
-      leadStage: context.lead?.stage,
+      leadStage: context.lead?.pipelineStage || context.lead?.status || undefined,
       conversationLength: context.messages?.length,
       hasMultipleQuestions: prompt.includes('?') && (prompt.match(/\?/g) || []).length > 1,
     })
