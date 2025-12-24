@@ -547,13 +547,9 @@ export async function POST(req: NextRequest) {
           // Handle unique constraint violation (duplicate message)
           if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
             console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint - NO auto-reply for duplicates`)
-            // NO auto-reply for duplicates - user requirement
-            // Just log and return success
-                console.log(`📊 [WEBHOOK] Auto-reply result for duplicate:`, replyResult)
-              }
-            } catch (autoReplyError: any) {
-              console.error(`❌ [WEBHOOK] Failed to auto-reply for duplicate message:`, autoReplyError.message)
-            }
+            // NO auto-reply for duplicates - user requirement: "duplicate messages from customer shouldn't get replies"
+            // Just return success without triggering auto-reply
+            return NextResponse.json({ ok: true, duplicate: true })
           } else {
             console.error(`❌ [WEBHOOK] Error processing inbound message:`, {
               error: error.message,
