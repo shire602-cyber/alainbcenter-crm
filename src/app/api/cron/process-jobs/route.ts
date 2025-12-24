@@ -39,11 +39,11 @@ export async function POST(req: NextRequest) {
     // Get worker and process jobs
     const worker = getAutomationWorker()
     
-    // Initialize worker state from database
-    await worker.initialize()
+    // Check and restore worker state from database if needed
+    const isRunning = await worker.checkIfRunning()
     
     // If worker is running, process jobs
-    if (worker.isActive()) {
+    if (isRunning || worker.isActive()) {
       // Trigger job processing (this will process pending jobs)
       const stats = await worker.getStats()
       console.log(`📦 Processing automation jobs: ${stats.pending} pending, ${stats.processing} processing`)
