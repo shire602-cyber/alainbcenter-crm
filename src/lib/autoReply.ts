@@ -72,24 +72,9 @@ async function shouldAutoReply(leadId: number): Promise<{ shouldReply: boolean; 
     }
   }
 
-  // Check business hours (if not allowed outside hours)
-  // For first messages, always allow (business hours check is too strict)
-  if (!lead.allowOutsideHours) {
-    const now = new Date()
-    const hour = now.getUTCHours()
-    const dubaiHour = (hour + 4) % 24
-    console.log(`🕐 Current time: UTC ${hour}:00, Dubai ${dubaiHour}:00`)
-    
-    // Allow replies during business hours OR if it's a first message (checked later)
-    if (dubaiHour < 9 || dubaiHour >= 18) {
-      // Don't block - we'll check if it's first message later
-      console.log(`⚠️ Outside business hours, but will check if first message`)
-    }
-  } else {
-    console.log(`✅ Outside hours allowed for lead ${leadId}`)
-  }
-
-  console.log(`✅ Auto-reply check passed for lead ${leadId}`)
+  // Business hours check removed - auto-reply works 24/7
+  // This is especially important for marketing campaigns where first contact can happen anytime
+  console.log(`✅ Auto-reply check passed for lead ${leadId} (24/7 enabled)`)
   return { shouldReply: true }
 }
 
@@ -236,7 +221,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       console.log(`👋 First message detected - sending greeting for lead ${leadId}`)
     }
 
-    // Step 5: Generate AI reply
+    // Step 5: Generate AI reply (with language detection)
+    // Use detected language from message
     const aiContext: AIMessageContext = {
       lead,
       contact: lead.contact,
@@ -247,8 +233,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       })),
       mode: 'QUALIFY' as AIMessageMode, // Default mode
       channel: channel.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT',
+      language: detectedLanguage, // Pass detected language to AI context
     }
 
+    console.log(`🤖 Generating AI reply with language: ${detectedLanguage}`)
     const aiResult = await generateAIAutoresponse(aiContext)
 
     if (!aiResult.success || !aiResult.text) {
