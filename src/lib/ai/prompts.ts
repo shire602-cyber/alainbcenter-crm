@@ -181,11 +181,59 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
     prompt += `No lead created yet - this is a new inquiry.\n\n`
   }
 
-  prompt += `Recent Conversation (last ${messages.length} messages):\n`
-  messages.slice(-5).forEach((msg, idx) => {
-    const messageText = (msg.message || '').substring(0, 200)
-    prompt += `${idx + 1}. [${msg.direction.toUpperCase()}] ${messageText}\n`
+  // Build comprehensive conversation history with clear extraction of provided information
+  prompt += `\n=== CONVERSATION HISTORY (READ CAREFULLY) ===\n`
+  const providedInfo: string[] = []
+  messages.slice(-10).forEach((msg, idx) => {
+    const messageText = (msg.message || '').substring(0, 300)
+    const direction = msg.direction.toUpperCase()
+    prompt += `${idx + 1}. [${direction}] ${messageText}\n`
+    
+    // Extract information that was already provided
+    const lowerText = messageText.toLowerCase()
+    if (direction === 'INBOUND' || direction === 'IN') {
+      // Extract nationality mentions
+      if (lowerText.includes('nationality') || lowerText.includes('from') || lowerText.includes('i am') || lowerText.includes('i\'m')) {
+        const nationalityMatch = messageText.match(/(?:nationality|from|i am|i'm)\s+(?:is\s+)?([a-z\s]+)/i)
+        if (nationalityMatch && nationalityMatch[1]) {
+          const nationality = nationalityMatch[1].trim()
+          if (nationality.length > 2 && nationality.length < 30) {
+            providedInfo.push(`Nationality: ${nationality}`)
+          }
+        }
+      }
+      // Extract service mentions
+      if (lowerText.includes('visa') || lowerText.includes('business') || lowerText.includes('setup') || lowerText.includes('renewal')) {
+        if (lowerText.includes('visit visa')) providedInfo.push('Service: Visit Visa')
+        if (lowerText.includes('family visa')) providedInfo.push('Service: Family Visa')
+        if (lowerText.includes('business')) providedInfo.push('Service: Business Setup')
+        if (lowerText.includes('renewal')) providedInfo.push('Service: Renewal')
+      }
+      // Extract location
+      if (lowerText.includes('inside') || lowerText.includes('outside') || lowerText.includes('in uae') || lowerText.includes('outside uae')) {
+        if (lowerText.includes('outside')) providedInfo.push('Location: Outside UAE')
+        if (lowerText.includes('inside')) providedInfo.push('Location: Inside UAE')
+      }
+      // Extract passport info
+      if (lowerText.includes('passport')) {
+        providedInfo.push('Passport: Mentioned')
+      }
+      // Extract price queries
+      if (lowerText.includes('price') || lowerText.includes('cost') || lowerText.includes('how much')) {
+        providedInfo.push('Asked about: Pricing')
+      }
+    }
   })
+  
+  if (providedInfo.length > 0) {
+    prompt += `\n=== INFORMATION ALREADY PROVIDED (DO NOT ASK AGAIN) ===\n`
+    providedInfo.forEach(info => {
+      prompt += `- ${info}\n`
+    })
+    prompt += `\nCRITICAL: Do NOT ask for information that is already listed above. If nationality is listed, do NOT ask "what's your nationality?" again.\n`
+  }
+  
+  prompt += `=== END CONVERSATION HISTORY ===\n\n`
 
   // Check if this is first message (no outbound messages yet)
   const hasOutboundMessages = messages.some(m => m.direction === 'OUTBOUND' || m.direction === 'outbound')
