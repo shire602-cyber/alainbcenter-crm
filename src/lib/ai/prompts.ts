@@ -116,7 +116,7 @@ export async function buildDraftReplyPrompt(
         }
       } else {
         // Retrieve training documents now
-        const similarityThreshold = agent?.similarityThreshold ?? 0.5
+        const similarityThreshold = agent?.similarityThreshold ?? 0.25
         searchResults = await searchTrainingDocuments(queryText, {
         topK: 5,
         similarityThreshold,
@@ -151,11 +151,11 @@ export async function buildDraftReplyPrompt(
         trainingContext += '8. If the training documents conflict with general instructions, ALWAYS prioritize the training documents\n\n'
       } else {
         // Even if no training documents found, try with lower threshold
-        console.warn(`⚠️ No training documents found, trying with lower threshold 0.4`)
+        console.warn(`⚠️ No training documents found, trying with lower threshold 0.1`)
         try {
           const lowerThresholdResults = await searchTrainingDocuments(queryText, {
             topK: 5,
-            similarityThreshold: 0.4, // Much lower threshold
+            similarityThreshold: 0.1, // Very low threshold to force retrieval
             trainingDocumentIds: agent?.trainingDocumentIds || undefined,
           })
           
