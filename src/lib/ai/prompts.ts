@@ -151,7 +151,7 @@ export async function buildDraftReplyPrompt(
         trainingContext += '8. If the training documents conflict with general instructions, ALWAYS prioritize the training documents\n\n'
       } else {
         // Even if no training documents found, try with lower threshold
-        console.warn(`⚠️ No training documents found, trying with lower threshold 0.4`)
+        console.warn(`⚠️ No training documents found, trying with lower threshold 0.1`)
         try {
           const lowerThresholdResults = await searchTrainingDocuments(queryText, {
             topK: 5,
