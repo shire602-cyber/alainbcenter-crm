@@ -359,6 +359,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 
     // Step 7: Check if AI can respond (retriever-first chain)
     // Skip retriever check for first messages - always greet and collect info
+    // For follow-ups, only block if it's clearly out of scope (spam, abuse, etc.)
     let retrievalResult: any = null
     if (!isFirstMessage) {
       try {
@@ -367,8 +368,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           topK: 5,
         })
 
-        if (!retrievalResult.canRespond) {
-          // Mark lead and notify users
+        // Only block if it's clearly spam/abuse/out of scope - not for normal visa/service questions
+        if (!retrievalResult.canRespond && retrievalResult.reason?.toLowerCase().includes('spam')) {
+          // Mark lead and notify users only for spam/abuse
           await markLeadRequiresHuman(leadId, retrievalResult.reason, messageText)
           
           const conversation = await prisma.conversation.findFirst({
@@ -386,15 +388,14 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             retrievalResult.reason
           )
           
-          return { replied: false, reason: 'AI not trained on this subject' }
+          return { replied: false, reason: 'Message flagged as spam/abuse' }
         }
+        // For normal service questions (like "I want visit visa"), continue even if similarity is low
+        console.log(`✅ Continuing with reply despite low similarity - treating as normal service inquiry`)
       } catch (retrievalError: any) {
-        // If retrieval fails, log but continue for first messages
-        console.warn('Retriever chain error (non-blocking):', retrievalError.message)
-        if (!isFirstMessage) {
-          // For non-first messages, fail if retrieval errors
-          return { replied: false, reason: 'Failed to check AI training' }
-        }
+        // If retrieval fails, log but ALWAYS continue - don't block replies
+        console.warn('Retriever chain error (non-blocking, continuing):', retrievalError.message)
+        // Don't return - always allow reply to proceed
       }
     } else {
       // First message - always respond with greeting
