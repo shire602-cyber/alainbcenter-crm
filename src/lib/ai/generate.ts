@@ -65,7 +65,9 @@ export async function generateDraftReply(
   context: ConversationContext,
   tone: 'professional' | 'friendly' | 'short',
   language: 'en' | 'ar' = 'en',
-  agent?: import('../ai/agentProfile').AgentProfile
+  agent?: import('../ai/agentProfile').AgentProfile,
+  currentMessageText?: string, // Optional: current inbound message text
+  preRetrievedDocs?: any // Optional: pre-retrieved training documents
 ): Promise<DraftReplyResult> {
   // Check if any LLM is configured
   const config = await getAIConfig()
@@ -73,7 +75,7 @@ export async function generateDraftReply(
     throw new Error('AI not configured. Please set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY, or configure integrations.')
   }
 
-  const prompt = await buildDraftReplyPrompt(context, tone, language, agent)
+  const prompt = await buildDraftReplyPrompt(context, tone, language, agent, currentMessageText, preRetrievedDocs)
 
   try {
     // Use agent's system prompt if available, otherwise use default
