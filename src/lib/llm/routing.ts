@@ -151,9 +151,11 @@ export class RoutingService {
       const isFallback = i > 0
 
       try {
-        console.log(`🔄 Trying ${provider.name}${isFallback ? ' (fallback)' : ' (primary)'}`)
+        console.log(`🔄 [LLM-ROUTING] Trying ${provider.name}${isFallback ? ' (fallback)' : ' (primary)'} for task: ${taskType}`)
         
         const result = await provider.complete(messages, options)
+        
+        console.log(`✅ [LLM-ROUTING] ${provider.name} succeeded: ${result.text.substring(0, 100)}...`)
 
         // Create decision
         const decision: LLMRoutingDecision = {

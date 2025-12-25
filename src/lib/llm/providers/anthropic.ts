@@ -44,11 +44,17 @@ export class AnthropicProvider implements LLMProvider {
     messages: LLMMessage[],
     options: LLMCompletionOptions = {}
   ): Promise<LLMCompletionResult> {
+    // Ensure API key is loaded
     if (!this.apiKey) {
       const available = await this.isAvailable()
-      if (!available) {
+      if (!available || !this.apiKey) {
         throw new Error('Anthropic API key not configured. Set ANTHROPIC_API_KEY or configure Anthropic integration.')
       }
+    }
+
+    // Double-check API key is set (TypeScript safety)
+    if (!this.apiKey) {
+      throw new Error('Anthropic API key is null after availability check')
     }
 
     try {
