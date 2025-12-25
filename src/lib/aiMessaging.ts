@@ -200,12 +200,15 @@ export async function generateAIAutoresponse(
     })
 
     if (!conversation) {
+      console.error(`❌ [AI-GEN] CRITICAL: No conversation found for lead ${lead.id}, contact ${contact.id}, channel ${channel}`)
+      console.error(`❌ [AI-GEN] This will cause AI generation to fail!`)
       return {
         text: '',
         success: false,
-        error: 'No conversation found',
+        error: `No conversation found for lead ${lead.id}, contact ${contact.id}, channel ${channel}`,
       }
     }
+    console.log(`✅ [AI-GEN] Found conversation: ${conversation.id}`)
 
     // Generate structured conversation flow reply
     // Check if this is first message
@@ -270,15 +273,25 @@ export async function generateAIAutoresponse(
       taskType = 'complex'
     }
     
-    console.log(`🤖 Generating AI reply using ${tone} tone, ${detectedLanguage} language, task: ${taskType}`)
+    console.log(`🤖 [AI-GEN] Generating AI reply using ${tone} tone, ${detectedLanguage} language, task: ${taskType}`)
     console.log(`🤖 [AI-GEN] Conversation context:`, {
       leadId: lead.id,
       contactName: contact?.fullName,
       messageCount: conversationContext.messages?.length || 0,
       lastMessage: conversationContext.messages?.[conversationContext.messages.length - 1]?.message?.substring(0, 100),
     })
+    console.log(`🚀 [AI-GEN] About to call generateDraftReply - this is the critical AI call!`)
     
-    const aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar', agent)
+    let aiDraftResult
+    try {
+      aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar', agent)
+      console.log(`✅ [AI-GEN] generateDraftReply succeeded`)
+    } catch (draftError: any) {
+      console.error(`❌ [AI-GEN] CRITICAL ERROR: generateDraftReply threw exception!`)
+      console.error(`❌ [AI-GEN] Error: ${draftError.message}`)
+      console.error(`❌ [AI-GEN] Stack:`, draftError.stack)
+      throw draftError
+    }
     
     const draftText = aiDraftResult.text
     console.log(`✅ [AI-GEN] AI-generated reply for lead ${lead.id}: "${draftText.substring(0, 100)}..."`)
