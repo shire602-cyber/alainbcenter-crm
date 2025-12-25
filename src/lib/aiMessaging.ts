@@ -283,9 +283,22 @@ export async function generateAIAutoresponse(
     })
     console.log(`🚀 [AI-GEN] About to call generateDraftReply - this is the critical AI call!`)
     
+    // Get current message text for better training document retrieval
+    const currentMessageText = recentMessages.length > 0 && recentMessages[0]?.direction === 'INBOUND'
+      ? recentMessages[0]?.body || ''
+      : undefined
+    
     let aiDraftResult
     try {
-      aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar', agent)
+      // Pass retrieval result and current message text to use training documents
+      aiDraftResult = await generateDraftReply(
+        conversationContext, 
+        tone, 
+        detectedLanguage as 'en' | 'ar', 
+        agent,
+        currentMessageText, // Pass current message for better training doc retrieval
+        retrievalResult // Pass pre-retrieved training documents
+      )
       console.log(`✅ [AI-GEN] generateDraftReply succeeded`)
     } catch (draftError: any) {
       console.error(`❌ [AI-GEN] CRITICAL ERROR: generateDraftReply threw exception!`)
