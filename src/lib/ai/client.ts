@@ -31,7 +31,7 @@ export async function getAIConfig(): Promise<AIConfig | null> {
       }
     }
 
-    // Fallback to OpenAI
+    // Fallback to OpenAI integration (which might be configured for Groq or other providers)
     const openaiIntegration = await prisma.integration.findUnique({
       where: { name: 'openai' },
     })
@@ -42,9 +42,13 @@ export async function getAIConfig(): Promise<AIConfig | null> {
       } catch {
         config = {}
       }
+      // Use provider from config if specified, otherwise default to 'openai'
+      const provider = (config.provider || 'openai') as 'openai' | 'groq' | 'anthropic'
+      const model = config.model || (provider === 'groq' ? 'llama-3.1-70b-versatile' : provider === 'anthropic' ? 'claude-3-5-sonnet-20241022' : 'gpt-4o-mini')
+      
       return {
-        provider: (config.provider || 'openai') as 'openai' | 'groq' | 'anthropic',
-        model: config.model || 'gpt-4o-mini',
+        provider,
+        model,
         apiKey: openaiIntegration.apiKey,
       }
     }
