@@ -130,7 +130,7 @@ export async function buildDraftReplyPrompt(
         trainingContext += '🚨 DO NOT MAKE UP INFORMATION. USE ONLY WHAT IS IN THE TRAINING DOCUMENTS BELOW.\n'
         trainingContext += '🚨 IF THE USER ASKS ABOUT PRICING, SERVICES, REQUIREMENTS, OR PROCEDURES, USE THE EXACT INFORMATION FROM BELOW.\n\n'
         
-        searchResults.documents.forEach((doc, idx) => {
+        searchResults.documents.forEach((doc: any, idx: number) => {
           const similarity = searchResults.scores[idx] || 0
           // Defensive checks for metadata fields (should always exist per VectorDocument type, but safe to check)
           const docType = doc.metadata?.type || 'guidance'
