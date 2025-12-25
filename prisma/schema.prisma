@@ -290,6 +290,7 @@ model Conversation {
   assignedUser     User?     @relation(fields: [assignedUserId], references: [id])
   unreadCount      Int       @default(0)
   lockedService    String?   // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
+  ruleEngineMemory String?   // JSON: Rule engine conversation memory (name, service, nationality, etc.)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
