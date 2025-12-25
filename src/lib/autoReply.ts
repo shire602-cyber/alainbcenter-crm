@@ -49,9 +49,10 @@ async function shouldAutoReply(
     console.log(`🤖 Using agent profile: ${agent.name} (ID: ${agent.id})`)
   }
 
+  // Fetch lead with all fields (fields exist in schema but Prisma types may not be updated)
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-  })
+  }) as any // Type assertion: fields exist in DB schema (autoReplyEnabled, mutedUntil, lastAutoReplyAt, allowOutsideHours)
 
   if (!lead) {
     console.log(`❌ Lead ${leadId} not found`)
@@ -430,9 +431,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           trainingDocumentIds: agent?.trainingDocumentIds || undefined,
         })
 
-        // Only block if it's clearly spam/abuse/out of scope - not for normal visa/service questions
-        if (!retrievalResult.canRespond && retrievalResult.reason?.toLowerCase().includes('spam')) {
-          // Mark lead and notify users only for spam/abuse
+        // Block if AI cannot respond AND requires human intervention
+        // This includes: no training found, subject tag mismatch, low similarity, errors, etc.
+        if (!retrievalResult.canRespond && retrievalResult.requiresHuman) {
+          // Mark lead and notify users for all out-of-scope queries
           await markLeadRequiresHuman(leadId, retrievalResult.reason, messageText)
           
           const conversation = await prisma.conversation.findFirst({
@@ -450,10 +452,49 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             retrievalResult.reason
           )
           
-          return { replied: false, reason: 'Message flagged as spam/abuse' }
+          // Send suggested response if available, otherwise use default
+          if (retrievalResult.suggestedResponse) {
+            // Send the suggested response before blocking
+            try {
+              const { sendTextMessage } = await import('./whatsapp')
+              const phoneNumber = lead.contact?.phone || null
+              if (phoneNumber && channel.toUpperCase() === 'WHATSAPP') {
+                await sendTextMessage(phoneNumber, retrievalResult.suggestedResponse)
+                // Save the message
+                if (conversation) {
+                  await prisma.message.create({
+                    data: {
+                      conversationId: conversation.id,
+                      leadId: leadId,
+                      contactId: contactId,
+                      direction: 'OUTBOUND',
+                      channel: channel.toLowerCase(),
+                      type: 'text',
+                      body: retrievalResult.suggestedResponse,
+                      status: 'SENT',
+                      rawPayload: JSON.stringify({
+                        automation: true,
+                        autoReply: true,
+                        aiGenerated: false,
+                        requiresHuman: true,
+                        reason: retrievalResult.reason,
+                      }),
+                      sentAt: new Date(),
+                    },
+                  })
+                }
+              }
+            } catch (sendError: any) {
+              console.error('Failed to send suggested response:', sendError.message)
+            }
+          }
+          
+          return { replied: false, reason: retrievalResult.reason || 'Message requires human intervention' }
         }
-        // For normal service questions (like "I want visit visa"), continue even if similarity is low
-        console.log(`✅ Continuing with reply despite low similarity - treating as normal service inquiry`)
+        // If canRespond is false but requiresHuman is also false, log and continue
+        if (!retrievalResult.canRespond && !retrievalResult.requiresHuman) {
+          console.log(`⚠️ Retrieval result indicates cannot respond but doesn't require human - continuing anyway`)
+        }
       } catch (retrievalError: any) {
         // If retrieval fails, log but ALWAYS continue - don't block replies
         console.warn('Retriever chain error (non-blocking, continuing):', retrievalError.message)

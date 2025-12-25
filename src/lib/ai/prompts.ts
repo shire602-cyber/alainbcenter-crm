@@ -62,7 +62,8 @@ export async function buildDraftReplyPrompt(
   let trainingContext = ''
   try {
     const { searchTrainingDocuments } = await import('./vectorStore')
-    const lastMessage = messages[messages.length - 1]?.message || ''
+    // Get the actual latest message (messages are sorted chronologically, last one is latest)
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1]?.message || '' : ''
     
     if (lastMessage && lastMessage.trim().length > 0) {
       const similarityThreshold = agent?.similarityThreshold ?? 0.6
@@ -165,7 +166,7 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
     const agentName = agent?.name || 'an assistant'
     prompt += `\nThis is the FIRST message from the customer. Generate a friendly greeting that:
 1. Welcomes them to Al Ain Business Center
-2. Introduces yourself by name: "I'm ${agentName}" (use the agent name: ${agentName})
+2. Introduces yourself by name: "I'm ${agentName}" (MUST include: ${agentName})
 3. Asks for ONLY ${maxQuestions} piece${maxQuestions > 1 ? 's' : ''} of information:
    - Full name
    ${maxQuestions > 1 ? '- What service do you need? (examples: Family Visa, Business Setup, Visit Visa, etc. - NEVER mention Employment Visa)\n' : ''}
@@ -178,41 +179,62 @@ ${agent?.customGreeting ? `9. Use or adapt this greeting style: "${agent.customG
 
 Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm ${agentName}. To help you, please share: 1) Your full name${maxQuestions > 1 ? ' 2) What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)' : ''}"
 
-CRITICAL: You MUST include your name "${agentName}" in the greeting. Reply only with the message text, no explanations or metadata.`
+CRITICAL: You MUST include your name "${agentName}" in the greeting. The greeting must start with "I'm ${agentName}" or similar. Reply only with the message text, no explanations or metadata.`
   } else {
     // FOLLOW-UP MESSAGE
-    // Get the most recent inbound message (sort by createdAt desc, take first)
-    const inboundMessages = messages
-      .filter(m => m.direction === 'INBOUND' || m.direction === 'inbound')
-      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
-    const lastUserMessage = inboundMessages[0]?.message || ''
+    // Get the most recent inbound message - messages are sorted ascending, so last one is latest
+    const allInboundMessages = messages.filter(m => m.direction === 'INBOUND' || m.direction === 'inbound' || m.direction === 'IN')
+    const lastUserMessage = allInboundMessages.length > 0 
+      ? allInboundMessages[allInboundMessages.length - 1]?.message || ''
+      : messages[messages.length - 1]?.message || '' // Fallback to last message if no inbound found
     
     // Check if documents are uploaded
     const hasDocuments = lead && lead.id ? await checkIfLeadHasDocuments(lead.id) : false
     
     const agentName = agent?.name || 'an assistant'
-    prompt += `\nIMPORTANT: The user's latest message is: "${lastUserMessage}"
-${hasDocuments ? '\nNOTE: The customer has uploaded documents. If they are asking about documents, acknowledge that you have received them.\n' : ''}
+    
+    // Build a very explicit instruction
+    prompt += `\n\n=== CRITICAL INSTRUCTIONS ===
+The user's LATEST message (most recent) is: "${lastUserMessage}"
+
+YOU MUST:
+1. Start your reply by acknowledging what they just said. For example:
+   - If they said "visit visa" → "Great! I can help you with visit visa services."
+   - If they said "how much visit visa?" → "For visit visa pricing, I need a few details..."
+   - If they said "hello" → "Hello! How can I assist you today?"
+
+2. NEVER send a generic message like "Hi, thank you for your interest. Please share: 1. What service... 2. Timeline..."
+   This is WRONG and REPETITIVE.
+
+3. Your reply MUST be DIFFERENT from previous messages. Check the conversation history above - do NOT repeat the same questions.
+
+4. If they already mentioned a service (like "visit visa"), acknowledge it and ask for SPECIFIC next information needed for that service.
+
+5. Always sign off with your name: "${agentName}"
+   Example: "Best regards, ${agentName}" or "Thanks, ${agentName}"
+
+${hasDocuments ? '6. NOTE: Documents have been uploaded. If they ask about documents, acknowledge receipt.\n' : ''}
+=== END CRITICAL INSTRUCTIONS ===\n\n
 
 Generate a WhatsApp-ready reply that:
-1. DIRECTLY responds to what the user just said - address their specific request/question/statement
-2. If they mentioned a service (e.g., "visit visa", "family visa"), acknowledge it and provide relevant next steps
-3. If they asked a question, answer it directly and briefly
-4. If they asked about documents${hasDocuments ? ', acknowledge that documents have been received and are being reviewed' : ', let them know what documents are needed'}
-5. If they provided information, acknowledge it and ask for the NEXT piece of information needed
-6. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (NOT ${maxQuestions + 2}-${maxQuestions + 4}, MAX ${maxQuestions})
-7. Highlights urgency if expiry date is close
-8. Includes a clear CTA (e.g., "Reply with your nationality", "Share your expiry date")
-9. Keeps it SHORT (under ${maxMessageLength} characters, max ${maxTotalLength} total)
-10. NEVER promises approvals, guarantees, or outcomes
-11. Uses ${tone} tone
-12. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
-13. Signs off with your name: "${agentName}" (e.g., "Best regards, ${agentName}" or "Thanks, ${agentName}")
-${agent?.customSignoff ? `14. End with or adapt this signoff style: "${agent.customSignoff}"\n` : ''}
+1. STARTS by directly acknowledging their latest message: "${lastUserMessage}"
+2. If they mentioned "visit visa" or asked about visit visa pricing, respond SPECIFICALLY about visit visas
+3. If they asked a question (like "how much?"), answer it directly or explain what info you need to provide pricing
+4. If they provided information, acknowledge it and ask for the NEXT specific piece needed
+5. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing
+6. Keeps it SHORT (under ${maxMessageLength} characters)
+7. NEVER promises approvals or guarantees
+8. Uses ${tone} tone
+9. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+10. MUST end with: "Best regards, ${agentName}" or similar with your name
 
-CRITICAL: Do NOT send a generic message. Your reply MUST be specific to what the user just said. If they said "visit visa", respond about visit visas. If they said "I want visa", acknowledge their interest and ask which type of visa. Always include your name "${agentName}" in the signoff.
+CRITICAL REMINDER: Your reply must be SPECIFIC to "${lastUserMessage}". Do NOT use a generic template.`
 
-Reply only with the message text, no explanations or metadata.`
+    if (agent?.customSignoff) {
+      prompt += `\n\nCustom signoff style: "${agent.customSignoff}"`
+    }
+    
+    prompt += `\n\nReply ONLY with the message text, no explanations or metadata.`
   }
 
   return prompt
