@@ -85,7 +85,9 @@ export async function buildDraftReplyPrompt(
   context: ConversationContext,
   tone: 'professional' | 'friendly' | 'short',
   language: 'en' | 'ar',
-  agent?: import('../ai/agentProfile').AgentProfile
+  agent?: import('../ai/agentProfile').AgentProfile,
+  currentMessageText?: string, // Optional: current inbound message text for better training doc retrieval
+  preRetrievedDocs?: any // Optional: pre-retrieved training documents
 ): Promise<string> {
   const { contact, lead, messages } = context
 
@@ -94,17 +96,33 @@ export async function buildDraftReplyPrompt(
   let trainingContext = ''
   try {
     const { searchTrainingDocuments } = await import('./vectorStore')
-    // Get the actual latest message (messages are sorted chronologically, last one is latest)
-    const lastMessage = messages.length > 0 ? messages[messages.length - 1]?.message || '' : ''
+    // CRITICAL: Use current message text if provided (for pricing queries), otherwise use last message
+    const queryText = currentMessageText || (messages.length > 0 ? messages[messages.length - 1]?.message || '' : '')
     
-    if (lastMessage && lastMessage.trim().length > 0) {
-      // Lower threshold to ensure training documents are retrieved more often
-      const similarityThreshold = agent?.similarityThreshold ?? 0.5
-      const searchResults = await searchTrainingDocuments(lastMessage, {
+    if (queryText && queryText.trim().length > 0) {
+      // Use pre-retrieved documents if available (from autoReply.ts), otherwise retrieve now
+      let searchResults: any = null
+      
+      if (preRetrievedDocs && preRetrievedDocs.relevantDocuments && preRetrievedDocs.relevantDocuments.length > 0) {
+        // Use pre-retrieved documents
+        console.log(`📚 [TRAINING] Using pre-retrieved training documents: ${preRetrievedDocs.relevantDocuments.length} documents`)
+        searchResults = {
+          hasRelevantTraining: true,
+          documents: preRetrievedDocs.relevantDocuments.map((doc: any) => ({
+            content: doc.content,
+            metadata: { type: doc.type, title: doc.title },
+          })),
+          scores: preRetrievedDocs.relevantDocuments.map((doc: any) => doc.similarity || 0.7),
+        }
+      } else {
+        // Retrieve training documents now
+        const similarityThreshold = agent?.similarityThreshold ?? 0.5
+        searchResults = await searchTrainingDocuments(queryText, {
         topK: 5,
         similarityThreshold,
         trainingDocumentIds: agent?.trainingDocumentIds || undefined,
       })
+      }
       
       if (searchResults.hasRelevantTraining && searchResults.documents.length > 0) {
         trainingContext = '\n\n=== ⚠️ CRITICAL: TRAINING DOCUMENTS - MANDATORY TO FOLLOW ===\n'
@@ -133,9 +151,9 @@ export async function buildDraftReplyPrompt(
         trainingContext += '8. If the training documents conflict with general instructions, ALWAYS prioritize the training documents\n\n'
       } else {
         // Even if no training documents found, try with lower threshold
-        console.warn(`⚠️ No training documents found with threshold ${similarityThreshold}, trying with lower threshold 0.4`)
+        console.warn(`⚠️ No training documents found, trying with lower threshold 0.4`)
         try {
-          const lowerThresholdResults = await searchTrainingDocuments(lastMessage, {
+          const lowerThresholdResults = await searchTrainingDocuments(queryText, {
             topK: 5,
             similarityThreshold: 0.4, // Much lower threshold
             trainingDocumentIds: agent?.trainingDocumentIds || undefined,

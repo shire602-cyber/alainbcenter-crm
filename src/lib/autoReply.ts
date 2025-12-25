@@ -621,7 +621,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       })
       
       const startTime = Date.now()
-      aiResult = await generateAIAutoresponse(aiContext, agent)
+      // Pass retrieval result to AI generation so it can use training documents
+      aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
       const duration = Date.now() - startTime
       console.log(`⏱️ [AI-GEN] AI generation took ${duration}ms`)
       
