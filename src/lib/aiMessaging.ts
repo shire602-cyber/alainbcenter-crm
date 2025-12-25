@@ -306,11 +306,22 @@ export async function generateAIAutoresponse(
       confidence: Math.max(0, Math.min(100, confidence)), // Clamp between 0-100
     }
   } catch (error: any) {
-    console.error('Error generating AI autoresponse:', error)
+    const errorMessage = error.message || 'Failed to generate AI reply'
+    console.error('❌ [AI-GEN] Error generating AI autoresponse:', errorMessage)
+    console.error('❌ [AI-GEN] Stack:', error.stack)
+    
+    // Provide more specific error message
+    let detailedError = errorMessage
+    if (errorMessage.includes('not configured') || errorMessage.includes('AI not configured')) {
+      detailedError = 'AI not configured. Please set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in environment variables or configure in admin integrations.'
+    } else if (errorMessage.includes('API') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+      detailedError = `AI API error: ${errorMessage}. Check API key validity and network connectivity.`
+    }
+    
     return {
       text: '',
       success: false,
-      error: error.message || 'Failed to generate AI reply',
+      error: detailedError,
       confidence: 0, // No confidence on error
     }
   }

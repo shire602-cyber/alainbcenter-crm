@@ -625,14 +625,24 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       aiResult = await generateAIAutoresponse(aiContext, agent)
       
       if (!aiResult || !aiResult.success || !aiResult.text) {
-        console.error(`⚠️ [AI-GEN] AI generation failed or returned empty:`, {
+        const errorMsg = aiResult?.error || 'Unknown error'
+        console.error(`❌ [AI-GEN] AI generation FAILED:`, {
           success: aiResult?.success,
-          error: aiResult?.error,
+          error: errorMsg,
           hasText: !!aiResult?.text,
           messageText: messageText.substring(0, 100),
           leadId,
         })
-        console.error(`⚠️ [AI-GEN] This will trigger context-aware fallback based on: "${messageText.substring(0, 100)}"`)
+        
+        // Check if error is about AI not being configured
+        if (errorMsg.includes('not configured') || errorMsg.includes('AI not configured')) {
+          console.error(`🚨 [AI-CONFIG] CRITICAL: AI is NOT configured! Set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in environment variables or configure in admin integrations.`)
+          console.error(`🚨 [AI-CONFIG] Using minimal fallback because AI is not available.`)
+        } else {
+          console.error(`⚠️ [AI-GEN] AI generation error (not config issue): ${errorMsg}`)
+        }
+        
+        console.error(`⚠️ [AI-GEN] This will trigger minimal fallback based on: "${messageText.substring(0, 100)}"`)
         usedFallback = true
       } else if (aiResult && aiResult.text) {
         const replyText = aiResult.text // Store in local variable for type narrowing
