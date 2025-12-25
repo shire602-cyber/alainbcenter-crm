@@ -781,7 +781,6 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       let fallbackText = ''
       
       const userMessage = messageText.toLowerCase().trim()
-      const contactName = lead.contact?.fullName || 'there'
       
       // Check if this is a business setup/license question
       const isLicenseQuestion = userMessage.includes('license') || userMessage.includes('trading license') || 
