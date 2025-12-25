@@ -152,10 +152,12 @@ export class RoutingService {
 
       try {
         console.log(`🔄 [LLM-ROUTING] Trying ${provider.name}${isFallback ? ' (fallback)' : ' (primary)'} for task: ${taskType}`)
+        console.log(`🚀 [LLM-ROUTING] Making API call to ${provider.name}...`)
         
         const result = await provider.complete(messages, options)
         
         console.log(`✅ [LLM-ROUTING] ${provider.name} succeeded: ${result.text.substring(0, 100)}...`)
+        console.log(`✅ [LLM-ROUTING] Response length: ${result.text.length} chars`)
 
         // Create decision
         const decision: LLMRoutingDecision = {
