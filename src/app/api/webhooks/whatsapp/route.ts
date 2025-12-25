@@ -466,10 +466,10 @@ export async function POST(req: NextRequest) {
             messageBody: result.message?.body?.substring(0, 50),
           })
 
-          // CRITICAL: Trigger auto-reply from webhook level to ensure it always runs
+          // CRITICAL: Trigger AI reply from webhook level to ensure it always runs
           // Even if handleInboundMessage had issues, we still have the result
           if (result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id) {
-            console.log(`🤖 [WEBHOOK] Triggering auto-reply from webhook level (backup)`)
+            console.log(`🤖 [WEBHOOK] Triggering AI reply from webhook level (backup)`)
             try {
               const { handleInboundAutoReply } = await import('@/lib/autoReply')
               const replyResult = await handleInboundAutoReply({
@@ -479,12 +479,12 @@ export async function POST(req: NextRequest) {
                 channel: result.message.channel,
                 contactId: result.contact.id,
               })
-              console.log(`📊 [WEBHOOK] Auto-reply result (webhook level):`, replyResult)
+              console.log(`📊 [WEBHOOK] AI reply result (webhook level):`, replyResult)
             } catch (autoReplyError: any) {
-              console.error(`❌ [WEBHOOK] Auto-reply failed at webhook level:`, autoReplyError.message)
+              console.error(`❌ [WEBHOOK] AI reply failed at webhook level:`, autoReplyError.message)
             }
           } else {
-            console.warn(`⚠️ [WEBHOOK] Cannot trigger auto-reply - missing data`, {
+            console.warn(`⚠️ [WEBHOOK] Cannot trigger AI reply - missing data`, {
               hasMessage: !!result.message,
               hasBody: !!result.message?.body,
               hasLead: !!result.lead,
@@ -546,9 +546,9 @@ export async function POST(req: NextRequest) {
         } catch (error: any) {
           // Handle unique constraint violation (duplicate message)
           if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
-            console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint - NO auto-reply for duplicates`)
-            // NO auto-reply for duplicates - user requirement: "duplicate messages from customer shouldn't get replies"
-            // Just return success without triggering auto-reply
+            console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint - NO AI reply for duplicates`)
+            // NO AI reply for duplicates - user requirement: "duplicate messages from customer shouldn't get replies"
+            // Just return success without triggering AI reply
             return NextResponse.json({ ok: true, duplicate: true })
           } else {
             console.error(`❌ [WEBHOOK] Error processing inbound message:`, {
