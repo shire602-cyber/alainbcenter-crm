@@ -243,12 +243,11 @@ export async function POST(req: NextRequest) {
         }
         
         if (outboundCount === 0) {
-          // First message - greet and collect basic info
-          draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!${trainingContext}`
+          // First message - greet and collect basic info (SHORT, no Employment Visa)
+          draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm Hamdi. To help you, please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)${trainingContext}`
           nextQuestions = [
             'What is your full name?',
-            'What service are you interested in?',
-            'What is your nationality?'
+            'What service are you interested in?'
           ]
         } else {
           // Follow-up message
