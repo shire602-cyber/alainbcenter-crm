@@ -233,17 +233,6 @@ export async function handleInboundMessage(
       data: contactData,
     })
     console.log(`✅ Created new contact: ${contact.id} for ${channel} user`)
-  } else {
-    // CRITICAL: Update existing contact with phone number if missing (for WhatsApp)
-    // This ensures auto-reply can always find the phone number
-    if (channel === 'WHATSAPP' && contactLookupField === 'phone' && normalizedAddress && (!contact.phone || !contact.phone.trim())) {
-      console.log(`📞 Updating existing contact ${contact.id} with phone number ${normalizedAddress}`)
-      contact = await prisma.contact.update({
-        where: { id: contact.id },
-        data: { phone: normalizedAddress },
-      })
-      console.log(`✅ Updated contact ${contact.id} with phone number`)
-    }
   }
 
   // Step 4: Find or create Lead
@@ -609,21 +598,21 @@ export async function handleInboundMessage(
         stack: error.stack,
         leadId: lead.id,
         messageId: message.id,
-        channel: message.channel,
+    channel: message.channel,
       })
       // Log to database for monitoring
       try {
         await prisma.externalEventLog.create({
-          data: {
-            provider: channel.toLowerCase(),
+      data: {
+        provider: channel.toLowerCase(),
             externalId: `auto-reply-error-${Date.now()}`,
-            payload: JSON.stringify({
+        payload: JSON.stringify({
               error: error.message,
               stack: error.stack,
-              leadId: lead.id,
-              messageId: message.id,
-            }),
-          },
+          leadId: lead.id,
+          messageId: message.id,
+        }),
+      },
         })
       } catch (logError) {
         console.warn('Failed to log auto-reply error:', logError)
@@ -636,7 +625,7 @@ export async function handleInboundMessage(
       hasLead: !!lead,
       hasContact: !!contact,
       bodyLength: message?.body?.length || 0,
-    })
+  })
   }
 
   console.log(
