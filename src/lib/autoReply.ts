@@ -249,10 +249,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     const channelLower = channel.toLowerCase()
     
     // CRITICAL FIX: Check AutoReplyLog first - most reliable way to prevent duplicates
-    // This checks if we already processed THIS specific messageId
+    // This checks if we already processed THIS specific messageId (not other messages)
+    // IMPORTANT: Only block if we already replied to THIS exact messageId, not if we replied to a different message
     const existingLog = await (prisma as any).autoReplyLog.findFirst({
       where: {
-        messageId: messageId,
+        messageId: messageId, // CRITICAL: Only check THIS specific messageId
         leadId: leadId,
         channel: channelLower,
         OR: [
@@ -264,7 +265,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     })
     
     if (existingLog) {
-      console.log(`⏭️ Auto-reply already processed for message ${messageId} (found existing log ${existingLog.id}, decision: ${existingLog.decision})`)
+      console.log(`⏭️ [DUPLICATE-CHECK] Already processed THIS message ${messageId} (log ${existingLog.id}, decision: ${existingLog.decision})`)
       
       // Update current log to mark as duplicate attempt
       if (autoReplyLog) {
@@ -273,7 +274,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             where: { id: autoReplyLog.id },
             data: {
               decision: 'skipped',
-              skippedReason: `Duplicate attempt - already replied (log ${existingLog.id})`,
+              skippedReason: `Duplicate attempt - already replied to this exact message (log ${existingLog.id})`,
             },
           })
         } catch (logError) {
@@ -281,7 +282,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         }
       }
       
-      return { replied: false, reason: 'Already replied to this message' }
+      return { replied: false, reason: 'Already replied to this exact message' }
+    } else {
+      console.log(`✅ [DUPLICATE-CHECK] No existing reply for message ${messageId} - proceeding with AI reply`)
     }
     
     let messageCount = await prisma.message.count({
@@ -633,22 +636,32 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         const replyPreview = replyText.substring(0, 150)
         console.log(`✅ [AI-GEN] AI generated fresh reply (${replyText.length} chars): "${replyPreview}..."`)
         
-        // Check if reply looks like a template
+        // CRITICAL: Validate reply is NOT a template - REJECT if it contains template patterns
         const templatePatterns = [
-          'Thank you for your interest',
-          'To better assist you',
-          'What specific service',
-          'What is your timeline',
-          'Looking forward to helping you',
+          'thank you for your interest',
+          'to better assist you',
+          'what specific service',
+          'what is your timeline',
+          'looking forward to helping you',
+          'could you please share',
+          'please share: 1.',
+          'please share: 2.',
         ]
-        const isTemplate = templatePatterns.some(pattern => 
-          replyText.toLowerCase().includes(pattern.toLowerCase())
-        )
+        const lowerReply = replyText.toLowerCase()
+        const isTemplate = templatePatterns.some(pattern => lowerReply.includes(pattern))
         
         if (isTemplate) {
-          console.warn(`⚠️ [AI-GEN] WARNING: Generated reply contains template patterns! Regenerating...`)
-          // Try once more with stronger prompt
-          // For now, just log it - the prompts should prevent this
+          console.error(`❌ [AI-GEN] REJECTED: Generated reply contains FORBIDDEN template patterns!`)
+          console.error(`   Reply: "${replyText.substring(0, 200)}..."`)
+          console.error(`   This message will NOT be sent. Using minimal fallback instead.`)
+          
+          // REJECT the template message - use minimal fallback instead
+          aiResult = {
+            text: `Hello! I received your message. Let me review it and get back to you with the information you need.`,
+            success: true,
+            confidence: 30, // Very low confidence for rejected template
+          }
+          usedFallback = true
         }
       }
     } catch (aiError: any) {
