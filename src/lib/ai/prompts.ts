@@ -167,16 +167,24 @@ Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm Hamdi. To he
 Reply only with the message text, no explanations or metadata.`
   } else {
     // FOLLOW-UP MESSAGE
-    prompt += `\nGenerate a WhatsApp-ready reply that:
-1. Acknowledges the last message
-2. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is missing (NOT ${maxQuestions + 2}-${maxQuestions + 4}, MAX ${maxQuestions})
-3. Highlights urgency if expiry date is close
-4. Includes a clear CTA (e.g., "Reply with 1/2/3" or "Share passport copy")
-5. Keeps it SHORT (under ${maxMessageLength} characters, max ${maxTotalLength} total)
-6. NEVER promises approvals, guarantees, or outcomes
-7. Uses ${tone} tone
-8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
-${agent?.customSignoff ? `9. End with or adapt this signoff style: "${agent.customSignoff}"\n` : ''}
+    const lastUserMessage = messages.filter(m => m.direction === 'INBOUND' || m.direction === 'inbound').slice(-1)[0]?.message || ''
+    prompt += `\nIMPORTANT: The user's latest message is: "${lastUserMessage}"
+
+Generate a WhatsApp-ready reply that:
+1. DIRECTLY responds to what the user just said - address their specific request/question/statement
+2. If they mentioned a service (e.g., "visit visa", "family visa"), acknowledge it and provide relevant next steps
+3. If they asked a question, answer it directly and briefly
+4. If they provided information, acknowledge it and ask for the NEXT piece of information needed
+5. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (NOT ${maxQuestions + 2}-${maxQuestions + 4}, MAX ${maxQuestions})
+6. Highlights urgency if expiry date is close
+7. Includes a clear CTA (e.g., "Reply with your nationality", "Share your expiry date")
+8. Keeps it SHORT (under ${maxMessageLength} characters, max ${maxTotalLength} total)
+9. NEVER promises approvals, guarantees, or outcomes
+10. Uses ${tone} tone
+11. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+${agent?.customSignoff ? `12. End with or adapt this signoff style: "${agent.customSignoff}"\n` : ''}
+
+CRITICAL: Do NOT send a generic message. Your reply MUST be specific to what the user just said. If they said "visit visa", respond about visit visas. If they said "I want visa", acknowledge their interest and ask which type of visa.
 
 Reply only with the message text, no explanations or metadata.`
   }
