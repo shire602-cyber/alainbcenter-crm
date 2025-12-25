@@ -717,15 +717,15 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       // Check visa/family FIRST (most specific service requests)
       if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
         console.log(`📝 [FALLBACK] Matched: visa/family context`)
-        // More specific message for family visa
+        // More specific message for family visa with actual helpful information
         if (userMessage.includes('family')) {
           fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، سأساعدك في تأشيرة العائلة. سأعود إليك بالتفاصيل والمتطلبات قريباً.`
-            : `Hi ${contactName}, I'll help you with family visa services. Let me get the details and requirements for you.`
+            ? `مرحباً ${contactName}، سأساعدك في تأشيرة العائلة. للحصول على أفضل خدمة، يرجى إرسال: 1) جنسية مقدم الطلب 2) عدد أفراد العائلة 3) تاريخ انتهاء التأشيرة الحالية (إن وجدت)`
+            : `Hi ${contactName}, I'll help you with family visa services. To provide the best service, please share: 1) Your nationality 2) Number of family members 3) Current visa expiry date (if applicable)`
         } else {
           fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. سأعود إليك بالتفاصيل قريباً.`
-            : `Hi ${contactName}, I'll help you with visa services. Let me get the details for you.`
+            ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. يرجى إرسال: 1) نوع التأشيرة المطلوبة 2) جنسيتك 3) موقعك الحالي (داخل أو خارج الإمارات)`
+            : `Hi ${contactName}, I'll help you with visa services. Please share: 1) Type of visa needed 2) Your nationality 3) Your current location (inside or outside UAE)`
         }
       } else if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
         console.log(`📝 [FALLBACK] Matched: business/setup context`)
@@ -760,14 +760,35 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             : `Hi ${contactName}, I understand this is urgent. I'll get back to you shortly.`
         } else if (hasQuestion) {
           console.log(`📝 [FALLBACK] Matched: question context`)
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، شكراً لسؤالك. سأعود إليك بالإجابة قريباً.`
-            : `Hi ${contactName}, thanks for your question. I'll get back to you with an answer shortly.`
+          // For "what details" after family visa, provide specific information
+          if (userMessage.includes('detail') && recentMessages && recentMessages.length > 0) {
+            const previousMessage = recentMessages[0]?.body?.toLowerCase() || ''
+            if (previousMessage.includes('family') || previousMessage.includes('visa')) {
+              fallbackText = detectedLanguage === 'ar'
+                ? `مرحباً ${contactName}، لتأشيرة العائلة نحتاج: جواز السفر، شهادة الزواج، شهادات ميلاد الأطفال، شهادة الراتب، سجل الإقامة. ما هي جنسيتك وعدد أفراد العائلة؟`
+                : `Hi ${contactName}, for family visa we need: passport, marriage certificate, children birth certificates, salary certificate, residence record. What's your nationality and number of family members?`
+            } else {
+              fallbackText = detectedLanguage === 'ar'
+                ? `مرحباً ${contactName}، شكراً لسؤالك. يرجى توضيح نوع الخدمة التي تحتاجها (تأشيرة، تأسيس شركة، تجديد) وسأساعدك بالتفاصيل.`
+                : `Hi ${contactName}, thanks for your question. Please specify the service you need (visa, business setup, renewal) and I'll provide the details.`
+            }
+          } else {
+            fallbackText = detectedLanguage === 'ar'
+              ? `مرحباً ${contactName}، شكراً لسؤالك. يرجى توضيح نوع الخدمة التي تحتاجها وسأساعدك بالتفاصيل.`
+              : `Hi ${contactName}, thanks for your question. Please specify the service you need and I'll provide the details.`
+          }
         } else {
           console.log(`📝 [FALLBACK] Matched: generic context with message reference`)
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، تلقيت رسالتك عن "${messagePreview}". سأعود إليك بالمعلومات قريباً.`
-            : `Hi ${contactName}, I received your message about "${messagePreview}". Let me get back to you with the information you need.`
+          // For simple greetings, provide helpful next steps
+          if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey' || userMessage.length < 5) {
+            fallbackText = detectedLanguage === 'ar'
+              ? `مرحباً ${contactName}، أهلاً بك في مركز عين الأعمال! كيف يمكنني مساعدتك اليوم؟ نحن متخصصون في: تأشيرات العائلة، تأسيس الشركات، تجديد التأشيرات.`
+              : `Hi ${contactName}, welcome to Al Ain Business Center! How can I help you today? We specialize in: family visas, business setup, visa renewals.`
+          } else {
+            fallbackText = detectedLanguage === 'ar'
+              ? `مرحباً ${contactName}، تلقيت رسالتك عن "${messagePreview}". يرجى توضيح نوع الخدمة التي تحتاجها (تأشيرة، تأسيس شركة، تجديد) وسأساعدك.`
+              : `Hi ${contactName}, I received your message about "${messagePreview}". Please specify the service you need (visa, business setup, renewal) and I'll help you.`
+          }
         }
       }
       
