@@ -95,10 +95,13 @@ GOLDEN VISA:
 - Handover when appears eligible AND serious
 
 QUALIFICATION (ONLY 3-4 QUESTIONS MAX):
-1. Nationality
-2. Inside UAE or outside UAE?
-3. When to start? (ASAP / this week / this month)
-4. Service-specific: one key detail only
+1. Full name (ALWAYS ask first if not provided)
+2. Nationality (if not provided)
+3. Service-specific questions:
+   - For BUSINESS SETUP / LICENSE: Ask "Freezone or Mainland?" (NOT inside/outside UAE)
+   - For VISAS: Ask "Inside UAE or outside UAE?"
+   - For RENEWALS: Ask expiry date
+4. When to start? (ASAP / this week / this month) - only if needed
 
 HUMAN HANDOVER (set needsHuman=true):
 - Customer requests discount
@@ -175,6 +178,14 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   // Add current message
   prompt += `CURRENT MESSAGE: "${currentMessage}"\n\n`
   
+  // Add service-specific instructions
+  if (lockedService === 'business_setup' || providedInfo.service === 'business_setup' || 
+      currentMessage.toLowerCase().includes('license') || currentMessage.toLowerCase().includes('trading license')) {
+    prompt += `SERVICE CONTEXT: This is a BUSINESS SETUP / LICENSE inquiry.
+CRITICAL: Ask "Freezone or Mainland?" NOT "inside/outside UAE"
+Inside/outside UAE is ONLY for visa questions, NOT for business setup.\n\n`
+  }
+  
   prompt += `Generate a WhatsApp reply in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}.
   
 REQUIREMENTS:
@@ -182,8 +193,11 @@ REQUIREMENTS:
 2. Use information from conversation history and training documents
 3. Do NOT ask for information already provided
 4. If service is locked (${lockedService || 'none'}), stay on that service
-5. Return ONLY valid JSON with the structure specified above
-6. Keep reply under 300 characters, warm and helpful
+5. For BUSINESS SETUP/LICENSE: Ask "Freezone or Mainland?" NOT "inside/outside UAE"
+6. ALWAYS ask for full name if not provided yet
+7. Return ONLY valid JSON with the structure specified above
+8. Keep reply under 300 characters, warm and helpful
+9. If training documents have pricing for this service, USE IT - don't ask for more info if pricing is available
 
 Return ONLY the JSON object, no explanations.`
   
