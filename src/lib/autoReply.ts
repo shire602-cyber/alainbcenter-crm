@@ -602,7 +602,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       language: detectedLanguage, // Pass detected language to AI context
     }
 
-    console.log(`🤖 Generating AI reply with language: ${detectedLanguage}, agent: ${agent?.name || 'default'}, hasContext: ${hasUsefulContext}`)
+    console.log(`🤖 [AI-GEN] Generating AI reply with language: ${detectedLanguage}, agent: ${agent?.name || 'default'}, hasContext: ${hasUsefulContext}`)
     
     // CRITICAL: Always try to generate AI reply first (never use saved/cached messages)
     // Only use fallback if AI generation fails
@@ -622,7 +622,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         agentName: agent?.name,
       })
       
+      const startTime = Date.now()
       aiResult = await generateAIAutoresponse(aiContext, agent)
+      const duration = Date.now() - startTime
+      console.log(`⏱️ [AI-GEN] AI generation took ${duration}ms`)
       
       if (!aiResult || !aiResult.success || !aiResult.text) {
         const errorMsg = aiResult?.error || 'Unknown error'
