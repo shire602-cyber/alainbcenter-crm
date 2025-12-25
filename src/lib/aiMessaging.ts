@@ -137,61 +137,9 @@ function analyzeConversationState(lead: any, contact: any, recentMessages: any[]
   return { hasService, hasNationality, hasExpiryInfo, hasLocation, nextStep: 'other_info' }
 }
 
-/**
- * Generate qualification message based on conversation state
- */
-function generateQualificationMessage(
-  analysis: ReturnType<typeof analyzeConversationState>,
-  language: 'en' | 'ar',
-  contactName: string
-): string {
-  const { nextStep, hasService, hasNationality, hasExpiryInfo, hasLocation } = analysis
-  
-  if (language === 'ar') {
-    switch (nextStep) {
-      case 'service':
-        return `مرحباً ${contactName}، شكراً لتواصلك معنا! 🌟\n\nما هي الخدمة التي تحتاجها؟\n\nمثلاً:\n• تأشيرة عائلية\n• تأشيرة عمل\n• تأسيس شركة\n• تجديد تأشيرة\n\nأخبرني بما تحتاجه وسأساعدك!`
-      case 'nationality':
-        return `ممتاز! 👍\n\nما هي جنسيتك؟ هذا يساعدني في تقديم المعلومات الصحيحة لك.`
-      case 'other_info':
-        let otherInfoAr = `شكراً! 📝\n\nللمتابعة، أحتاج بعض المعلومات:\n\n`
-        if (!hasExpiryInfo) {
-          otherInfoAr += `• متى تنتهي تأشيرتك الحالية؟ (إن وجدت)\n`
-        }
-        if (!hasLocation) {
-          otherInfoAr += `• هل أنت داخل الإمارات أم خارجها؟\n`
-        }
-        otherInfoAr += `\nهذه المعلومات تساعدنا في تقديم أفضل خدمة لك.`
-        return otherInfoAr
-      case 'book_call':
-        return `ممتاز! لدينا كل المعلومات الأساسية. 🎯\n\nهل تريد حجز مكالمة مع أحد مستشارينا لمناقشة تفاصيل خدمتك؟\n\nأو يمكنك إخباري بأي أسئلة إضافية لديك.`
-      default:
-        return `مرحباً ${contactName}، كيف يمكنني مساعدتك اليوم؟`
-    }
-  } else {
-    // English
-    switch (nextStep) {
-      case 'service':
-        return `Hi ${contactName}, thanks for reaching out! 🌟\n\nWhat service do you need?\n\nFor example:\n• Family Visa\n• Employment Visa\n• Business Setup\n• Visa Renewal\n\nLet me know what you need and I'll help you!`
-      case 'nationality':
-        return `Great! 👍\n\nWhat's your nationality? This helps me provide the right information for you.`
-      case 'other_info':
-        let otherInfoEn = `Thanks! 📝\n\nTo proceed, I need a few details:\n\n`
-        if (!hasExpiryInfo) {
-          otherInfoEn += `• When does your current visa expire? (if applicable)\n`
-        }
-        if (!hasLocation) {
-          otherInfoEn += `• Are you inside UAE or outside?\n`
-        }
-        otherInfoEn += `\nThis information helps us provide the best service for you.`
-        return otherInfoEn
-      case 'book_call':
-        return `Perfect! We have all the basic information. 🎯\n\nWould you like to book a call with one of our consultants to discuss your service details?\n\nOr you can let me know if you have any additional questions.`
-      default:
-        return `Hi ${contactName}, how can I assist you today?`
-    }
-  }
-}
+// REMOVED: generateQualificationMessage - This was generating template messages
+// All messages now use AI generation via generateAIAutoresponse()
+// This function is no longer used and has been removed to prevent template messages
 
 /**
  * Generate AI reply text for automation
