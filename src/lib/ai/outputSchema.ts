@@ -68,6 +68,12 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
     /discount/i,
     /special price/i,
     /reduced price/i,
+    
+    // Casual/unprofessional questions
+    /what brings you here/i,
+    /what brings you to uae/i,
+    /what brings you/i,
+    /how can i help you today/i,
   ]
   
   for (const pattern of forbiddenPatterns) {

@@ -317,27 +317,27 @@ export async function handleInboundMessage(
   let conversation = await prisma.conversation.findUnique({
     where: {
       contactId_channel: {
-        contactId: contact.id,
-        channel: channelLower,
-      },
+      contactId: contact.id,
+      channel: channelLower,
+    },
     },
   })
 
   if (!conversation) {
     // Create new conversation using unique constraint
     try {
-      conversation = await prisma.conversation.create({
-        data: {
-          contactId: contact.id,
-          leadId: lead.id,
-          channel: channelLower,
+    conversation = await prisma.conversation.create({
+      data: {
+        contactId: contact.id,
+        leadId: lead.id,
+        channel: channelLower,
           externalId: externalId || null, // Optional metadata only
-          status: 'open',
-          lastMessageAt: timestamp,
-          lastInboundAt: timestamp,
-          unreadCount: 1,
-        },
-      })
+        status: 'open',
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        unreadCount: 1,
+      },
+    })
       console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}, channel ${channelLower}`)
     } catch (createError: any) {
       // Handle race condition: if another request created it simultaneously, find it

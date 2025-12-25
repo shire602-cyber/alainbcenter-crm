@@ -19,6 +19,8 @@ import {
   matchesEscalatePatterns,
   type AgentProfile 
 } from './ai/agentProfile'
+import { appendFile } from 'fs/promises'
+import { join } from 'path'
 
 interface AutoReplyOptions {
   leadId: number
@@ -638,54 +640,162 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         })
         
         if (conversation) {
-          console.log(`🤖 [STRICT-AI] Using strict AI generation with JSON output`)
-          const strictResult = await generateStrictAIReply({
-            lead,
-            contact: lead.contact,
-            conversation,
-            currentMessage: messageText,
-            conversationHistory: aiContext.recentMessages || [],
-            agent,
-            language: detectedLanguage,
-          })
-          
-          const duration = Date.now() - startTime
-          console.log(`⏱️ [STRICT-AI] Generation took ${duration}ms`)
-          console.log(`📊 [STRICT-AI] Service: ${strictResult.service}, Needs Human: ${strictResult.needsHuman}, Confidence: ${strictResult.confidence}`)
-          console.log(`📊 [STRICT-AI] Reply preview: ${strictResult.reply.substring(0, 100)}...`)
-          
-          // Log structured output to AutoReplyLog
-          if (autoReplyLog && strictResult.structured) {
-            try {
-              await (prisma as any).autoReplyLog.update({
-                where: { id: autoReplyLog.id },
-                data: {
-                  replyText: strictResult.reply.substring(0, 500),
-                  decisionReason: `Strict AI: service=${strictResult.service}, stage=${strictResult.structured.stage}, confidence=${strictResult.confidence}`,
-                  usedFallback: false,
-                },
-              })
-            } catch (logError) {
-              console.warn('Failed to update AutoReplyLog with strict AI result:', logError)
+          // TRY RULE ENGINE FIRST (deterministic, no hallucinations)
+          try {
+            const { executeRuleEngine, loadConversationMemory } = await import('./ai/ruleEngine')
+            
+            // Load existing memory from conversation
+            const existingMemory = await loadConversationMemory(conversation.id)
+            
+            // Get ALL messages from conversation
+            const conversationMessages = await prisma.message.findMany({
+              where: {
+                conversationId: conversation.id,
+              },
+              orderBy: {
+                createdAt: 'asc',
+              },
+              take: 50, // Get more messages for better context
+            })
+            
+            // Build conversation history
+            const fullConversationHistory = [
+              {
+                direction: 'INBOUND',
+                body: messageText,
+                createdAt: new Date(),
+              },
+              ...conversationMessages.map(m => ({
+                direction: m.direction,
+                body: m.body || '',
+                createdAt: m.createdAt,
+              })),
+            ]
+            
+            // Check if this is first message in thread
+            const isFirstMessage = conversationMessages.filter(m => m.direction === 'OUTBOUND').length === 0
+            
+            console.log(`🎯 [RULE-ENGINE] Executing deterministic rule engine`)
+            console.log(`📋 [RULE-ENGINE] Memory:`, existingMemory)
+            console.log(`📋 [RULE-ENGINE] Is first message:`, isFirstMessage)
+            
+            const ruleResult = await executeRuleEngine({
+              conversationId: conversation.id,
+              leadId: lead.id,
+              contactId: contactId,
+              currentMessage: messageText,
+              conversationHistory: fullConversationHistory,
+              isFirstMessage,
+              memory: existingMemory,
+            })
+            
+            console.log(`✅ [RULE-ENGINE] Generated reply:`, ruleResult.reply.substring(0, 100))
+            console.log(`📊 [RULE-ENGINE] Needs human:`, ruleResult.needsHuman, ruleResult.handoverReason)
+            
+            // Use rule engine result
+            aiResult = {
+              text: ruleResult.reply,
+              success: true,
+              confidence: 0.95, // Rule engine is deterministic
             }
+            
+            // If needs human, create task
+            if (ruleResult.needsHuman) {
+              await createAgentTask(lead.id, 'complex_query', {
+                messageText: `Handover: ${ruleResult.handoverReason || 'Complex case'}\n\nLast message: ${messageText}`,
+              })
+            }
+            
+            // Skip strict AI generation, use rule engine result
+            console.log(`✅ [RULE-ENGINE] Using rule engine result, skipping strict AI`)
+          } catch (ruleError: any) {
+            console.error(`❌ [RULE-ENGINE] Rule engine failed, falling back to strict AI:`, ruleError.message)
+            // Fall through to strict AI generation
           }
           
-          // If needs human, create task
-          if (strictResult.needsHuman) {
-            console.log(`👤 [STRICT-AI] Escalating to human (needsHuman=true)`)
-            try {
-              await createAgentTask(leadId, 'complex_query', {
-                messageText: strictResult.reply.substring(0, 200),
-              })
-            } catch (taskError) {
-              console.warn('Failed to create agent task:', taskError)
+          // If rule engine didn't produce a result, fall back to strict AI
+          if (!aiResult) {
+            console.log(`🤖 [STRICT-AI] Using strict AI generation with JSON output`)
+            
+            // CRITICAL FIX: Get ALL messages from conversation, not just lead.messages
+            // This ensures we have the complete conversation history including all previous answers
+            const conversationMessages = await prisma.message.findMany({
+              where: {
+                conversationId: conversation.id,
+              },
+              orderBy: {
+                createdAt: 'asc', // Chronological order
+              },
+              take: 20, // Get last 20 messages for context
+            })
+            
+            // Build conversation history with ALL messages from conversation
+            const fullConversationHistory = [
+              // Current inbound message first
+              {
+                direction: 'INBOUND',
+                body: messageText,
+                createdAt: new Date(),
+              },
+              // Then all previous messages from conversation
+              ...conversationMessages.map(m => ({
+                direction: m.direction,
+                body: m.body || '',
+                createdAt: m.createdAt,
+              })),
+            ]
+            
+            console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
+            console.log(`📋 [STRICT-AI] Sample messages:`, fullConversationHistory.slice(-5).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
+            
+            const strictResult = await generateStrictAIReply({
+              lead,
+              contact: lead.contact,
+              conversation,
+              currentMessage: messageText,
+              conversationHistory: fullConversationHistory, // Use full conversation history, not just aiContext.recentMessages
+              agent,
+              language: detectedLanguage,
+            })
+            
+            const duration = Date.now() - startTime
+            console.log(`⏱️ [STRICT-AI] Generation took ${duration}ms`)
+            console.log(`📊 [STRICT-AI] Service: ${strictResult.service}, Needs Human: ${strictResult.needsHuman}, Confidence: ${strictResult.confidence}`)
+            console.log(`📊 [STRICT-AI] Reply preview: ${strictResult.reply.substring(0, 100)}...`)
+            
+            // Log structured output to AutoReplyLog
+            if (autoReplyLog && strictResult.structured) {
+              try {
+                await (prisma as any).autoReplyLog.update({
+                  where: { id: autoReplyLog.id },
+                  data: {
+                    replyText: strictResult.reply.substring(0, 500),
+                    decisionReason: `Strict AI: service=${strictResult.service}, stage=${strictResult.structured.stage}, confidence=${strictResult.confidence}`,
+                    usedFallback: false,
+                  },
+                })
+              } catch (logError) {
+                console.warn('Failed to update AutoReplyLog with strict AI result:', logError)
+              }
             }
-          }
-          
-          aiResult = {
-            text: strictResult.reply,
-            success: true,
-            confidence: strictResult.confidence * 100, // Convert to 0-100 scale
+            
+            // If needs human, create task
+            if (strictResult.needsHuman) {
+              console.log(`👤 [STRICT-AI] Escalating to human (needsHuman=true)`)
+              try {
+                await createAgentTask(lead.id, 'complex_query', {
+                  messageText: strictResult.reply.substring(0, 200),
+                })
+              } catch (taskError) {
+                console.warn('Failed to create agent task:', taskError)
+              }
+            }
+            
+            aiResult = {
+              text: strictResult.reply,
+              success: true,
+              confidence: strictResult.confidence * 100, // Convert to 0-100 scale
+            }
           }
         } else {
           console.warn(`⚠️ [STRICT-AI] No conversation found, falling back to regular AI generation`)
