@@ -262,10 +262,17 @@ export async function generateAIAutoresponse(
     }
     
     console.log(`🤖 Generating AI reply using ${tone} tone, ${detectedLanguage} language, task: ${taskType}`)
+    console.log(`🤖 [AI-GEN] Conversation context:`, {
+      leadId: lead.id,
+      contactName: contact?.fullName,
+      messageCount: conversationContext.messages?.length || 0,
+      lastMessage: conversationContext.messages?.[conversationContext.messages.length - 1]?.message?.substring(0, 100),
+    })
+    
     const aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar', agent)
     
     const draftText = aiDraftResult.text
-    console.log(`✅ AI-generated reply for lead ${lead.id}: "${draftText.substring(0, 100)}..."`)
+    console.log(`✅ [AI-GEN] AI-generated reply for lead ${lead.id}: "${draftText.substring(0, 100)}..."`)
 
     if (!draftText || draftText.trim().length === 0) {
       return {
@@ -308,15 +315,22 @@ export async function generateAIAutoresponse(
   } catch (error: any) {
     const errorMessage = error.message || 'Failed to generate AI reply'
     console.error('❌ [AI-GEN] Error generating AI autoresponse:', errorMessage)
-    console.error('❌ [AI-GEN] Stack:', error.stack)
+    console.error('❌ [AI-GEN] Full error:', error)
+    if (error.stack) {
+      console.error('❌ [AI-GEN] Stack:', error.stack)
+    }
     
     // Provide more specific error message
     let detailedError = errorMessage
-    if (errorMessage.includes('not configured') || errorMessage.includes('AI not configured')) {
+    if (errorMessage.includes('not configured') || errorMessage.includes('AI not configured') || errorMessage.includes('No LLM providers available')) {
       detailedError = 'AI not configured. Please set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in environment variables or configure in admin integrations.'
-    } else if (errorMessage.includes('API') || errorMessage.includes('network') || errorMessage.includes('fetch')) {
+    } else if (errorMessage.includes('API') || errorMessage.includes('network') || errorMessage.includes('fetch') || errorMessage.includes('All LLM providers failed')) {
       detailedError = `AI API error: ${errorMessage}. Check API key validity and network connectivity.`
+    } else if (errorMessage.includes('Empty response') || errorMessage.includes('empty')) {
+      detailedError = `AI returned empty response: ${errorMessage}`
     }
+    
+    console.error(`❌ [AI-GEN] Detailed error: ${detailedError}`)
     
     return {
       text: '',
