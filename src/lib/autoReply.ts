@@ -639,21 +639,25 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         const replyPreview = replyText.substring(0, 150)
         console.log(`✅ [AI-GEN] AI generated fresh reply (${replyText.length} chars): "${replyPreview}..."`)
         
-        // CRITICAL: Validate reply is NOT a template - REJECT only if it's EXACTLY a template
-        // Only reject if it contains MULTIPLE template patterns (more lenient check)
+        // CRITICAL: Validate reply is NOT a template - REJECT if it contains ANY template pattern
+        // This is STRICT validation - we want AI-generated responses, not templates
         const templatePatterns = [
-          'thank you for your interest in our services',
-          'to better assist you, could you please share',
-          'what specific service are you looking for',
+          'thank you for your interest',
+          'to better assist you',
+          'could you please share',
+          'what specific service',
           'what is your timeline',
           'looking forward to helping you',
+          'please share: 1.',
+          'please share: 2.',
+          'to better assist',
         ]
         const lowerReply = replyText.toLowerCase()
-        const templateMatches = templatePatterns.filter(pattern => lowerReply.includes(pattern)).length
+        const hasTemplatePattern = templatePatterns.some(pattern => lowerReply.includes(pattern))
         
-        // Only reject if it contains 2+ template patterns (likely a full template)
-        if (templateMatches >= 2) {
-          console.error(`❌ [AI-GEN] REJECTED: Generated reply contains ${templateMatches} FORBIDDEN template patterns!`)
+        // REJECT if it contains ANY template pattern - we want fresh AI responses only
+        if (hasTemplatePattern) {
+          console.error(`❌ [AI-GEN] REJECTED: Generated reply contains FORBIDDEN template patterns!`)
           console.error(`   Reply: "${replyText.substring(0, 200)}..."`)
           console.error(`   This message will NOT be sent. Generating context-aware fallback instead.`)
           
@@ -662,14 +666,20 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           const contactNameForFallback = lead.contact?.fullName || 'there'
           let contextAwareFallback = ''
           
-          if (userMessage.includes('business') || userMessage.includes('setup')) {
+          if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
             contextAwareFallback = `Hi ${contactNameForFallback}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
-          } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee')) {
+          } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much')) {
             contextAwareFallback = `Hi ${contactNameForFallback}, I'll get the pricing information for you right away.`
-          } else if (userMessage.includes('renew') || userMessage.includes('expir')) {
+          } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry')) {
             contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the renewal details for you.`
+          } else if (userMessage.includes('visa') || userMessage.includes('permit')) {
+            contextAwareFallback = `Hi ${contactNameForFallback}, I'll help you with visa services. Let me get the information you need.`
+          } else if (userMessage.includes('doc') || userMessage.includes('document')) {
+            contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the document requirements for you.`
           } else {
-            contextAwareFallback = `Hi ${contactNameForFallback}, I received your message about "${messageText.substring(0, 50)}". Let me get the information you need.`
+            // Even generic fallback should reference their message
+            const messagePreview = messageText.length > 40 ? messageText.substring(0, 40) + '...' : messageText
+            contextAwareFallback = `Hi ${contactNameForFallback}, I received your message about "${messagePreview}". Let me get the information you need.`
           }
           
           aiResult = {
@@ -699,42 +709,53 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       let fallbackText = ''
       
-      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+      // CRITICAL: Fallback MUST match user's message context - check in order of specificity
+      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
         console.log(`📝 [FALLBACK] Matched: business/setup context`)
         fallbackText = detectedLanguage === 'ar' 
           ? `مرحباً ${contactName}، يسعدني مساعدتك في خدمات تأسيس الشركات. سأجمع التفاصيل وأعود إليك قريباً.`
           : `Hi ${contactName}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
-      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much')) {
+      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much') || userMessage.includes('pricing')) {
+        console.log(`📝 [FALLBACK] Matched: pricing context`)
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، سأحضر معلومات الأسعار لك الآن.`
           : `Hi ${contactName}, I'll get the pricing information for you right away.`
-      } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry')) {
+      } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry') || userMessage.includes('renewal')) {
+        console.log(`📝 [FALLBACK] Matched: renewal context`)
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، سأتحقق من تفاصيل التجديد لك.`
           : `Hi ${contactName}, I'll check the renewal details for you.`
-      } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper')) {
+      } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence')) {
+        console.log(`📝 [FALLBACK] Matched: visa context`)
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. سأعود إليك بالتفاصيل قريباً.`
+          : `Hi ${contactName}, I'll help you with visa services. Let me get the details for you.`
+      } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper') || userMessage.includes('requirement')) {
+        console.log(`📝 [FALLBACK] Matched: document context`)
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، سأتحقق من متطلبات المستندات لك.`
           : `Hi ${contactName}, I'll check the document requirements for you.`
       } else {
-        // Generic but still acknowledges their message with context
-        const messagePreview = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText
-        // Try to extract key words from the message for better context
-        const hasQuestion = userMessage.includes('?') || userMessage.includes('what') || userMessage.includes('how') || userMessage.includes('when') || userMessage.includes('where')
-        const hasUrgent = userMessage.includes('urgent') || userMessage.includes('asap') || userMessage.includes('quick')
+        // Generic fallback - but MUST reference their actual message
+        const messagePreview = messageText.length > 40 ? messageText.substring(0, 40) + '...' : messageText
+        const hasQuestion = userMessage.includes('?') || userMessage.includes('what') || userMessage.includes('how') || userMessage.includes('when') || userMessage.includes('where') || userMessage.includes('why')
+        const hasUrgent = userMessage.includes('urgent') || userMessage.includes('asap') || userMessage.includes('quick') || userMessage.includes('immediately')
         
         if (hasUrgent) {
+          console.log(`📝 [FALLBACK] Matched: urgent context`)
           fallbackText = detectedLanguage === 'ar'
             ? `مرحباً ${contactName}، أفهم أن هذا عاجل. سأعود إليك قريباً.`
             : `Hi ${contactName}, I understand this is urgent. I'll get back to you shortly.`
         } else if (hasQuestion) {
+          console.log(`📝 [FALLBACK] Matched: question context`)
           fallbackText = detectedLanguage === 'ar'
             ? `مرحباً ${contactName}، شكراً لسؤالك. سأعود إليك بالإجابة قريباً.`
             : `Hi ${contactName}, thanks for your question. I'll get back to you with an answer shortly.`
         } else {
+          console.log(`📝 [FALLBACK] Matched: generic context with message reference`)
           fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
-            : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
+            ? `مرحباً ${contactName}، تلقيت رسالتك عن "${messagePreview}". سأعود إليك بالمعلومات قريباً.`
+            : `Hi ${contactName}, I received your message about "${messagePreview}". Let me get back to you with the information you need.`
         }
       }
       
