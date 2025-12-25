@@ -670,47 +670,57 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                 </div>
                 <div className="grid grid-cols-2 gap-4">
                   <div>
-                    <Label htmlFor="agent-hours-start">Business Hours Start</Label>
+                    <Label htmlFor="agent-hours-start">Business Hours Start (Not Enforced)</Label>
                     <Input
                       id="agent-hours-start"
                       type="time"
                       value={formData.businessHoursStart || '07:00'}
                       onChange={(e) => setFormData({ ...formData, businessHoursStart: e.target.value })}
+                      disabled={true}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Business hours are not currently enforced - replies are sent 24/7</p>
                   </div>
                   <div>
-                    <Label htmlFor="agent-hours-end">Business Hours End</Label>
+                    <Label htmlFor="agent-hours-end">Business Hours End (Not Enforced)</Label>
                     <Input
                       id="agent-hours-end"
                       type="time"
                       value={formData.businessHoursEnd || '21:30'}
                       onChange={(e) => setFormData({ ...formData, businessHoursEnd: e.target.value })}
+                      disabled={true}
                     />
+                    <p className="text-xs text-muted-foreground mt-1">Business hours are not currently enforced - replies are sent 24/7</p>
                   </div>
                 </div>
                 <div>
-                  <Label htmlFor="agent-timezone">Timezone</Label>
+                  <Label htmlFor="agent-timezone">Timezone (Not Enforced)</Label>
                   <select
                     id="agent-timezone"
                     value={formData.timezone || 'Asia/Dubai'}
                     onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
                     className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                    disabled={true}
                   >
                     <option value="Asia/Dubai">Asia/Dubai (UAE)</option>
                     <option value="UTC">UTC</option>
                     <option value="America/New_York">America/New_York</option>
                     <option value="Europe/London">Europe/London</option>
                   </select>
+                  <p className="text-xs text-muted-foreground mt-1">Timezone setting is saved but not enforced - replies are sent 24/7</p>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">
                     <Switch
                       id="agent-outside-hours"
-                      checked={formData.allowOutsideHours ?? false}
-                      onCheckedChange={(checked) => setFormData({ ...formData, allowOutsideHours: checked })}
+                      checked={true}
+                      onCheckedChange={() => {}}
+                      disabled={true}
                     />
-                    <Label htmlFor="agent-outside-hours" className="cursor-pointer">Allow Replies Outside Business Hours</Label>
+                    <Label htmlFor="agent-outside-hours" className="cursor-pointer">
+                      Allow Replies Outside Business Hours (Always Enabled - 24/7)
+                    </Label>
                   </div>
+                  <p className="text-xs text-muted-foreground">Business hours are not currently enforced - all replies are sent 24/7</p>
                   <div className="flex items-center gap-2">
                     <Switch
                       id="agent-immediate"
