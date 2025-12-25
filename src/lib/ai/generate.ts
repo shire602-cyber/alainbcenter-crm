@@ -134,8 +134,13 @@ export async function generateDraftReply(
       suggestedNextFollowUpAt,
     }
   } catch (error: any) {
-    console.error('LLM routing error:', error)
-    throw new Error(error.message || 'Failed to generate draft reply')
+    const errorMessage = error.message || 'Failed to generate draft reply'
+    console.error('❌ [AI-GEN] LLM routing error:', errorMessage)
+    if (error.stack) {
+      console.error('❌ [AI-GEN] LLM routing error stack:', error.stack)
+    }
+    // Include original error details for debugging
+    throw new Error(`AI generation failed: ${errorMessage}`)
   }
 }
 

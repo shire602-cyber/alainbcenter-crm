@@ -44,11 +44,17 @@ export class OpenAIProvider implements LLMProvider {
     messages: LLMMessage[],
     options: LLMCompletionOptions = {}
   ): Promise<LLMCompletionResult> {
+    // Ensure API key is loaded
     if (!this.apiKey) {
       const available = await this.isAvailable()
-      if (!available) {
+      if (!available || !this.apiKey) {
         throw new Error('OpenAI API key not configured. Set OPENAI_API_KEY or configure OpenAI integration.')
       }
+    }
+
+    // Double-check API key is set (TypeScript safety)
+    if (!this.apiKey) {
+      throw new Error('OpenAI API key is null after availability check')
     }
 
     try {
