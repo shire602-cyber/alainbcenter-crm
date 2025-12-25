@@ -611,8 +611,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       // Pass agent to AI generation for custom prompts and settings
       console.log(`🤖 [AI-GEN] Calling generateAIAutoresponse with context:`, {
         leadId: aiContext.lead.id,
-        messageCount: aiContext.recentMessages.length,
-        firstMessage: aiContext.recentMessages[0]?.body?.substring(0, 50),
+        messageCount: aiContext.recentMessages?.length || 0,
+        firstMessage: aiContext.recentMessages?.[0]?.body?.substring(0, 50) || '',
         mode: aiContext.mode,
         channel: aiContext.channel,
         language: aiContext.language,
