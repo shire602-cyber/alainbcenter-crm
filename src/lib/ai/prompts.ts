@@ -116,7 +116,7 @@ export async function buildDraftReplyPrompt(
         }
       } else {
         // Retrieve training documents now
-        const similarityThreshold = agent?.similarityThreshold ?? 0.5
+        const similarityThreshold = agent?.similarityThreshold ?? 0.25
         searchResults = await searchTrainingDocuments(queryText, {
         topK: 5,
         similarityThreshold,
@@ -155,7 +155,7 @@ export async function buildDraftReplyPrompt(
         try {
           const lowerThresholdResults = await searchTrainingDocuments(queryText, {
             topK: 5,
-            similarityThreshold: 0.4, // Much lower threshold
+            similarityThreshold: 0.1, // Very low threshold to force retrieval
             trainingDocumentIds: agent?.trainingDocumentIds || undefined,
           })
           
