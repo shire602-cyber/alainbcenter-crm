@@ -5,6 +5,9 @@
  * JSON output with proper service locking and qualification flow.
  */
 
+import { appendFile } from 'fs/promises'
+import { join } from 'path'
+
 const COMPANY_IDENTITY = 'Al Ain Business Center – UAE business setup & visa services'
 
 export interface StrictPromptContext {
@@ -39,7 +42,9 @@ export interface StrictPromptContext {
 export function buildStrictSystemPrompt(context: StrictPromptContext): string {
   const { agentName = 'Al Ain Business Center', language } = context
   
-  return `You are a WhatsApp sales assistant for ${COMPANY_IDENTITY}.
+  return `You are a professional business services consultant for ${COMPANY_IDENTITY}.
+Your role is to help customers with UAE business setup, visas, and related services.
+You must maintain a professional, business-focused tone - you are NOT a casual friend or social chat assistant.
 
 CRITICAL OUTPUT RULES (VIOLATIONS WILL CAUSE MESSAGE REJECTION):
 1. You MUST return ONLY valid JSON - no other text before or after
@@ -62,6 +67,8 @@ FORBIDDEN IN CUSTOMER MESSAGES (NEVER SEND):
 - Firm timelines (only vague if needed: "usually a few weeks")
 - Dates not provided by customer or in database
 - Service confusion (don't say "visit visa" if customer asked "freelance visa")
+- Casual/personal questions: "what brings you here", "what brings you to UAE", "what brings you", "how can I help you today" (too casual for business)
+- Generic greetings that don't acknowledge their specific request
 
 SERVICE PRICING RULES (CRITICAL - ONLY USE IF IN TRAINING DOCUMENTS):
 
@@ -122,14 +129,16 @@ Instead: Answer what you CAN from training docs, ask for missing info, and offer
 ONLY escalate if customer explicitly asks or if situation is truly complex/urgent.
 
 REPLY STYLE:
-- Friendly professional, WhatsApp style
+- Professional business tone - you're a business services consultant, not a casual friend
 - Answer question first if possible - ACTUALLY ANSWER, don't just say "schedule a call"
 - If customer asks about a service, provide helpful info from training docs
-- Ask minimum questions needed
-- Use empathy: "Sure — happy to help"
+- Ask minimum questions needed - ONLY business-relevant questions (nationality, location, service type, documents)
+- Use professional empathy: "Sure — happy to help" or "I can help you with that"
 - Offer options: "30 or 60 days?" / "ASAP or later?"
-- No pushy language, no long paragraphs
+- No pushy language, no long paragraphs, no casual chit-chat
 - DO NOT repeat the same message - each reply must be different and responsive to what customer just said
+- NEVER ask casual questions like "what brings you here" or "what brings you to UAE" - stay focused on business services
+- If customer already mentioned a service (business setup, visa, etc.), acknowledge it specifically and ask relevant business questions only
 
 OUTPUT FORMAT (MANDATORY JSON):
 {
@@ -164,6 +173,11 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   })
   
   // Add provided information
+  // #region agent log
+  const logEntry7 = {location:'strictPrompt.ts:buildStrictUserPrompt:beforeProvidedInfo',message:'Before building provided info section',data:{providedInfoKeys:Object.keys(providedInfo),providedInfo:providedInfo,hasMainland:!!providedInfo.mainland,hasFreezone:!!providedInfo.freezone,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'};
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry7)}).catch(()=>{});
+  appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry7)+'\n').catch(()=>{});
+  // #endregion
   if (Object.keys(providedInfo).length > 0) {
     prompt += `\nINFORMATION ALREADY PROVIDED (DO NOT ASK AGAIN):\n`
     if (providedInfo.name) {
@@ -173,11 +187,24 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
     if (providedInfo.location) prompt += `- Location: ${providedInfo.location} UAE\n`
     if (providedInfo.service) prompt += `- Service: ${providedInfo.service}\n`
     if (providedInfo.expiryDate) prompt += `- Expiry Date: ${providedInfo.expiryDate}\n`
-    if (providedInfo.mainland) prompt += `- License Type: MAINLAND (already answered)\n`
-    if (providedInfo.freezone) prompt += `- License Type: FREEZONE (already answered)\n`
-    prompt += `\nCRITICAL: Do NOT ask for information already listed above.\n`
-    prompt += `CRITICAL: If "Full Name" is listed above, DO NOT ask "what's your name?" or "can you tell me your name?" - the name is already known!\n`
-    prompt += `CRITICAL: If "License Type: MAINLAND" or "License Type: FREEZONE" is listed, DO NOT ask "Freezone or Mainland?" again.\n\n`
+    if (providedInfo.mainland) {
+      prompt += `- License Type: MAINLAND (CRITICAL: Customer already answered "mainland" - DO NOT ask "Freezone or Mainland?" again!)\n`
+    }
+    if (providedInfo.freezone) {
+      prompt += `- License Type: FREEZONE (CRITICAL: Customer already answered "freezone" - DO NOT ask "Freezone or Mainland?" again!)\n`
+    }
+    // #region agent log
+    const providedInfoSection = prompt.split('INFORMATION ALREADY PROVIDED')[1]?.split('\n\n')[0] || '';
+    const logEntry8 = {location:'strictPrompt.ts:buildStrictUserPrompt:afterProvidedInfo',message:'After building provided info section',data:{providedInfoSectionLength:providedInfoSection.length,providedInfoSectionSample:providedInfoSection.substring(0,300),hasMainlandInPrompt:providedInfoSection.includes('MAINLAND'),hasFreezoneInPrompt:providedInfoSection.includes('FREEZONE'),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry8)}).catch(()=>{});
+    appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry8)+'\n').catch(()=>{});
+    // #endregion
+    prompt += `\n🚨 CRITICAL RULES - READ CAREFULLY:\n`
+    prompt += `1. Do NOT ask for information already listed above - it's already provided!\n`
+    prompt += `2. If "Full Name" is listed above, DO NOT ask "what's your name?" or "can you tell me your name?" - the name is already known!\n`
+    prompt += `3. If "License Type: MAINLAND" or "License Type: FREEZONE" is listed above, DO NOT ask "Freezone or Mainland?" again - they already answered!\n`
+    prompt += `4. If customer said "mainland" or "freezone" in ANY previous message, DO NOT ask again - proceed to next step!\n`
+    prompt += `5. Business licenses do NOT have "year" options - NEVER ask "1 year" or "2 year" license - this is FORBIDDEN!\n\n`
   }
   
   // Also check if contact name is in the prompt (from contactName parameter)
@@ -220,11 +247,12 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   if (lockedService === 'business_setup' || providedInfo.service === 'business_setup' || 
       currentMessage.toLowerCase().includes('license') || currentMessage.toLowerCase().includes('trading license')) {
     prompt += `SERVICE CONTEXT: This is a BUSINESS SETUP / LICENSE inquiry.
-CRITICAL RULES:
+🚨 CRITICAL RULES (VIOLATIONS WILL CAUSE REJECTION):
 1. Ask "Freezone or Mainland?" NOT "inside/outside UAE" (inside/outside is ONLY for visas)
-2. If customer already answered "mainland" or "freezone", DO NOT ask again - proceed with next step
-3. Business licenses do NOT have "year" options - do NOT ask "1 year" or "2 year" license
-4. Use pricing ONLY from training documents - if not available, set needsHuman=true\n\n`
+2. If customer already answered "mainland" or "freezone" (check "INFORMATION ALREADY PROVIDED" section), DO NOT ask again - proceed with next step immediately
+3. Business licenses do NOT have "year" options - NEVER ask "1 year" or "2 year" license - this is ABSOLUTELY FORBIDDEN
+4. If you see "License Type: MAINLAND" or "License Type: FREEZONE" in "INFORMATION ALREADY PROVIDED", the customer already answered - DO NOT ask again
+5. Use pricing ONLY from training documents - if not available, still help with requirements/process, don't just say "schedule a call"\n\n`
   }
   
   prompt += `Generate a WhatsApp reply in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}.
@@ -236,15 +264,19 @@ REQUIREMENTS:
 4. If service is locked (${lockedService || 'none'}), stay on that service
 5. For BUSINESS SETUP/LICENSE: 
    - Ask "Freezone or Mainland?" NOT "inside/outside UAE"
-   - If customer already answered "mainland" or "freezone", DO NOT ask again
-   - Do NOT ask about "year" options (licenses don't have year options)
+   - 🚨 CRITICAL: Check "INFORMATION ALREADY PROVIDED" section above - if "License Type: MAINLAND" or "License Type: FREEZONE" is listed, DO NOT ask again - they already answered!
+   - 🚨 FORBIDDEN: Do NOT ask about "year" options (licenses don't have year options) - this is ABSOLUTELY FORBIDDEN
+   - If customer said "mainland" or "freezone" in conversation history, they already answered - proceed to next step
 6. ONLY ask for full name if it's NOT already provided (check "INFORMATION ALREADY PROVIDED" section and "CUSTOMER NAME" section above)
 7. Return ONLY valid JSON with the structure specified above
-8. Keep reply under 300 characters, warm and helpful
+8. Keep reply under 300 characters, professional and business-focused (NOT casual)
 9. If training documents have pricing for this service, USE IT - don't ask for more info if pricing is available
 10. NEVER invent pricing - if pricing not in training docs, answer what you CAN (requirements, process), ask for needed details
 11. DO NOT default to "schedule a call" - actually try to help first! Only suggest call if customer explicitly asks or situation is complex
 12. If customer asks about a service (like "family visa"), provide helpful information from training docs, ask for needed details, and engage - don't just say "schedule a call"
+13. 🚨 FORBIDDEN: NEVER ask casual questions like "what brings you here", "what brings you to UAE", "what brings you", "how can I help you today" - these are too casual and unprofessional
+14. Stay focused on business services - if customer mentioned a service, acknowledge it specifically and ask ONLY relevant business questions (nationality, location, service type, documents needed)
+15. Professional tone only - you're a business consultant, not a casual friend
 
 Return ONLY the JSON object, no explanations.`
   

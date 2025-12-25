@@ -15,6 +15,8 @@ import { RoutingService } from '../llm/routing'
 import type { LLMMessage } from '../llm/types'
 import { prisma } from '../prisma'
 import { searchTrainingDocuments } from './vectorStore'
+import { writeFile, appendFile } from 'fs/promises'
+import { join } from 'path'
 
 /**
  * Extract provided information from conversation history
@@ -29,8 +31,18 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
   mainland?: boolean
   [key: string]: any
 } {
+  // #region agent log
+  const logEntry1 = {location:'strictGeneration.ts:extractProvidedInfo:entry',message:'Extraction started',data:{messageCount:messages.length,messageBodies:messages.map(m=>({dir:m.direction,body:(m.body||'').substring(0,50)})),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry1)}).catch(()=>{});
+  appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry1)+'\n').catch(()=>{});
+  // #endregion
   const provided: any = {}
   const allText = messages.map(m => m.body || '').join(' ').toLowerCase()
+  // #region agent log
+  const logEntry2 = {location:'strictGeneration.ts:extractProvidedInfo:allText',message:'All text extracted',data:{allTextLength:allText.length,allTextSample:allText.substring(0,200),hasMainland:allText.includes('mainland'),hasFreezone:allText.includes('freezone'),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry2)}).catch(()=>{});
+  appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry2)+'\n').catch(()=>{});
+  // #endregion
   
   // Extract nationality
   const nationalityKeywords = ['nigeria', 'somalia', 'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian', 'somali', 'nigerian', 'bangladesh', 'bangladeshi', 'nepal', 'nepali', 'sri lanka', 'sri lankan', 'vietnam', 'vietnamese']
@@ -55,13 +67,59 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
   }
   
   // Extract mainland/freezone (for business setup/license only)
-  if (allText.includes('mainland')) {
+  // Check both allText and individual messages to catch all cases
+  let foundMainland = false
+  let foundFreezone = false
+  
+  // Check individual messages first (more reliable)
+  for (const msg of messages) {
+    const msgText = (msg.body || '').toLowerCase().trim()
+    if (msgText === 'mainland' || msgText.includes('mainland')) {
+      foundMainland = true
+      foundFreezone = false
+      break
+    } else if (msgText === 'freezone' || msgText.includes('freezone') || msgText.includes('free zone')) {
+      foundFreezone = true
+      foundMainland = false
+      break
+    }
+  }
+  
+  // Also check allText as fallback
+  if (!foundMainland && !foundFreezone) {
+    if (allText.includes('mainland')) {
+      foundMainland = true
+      foundFreezone = false
+    } else if (allText.includes('freezone') || allText.includes('free zone')) {
+      foundFreezone = true
+      foundMainland = false
+    }
+  }
+  
+  if (foundMainland) {
     provided.mainland = true
     provided.freezone = false
-  } else if (allText.includes('freezone') || allText.includes('free zone')) {
+    console.log(`✅ [EXTRACT] Detected MAINLAND from conversation`)
+    // #region agent log
+    const logEntry3 = {location:'strictGeneration.ts:extractProvidedInfo:mainland',message:'Mainland detected',data:{foundMainland:true,providedMainland:provided.mainland,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry3)}).catch(()=>{});
+    appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry3)+'\n').catch(()=>{});
+    // #endregion
+  } else if (foundFreezone) {
     provided.freezone = true
     provided.mainland = false
+    console.log(`✅ [EXTRACT] Detected FREEZONE from conversation`)
+    // #region agent log
+    const logEntry4 = {location:'strictGeneration.ts:extractProvidedInfo:freezone',message:'Freezone detected',data:{foundFreezone:true,providedFreezone:provided.freezone,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'};
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry4)}).catch(()=>{});
+    appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry4)+'\n').catch(()=>{});
+    // #endregion
   }
+  // #region agent log
+  const logEntry5 = {location:'strictGeneration.ts:extractProvidedInfo:exit',message:'Extraction complete',data:{providedInfo:provided,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'};
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry5)}).catch(()=>{});
+  appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry5)+'\n').catch(()=>{});
+  // #endregion
   
   // Extract name - improved patterns to catch names in various formats
   const namePatterns = [
@@ -163,6 +221,21 @@ export async function generateStrictAIReply(
   
   // Extract provided information
   const providedInfo = extractProvidedInfo(conversationHistory)
+  
+  // DEBUG: Log what we extracted
+  console.log(`📝 [EXTRACT] Extracted info:`, {
+    mainland: providedInfo.mainland,
+    freezone: providedInfo.freezone,
+    name: providedInfo.name,
+    service: providedInfo.service,
+    messageCount: conversationHistory.length,
+    sampleMessages: conversationHistory.slice(-3).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`),
+  })
+  // #region agent log
+  const logEntry6 = {location:'strictGeneration.ts:generateStrictAIReply:afterExtract',message:'After extraction',data:{providedInfo:providedInfo,conversationHistoryLength:conversationHistory.length,conversationHistorySample:conversationHistory.slice(-3).map(m=>({dir:m.direction,body:(m.body||'').substring(0,50)})),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'};
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry6)}).catch(()=>{});
+  appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry6)+'\n').catch(()=>{});
+  // #endregion
   
   // If service is locked, use it
   if (lockedService) {
@@ -277,6 +350,11 @@ export async function generateStrictAIReply(
       rawOutput = result.text
       
       console.log(`📝 [STRICT-AI] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 200)}...`)
+      // #region agent log
+      const logEntry9 = {location:'strictGeneration.ts:generateStrictAIReply:rawOutput',message:'Raw AI output received',data:{rawOutputLength:rawOutput.length,rawOutputSample:rawOutput.substring(0,500),hasYearQuestion:rawOutput.toLowerCase().includes('year')||rawOutput.toLowerCase().includes('1-year')||rawOutput.toLowerCase().includes('2-year'),hasFreezoneQuestion:rawOutput.toLowerCase().includes('freezone or mainland'),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry9)}).catch(()=>{});
+      appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry9)+'\n').catch(()=>{});
+      // #endregion
       
       // Parse JSON output
       const parsed = parseAIOutput(rawOutput, conversationHistory)

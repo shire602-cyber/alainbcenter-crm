@@ -1,8 +1,0 @@
-{"location":"auth-server.ts:13","message":"getCurrentUser entry","data":{},"timestamp":1766134365880,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:17","message":"getCurrentUser token check","data":{"hasToken":true,"tokenLength":193},"timestamp":1766134365904,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:21","message":"getCurrentUser payload check","data":{"hasPayload":true,"userId":2},"timestamp":1766134365912,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:26","message":"getCurrentUser user found","data":{"hasUser":true,"userId":2},"timestamp":1766134366300,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:13","message":"getCurrentUser entry","data":{},"timestamp":1766134580372,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:21","message":"getCurrentUser payload check","data":{"hasPayload":true,"userId":2},"timestamp":1766134580393,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:17","message":"getCurrentUser token check","data":{"hasToken":true,"tokenLength":193},"timestamp":1766134580391,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
-{"location":"auth-server.ts:26","message":"getCurrentUser user found","data":{"hasUser":true,"userId":2},"timestamp":1766134580487,"sessionId":"debug-session","runId":"run1","hypothesisId":"G"}
