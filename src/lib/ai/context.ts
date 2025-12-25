@@ -215,17 +215,20 @@ export async function buildConversationContextFromLead(
     throw new Error('Lead not found')
   }
 
-  // Get messages from conversations or ChatMessage/CommunicationLog
-  const conversationMessages = lead.conversations[0]?.messages || []
+  // Get messages from conversations - these are already ordered desc, but we need them in chronological order
+  const conversationMessages = (lead.conversations[0]?.messages || []).sort((a: any, b: any) => 
+    new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
+  )
+  
   const chatMessages = await prisma.chatMessage.findMany({
     where: { contactId: lead.contactId },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
+    orderBy: { createdAt: 'asc' }, // Get in chronological order
+    take: 20, // Get more to ensure we have the latest
   })
   const communicationLogs = await prisma.communicationLog.findMany({
     where: { leadId: lead.id },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
+    orderBy: { createdAt: 'asc' }, // Get in chronological order
+    take: 20, // Get more to ensure we have the latest
   })
 
   // Also check for documents

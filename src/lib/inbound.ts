@@ -362,7 +362,7 @@ export async function handleInboundMessage(
         conversationId: conversation.id,
         leadId: lead.id,
         contactId: contact.id,
-        direction: 'inbound', // Use lowercase to match schema ('inbound' | 'outbound')
+        direction: 'INBOUND', // Message schema uses uppercase: INBOUND | OUTBOUND
         channel: channelLower,
         type: messageType,
         body: body || null,
@@ -452,7 +452,7 @@ export async function handleInboundMessage(
         leadId: lead.id,
         conversationId: conversation.id,
         channel: channelLower,
-        direction: 'inbound', // Use lowercase to match schema ('inbound' | 'outbound')
+        direction: 'inbound', // CommunicationLog schema uses lowercase: 'inbound' | 'outbound'
         from: fromAddress || null,
         body: body,
         messageSnippet: body?.substring(0, 200) || 'Inbound message',
@@ -561,8 +561,9 @@ export async function handleInboundMessage(
 
   // Step 9: Immediate auto-reply (no queue, no worker - just reply now)
   // CRITICAL: This must run even if previous steps had errors
+  // BUT: Skip auto-reply for duplicate messages (user requirement: "duplicate messages from customer shouldn't get replies")
   // Run synchronously (awaited) to ensure it executes, but wrapped in try-catch so it doesn't fail the webhook
-  if (message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
+  if (!isDuplicate && message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
     try {
       console.log(`🤖 [AUTO-REPLY] Starting auto-reply process for message ${message.id}`)
       console.log(`🤖 [AUTO-REPLY] Lead ID: ${lead.id}, Channel: ${message.channel}, Message: "${message.body.substring(0, 100)}..."`)
@@ -618,6 +619,8 @@ export async function handleInboundMessage(
         console.warn('Failed to log auto-reply error:', logError)
       }
     }
+  } else if (isDuplicate) {
+    console.log(`⏭️ [AUTO-REPLY] SKIPPED: Duplicate message detected - no auto-reply for duplicates (user requirement)`)
   } else {
     console.log(`⏭️ [AUTO-REPLY] SKIPPED: Missing required data`, {
       hasMessage: !!message,
@@ -625,7 +628,8 @@ export async function handleInboundMessage(
       hasLead: !!lead,
       hasContact: !!contact,
       bodyLength: message?.body?.length || 0,
-  })
+      isDuplicate,
+    })
   }
 
   console.log(
