@@ -685,97 +685,24 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       console.log(`📝 [FALLBACK] Using context-aware fallback reply (aiSuccess: ${aiResult?.success || false}, error: ${aiResult?.error || 'none'})`)
       console.log(`📝 [FALLBACK] User message: "${messageText.substring(0, 100)}"`)
       
-      // Generate context-aware fallback based on user's actual message
-      const userMessage = messageText.toLowerCase()
+      // Minimal fallback - AI should handle all responses, this is only for when AI completely fails
       const contactName = lead.contact?.fullName || 'there'
       
-      console.log(`📝 [FALLBACK] Detecting context from message (lowercase): "${userMessage.substring(0, 100)}"`)
+      console.log(`📝 [FALLBACK] Using minimal fallback (AI generation failed)`)
       
+      // Simple, generic fallback - AI should be doing the work, not fallbacks
       let fallbackText = ''
       
-      // CRITICAL: Fallback MUST match user's message context - check in order of specificity
-      // Check visa/family FIRST (most specific service requests)
-      if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
-        console.log(`📝 [FALLBACK] Matched: visa/family context`)
-        // More specific message for family visa with actual helpful information
-        if (userMessage.includes('family')) {
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، سأساعدك في تأشيرة العائلة. للحصول على أفضل خدمة، يرجى إرسال: 1) جنسية مقدم الطلب 2) عدد أفراد العائلة 3) تاريخ انتهاء التأشيرة الحالية (إن وجدت)`
-            : `Hi ${contactName}, I'll help you with family visa services. To provide the best service, please share: 1) Your nationality 2) Number of family members 3) Current visa expiry date (if applicable)`
-        } else {
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. يرجى إرسال: 1) نوع التأشيرة المطلوبة 2) جنسيتك 3) موقعك الحالي (داخل أو خارج الإمارات)`
-            : `Hi ${contactName}, I'll help you with visa services. Please share: 1) Type of visa needed 2) Your nationality 3) Your current location (inside or outside UAE)`
-        }
-      } else if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
-        console.log(`📝 [FALLBACK] Matched: business/setup context`)
-        fallbackText = detectedLanguage === 'ar' 
-          ? `مرحباً ${contactName}، يسعدني مساعدتك في خدمات تأسيس الشركات. سأجمع التفاصيل وأعود إليك قريباً.`
-          : `Hi ${contactName}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
-      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much') || userMessage.includes('pricing')) {
-        console.log(`📝 [FALLBACK] Matched: pricing context`)
+      // Only differentiate for simple greetings vs other messages
+      const userMessage = messageText.toLowerCase().trim()
+      if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey' || userMessage.length < 3) {
         fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، سأحضر معلومات الأسعار لك الآن.`
-          : `Hi ${contactName}, I'll get the pricing information for you right away.`
-      } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry') || userMessage.includes('renewal')) {
-        console.log(`📝 [FALLBACK] Matched: renewal context`)
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، سأتحقق من تفاصيل التجديد لك.`
-          : `Hi ${contactName}, I'll check the renewal details for you.`
-      } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper') || userMessage.includes('requirement')) {
-        console.log(`📝 [FALLBACK] Matched: document context`)
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، سأتحقق من متطلبات المستندات لك.`
-          : `Hi ${contactName}, I'll check the document requirements for you.`
+          ? `مرحباً ${contactName}، أهلاً بك في مركز عين الأعمال! كيف يمكنني مساعدتك اليوم؟`
+          : `Hi ${contactName}, welcome to Al Ain Business Center! How can I help you today?`
       } else {
-        // Generic fallback - but MUST reference their actual message
-        const messagePreview = messageText.length > 40 ? messageText.substring(0, 40) + '...' : messageText
-        const hasQuestion = userMessage.includes('?') || userMessage.includes('what') || userMessage.includes('how') || userMessage.includes('when') || userMessage.includes('where') || userMessage.includes('why') || userMessage.includes('info')
-        const hasUrgent = userMessage.includes('urgent') || userMessage.includes('asap') || userMessage.includes('quick') || userMessage.includes('immediately')
-        
-        if (hasUrgent) {
-          console.log(`📝 [FALLBACK] Matched: urgent context`)
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، أفهم أن هذا عاجل. سأعود إليك قريباً.`
-            : `Hi ${contactName}, I understand this is urgent. I'll get back to you shortly.`
-        } else if (hasQuestion) {
-          console.log(`📝 [FALLBACK] Matched: question context`)
-          // For "what details" after family visa, check conversation history
-          if (userMessage.includes('detail')) {
-            // Check if previous messages mentioned visa/family
-            const previousMessages = lead.messages?.filter(m => m.id !== messageId && m.direction === 'INBOUND').slice(-3) || []
-            const hasVisaContext = previousMessages.some(m => {
-              const body = (m.body || '').toLowerCase()
-              return body.includes('family') || body.includes('visa')
-            })
-            
-            if (hasVisaContext) {
-              fallbackText = detectedLanguage === 'ar'
-                ? `مرحباً ${contactName}، لتأشيرة العائلة نحتاج: جواز السفر، شهادة الزواج، شهادات ميلاد الأطفال، شهادة الراتب، سجل الإقامة. ما هي جنسيتك وعدد أفراد العائلة؟`
-                : `Hi ${contactName}, for family visa we need: passport, marriage certificate, children birth certificates, salary certificate, residence record. What's your nationality and number of family members?`
-            } else {
-              fallbackText = detectedLanguage === 'ar'
-                ? `مرحباً ${contactName}، شكراً لسؤالك. يرجى توضيح نوع الخدمة التي تحتاجها (تأشيرة، تأسيس شركة، تجديد) وسأساعدك بالتفاصيل.`
-                : `Hi ${contactName}, thanks for your question. Please specify the service you need (visa, business setup, renewal) and I'll provide the details.`
-            }
-          } else {
-            fallbackText = detectedLanguage === 'ar'
-              ? `مرحباً ${contactName}، شكراً لسؤالك. يرجى توضيح نوع الخدمة التي تحتاجها وسأساعدك بالتفاصيل.`
-              : `Hi ${contactName}, thanks for your question. Please specify the service you need and I'll provide the details.`
-          }
-        } else {
-          console.log(`📝 [FALLBACK] Matched: generic context with message reference`)
-          // For simple greetings, provide helpful next steps
-          if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey' || userMessage.length < 5) {
-            fallbackText = detectedLanguage === 'ar'
-              ? `مرحباً ${contactName}، أهلاً بك في مركز عين الأعمال! كيف يمكنني مساعدتك اليوم؟ نحن متخصصون في: تأشيرات العائلة، تأسيس الشركات، تجديد التأشيرات.`
-              : `Hi ${contactName}, welcome to Al Ain Business Center! How can I help you today? We specialize in: family visas, business setup, visa renewals.`
-          } else {
-            fallbackText = detectedLanguage === 'ar'
-              ? `مرحباً ${contactName}، تلقيت رسالتك عن "${messagePreview}". يرجى توضيح نوع الخدمة التي تحتاجها (تأشيرة، تأسيس شركة، تجديد) وسأساعدك.`
-              : `Hi ${contactName}, I received your message about "${messagePreview}". Please specify the service you need (visa, business setup, renewal) and I'll help you.`
-          }
-        }
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
+          : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
       }
       
       aiResult = {
