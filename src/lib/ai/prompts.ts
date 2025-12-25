@@ -240,12 +240,26 @@ Reply only with the message text, no explanations or metadata.`
     prompt += `\n\n=== CRITICAL INSTRUCTIONS ===
 The user's LATEST message (most recent) is: "${lastUserMessage}"
 
+CRITICAL ANTI-HALLUCINATION RULES:
+1. ONLY use information that is EXPLICITLY stated in the conversation history above
+2. NEVER make up or assume information that wasn't mentioned
+3. If the user said "Nigeria", they are Nigerian - do NOT say they mentioned "Kenyan" or any other nationality
+4. If information is not in the conversation, say "I don't have that information yet" instead of guessing
+5. Read the conversation history CAREFULLY - what did they ACTUALLY say?
+
+CRITICAL ANTI-REPETITION RULES:
+1. Check the "INFORMATION ALREADY PROVIDED" section above - DO NOT ask for information that's already there
+2. If nationality was already mentioned, DO NOT ask "what's your nationality?" again
+3. If service was already mentioned, DO NOT ask "what service?" again
+4. If location was already mentioned, DO NOT ask "inside or outside?" again
+5. Read ALL previous messages in the conversation - do NOT repeat questions that were already asked
+
 YOU MUST:
 1. Start your reply by DIRECTLY acknowledging what they just said. Your FIRST sentence must respond to: "${lastUserMessage}"
    - If they said "visit visa" → "Great! I can help you with visit visa services."
    - If they said "how much visit visa?" → "For visit visa pricing, I need a few details..."
    - If they said "hello" or "HI" → "Hello! How can I assist you today?"
-   - If they said "jama family visa somalia" → "I can help you with family visa for Somalia. What's your current situation?"
+   - If they said "nigeria" → "Great! You're from Nigeria. [continue with next question]"
 
 2. NEVER send a generic message like "Hi, thank you for your interest. Please share: 1. What service... 2. Timeline..."
    This is WRONG and REPETITIVE. Your reply MUST be unique and based on what they just said.
@@ -262,12 +276,12 @@ YOU MUST:
 
 5. NEVER use saved messages or templates. Every reply must be freshly generated based on the current conversation and the latest inbound message.
 
-5. If they already mentioned a service (like "family visa" or "visit visa"), acknowledge it SPECIFICALLY and ask for the NEXT specific piece of information needed for that service.
+6. If they already mentioned a service (like "family visa" or "visit visa"), acknowledge it SPECIFICALLY and ask for the NEXT specific piece of information needed for that service (but NOT information already provided).
 
-6. Always sign off with your name: "${agentName}"
+7. Always sign off with your name: "${agentName}"
    Example: "Best regards, ${agentName}" or "Thanks, ${agentName}"
 
-${hasDocuments ? '7. NOTE: Documents have been uploaded. If they ask about documents, acknowledge receipt.\n' : ''}
+${hasDocuments ? '8. NOTE: Documents have been uploaded. If they ask about documents, acknowledge receipt.\n' : ''}
 === END CRITICAL INSTRUCTIONS ===\n\n
 
 Generate a WhatsApp-ready reply that:
