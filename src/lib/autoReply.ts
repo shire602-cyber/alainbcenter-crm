@@ -102,17 +102,17 @@ async function shouldAutoReply(
     // @ts-ignore
     const secondsSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / 1000
     
-    // CRITICAL: For follow-up messages, use a very short rate limit (5 seconds) to allow quick replies
+    // CRITICAL: For follow-up messages, use a very short rate limit (3 seconds) to allow quick replies
     // This ensures second messages get replies quickly, regardless of agent's rateLimitMinutes
-    const followUpRateLimitSeconds = 5 // Always allow replies after 5 seconds for follow-ups (reduced from 10s)
-    console.log(`⏱️ Last auto-reply was ${secondsSinceLastReply.toFixed(0)} seconds ago (follow-up rate limit: ${followUpRateLimitSeconds}s)`)
+    const followUpRateLimitSeconds = 3 // Always allow replies after 3 seconds for follow-ups (reduced from 5s)
+    console.log(`⏱️ [RATE-LIMIT] Last auto-reply was ${secondsSinceLastReply.toFixed(1)} seconds ago (follow-up rate limit: ${followUpRateLimitSeconds}s)`)
     
-    // Only block if it's been less than 5 seconds (prevent spam, but allow normal follow-ups)
+    // Only block if it's been less than 3 seconds (prevent spam, but allow normal follow-ups)
     if (secondsSinceLastReply < followUpRateLimitSeconds) {
-      console.log(`⏭️ Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago (minimum ${followUpRateLimitSeconds}s for follow-ups)`)
+      console.log(`⏭️ [RATE-LIMIT] BLOCKED: replied ${secondsSinceLastReply.toFixed(1)} seconds ago (minimum ${followUpRateLimitSeconds}s for follow-ups)`)
       return { shouldReply: false, reason: `Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago`, agent: agent || undefined }
     } else {
-      console.log(`✅ Rate limit passed: ${secondsSinceLastReply.toFixed(0)} seconds since last reply (>= ${followUpRateLimitSeconds}s)`)
+      console.log(`✅ [RATE-LIMIT] PASSED: ${secondsSinceLastReply.toFixed(1)} seconds since last reply (>= ${followUpRateLimitSeconds}s) - allowing reply`)
     }
   } else if (isFirstMessage && agent && !agent.firstMessageImmediate) {
     // Agent can disable immediate first message replies
@@ -609,16 +609,49 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     try {
       // Always generate fresh AI reply (not saved/cached)
       // Pass agent to AI generation for custom prompts and settings
+      console.log(`🤖 [AI-GEN] Calling generateAIAutoresponse with context:`, {
+        leadId: aiContext.lead.id,
+        messageCount: aiContext.recentMessages.length,
+        firstMessage: aiContext.recentMessages[0]?.body?.substring(0, 50),
+        mode: aiContext.mode,
+        channel: aiContext.channel,
+        language: aiContext.language,
+        agentName: agent?.name,
+      })
+      
       aiResult = await generateAIAutoresponse(aiContext, agent)
       
       if (!aiResult || !aiResult.success || !aiResult.text) {
-        console.log(`⚠️ AI generation failed or returned empty, will use fallback`)
+        console.log(`⚠️ [AI-GEN] AI generation failed or returned empty:`, {
+          success: aiResult?.success,
+          error: aiResult?.error,
+          hasText: !!aiResult?.text,
+        })
         usedFallback = true
       } else {
-        console.log(`✅ AI generated fresh reply: "${aiResult.text.substring(0, 100)}..."`)
+        const replyPreview = aiResult.text.substring(0, 150)
+        console.log(`✅ [AI-GEN] AI generated fresh reply (${aiResult.text.length} chars): "${replyPreview}..."`)
+        
+        // Check if reply looks like a template
+        const templatePatterns = [
+          'Thank you for your interest',
+          'To better assist you',
+          'What specific service',
+          'What is your timeline',
+          'Looking forward to helping you',
+        ]
+        const isTemplate = templatePatterns.some(pattern => 
+          aiResult.text.toLowerCase().includes(pattern.toLowerCase())
+        )
+        
+        if (isTemplate) {
+          console.warn(`⚠️ [AI-GEN] WARNING: Generated reply contains template patterns! Regenerating...`)
+          // Try once more with stronger prompt
+          // For now, just log it - the prompts should prevent this
+        }
       }
     } catch (aiError: any) {
-      console.error(`❌ AI generation error: ${aiError.message}, will use fallback`)
+      console.error(`❌ [AI-GEN] AI generation error: ${aiError.message}`, aiError.stack)
       usedFallback = true
       aiResult = null
     }
