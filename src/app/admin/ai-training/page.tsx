@@ -294,19 +294,36 @@ export default function AITrainingPage() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              AI Training Area
+              AI Training & Response Settings
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload guidance documents and training materials for the AI autopilot
+              Manage training documents and configure AI agent responses
             </p>
           </div>
-          <Button onClick={newDocument} size="sm" className="gap-1.5">
-            <BookOpen className="h-4 w-4" />
-            New Document
-          </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'documents' | 'settings')}>
+          <TabsList>
+            <TabsTrigger value="documents">
+              <FileText className="h-4 w-4 mr-2" />
+              Training Documents
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings className="h-4 w-4 mr-2" />
+              Response Settings
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="documents" className="mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <div></div>
+              <Button onClick={newDocument} size="sm" className="gap-1.5">
+                <BookOpen className="h-4 w-4" />
+                New Document
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Document List */}
           <BentoCard className="lg:col-span-1" title="Training Documents">
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
