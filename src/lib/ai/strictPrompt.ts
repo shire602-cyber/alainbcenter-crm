@@ -174,7 +174,7 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   
   // Add provided information
   // #region agent log
-  const logEntry7 = {location:'strictPrompt.ts:buildStrictUserPrompt:beforeProvidedInfo',message:'Before building provided info section',data:{providedInfoKeys:Object.keys(providedInfo),providedInfo:providedInfo,hasMainland:!!providedInfo.mainland,hasFreezone:!!providedInfo.freezone,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'};
+  const logEntry7 = {location:'strictPrompt.ts:buildStrictUserPrompt:beforeProvidedInfo',message:'Before building provided info section',data:{providedInfoKeys:Object.keys(providedInfo),providedInfo:providedInfo,hasMainland:!!providedInfo.mainland,hasFreezone:!!providedInfo.freezone,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}};
   fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry7)}).catch(()=>{});
   appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry7)+'\n').catch(()=>{});
   // #endregion
@@ -195,7 +195,7 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
     }
     // #region agent log
     const providedInfoSection = prompt.split('INFORMATION ALREADY PROVIDED')[1]?.split('\n\n')[0] || '';
-    const logEntry8 = {location:'strictPrompt.ts:buildStrictUserPrompt:afterProvidedInfo',message:'After building provided info section',data:{providedInfoSectionLength:providedInfoSection.length,providedInfoSectionSample:providedInfoSection.substring(0,300),hasMainlandInPrompt:providedInfoSection.includes('MAINLAND'),hasFreezoneInPrompt:providedInfoSection.includes('FREEZONE'),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'};
+    const logEntry8 = {location:'strictPrompt.ts:buildStrictUserPrompt:afterProvidedInfo',message:'After building provided info section',data:{providedInfoSectionLength:providedInfoSection.length,providedInfoSectionSample:providedInfoSection.substring(0,300),hasMainlandInPrompt:providedInfoSection.includes('MAINLAND'),hasFreezoneInPrompt:providedInfoSection.includes('FREEZONE'),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}};
     fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry8)}).catch(()=>{});
     appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry8)+'\n').catch(()=>{});
     // #endregion
