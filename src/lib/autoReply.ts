@@ -223,9 +223,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // Use type assertion since table may not exist until migration is run
     autoReplyLog = await (prisma as any).autoReplyLog.create({
       data: {
-        leadId,
+          leadId,
         contactId,
-        messageId,
+          messageId,
         channel: channel.toLowerCase(),
         messageText: messageText.substring(0, 500), // Truncate for storage
         inboundParsed: JSON.stringify({
@@ -303,7 +303,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     // Step 2: Check if auto-reply should run (with first message context and messageText for pattern matching)
     const shouldReply = await shouldAutoReply(leadId, isFirstMessage, messageText)
-    
+      
     // Update log with autoReplyEnabled status
     if (autoReplyLog) {
       try {
@@ -526,7 +526,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               data: {
                 retrievalDocsCount: retrievalResult.relevantDocuments.length,
                 retrievalSimilarity: maxSimilarity,
-                retrievalReason: retrievalResult.reason,
+                  retrievalReason: retrievalResult.reason,
                 hasUsefulContext,
               },
             })
@@ -592,10 +592,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         ...lead.messages
           .filter(m => m.id !== messageId)
           .map(m => ({
-            direction: m.direction,
-            body: m.body || '',
-            createdAt: m.createdAt,
-          })),
+        direction: m.direction,
+        body: m.body || '',
+        createdAt: m.createdAt,
+      })),
       ],
       mode: 'QUALIFY' as AIMessageMode, // Default mode
       channel: channel.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT',
@@ -611,7 +611,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     try {
       // Always generate fresh AI reply (not saved/cached)
-      // Pass agent to AI generation for custom prompts and settings
+    // Pass agent to AI generation for custom prompts and settings
       console.log(`🤖 [AI-GEN] Calling generateAIAutoresponse with context:`, {
         leadId: aiContext.lead.id,
         messageCount: aiContext.recentMessages?.length || 0,
@@ -672,8 +672,12 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             contextAwareFallback = `Hi ${contactNameForFallback}, I'll get the pricing information for you right away.`
           } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry')) {
             contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the renewal details for you.`
-          } else if (userMessage.includes('visa') || userMessage.includes('permit')) {
-            contextAwareFallback = `Hi ${contactNameForFallback}, I'll help you with visa services. Let me get the information you need.`
+          } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
+            if (userMessage.includes('family')) {
+              contextAwareFallback = `Hi ${contactNameForFallback}, I'll help you with family visa services. Let me get the details and requirements for you.`
+            } else {
+              contextAwareFallback = `Hi ${contactNameForFallback}, I'll help you with visa services. Let me get the information you need.`
+            }
           } else if (userMessage.includes('doc') || userMessage.includes('document')) {
             contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the document requirements for you.`
           } else {
@@ -725,11 +729,18 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، سأتحقق من تفاصيل التجديد لك.`
           : `Hi ${contactName}, I'll check the renewal details for you.`
-      } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence')) {
-        console.log(`📝 [FALLBACK] Matched: visa context`)
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. سأعود إليك بالتفاصيل قريباً.`
-          : `Hi ${contactName}, I'll help you with visa services. Let me get the details for you.`
+      } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
+        console.log(`📝 [FALLBACK] Matched: visa/family context`)
+        // More specific message for family visa
+        if (userMessage.includes('family')) {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، سأساعدك في تأشيرة العائلة. سأعود إليك بالتفاصيل والمتطلبات قريباً.`
+            : `Hi ${contactName}, I'll help you with family visa services. Let me get the details and requirements for you.`
+        } else {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. سأعود إليك بالتفاصيل قريباً.`
+            : `Hi ${contactName}, I'll help you with visa services. Let me get the details for you.`
+        }
       } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper') || userMessage.includes('requirement')) {
         console.log(`📝 [FALLBACK] Matched: document context`)
         fallbackText = detectedLanguage === 'ar'
@@ -738,7 +749,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       } else {
         // Generic fallback - but MUST reference their actual message
         const messagePreview = messageText.length > 40 ? messageText.substring(0, 40) + '...' : messageText
-        const hasQuestion = userMessage.includes('?') || userMessage.includes('what') || userMessage.includes('how') || userMessage.includes('when') || userMessage.includes('where') || userMessage.includes('why')
+        const hasQuestion = userMessage.includes('?') || userMessage.includes('what') || userMessage.includes('how') || userMessage.includes('when') || userMessage.includes('where') || userMessage.includes('why') || userMessage.includes('info')
         const hasUrgent = userMessage.includes('urgent') || userMessage.includes('asap') || userMessage.includes('quick') || userMessage.includes('immediately')
         
         if (hasUrgent) {
@@ -891,7 +902,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             
             await (prisma as any).autoReplyLog.update({
               where: { id: autoReplyLog.id },
-              data: {
+            data: {
                 conversationId: conversation?.id || null,
                 decision: 'replied',
                 decisionReason: 'AI reply sent successfully',
@@ -899,9 +910,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 replyText: aiResult.text.substring(0, 500),
                 replyStatus: 'sent',
                 replyError: null,
-              },
-            })
-          } catch (logError: any) {
+            },
+          })
+        } catch (logError: any) {
             console.warn('Failed to update AutoReplyLog with success:', logError.message)
           }
         }
