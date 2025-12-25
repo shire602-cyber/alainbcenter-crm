@@ -17,7 +17,6 @@ import {
   getAgentProfileForLead, 
   matchesSkipPatterns, 
   matchesEscalatePatterns,
-  isWithinBusinessHours,
   type AgentProfile 
 } from './ai/agentProfile'
 
@@ -134,41 +133,10 @@ async function shouldAutoReply(
     console.log(`✅ First message - rate limit bypassed`)
   }
 
-  // Business hours check: CRITICAL FIX - User wants 24/7 auto-reply for sales leads
-  // Only check business hours if explicitly disabled, otherwise allow 24/7
-  // @ts-ignore
-  const allowOutside = agent?.allowOutsideHours ?? lead.allowOutsideHours ?? true // DEFAULT TO TRUE for 24/7
-  
-  if (allowOutside) {
-    console.log(`✅ 24/7 auto-reply enabled (allowOutsideHours: true)`)
-  } else {
-    // Only enforce business hours if explicitly disabled
-    if (agent) {
-      // Use agent's business hours
-      if (!isWithinBusinessHours(agent)) {
-        console.log(`⏭️ Outside agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
-        return { shouldReply: false, reason: `Outside business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd})`, agent }
-      }
-      console.log(`✅ Within agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
-    } else {
-      // Fallback to default Dubai business hours (only if allowOutsideHours is explicitly false)
-      const now = new Date()
-      const utcHour = now.getUTCHours()
-      const utcMinutes = now.getUTCMinutes()
-      const dubaiHour = (utcHour + 4) % 24
-      const dubaiMinutes = utcMinutes
-      const dubaiTime = dubaiHour * 60 + dubaiMinutes
-      const startTime = 7 * 60
-      const endTime = 21 * 60 + 30
-      
-      if (dubaiTime < startTime || dubaiTime >= endTime) {
-        console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
-        return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
-      }
-      console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
-    }
-  }
-
+  // Business hours check: REMOVED - User wants 24/7 auto-reply
+  // Business hours can be configured in AI Training & Response Settings page but won't block replies
+  // This allows 24/7 replies regardless of time
+  console.log(`✅ [SHOULD-REPLY] Business hours check SKIPPED - 24/7 auto-reply enabled`)
   console.log(`✅ [SHOULD-REPLY] Auto-reply check PASSED for lead ${leadId} - reply will be sent!`)
   return { shouldReply: true, agent: agent || undefined }
 }
