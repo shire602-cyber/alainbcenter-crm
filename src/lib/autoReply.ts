@@ -215,12 +215,20 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     return { replied: false, reason: 'Empty message text' }
   }
 
-  console.log(`🤖 AI reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
+  console.log(`🤖 [AUTO-REPLY] AI reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
+  console.log(`🤖 [AUTO-REPLY] Input:`, {
+    leadId,
+    messageId,
+    contactId,
+    channel,
+    messageLength: messageText.length,
+  })
 
   // Create structured log entry (will be updated throughout the process)
   let autoReplyLog: any = null
   try {
     // Use type assertion since table may not exist until migration is run
+    console.log(`📝 [AUTO-REPLY] Creating AutoReplyLog entry...`)
     autoReplyLog = await (prisma as any).autoReplyLog.create({
       data: {
           leadId,
@@ -237,10 +245,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         autoReplyEnabled: true, // Will be updated
       },
     })
-    console.log(`📝 Created AutoReplyLog entry: ${autoReplyLog.id}`)
+    console.log(`✅ [AUTO-REPLY] Created AutoReplyLog entry: ${autoReplyLog.id}`)
   } catch (logError: any) {
-    console.warn('Failed to create AutoReplyLog (table may not exist yet - run migration):', logError.message)
-    // Continue even if logging fails
+    console.error('❌ [AUTO-REPLY] Failed to create AutoReplyLog:', logError.message)
+    console.error('❌ [AUTO-REPLY] Error stack:', logError.stack)
+    // Continue even if logging fails - don't block replies
   }
 
   try {
@@ -321,7 +330,24 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     }
     
     if (!shouldReply.shouldReply) {
-      console.log(`⏭️ Skipping AI reply for lead ${leadId}: ${shouldReply.reason}`)
+      console.error(`❌ [AUTO-REPLY] BLOCKED: Skipping AI reply for lead ${leadId}: ${shouldReply.reason}`)
+      console.error(`❌ [AUTO-REPLY] This is why no reply was sent!`)
+      
+      // Update log with skip reason
+      if (autoReplyLog) {
+        try {
+          await (prisma as any).autoReplyLog.update({
+            where: { id: autoReplyLog.id },
+            data: {
+              decision: 'skipped',
+              skippedReason: shouldReply.reason || 'Unknown reason',
+            },
+          })
+        } catch (logError) {
+          console.warn('Failed to update AutoReplyLog with skip reason:', logError)
+        }
+      }
+      
       return { replied: false, reason: shouldReply.reason }
     }
     
