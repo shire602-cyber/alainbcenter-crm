@@ -163,12 +163,17 @@ export async function POST(req: NextRequest) {
 
     // RETRIEVER-FIRST CHAIN: Check if AI can respond to this query
     // Get the user's query from recent messages
+    // Check for both 'INBOUND' and 'inbound' for backward compatibility with existing data
     let userQuery = ''
     if (resolvedConversationId) {
       const lastMessage = await prisma.message.findFirst({
         where: { 
           conversationId: resolvedConversationId,
-          direction: 'INBOUND',
+          OR: [
+            { direction: 'INBOUND' },
+            { direction: 'inbound' },
+            { direction: 'IN' }, // Legacy support
+          ],
         },
         orderBy: { createdAt: 'desc' },
         select: { body: true },
@@ -200,129 +205,85 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Determine tone and language based on objective
-    let tone = 'professional'
-    if (objective === 'followup' || objective === 'qualify') {
-      tone = 'friendly'
-    }
-
     // Build training context from retrieved documents
     const relevantTraining = retrievalResult.relevantDocuments
       .map(doc => `${doc.title} (${doc.type}, similarity: ${doc.similarity.toFixed(2)}):\n${doc.content}`)
       .join('\n\n---\n\n')
 
-    // Generate draft based on objective
+    // ALWAYS use AI-generated replies (no templates)
+    const { generateDraftReply, generateModeSpecificDraft } = await import('@/lib/ai/generate')
+    
+    // Determine tone and mode based on objective
+    let tone: 'professional' | 'friendly' | 'short' = 'friendly'
+    let mode: 'FOLLOW_UP' | 'RENEWAL' | 'DOCS' | 'PRICING' | undefined = undefined
+    
+    if (objective === 'renewal' || objective === 'remind') {
+      tone = 'professional'
+      mode = 'RENEWAL'
+    } else if (objective === 'pricing') {
+      tone = 'professional'
+      mode = 'PRICING'
+    } else if (objective === 'docs_request') {
+      tone = 'professional'
+      mode = 'DOCS'
+    } else if (objective === 'followup' || objective === 'qualify') {
+      tone = 'friendly'
+      mode = 'FOLLOW_UP'
+    }
+    
+    // Detect language from messages
+    const lastMessages = contextSummary.structured.messages.slice(-3)
+    const messageText = lastMessages.map((m: { message: string }) => m.message).join(' ')
+    const detectedLanguage = detectLanguage(messageText || '') as 'en' | 'ar'
+    
     let draftText = ''
     let nextQuestions: string[] = []
-
-    // For now, use template-based approach (can be enhanced with OpenAI later)
-    const contactName = contextSummary.structured.contact?.name || 'there'
-    const leadStage = contextSummary.structured.lead?.stage || 'NEW'
     
-    // Use training documents to enhance the response
-    const trainingContext = relevantTraining 
-      ? `\n\nTraining Guidelines:\n${relevantTraining}\n\nUse the above training to guide your response.`
-      : ''
-
-    switch (objective) {
-      case 'qualify':
-        // Check if this is first message (no previous outbound messages)
-        let outboundCount = 0
-        if (resolvedConversationId) {
-          outboundCount = await prisma.message.count({
-            where: {
-              conversationId: resolvedConversationId,
-              direction: 'OUTBOUND',
-            },
-          })
+    try {
+      // ALWAYS use AI-generated replies
+      // Use mode-specific AI generation if mode is specified, otherwise use general draft
+      if (mode && (mode === 'RENEWAL' || mode === 'PRICING' || mode === 'DOCS')) {
+        // Use the mode-specific generator for specialized modes
+        const modeResult = await generateModeSpecificDraft(
+          contextSummary.structured,
+          mode,
+          tone,
+          detectedLanguage
+        )
+        draftText = modeResult.text
+      } else {
+        // Use general AI draft generator (works for all objectives including qualify, followup, etc.)
+        const aiResult = await generateDraftReply(
+          contextSummary.structured,
+          tone,
+          detectedLanguage
+        )
+        draftText = aiResult.text
+      }
+      
+      // Extract questions from AI-generated text (simple heuristic)
+      const questionMatches = draftText.match(/\d+[\.\)]\s*([^?\n]+[?])/g)
+      if (questionMatches) {
+        nextQuestions = questionMatches.map(q => q.replace(/^\d+[\.\)]\s*/, '').trim())
+      } else {
+        // Fallback: extract questions ending with ?
+        const questions = draftText.match(/[^.!?\n]+[?]/g)
+        if (questions) {
+          nextQuestions = questions.slice(0, 3).map(q => q.trim())
         }
-        
-        if (outboundCount === 0) {
-          // First message - greet and collect basic info
-          draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!${trainingContext}`
-          nextQuestions = [
-            'What is your full name?',
-            'What service are you interested in?',
-            'What is your nationality?'
-          ]
-        } else {
-          // Follow-up message
-          draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n3. Do you have any specific requirements?\n\nLooking forward to helping you!${trainingContext}`
-          nextQuestions = [
-            'What specific service are you interested in?',
-            'What is your timeline?',
-            'Do you have any specific requirements?'
-          ]
-        }
-        break
+      }
       
-      case 'renewal':
-        const nearestExpiry = contextSummary.structured.expiries?.[0]
-        if (nearestExpiry) {
-          draftText = `Hi ${contactName}, I hope this message finds you well. I noticed that your ${nearestExpiry.type} is expiring soon. Would you like to proceed with renewal? We can help you complete the process smoothly.`
-        } else {
-          draftText = `Hi ${contactName}, I wanted to check in regarding your upcoming renewals. Is there anything we can help you with?`
-        }
-        nextQuestions = [
-          'Would you like to proceed with renewal?',
-          'Do you have all required documents?',
-          'What is your preferred timeline?'
-        ]
-        break
-      
-      case 'followup':
-        draftText = `Hi ${contactName}, I wanted to follow up on our previous conversation. How can we assist you further? Please let me know if you have any questions.`
-        nextQuestions = [
-          'Do you have any questions?',
-          'Would you like to schedule a call?',
-          'What is the best time to reach you?'
-        ]
-        break
-      
-      case 'pricing':
-        draftText = `Hi ${contactName}, thank you for your interest. I'd be happy to provide you with detailed pricing information. Could you please let me know which service you're interested in, and I'll send you a customized quote?`
-        nextQuestions = [
-          'Which service are you interested in?',
-          'What is your budget range?',
-          'Do you need any add-on services?'
-        ]
-        break
-      
-      case 'docs_request':
-        draftText = `Hi ${contactName}, to proceed with your application, we'll need the following documents:\n\n1. Passport copy\n2. Photo\n3. Emirates ID (if applicable)\n\nPlease share these documents when convenient. If you have any questions, feel free to ask!`
-        nextQuestions = [
-          'Do you have all required documents?',
-          'When can you provide the documents?',
-          'Do you need help with any specific document?'
-        ]
-        break
-      
-      case 'remind':
-        const nearestExpiryRemind = contextSummary.structured.expiries?.[0]
-        if (nearestExpiryRemind) {
-          draftText = `Hi ${contactName}, this is a friendly reminder about your upcoming ${nearestExpiryRemind.type} expiry. We're here to help you renew on time. Would you like to proceed?`
-        } else {
-          draftText = `Hi ${contactName}, this is a friendly reminder about your pending follow-up. Is there anything we can help you with today?`
-        }
-        nextQuestions = [
-          'Would you like to proceed?',
-          'Do you have any questions?',
-          'What is the best time to reach you?'
-        ]
-        break
-      
-      case 'book_call':
-        draftText = `Hi ${contactName}, I'd love to schedule a call with you to discuss your needs in detail. Would you be available for a quick call? Please let me know your preferred time, and I'll arrange it.`
-        nextQuestions = [
-          'What is your preferred time?',
-          'Which day works best for you?',
-          'Do you prefer morning or afternoon?'
-        ]
-        break
+      console.log(`✅ AI-generated draft for objective ${objective}: "${draftText.substring(0, 100)}..."`)
+    } catch (aiError: any) {
+      console.error('❌ AI generation failed, using minimal fallback:', aiError.message)
+      // Minimal fallback - NO template phrases
+      const contactName = contextSummary.structured.contact?.name || 'there'
+      draftText = `Hello ${contactName}! I received your message. How can I help you today?`
+      nextQuestions = ['How can I help you today?']
     }
 
-    // Auto-detect language (simplified - can be enhanced)
-    const language = 'en' // Default to English, can be enhanced with detection
+    // Language already detected above
+    const language = detectedLanguage || 'en'
 
     // Ensure we have a conversationId (required by schema)
     // If we don't have one, create a conversation first

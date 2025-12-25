@@ -1,17 +1,46 @@
 import { ConversationContext } from './context'
+import { prisma } from '@/lib/prisma'
+
+// Helper to check if lead has uploaded documents
+async function checkIfLeadHasDocuments(leadId: number): Promise<boolean> {
+  try {
+    const docCount = await prisma.document.count({
+      where: { leadId },
+    })
+    return docCount > 0
+  } catch {
+    return false
+  }
+}
 
 const COMPANY_IDENTITY = 'Al Ain Business Center – UAE business setup & visa services'
 
 export function getSystemPrompt(): string {
   return `You are an AI assistant helping agents at ${COMPANY_IDENTITY} communicate with clients via WhatsApp.
 
-CRITICAL RULES (MUST FOLLOW):
+CRITICAL RULES (MUST FOLLOW - VIOLATIONS WILL CAUSE MESSAGE REJECTION):
 1. NEVER promise approvals, guarantees, or outcomes (e.g., "you will get approved", "guaranteed", "definitely")
 2. Keep replies SHORT (under 300 characters for first message, max 600 total)
 3. Ask MAXIMUM 2 questions per message
 4. Always include a clear next-step CTA (e.g., "Reply with your nationality", "Share your expiry date")
 5. Detect language (EN/AR) and reply in the SAME language
 6. Never request sensitive data (bank details, passwords, credit cards)
+
+ABSOLUTELY FORBIDDEN PHRASES (YOUR MESSAGE WILL BE REJECTED IF IT CONTAINS THESE):
+- "Thank you for your interest in our services"
+- "To better assist you"
+- "could you please share"
+- "What specific service are you looking for"
+- "What is your timeline"
+- "Looking forward to helping you"
+- Any numbered list format (1. 2. 3.)
+- Any template-like structure
+
+YOUR REPLY MUST BE:
+- Unique and based on what the user actually said
+- Natural and conversational (not robotic)
+- Direct response to their message
+- NO generic templates or saved messages
 
 Your role:
 - Generate professional, compliant WhatsApp messages
@@ -22,7 +51,7 @@ Your role:
 Guidelines:
 - Always be professional and helpful
 - Ask 1-2 qualifying questions maximum if information is missing:
-  * Service needed (family visa, employment visa, freelance permit, business setup, renewal)
+  * Service needed (family visa, visit visa, freelance permit, business setup, renewal) - NEVER mention employment visa
   * Nationality
   * Location (inside UAE or outside)
   * Urgency (expiry date or when they want to proceed)
@@ -39,20 +68,25 @@ Tone guidelines:
 export async function buildDraftReplyPrompt(
   context: ConversationContext,
   tone: 'professional' | 'friendly' | 'short',
-  language: 'en' | 'ar'
+  language: 'en' | 'ar',
+  agent?: import('../ai/agentProfile').AgentProfile
 ): Promise<string> {
   const { contact, lead, messages } = context
 
   // Load relevant training documents using vector search
+  // Use agent's training documents if specified
   let trainingContext = ''
   try {
     const { searchTrainingDocuments } = await import('./vectorStore')
-    const lastMessage = messages[messages.length - 1]?.message || ''
+    // Get the actual latest message (messages are sorted chronologically, last one is latest)
+    const lastMessage = messages.length > 0 ? messages[messages.length - 1]?.message || '' : ''
     
     if (lastMessage && lastMessage.trim().length > 0) {
+      const similarityThreshold = agent?.similarityThreshold ?? 0.6
       const searchResults = await searchTrainingDocuments(lastMessage, {
         topK: 5,
-        similarityThreshold: 0.6,
+        similarityThreshold,
+        trainingDocumentIds: agent?.trainingDocumentIds || undefined,
       })
       
       if (searchResults.hasRelevantTraining && searchResults.documents.length > 0) {
@@ -61,7 +95,10 @@ export async function buildDraftReplyPrompt(
         
         searchResults.documents.forEach((doc, idx) => {
           const similarity = searchResults.scores[idx] || 0
-          trainingContext += `[${doc.metadata.type.toUpperCase()}] ${doc.metadata.title} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
+          // Defensive checks for metadata fields (should always exist per VectorDocument type, but safe to check)
+          const docType = doc.metadata?.type || 'guidance'
+          const docTitle = doc.metadata?.title || 'Untitled Document'
+          trainingContext += `[${docType.toUpperCase()}] ${docTitle} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
           trainingContext += `${doc.content.substring(0, 800)}\n\n`
         })
         
@@ -75,7 +112,32 @@ export async function buildDraftReplyPrompt(
     console.warn('Failed to load training documents for prompt:', error.message)
   }
 
-  let prompt = `${getSystemPrompt()}${trainingContext}
+  // Add agent-specific guidelines
+  let agentGuidelines = ''
+  if (agent) {
+    if (agent.allowedPhrases && agent.allowedPhrases.length > 0) {
+      agentGuidelines += `\n\nIMPORTANT - ALLOWED PHRASES/TOPICS:\n`
+      agentGuidelines += `You MUST emphasize or use these phrases/topics when relevant:\n`
+      agent.allowedPhrases.forEach(phrase => {
+        agentGuidelines += `- ${phrase}\n`
+      })
+    }
+    if (agent.prohibitedPhrases && agent.prohibitedPhrases.length > 0) {
+      agentGuidelines += `\n\nIMPORTANT - PROHIBITED PHRASES/TOPICS:\n`
+      agentGuidelines += `You MUST NEVER use these phrases or discuss these topics:\n`
+      agent.prohibitedPhrases.forEach(phrase => {
+        agentGuidelines += `- ${phrase}\n`
+      })
+    }
+    if (agent.customGreeting) {
+      agentGuidelines += `\n\nCUSTOM GREETING TEMPLATE:\n${agent.customGreeting}\n`
+    }
+    if (agent.customSignoff) {
+      agentGuidelines += `\n\nCUSTOM SIGNOFF TEMPLATE:\n${agent.customSignoff}\n`
+    }
+  }
+
+  let prompt = `${getSystemPrompt()}${trainingContext}${agentGuidelines}
 
 Generate a WhatsApp reply in ${language === 'ar' ? 'Arabic' : 'English'} with ${tone} tone.
 
@@ -111,36 +173,122 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
   // Check if this is first message (no outbound messages yet)
   const hasOutboundMessages = messages.some(m => m.direction === 'OUTBOUND' || m.direction === 'outbound')
   
-  if (!hasOutboundMessages) {
-    // FIRST MESSAGE - Always greet and collect basic info
-    prompt += `\nThis is the FIRST message from the customer. Generate a friendly greeting that:
-1. Welcomes them to Al Ain Business Center
-2. Introduces yourself briefly
-3. Asks for 3 pieces of information (in order):
-   - Full name
-   - Service needed (Family Visa, Business Setup, Employment Visa, etc.)
-   - Nationality
-4. Keeps it SHORT (under 250 characters)
-5. Uses friendly, warm tone
-6. NEVER promises approvals or guarantees
-7. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+  const maxMessageLength = agent?.maxMessageLength || 300
+  const maxTotalLength = agent?.maxTotalLength || 600
+  const maxQuestions = agent?.maxQuestionsPerMessage || 2
 
-Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm here to help with UAE business setup and visa services. To get started, please share: 1) Your full name 2) What service do you need? 3) Your nationality. I'll connect you with the right specialist!"
+  if (!hasOutboundMessages) {
+    // FIRST MESSAGE - Respond naturally to what the user said
+    const agentName = agent?.name || 'an assistant'
+    const lastUserMessage = messages.length > 0 
+      ? messages[messages.length - 1]?.message || ''
+      : ''
+    
+    prompt += `\n=== CRITICAL: FIRST MESSAGE REPLY ===
+This is the FIRST message from the customer. Their message was: "${lastUserMessage}"
+
+YOU MUST:
+1. Respond DIRECTLY to what they said. If they said "HI" or "hello", greet them naturally. If they mentioned a service (like "family visa"), acknowledge it and respond about that service.
+2. NEVER use a template or generic message like "Welcome to Al Ain Business Center. Please share: 1. Your full name 2. What service..."
+3. NEVER ask for multiple pieces of information in a numbered list format
+4. Your reply must be UNIQUE and based on their actual message: "${lastUserMessage}"
+5. If they just said "HI" or "hello", respond with a friendly greeting and ask ONE simple question (not a numbered list)
+6. If they mentioned a service, acknowledge it and ask ONE follow-up question about that service
+7. Keep it SHORT (under ${maxMessageLength} characters)
+8. Use friendly, warm tone
+9. NEVER promises approvals or guarantees
+10. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+11. Sign off with your name: "${agentName}"
+
+CRITICAL: Your reply must be SPECIFIC to "${lastUserMessage}". Do NOT use a generic template or numbered list of questions.
+
+ABSOLUTELY FORBIDDEN PHRASES (NEVER USE):
+- "Thank you for your interest in our services"
+- "To better assist you, could you please share"
+- "What specific service are you looking for"
+- "What is your timeline"
+- "Looking forward to helping you"
+- Any numbered list format (1. 2. 3.)
+- Any template-like structure
+
+Example GOOD replies:
+- If they said "HI": "Hello! 👋 I'm ${agentName} from Al Ain Business Center. How can I help you today?"
+- If they said "family visa": "Great! I can help you with family visa services. What's your nationality?"
+- If they said "visit visa": "I'd be happy to help with visit visa. Are you currently in the UAE?"
+- If they said "jama family visa somalia": "I can help you with family visa for Somalia. What's your current situation?"
+
+Example BAD replies (NEVER USE - THESE ARE TEMPLATES):
+- "Hi Abdurahman Shire, thank you for your interest in our services. To better assist you, could you please share: 1. What specific service are you looking for? 2. What is your timeline? Looking forward to helping you!"
+- "Welcome to Al Ain Business Center. Please share: 1. Your full name 2. What service..."
+- "Hi, thank you for your interest. To help you, please provide: 1) Full name 2) Service needed..."
 
 Reply only with the message text, no explanations or metadata.`
   } else {
     // FOLLOW-UP MESSAGE
-    prompt += `\nGenerate a WhatsApp-ready reply that:
-1. Acknowledges the last message
-2. Asks MAXIMUM 2 qualifying questions if information is missing (NOT 2-4, MAX 2)
-3. Highlights urgency if expiry date is close
-4. Includes a clear CTA (e.g., "Reply with 1/2/3" or "Share passport copy")
-5. Keeps it SHORT (under 300 characters, max 600 total)
-6. NEVER promises approvals, guarantees, or outcomes
-7. Uses ${tone} tone
-8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+    // Get the most recent inbound message - messages are sorted ascending, so last one is latest
+    const allInboundMessages = messages.filter(m => m.direction === 'INBOUND' || m.direction === 'inbound' || m.direction === 'IN')
+    const lastUserMessage = allInboundMessages.length > 0 
+      ? allInboundMessages[allInboundMessages.length - 1]?.message || ''
+      : messages[messages.length - 1]?.message || '' // Fallback to last message if no inbound found
+    
+    // Check if documents are uploaded
+    const hasDocuments = lead && lead.id ? await checkIfLeadHasDocuments(lead.id) : false
+    
+    const agentName = agent?.name || 'an assistant'
+    
+    // Build a very explicit instruction
+    prompt += `\n\n=== CRITICAL INSTRUCTIONS ===
+The user's LATEST message (most recent) is: "${lastUserMessage}"
 
-Reply only with the message text, no explanations or metadata.`
+YOU MUST:
+1. Start your reply by DIRECTLY acknowledging what they just said. Your FIRST sentence must respond to: "${lastUserMessage}"
+   - If they said "visit visa" → "Great! I can help you with visit visa services."
+   - If they said "how much visit visa?" → "For visit visa pricing, I need a few details..."
+   - If they said "hello" or "HI" → "Hello! How can I assist you today?"
+   - If they said "jama family visa somalia" → "I can help you with family visa for Somalia. What's your current situation?"
+
+2. NEVER send a generic message like "Hi, thank you for your interest. Please share: 1. What service... 2. Timeline..."
+   This is WRONG and REPETITIVE. Your reply MUST be unique and based on what they just said.
+
+3. ABSOLUTELY FORBIDDEN - NEVER use these phrases:
+   - "Thank you for your interest in our services"
+   - "To better assist you, could you please share"
+   - "What specific service are you looking for"
+   - "What is your timeline"
+   - "Looking forward to helping you"
+   - Any numbered list format (1. 2. 3.)
+
+4. CRITICAL: Your reply must be DIFFERENT from previous messages. Check the conversation history above - do NOT repeat the same questions or use saved templates.
+
+5. NEVER use saved messages or templates. Every reply must be freshly generated based on the current conversation and the latest inbound message.
+
+5. If they already mentioned a service (like "family visa" or "visit visa"), acknowledge it SPECIFICALLY and ask for the NEXT specific piece of information needed for that service.
+
+6. Always sign off with your name: "${agentName}"
+   Example: "Best regards, ${agentName}" or "Thanks, ${agentName}"
+
+${hasDocuments ? '7. NOTE: Documents have been uploaded. If they ask about documents, acknowledge receipt.\n' : ''}
+=== END CRITICAL INSTRUCTIONS ===\n\n
+
+Generate a WhatsApp-ready reply that:
+1. STARTS by directly acknowledging their latest message: "${lastUserMessage}" - Your first sentence MUST respond to this
+2. If they mentioned a service (like "family visa", "visit visa"), acknowledge it SPECIFICALLY and respond about that service
+3. If they asked a question (like "how much?"), answer it directly or explain what info you need to provide pricing
+4. If they provided information, acknowledge it and ask for the NEXT specific piece needed (not a numbered list)
+5. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (but NOT as a numbered list)
+6. Keeps it SHORT (under ${maxMessageLength} characters)
+7. NEVER promises approvals or guarantees
+8. Uses ${tone} tone
+9. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+10. MUST end with: "Best regards, ${agentName}" or similar with your name
+
+CRITICAL REMINDER: Your reply must be SPECIFIC to "${lastUserMessage}". Do NOT use a generic template or numbered list format.`
+
+    if (agent?.customSignoff) {
+      prompt += `\n\nCustom signoff style: "${agent.customSignoff}"`
+    }
+    
+    prompt += `\n\nReply ONLY with the message text, no explanations or metadata.`
   }
 
   return prompt

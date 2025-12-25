@@ -40,6 +40,10 @@ export function WhatsAppSettingsClient() {
   const [sending, setSending] = useState(false)
   const [testResult, setTestResult] = useState<{ success: boolean; message?: string } | null>(null)
   const [loadingContacts, setLoadingContacts] = useState(false)
+  const [testAutoReplyLeadId, setTestAutoReplyLeadId] = useState('')
+  const [testAutoReplyMessage, setTestAutoReplyMessage] = useState('Hi, I need help with visa services')
+  const [testingAutoReply, setTestingAutoReply] = useState(false)
+  const [autoReplyTestResult, setAutoReplyTestResult] = useState<{ success: boolean; message?: string } | null>(null)
 
   useEffect(() => {
     loadConfig()
@@ -432,6 +436,140 @@ export function WhatsAppSettingsClient() {
               </p>
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      {/* Test Auto-Reply */}
+      <Card className="shadow-lg border-blue-200 dark:border-blue-800">
+        <CardHeader>
+          <CardTitle>Test Auto-Reply</CardTitle>
+          <CardDescription>Test the AI auto-reply functionality for a lead</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <form onSubmit={async (e) => {
+            e.preventDefault()
+            if (!testAutoReplyLeadId || !testAutoReplyMessage) {
+              setAutoReplyTestResult({ success: false, message: 'Please enter lead ID and message' })
+              return
+            }
+
+            setTestingAutoReply(true)
+            setAutoReplyTestResult(null)
+
+            try {
+              const response = await fetch('/api/admin/auto-reply/test', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
+                body: JSON.stringify({
+                  leadId: parseInt(testAutoReplyLeadId),
+                  messageText: testAutoReplyMessage,
+                  channel: 'WHATSAPP',
+                }),
+              })
+
+              const data = await response.json()
+
+              if (data.ok && data.result) {
+                if (data.result.replied) {
+                  setAutoReplyTestResult({ 
+                    success: true, 
+                    message: `✅ Auto-reply sent successfully! Check the lead's conversation.` 
+                  })
+                } else {
+                  setAutoReplyTestResult({ 
+                    success: false, 
+                    message: `⏭️ Auto-reply skipped: ${data.result.reason || data.result.error}` 
+                  })
+                }
+              } else {
+                setAutoReplyTestResult({ 
+                  success: false, 
+                  message: data.error || 'Failed to test auto-reply' 
+                })
+              }
+            } catch (err: any) {
+              setAutoReplyTestResult({ 
+                success: false, 
+                message: err.message || 'Error testing auto-reply' 
+              })
+            } finally {
+              setTestingAutoReply(false)
+            }
+          }} className="space-y-4">
+            <div>
+              <label className="block text-sm font-medium mb-2">
+                Lead ID
+              </label>
+              <Input
+                type="number"
+                value={testAutoReplyLeadId}
+                onChange={(e) => setTestAutoReplyLeadId(e.target.value)}
+                placeholder="Enter lead ID"
+                required
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Find the lead ID from the Leads page or URL (e.g., /leads/123)
+              </p>
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-2">Test Message (simulated inbound)</label>
+              <Input
+                value={testAutoReplyMessage}
+                onChange={(e) => setTestAutoReplyMessage(e.target.value)}
+                placeholder="Hi, I need help"
+                required
+              />
+            </div>
+            <Button type="submit" disabled={testingAutoReply || !testAutoReplyLeadId || !testAutoReplyMessage}>
+              {testingAutoReply ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Testing...
+                </>
+              ) : (
+                <>
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Test Auto-Reply
+                </>
+              )}
+            </Button>
+          </form>
+
+          {autoReplyTestResult && (
+            <div
+              className={`mt-4 p-4 rounded-lg flex items-center gap-3 ${
+                autoReplyTestResult.success
+                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+              }`}
+            >
+              {autoReplyTestResult.success ? (
+                <CheckCircle2 className="h-5 w-5 text-green-600" />
+              ) : (
+                <XCircle className="h-5 w-5 text-red-600" />
+              )}
+              <p
+                className={
+                  autoReplyTestResult.success
+                    ? 'text-green-700 dark:text-green-300'
+                    : 'text-red-700 dark:text-red-300'
+                }
+              >
+                {autoReplyTestResult.message}
+              </p>
+            </div>
+          )}
+
+          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs text-muted-foreground">
+            <p className="font-medium mb-1">💡 How it works:</p>
+            <ul className="list-disc list-inside space-y-1">
+              <li>This simulates an inbound message from the lead</li>
+              <li>The AI will check if auto-reply should run</li>
+              <li>If approved, it will generate and send a reply via WhatsApp</li>
+              <li>Check the "Recent Webhook Activity" above to see the logs</li>
+            </ul>
+          </div>
         </CardContent>
       </Card>
 

@@ -65,10 +65,36 @@ export async function GET(req: NextRequest) {
 
     console.log(`📅 Found ${dueReminders.length} reminders due`)
 
-    for (const reminder of dueReminders) {
-      results.processed++
-      
-      try {
+    // Check if within support hours (7am - 9:30pm Dubai time)
+    const hour = now.getUTCHours()
+    const minute = now.getUTCMinutes()
+    // Dubai is UTC+4, so 7:00-21:30 Dubai = 3:00-17:30 UTC
+    const dubaiHour = (hour + 4) % 24
+    const dubaiMinute = minute
+    const dubaiTime = dubaiHour * 60 + dubaiMinute // Total minutes since midnight
+    const startTime = 7 * 60 // 7:00 AM = 420 minutes
+    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
+    
+    const isWithinHours = dubaiTime >= startTime && dubaiTime < endTime
+    
+    if (!isWithinHours) {
+      console.log(`⏭️ Outside support hours (7am-9:30pm Dubai time). Current: ${dubaiHour}:${dubaiMinute.toString().padStart(2, '0')} Dubai time. Skipping reminders.`)
+      return NextResponse.json({
+        ok: true,
+        message: 'Outside support hours - reminders will be sent during 7am-9:30pm Dubai time',
+        processed: 0,
+        sent: 0,
+        failed: 0,
+        errors: [],
+      })
+    }
+    
+    console.log(`✅ Within support hours (7am-9:30pm Dubai time). Current: ${dubaiHour}:${dubaiMinute.toString().padStart(2, '0')} Dubai time. Processing reminders.`)
+
+        for (const reminder of dueReminders) {
+          results.processed++
+          
+          try {
         const lead = reminder.lead
         const contact = lead.contact
 

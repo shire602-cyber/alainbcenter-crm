@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button'
 import LogoutButton from '@/components/LogoutButton'
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle'
 import { useSidebar } from '@/components/layout/SidebarContext'
-import { Bell, Search, Plus, Menu, MessageSquare, Sparkles } from 'lucide-react'
+import { Bell, Search, Plus, Menu, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
@@ -14,6 +14,7 @@ export function TopNavClient() {
   const [user, setUser] = useState<{ name?: string; email?: string; role?: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
   const [unrepliedCount, setUnrepliedCount] = useState(0)
+  const [notificationCount, setNotificationCount] = useState(0)
   const { toggle, isOpen } = useSidebar()
   const router = useRouter()
 
@@ -32,9 +33,21 @@ export function TopNavClient() {
         .catch(() => setUnrepliedCount(0))
     }
 
+    // Fetch notification count
+    const fetchNotificationCount = () => {
+      fetch('/api/notifications/count')
+        .then(res => res.json())
+        .then(data => setNotificationCount(data.count || 0))
+        .catch(() => setNotificationCount(0))
+    }
+
     fetchUnrepliedCount()
+    fetchNotificationCount()
     // Poll every 30 seconds for updates
-    const interval = setInterval(fetchUnrepliedCount, 30000)
+    const interval = setInterval(() => {
+      fetchUnrepliedCount()
+      fetchNotificationCount()
+    }, 30000)
     return () => clearInterval(interval)
   }, [])
 
@@ -93,10 +106,14 @@ export function TopNavClient() {
         </div>
         <div className="flex items-center gap-x-3 lg:gap-x-4">
           <DarkModeToggle />
-          <Button variant="ghost" size="icon" className="relative" title="Notifications">
-            <Bell className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive"></span>
-          </Button>
+          <Link href="/notifications">
+            <Button variant="ghost" size="icon" className="relative" title="Notifications">
+              <Bell className="h-5 w-5" />
+              {notificationCount > 0 && (
+                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
+              )}
+            </Button>
+          </Link>
           
           <Link href="/inbox">
             <Button variant="ghost" size="icon" className="relative" title="Inbox">
@@ -107,20 +124,6 @@ export function TopNavClient() {
             </Button>
           </Link>
 
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            className="relative" 
-            title="AI Assistant"
-            onClick={() => {
-              // TODO: Open AI assistant panel/modal
-              console.log('AI Assistant clicked')
-            }}
-          >
-            <Sparkles className="h-5 w-5" />
-            <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-gradient-to-r from-blue-500 to-purple-500 animate-pulse"></span>
-          </Button>
-          
           <Link href="/leads?action=create">
             <Button>
               <Plus className="h-4 w-4" />

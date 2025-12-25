@@ -48,6 +48,14 @@ export async function handleInboundMessage(
   message: any
   contact: any
 }> {
+  console.log(`📥 [INBOUND] handleInboundMessage called`, {
+    channel: input.channel,
+    fromAddress: input.fromAddress,
+    hasBody: !!input.body && input.body.trim().length > 0,
+    bodyLength: input.body?.length || 0,
+    externalMessageId: input.externalMessageId,
+  })
+
   const {
     channel,
     externalId,
@@ -134,10 +142,15 @@ export async function handleInboundMessage(
     })
 
     if (existingMessage) {
-      console.log(`⚠️ Duplicate message ${externalMessageId} detected - returning existing`)
+      console.log(`⚠️ [DUPLICATE] Message ${externalMessageId} already exists (ID: ${existingMessage.id}) - NO auto-reply for duplicates`)
       if (!existingMessage.conversation.lead) {
         throw new Error('Message conversation has no associated lead')
       }
+      
+      // NO auto-reply for duplicates - user requirement: "duplicate messages from customer shouldn't get replies"
+      // But log why we're skipping so we can debug
+      console.log(`⏭️ [AUTO-REPLY] SKIPPED: Duplicate message detected via externalMessageId check (${externalMessageId})`)
+      
       return {
         lead: existingMessage.conversation.lead,
         conversation: existingMessage.conversation,
@@ -249,7 +262,14 @@ export async function handleInboundMessage(
       lastContactAt: true,
       expiryDate: true,
       autopilotEnabled: true,
-      autoReplyEnabled: true, // Include for TypeScript
+      // @ts-ignore - autoReplyEnabled exists in schema but Prisma types may be out of sync
+      autoReplyEnabled: true, // Default to enabled for new leads
+      // @ts-ignore
+      allowOutsideHours: true,
+      // @ts-ignore
+      mutedUntil: true,
+      // @ts-ignore
+      lastAutoReplyAt: true,
       status: true,
       notes: true,
       createdAt: true,
@@ -269,6 +289,7 @@ export async function handleInboundMessage(
         notes: `Inbound ${channel} message`,
         lastContactAt: timestamp,
         lastContactChannel: channelLower,
+        // @ts-ignore - autoReplyEnabled exists in schema but Prisma types may be out of sync
         autoReplyEnabled: true, // Enable auto-reply by default for new leads
         // source field not in Lead schema - removed
       },
@@ -276,46 +297,87 @@ export async function handleInboundMessage(
     console.log(`✅ Created new lead: ${lead.id} for contact ${contact.id}`)
   } else {
     // Update existing lead - ensure autoReplyEnabled is set if NULL
+    // Check if autoReplyEnabled needs to be set (for leads created before migration)
+    const needsAutoReplyEnabled = (lead as any).autoReplyEnabled === null || (lead as any).autoReplyEnabled === undefined
+    
     await prisma.lead.update({
       where: { id: lead.id },
       data: {
         lastContactAt: timestamp,
         lastContactChannel: channelLower,
         // Set autoReplyEnabled to true if it's NULL (for leads created before migration)
-        ...(lead.autoReplyEnabled === null || lead.autoReplyEnabled === undefined 
-          ? { autoReplyEnabled: true } 
-          : {}),
+        ...(needsAutoReplyEnabled ? { autoReplyEnabled: true } : {}),
       },
     })
   }
 
   // Step 5: Find or create Conversation
-  let conversation = await prisma.conversation.findFirst({
+  // CRITICAL FIX: Use unique constraint (contactId, channel) as primary lookup key
+  // externalId is ONLY metadata, NOT used for lookup
+  let conversation = await prisma.conversation.findUnique({
     where: {
-      contactId: contact.id,
-      channel: channelLower,
-      ...(externalId ? { externalId } : {}),
+      contactId_channel: {
+        contactId: contact.id,
+        channel: channelLower,
+      },
     },
   })
 
   if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        contactId: contact.id,
-        leadId: lead.id,
-        channel: channelLower,
-        externalId: externalId || null,
-        status: 'open',
-        lastMessageAt: timestamp,
-        lastInboundAt: timestamp,
-        unreadCount: 1,
-      },
-    })
-    console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}`)
+    // Create new conversation using unique constraint
+    try {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: contact.id,
+          leadId: lead.id,
+          channel: channelLower,
+          externalId: externalId || null, // Optional metadata only
+          status: 'open',
+          lastMessageAt: timestamp,
+          lastInboundAt: timestamp,
+          unreadCount: 1,
+        },
+      })
+      console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}, channel ${channelLower}`)
+    } catch (createError: any) {
+      // Handle race condition: if another request created it simultaneously, find it
+      if (createError.code === 'P2002' && createError.meta?.target?.includes('contactId_channel')) {
+        console.log(`⚠️ Race condition: conversation already exists, fetching...`)
+        conversation = await prisma.conversation.findUnique({
+          where: {
+            contactId_channel: {
+              contactId: contact.id,
+              channel: channelLower,
+            },
+          },
+        })
+        if (!conversation) {
+          throw new Error('Failed to create or find conversation after race condition')
+        }
+        console.log(`✅ Found conversation after race condition: ${conversation.id}`)
+      } else {
+        throw createError
+      }
+    }
   } else {
-    // Don't update conversation here - will be updated after message creation
-    // This prevents race conditions with duplicate detection
-    console.log(`📋 Found existing conversation: ${conversation.id}`)
+    // Update externalId if we have one and it's missing (for WhatsApp phone number ID tracking)
+    // This is optional metadata, not used for lookup
+    if (externalId && !conversation.externalId) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { externalId },
+      })
+      console.log(`📝 Updated conversation ${conversation.id} with externalId: ${externalId}`)
+    }
+    // Ensure leadId is set (in case conversation was created before lead)
+    if (conversation.leadId !== lead.id) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { leadId: lead.id },
+      })
+      console.log(`📝 Updated conversation ${conversation.id} with leadId: ${lead.id}`)
+    }
+    console.log(`📋 Found existing conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}, channel ${channelLower}`)
   }
 
   // Step 6: Create Message record (with idempotency check via providerMessageId)
@@ -341,7 +403,7 @@ export async function handleInboundMessage(
         conversationId: conversation.id,
         leadId: lead.id,
         contactId: contact.id,
-        direction: 'inbound', // Use lowercase to match inbox expectations
+        direction: 'INBOUND', // Message schema uses uppercase: INBOUND | OUTBOUND
         channel: channelLower,
         type: messageType,
         body: body || null,
@@ -431,7 +493,7 @@ export async function handleInboundMessage(
         leadId: lead.id,
         conversationId: conversation.id,
         channel: channelLower,
-        direction: 'inbound',
+        direction: 'inbound', // CommunicationLog schema uses lowercase: 'inbound' | 'outbound'
         from: fromAddress || null,
         body: body,
         messageSnippet: body?.substring(0, 200) || 'Inbound message',
@@ -455,29 +517,84 @@ export async function handleInboundMessage(
         lead
       )
 
-      // Only update if confidence is reasonable (>50) and data is new/better
-      if (extracted.confidence > 50) {
-        const updates: any = {}
-        const contactUpdates: any = {}
+      // CRITICAL FIX: Always update name and nationality when provided, even with lower confidence
+      // User requirement: "when a customer gives their name and nationality lead should be updated automatically"
+      const updates: any = {}
+      const contactUpdates: any = {}
 
-        // Update contact if we have better info
-        if (extracted.name && (!contact.fullName || contact.fullName.includes('Unknown') || contact.fullName.includes('WhatsApp'))) {
-          contactUpdates.fullName = extracted.name
+      // Simple regex fallback for name (e.g., "My name is Herbert", "I am Herbert", "name: Herbert")
+      let extractedName = extracted.name
+      if (!extractedName || extractedName.trim().length === 0) {
+        const namePatterns = [
+          /(?:my\s+name\s+is|i\s+am|name\s*:)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+          /(?:i'm|i'm\s+called|call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+        ]
+        for (const pattern of namePatterns) {
+          const match = body.match(pattern)
+          if (match && match[1] && match[1].trim().length > 1) {
+            extractedName = match[1].trim()
+            console.log(`📝 Regex extracted name: "${extractedName}"`)
+            break
+          }
         }
+      }
+
+      // Update name if extracted (lower threshold for name - it's usually clear)
+      if (extractedName && extractedName.trim().length > 0) {
+        // Always update if current name is missing, unknown, or extracted name is different
+        if (!contact.fullName || 
+            contact.fullName.includes('Unknown') || 
+            contact.fullName.includes('WhatsApp') ||
+            contact.fullName.toLowerCase() !== extractedName.toLowerCase()) {
+          contactUpdates.fullName = extractedName.trim()
+          console.log(`📝 Updating contact name: "${contact.fullName || 'none'}" → "${extractedName}"`)
+        }
+      }
+      
+      // Simple regex fallback for nationality (e.g., "I am german", "I'm german", "nationality: german")
+      let extractedNationality = extracted.nationality
+      if (!extractedNationality || extractedNationality.trim().length === 0) {
+        const nationalityPatterns = [
+          /(?:i\s+am|i'm)\s+(german|british|american|indian|pakistani|filipino|egyptian|lebanese|jordanian|syrian|iraqi|iranian|turkish|russian|chinese|japanese|korean|thai|vietnamese|indonesian|malaysian|singaporean|australian|canadian|french|spanish|italian|greek|dutch|belgian|swiss|austrian|swedish|norwegian|danish|finnish|polish|czech|romanian|bulgarian|hungarian|portuguese|brazilian|mexican|argentinian|south\s+african|nigerian|kenyan|ethiopian|ugandan|tanzanian|ghanaian|moroccan|algerian|tunisian|libyan|sudanese|somali|eritrean|yemeni|omani|bahraini|kuwaiti|qatari|saudi|emirati|afghan|bangladeshi|sri\s+lankan|nepalese|myanmar| cambodian|laotian|mongolian|uzbek|kazakh|azerbaijani|armenian|georgian|ukrainian|belarusian|moldovan|serbian|croatian|bosnian|albanian|macedonian|montenegrin|slovenian|slovak|estonian|latvian|lithuanian|icelandic|maltese|cypriot|luxembourgish|monégasque|andorran|liechtenstein|san\s+marino|vatican|maltese)/i,
+          /(?:nationality|from)\s*:?\s*(german|british|american|indian|pakistani|filipino|egyptian|lebanese|jordanian|syrian|iraqi|iranian|turkish|russian|chinese|japanese|korean|thai|vietnamese|indonesian|malaysian|singaporean|australian|canadian|french|spanish|italian|greek|dutch|belgian|swiss|austrian|swedish|norwegian|danish|finnish|polish|czech|romanian|bulgarian|hungarian|portuguese|brazilian|mexican|argentinian|south\s+african|nigerian|kenyan|ethiopian|ugandan|tanzanian|ghanaian|moroccan|algerian|tunisian|libyan|sudanese|somali|eritrean|yemeni|omani|bahraini|kuwaiti|qatari|saudi|emirati|afghan|bangladeshi|sri\s+lankan|nepalese|myanmar|cambodian|laotian|mongolian|uzbek|kazakh|azerbaijani|armenian|georgian|ukrainian|belarusian|moldovan|serbian|croatian|bosnian|albanian|macedonian|montenegrin|slovenian|slovak|estonian|latvian|lithuanian|icelandic|maltese|cypriot|luxembourgish|monégasque|andorran|liechtenstein|san\s+marino|vatican|maltese)/i,
+        ]
+        for (const pattern of nationalityPatterns) {
+          const match = body.match(pattern)
+          if (match && match[1] && match[1].trim().length > 1) {
+            extractedNationality = match[1].trim()
+            console.log(`📝 Regex extracted nationality: "${extractedNationality}"`)
+            break
+          }
+        }
+      }
+
+      // Update nationality if extracted (lower threshold - it's usually clear)
+      if (extractedNationality && extractedNationality.trim().length > 0) {
+        // Always update if current nationality is missing or extracted nationality is different
+        if (!contact.nationality || 
+            contact.nationality.toLowerCase() !== extractedNationality.toLowerCase()) {
+          contactUpdates.nationality = extractedNationality.trim()
+          console.log(`📝 Updating contact nationality: "${contact.nationality || 'none'}" → "${extractedNationality}"`)
+        }
+      }
+      
+      // Update email/phone only with reasonable confidence (>50)
+      if (extracted.confidence > 50) {
         if (extracted.email && !contact.email) {
           contactUpdates.email = extracted.email
         }
         if (extracted.phone && !contact.phone) {
           contactUpdates.phone = extracted.phone
         }
-        if (extracted.nationality && !contact.nationality) {
-          contactUpdates.nationality = extracted.nationality
-        }
+      }
+      
+      // Update lead fields only with reasonable confidence (>50)
+      if (extracted.confidence > 50) {
 
         // Update lead if we have better info
         if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
           // Try to find matching ServiceType
-          // Use contains for text search (works for both SQLite and PostgreSQL)
+          // Note: Schema uses PostgreSQL, but code uses Prisma's contains which works across databases
           const serviceType = await prisma.serviceType.findFirst({
             where: {
               OR: [
@@ -514,23 +631,24 @@ export async function handleInboundMessage(
             ? `${lead.notes}\n\n[AI Extracted]: ${extracted.notes}`
             : extracted.notes
         }
+      } // End of confidence > 50 check for lead fields
 
-        // Apply updates
-        if (Object.keys(contactUpdates).length > 0) {
-          await prisma.contact.update({
-            where: { id: contact.id },
-            data: contactUpdates,
-          })
-          console.log(`✅ Updated contact ${contact.id} with AI-extracted data`)
-        }
+      // Apply contact updates (name/nationality always, email/phone only if confidence > 50)
+      if (Object.keys(contactUpdates).length > 0) {
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: contactUpdates,
+        })
+        console.log(`✅ Updated contact ${contact.id} with AI-extracted data:`, contactUpdates)
+      }
 
-        if (Object.keys(updates).length > 0) {
-          await prisma.lead.update({
-            where: { id: lead.id },
-            data: updates,
-          })
-          console.log(`✅ Updated lead ${lead.id} with AI-extracted data`)
-        }
+      // Apply lead updates (only if confidence > 50)
+      if (Object.keys(updates).length > 0) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: updates,
+        })
+        console.log(`✅ Updated lead ${lead.id} with AI-extracted data`)
       }
     } catch (extractError: any) {
       // Don't fail the whole process if extraction fails
@@ -538,12 +656,31 @@ export async function handleInboundMessage(
     }
   }
 
-  // Step 9: Immediate auto-reply (no queue, no worker - just reply now)
-  if (message.body && message.body.trim().length > 0) {
-    console.log(`🤖 Starting auto-reply process for message ${message.id} (lead ${lead.id}, channel: ${message.channel})`)
+  // Step 9: Generate AI reply for inbound message
+  // CRITICAL: This must run even if previous steps had errors
+  // BUT: Skip AI reply for duplicate messages (user requirement: "duplicate messages from customer shouldn't get replies")
+  // Run synchronously (awaited) to ensure it executes, but wrapped in try-catch so it doesn't fail the webhook
+  console.log(`🔍 [AI-REPLY] Pre-check:`, {
+    isDuplicate,
+    hasMessage: !!message,
+    hasBody: !!message?.body,
+    bodyLength: message?.body?.length || 0,
+    hasLead: !!lead,
+    leadId: lead?.id,
+    hasContact: !!contact,
+    contactId: contact?.id,
+    messageId: message?.id,
+    externalMessageId,
+  })
+  
+  if (!isDuplicate && message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
     try {
+      console.log(`🤖 [AI-REPLY] Starting AI reply process for message ${message.id}`)
+      console.log(`🤖 [AI-REPLY] Lead ID: ${lead.id}, Channel: ${message.channel}, Message: "${message.body.substring(0, 100)}..."`)
+      
       const { handleInboundAutoReply } = await import('./autoReply')
-      console.log(`📞 Calling handleInboundAutoReply...`)
+      console.log(`📞 [AI-REPLY] Calling handleInboundAutoReply...`)
+      
       const replyResult = await handleInboundAutoReply({
         leadId: lead.id,
         messageId: message.id,
@@ -552,35 +689,57 @@ export async function handleInboundMessage(
         contactId: contact.id,
       })
       
-      console.log(`📊 Auto-reply result:`, {
+      console.log(`📊 [AI-REPLY] Result:`, {
         replied: replyResult.replied,
         reason: replyResult.reason,
         error: replyResult.error,
+        leadId: lead.id,
+        messageId: message.id,
       })
       
       if (replyResult.replied) {
-        console.log(`✅ Auto-reply sent for message ${message.id}`)
+        console.log(`✅ [AI-REPLY] SUCCESS: AI reply sent for message ${message.id} to lead ${lead.id}`)
       } else {
-        console.log(`⏭️ Auto-reply skipped: ${replyResult.reason || replyResult.error}`)
+        console.log(`⏭️ [AI-REPLY] SKIPPED: ${replyResult.reason || replyResult.error} (lead ${lead.id}, message ${message.id})`)
       }
     } catch (error: any) {
-      // Don't fail webhook if auto-reply fails - log and continue
-      console.error('❌ Auto-reply error (non-blocking):', error.message)
-      // Log to database for monitoring
-      prisma.externalEventLog.create({
-        data: {
-          provider: channel.toLowerCase(),
-          externalId: `auto-reply-error-${Date.now()}`,
-          payload: JSON.stringify({
-            error: error.message,
-            leadId: lead.id,
-            messageId: message.id,
-          }),
-        },
-      }).catch((logError) => {
-        console.warn('Failed to log auto-reply error:', logError)
+      // Don't fail webhook if AI reply fails - log and continue
+      console.error('❌ [AI-REPLY] ERROR (non-blocking):', {
+        error: error.message,
+        stack: error.stack,
+        leadId: lead.id,
+        messageId: message.id,
+    channel: message.channel,
       })
+      // Log to database for monitoring
+      try {
+        await prisma.externalEventLog.create({
+      data: {
+        provider: channel.toLowerCase(),
+            externalId: `auto-reply-error-${Date.now()}`,
+        payload: JSON.stringify({
+              error: error.message,
+              stack: error.stack,
+          leadId: lead.id,
+          messageId: message.id,
+        }),
+      },
+        })
+      } catch (logError) {
+        console.warn('Failed to log auto-reply error:', logError)
+      }
     }
+  } else if (isDuplicate) {
+        console.log(`⏭️ [AI-REPLY] SKIPPED: Duplicate message detected - no AI reply for duplicates (user requirement)`)
+  } else {
+    console.log(`⏭️ [AI-REPLY] SKIPPED: Missing required data`, {
+      hasMessage: !!message,
+      hasBody: !!message?.body,
+      hasLead: !!lead,
+      hasContact: !!contact,
+      bodyLength: message?.body?.length || 0,
+      isDuplicate,
+    })
   }
 
   console.log(

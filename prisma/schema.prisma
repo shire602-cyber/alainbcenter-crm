@@ -70,6 +70,7 @@ model Contact {
   automationRunLogs AutomationRunLog[]
   aiActionLogs      AIActionLog[]
   aiDrafts          AIDraft[]
+  autoReplyLogs     AutoReplyLog[]
 
   @@index([phone])
   @@index([email])
@@ -81,14 +82,14 @@ model Reminder {
   id          Int       @id @default(autoincrement())
   lead        Lead      @relation(fields: [leadId], references: [id])
   leadId      Int
-  type        String    // FOLLOW_UP | EXPIRY | DOCUMENT_REQUEST | CUSTOM
-  scheduledAt DateTime  // When to send the reminder
+  type        String // FOLLOW_UP | EXPIRY | DOCUMENT_REQUEST | CUSTOM
+  scheduledAt DateTime // When to send the reminder
   channel     String    @default("WHATSAPP") // WHATSAPP | EMAIL
-  templateKey String?   // WhatsApp template key (if using template)
-  message     String?   // Custom message (if not using template)
+  templateKey String? // WhatsApp template key (if using template)
+  message     String? // Custom message (if not using template)
   sent        Boolean   @default(false)
   sentAt      DateTime?
-  error       String?   // Error message if send failed
+  error       String? // Error message if send failed
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
 
@@ -144,13 +145,17 @@ model Lead {
 
   // Automation control
   autopilotEnabled Boolean @default(true) // Lead-level autopilot toggle
-  
+
   // Auto-reply settings (simplified autopilot)
-  autoReplyEnabled      Boolean  @default(true) // Enable auto-reply for this lead
-  autoReplyMode         String?  // AI_ONLY | TEMPLATES_FIRST | OFF
-  mutedUntil            DateTime? // Mute auto-replies until this date
-  lastAutoReplyAt       DateTime? // Last auto-reply timestamp (for rate limiting)
-  allowOutsideHours     Boolean  @default(false) // Allow replies outside business hours
+  autoReplyEnabled  Boolean   @default(true) // Enable auto-reply for this lead
+  autoReplyMode     String? // AI_ONLY | TEMPLATES_FIRST | OFF
+  mutedUntil        DateTime? // Mute auto-replies until this date
+  lastAutoReplyAt   DateTime? // Last auto-reply timestamp (for rate limiting)
+  allowOutsideHours Boolean   @default(false) // Allow replies outside business hours
+  
+  // AI Agent Profile assignment
+  aiAgentProfileId  Int?
+  aiAgentProfile    AIAgentProfile? @relation(fields: [aiAgentProfileId], references: [id])
 
   // Info/Quotation sharing tracking (Phase 2)
   infoSharedAt       DateTime? // When information was shared with customer
@@ -175,6 +180,60 @@ model Lead {
   aiActionLogs       AIActionLog[]
   notifications      Notification[]
   reminders          Reminder[]
+  autoReplyLogs      AutoReplyLog[]
+}
+
+model AIAgentProfile {
+  id                    Int      @id @default(autoincrement())
+  name                  String   @unique // e.g., "Sales Agent", "Customer Support Agent", "Follow-up Agent"
+  description           String?  // Optional description
+  isActive              Boolean  @default(true)
+  isDefault             Boolean  @default(false) // Only one can be default
+  
+  // Training document associations (which training docs this agent uses)
+  trainingDocumentIds   String?  // JSON array of training document IDs this agent should use
+  
+  // Response Behavior Settings
+  systemPrompt          String?  // Custom system prompt (overrides default)
+  tone                  String   @default("friendly") // professional | friendly | short
+  maxMessageLength      Int      @default(300) // Max characters for first message
+  maxTotalLength        Int      @default(600) // Max characters total
+  maxQuestionsPerMessage Int     @default(2) // Max questions to ask
+  
+  // What to say / What not to say
+  allowedPhrases        String?  // JSON array of phrases/topics to emphasize
+  prohibitedPhrases     String?  // JSON array of phrases/topics to avoid
+  customGreeting        String?  // Custom greeting template
+  customSignoff         String?  // Custom signoff template
+  
+  // Timing Controls
+  responseDelayMin      Int      @default(0) // Minimum seconds before replying
+  responseDelayMax      Int      @default(5) // Maximum seconds before replying
+  rateLimitMinutes     Int      @default(2) // Minutes between auto-replies
+  businessHoursStart    String   @default("07:00") // HH:mm format
+  businessHoursEnd      String   @default("21:30") // HH:mm format
+  timezone              String   @default("Asia/Dubai")
+  allowOutsideHours     Boolean  @default(false) // Allow replies outside business hours
+  firstMessageImmediate Boolean @default(true) // Reply immediately to first message
+  
+  // Response Rules
+  similarityThreshold   Float    @default(0.7) // Training document similarity threshold
+  confidenceThreshold   Int      @default(50) // Minimum confidence to auto-reply
+  escalateToHumanRules  String?  // JSON array of patterns that trigger human escalation
+  skipAutoReplyRules    String?  // JSON array of patterns that skip auto-reply
+  
+  // Language Settings
+  defaultLanguage       String   @default("en") // en | ar
+  autoDetectLanguage    Boolean  @default(true)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  leads                 Lead[]  // Leads assigned to this agent
+  
+  @@index([isActive, isDefault])
+  @@index([name])
 }
 
 model ExpiryItem {
@@ -240,6 +299,7 @@ model Conversation {
   statusEvents      MessageStatusEvent[]
   tasks             Task[]               @relation("ConversationTasks")
   notifications     Notification[]
+  autoReplyLogs     AutoReplyLog[]
 
   @@unique([contactId, channel])
   @@index([channel, lastMessageAt])
@@ -275,6 +335,7 @@ model Message {
   createdAt         DateTime     @default(now())
 
   statusEvents MessageStatusEvent[]
+  autoReplyLogs AutoReplyLog[]
 
   @@index([conversationId, createdAt])
   @@index([leadId])
@@ -566,15 +627,15 @@ model AITrainingDocument {
 }
 
 model AutomationJob {
-  id          String   @id @default(cuid())
-  type        String   // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
-  data        String   // Job payload (JSON stored as string - works for both SQLite and PostgreSQL)
-  status      String   @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
-  priority    Int      @default(0)
+  id          String    @id @default(cuid())
+  type        String // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
+  data        String // Job payload (JSON stored as string - works for both SQLite and PostgreSQL)
+  status      String    @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  priority    Int       @default(0)
   error       String?
-  retryCount  Int      @default(0)
-  maxRetries  Int      @default(3)
-  createdAt   DateTime @default(now())
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+  createdAt   DateTime  @default(now())
   startedAt   DateTime?
   completedAt DateTime?
 
@@ -583,20 +644,68 @@ model AutomationJob {
 }
 
 model Notification {
-  id          Int       @id @default(autoincrement())
-  type        String    // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'system'
-  title       String
-  message     String
-  lead        Lead?     @relation(fields: [leadId], references: [id])
-  leadId      Int?
-  conversation Conversation? @relation(fields: [conversationId], references: [id])
+  id             Int           @id @default(autoincrement())
+  type           String // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'system'
+  title          String
+  message        String
+  lead           Lead?         @relation(fields: [leadId], references: [id])
+  leadId         Int?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
   conversationId Int?
-  isRead      Boolean   @default(false)
-  readAt      DateTime?
-  createdAt   DateTime  @default(now())
+  isRead         Boolean       @default(false)
+  readAt         DateTime?
+  createdAt      DateTime      @default(now())
 
   @@index([isRead, createdAt])
   @@index([leadId])
   @@index([conversationId])
   @@index([type, createdAt])
+}
+
+model AutoReplyLog {
+  id                Int           @id @default(autoincrement())
+  lead               Lead          @relation(fields: [leadId], references: [id])
+  leadId             Int
+  conversation       Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId     Int?
+  contact            Contact?      @relation(fields: [contactId], references: [id])
+  contactId          Int?
+  message            Message?      @relation(fields: [messageId], references: [id])
+  messageId          Int?
+  channel            String        // 'whatsapp' | 'email' | etc.
+  
+  // Inbound message details
+  inboundParsed      String?      // JSON: Parsed inbound message details
+  messageText        String?      // Inbound message text (truncated)
+  
+  // Decision tracking
+  autoReplyEnabled   Boolean       @default(true)
+  decision            String        // 'replied' | 'notified_human' | 'skipped'
+  decisionReason     String?       // Exact reason for decision
+  skippedReason      String?       // If skipped, why
+  
+  // Retrieval results
+  retrievalDocsCount Int?         // Number of documents retrieved
+  retrievalSimilarity Float?      // Highest similarity score
+  retrievalReason    String?      // Retrieval result reason
+  hasUsefulContext   Boolean      @default(false)
+  
+  // Reply details
+  replySent          Boolean       @default(false)
+  replyText          String?       // Reply text sent (truncated)
+  replyStatus        String?       // 'sent' | 'failed' | 'pending'
+  replyError          String?      // Error message if send failed
+  usedFallback       Boolean       @default(false) // Whether fallback reply was used
+  
+  // Human task
+  humanTaskCreated   Boolean       @default(false)
+  humanTaskReason    String?       // Why human task was created
+  
+  createdAt          DateTime      @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([contactId, createdAt])
+  @@index([decision, createdAt])
+  @@index([channel, createdAt])
 }

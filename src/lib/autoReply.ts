@@ -1,7 +1,8 @@
 /**
- * Simplified Auto-Reply System
+ * AI-Powered Inbound Message Reply System
  * 
- * Immediate auto-reply when messages arrive (no queue/worker)
+ * Generates AI replies when messages arrive (no queue/worker)
+ * All replies are AI-generated based on inbound messages - no saved templates
  */
 
 import { prisma } from './prisma'
@@ -12,6 +13,13 @@ import { retrieveAndGuard, markLeadRequiresHuman } from './ai/retrieverChain'
 import { notifyAIUntrainedSubject } from './notifications'
 import { createAgentTask } from './automation/agentFallback'
 import { detectLanguage } from './utils/languageDetection'
+import { 
+  getAgentProfileForLead, 
+  matchesSkipPatterns, 
+  matchesEscalatePatterns,
+  isWithinBusinessHours,
+  type AgentProfile 
+} from './ai/agentProfile'
 
 interface AutoReplyOptions {
   leadId: number
@@ -25,19 +33,27 @@ interface AutoReplyOptions {
  * Check if auto-reply should run for this lead
  * @param leadId - Lead ID
  * @param isFirstMessage - Whether this is the first message from the customer
+ * @param messageText - Message text (for skip/escalate pattern matching)
  */
-async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false): Promise<{ shouldReply: boolean; reason?: string }> {
+async function shouldAutoReply(
+  leadId: number, 
+  isFirstMessage: boolean = false,
+  messageText?: string
+): Promise<{ shouldReply: boolean; reason?: string; agent?: AgentProfile }> {
   console.log(`🔍 Checking shouldAutoReply for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
   
+  // Get agent profile for this lead
+  const agent = await getAgentProfileForLead(leadId)
+  if (!agent) {
+    console.log(`⚠️ No agent profile found for lead ${leadId}, using defaults`)
+  } else {
+    console.log(`🤖 Using agent profile: ${agent.name} (ID: ${agent.id})`)
+  }
+
+  // Fetch lead with all fields (fields exist in schema but Prisma types may not be updated)
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: {
-      autoReplyEnabled: true,
-      mutedUntil: true,
-      lastAutoReplyAt: true,
-      allowOutsideHours: true,
-    },
-  })
+  }) as any // Type assertion: fields exist in DB schema (autoReplyEnabled, mutedUntil, lastAutoReplyAt, allowOutsideHours)
 
   if (!lead) {
     console.log(`❌ Lead ${leadId} not found`)
@@ -51,66 +67,119 @@ async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false):
     allowOutsideHours: lead.allowOutsideHours,
   })
 
-  // Check if auto-reply is enabled (treat NULL as true for backward compatibility)
+  // Check if auto-reply is enabled (treat NULL/undefined as true for backward compatibility)
+  // Default to true if not explicitly set to false
+  // @ts-ignore - Prisma types may not be updated yet
   if (lead.autoReplyEnabled === false) {
     console.log(`⏭️ Auto-reply disabled for lead ${leadId}`)
-    return { shouldReply: false, reason: 'Auto-reply disabled for this lead' }
+    return { shouldReply: false, reason: 'Auto-reply disabled for this lead', agent: agent || undefined }
   }
   // If NULL or undefined, default to true (for leads created before migration)
+  // @ts-ignore
+  console.log(`✅ Auto-reply enabled for lead ${leadId} (autoReplyEnabled: ${lead.autoReplyEnabled ?? 'null/undefined - defaulting to true'})`)
 
   // Check if muted
+  // @ts-ignore
   if (lead.mutedUntil && lead.mutedUntil > new Date()) {
+    // @ts-ignore
     console.log(`⏭️ Lead ${leadId} muted until ${lead.mutedUntil.toISOString()}`)
-    return { shouldReply: false, reason: `Lead muted until ${lead.mutedUntil.toISOString()}` }
+    // @ts-ignore
+    return { shouldReply: false, reason: `Lead muted until ${lead.mutedUntil.toISOString()}`, agent: agent || undefined }
   }
 
-  // Rate limiting: don't reply if replied in last 2 minutes
-  if (lead.lastAutoReplyAt) {
-    const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
-    console.log(`⏱️ Last auto-reply was ${minutesSinceLastReply.toFixed(1)} minutes ago`)
-    if (minutesSinceLastReply < 2) {
-      console.log(`⏭️ Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`)
-      return { shouldReply: false, reason: 'Rate limit: replied recently' }
+  // Check skip patterns from agent profile
+  if (messageText && agent) {
+    if (matchesSkipPatterns(messageText, agent.skipAutoReplyRules)) {
+      console.log(`⏭️ Message matches skip pattern - skipping auto-reply`)
+      return { shouldReply: false, reason: 'Message matches skip pattern', agent }
     }
   }
 
-  // Business hours check:
-  // - First contact: 24/7 (important for marketing campaigns)
-  // - Follow-ups and customer support: 7 AM - 9:30 PM Dubai time
-  if (!isFirstMessage) {
-    const now = new Date()
-    const utcHour = now.getUTCHours()
-    const utcMinutes = now.getUTCMinutes()
+  // Rate limiting: CRITICAL FIX - Only prevent true spam, allow second messages
+  // For follow-up messages (not first), use a very short rate limit (10 seconds) to allow quick replies
+  // @ts-ignore
+  if (!isFirstMessage && lead.lastAutoReplyAt) {
+    // @ts-ignore
+    const secondsSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / 1000
     
-    // Dubai is UTC+4
-    // 7 AM Dubai = 3 AM UTC (03:00)
-    // 9:30 PM Dubai = 5:30 PM UTC (17:30)
-    const dubaiHour = (utcHour + 4) % 24
-    const dubaiMinutes = utcMinutes
-    const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
-    const startTime = 7 * 60 // 7:00 AM = 420 minutes
-    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
+    // CRITICAL: For follow-up messages, use a very short rate limit (3 seconds) to allow quick replies
+    // This ensures second messages get replies quickly, regardless of agent's rateLimitMinutes
+    const followUpRateLimitSeconds = 3 // Always allow replies after 3 seconds for follow-ups (reduced from 5s)
+    console.log(`⏱️ [RATE-LIMIT] Last auto-reply was ${secondsSinceLastReply.toFixed(1)} seconds ago (follow-up rate limit: ${followUpRateLimitSeconds}s)`)
     
-    console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
-    
-    if (dubaiTime < startTime || dubaiTime >= endTime) {
-      console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
-      return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+    // Only block if it's been less than 3 seconds (prevent spam, but allow normal follow-ups)
+    if (secondsSinceLastReply < followUpRateLimitSeconds) {
+      console.log(`⏭️ [RATE-LIMIT] BLOCKED: replied ${secondsSinceLastReply.toFixed(1)} seconds ago (minimum ${followUpRateLimitSeconds}s for follow-ups)`)
+      return { shouldReply: false, reason: `Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago`, agent: agent || undefined }
+    } else {
+      console.log(`✅ [RATE-LIMIT] PASSED: ${secondsSinceLastReply.toFixed(1)} seconds since last reply (>= ${followUpRateLimitSeconds}s) - allowing reply`)
     }
-    
-    console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+  } else if (isFirstMessage && agent && !agent.firstMessageImmediate) {
+    // Agent can disable immediate first message replies
+    // Use agent's rateLimitMinutes for first messages
+    const rateLimitMinutes = agent?.rateLimitMinutes || 0.17 // 10 seconds default
+    console.log(`⏭️ Agent ${agent.name} has firstMessageImmediate=false - applying rate limit`)
+    // @ts-ignore
+    if (lead.lastAutoReplyAt) {
+      // @ts-ignore
+      const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
+      if (minutesSinceLastReply < rateLimitMinutes) {
+        return { shouldReply: false, reason: 'Rate limit: replied recently', agent }
+      }
+    }
+  } else if (isFirstMessage) {
+    console.log(`✅ First message - rate limit bypassed`)
+  }
+
+  // Business hours check: CRITICAL FIX - User wants 24/7 auto-reply for sales leads
+  // Only check business hours if explicitly disabled, otherwise allow 24/7
+  // @ts-ignore
+  const allowOutside = agent?.allowOutsideHours ?? lead.allowOutsideHours ?? true // DEFAULT TO TRUE for 24/7
+  
+  if (allowOutside) {
+    console.log(`✅ 24/7 auto-reply enabled (allowOutsideHours: true)`)
   } else {
-    console.log(`✅ First contact - 24/7 auto-reply enabled`)
+    // Only enforce business hours if explicitly disabled
+    if (agent) {
+      // Use agent's business hours
+      if (!isWithinBusinessHours(agent)) {
+        console.log(`⏭️ Outside agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
+        return { shouldReply: false, reason: `Outside business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd})`, agent }
+      }
+      console.log(`✅ Within agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
+    } else {
+      // Fallback to default Dubai business hours (only if allowOutsideHours is explicitly false)
+      const now = new Date()
+      const utcHour = now.getUTCHours()
+      const utcMinutes = now.getUTCMinutes()
+      const dubaiHour = (utcHour + 4) % 24
+      const dubaiMinutes = utcMinutes
+      const dubaiTime = dubaiHour * 60 + dubaiMinutes
+      const startTime = 7 * 60
+      const endTime = 21 * 60 + 30
+      
+      if (dubaiTime < startTime || dubaiTime >= endTime) {
+        console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+        return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+      }
+      console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+    }
   }
 
   console.log(`✅ Auto-reply check passed for lead ${leadId}`)
-  return { shouldReply: true }
+  return { shouldReply: true, agent: agent || undefined }
 }
 
 /**
  * Detect if message needs human attention (payment dispute, angry, legal threat, etc.)
+ * Uses agent's escalate patterns if available, otherwise uses default patterns
  */
-function needsHumanAttention(messageText: string): { needsHuman: boolean; reason?: string } {
+function needsHumanAttention(messageText: string, agent?: AgentProfile): { needsHuman: boolean; reason?: string } {
+  // First check agent's escalate patterns
+  if (agent && matchesEscalatePatterns(messageText, agent.escalateToHumanRules)) {
+    return { needsHuman: true, reason: 'Message matches agent escalate pattern' }
+  }
+  
   const text = messageText.toLowerCase()
   
   // Payment dispute patterns
@@ -132,7 +201,7 @@ function needsHumanAttention(messageText: string): { needsHuman: boolean; reason
 }
 
 /**
- * Handle immediate auto-reply for inbound message
+ * Handle AI-generated reply for inbound message
  */
 export async function handleInboundAutoReply(options: AutoReplyOptions): Promise<{
   replied: boolean
@@ -141,35 +210,186 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 }> {
   const { leadId, messageId, messageText, channel, contactId } = options
 
-  console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
+  if (!messageText || !messageText.trim()) {
+    console.log(`⏭️ Auto-reply skipped: Empty message text for lead ${leadId}`)
+    return { replied: false, reason: 'Empty message text' }
+  }
+
+  console.log(`🤖 AI reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
+
+  // Create structured log entry (will be updated throughout the process)
+  let autoReplyLog: any = null
+  try {
+    // Use type assertion since table may not exist until migration is run
+    autoReplyLog = await (prisma as any).autoReplyLog.create({
+      data: {
+        leadId,
+        contactId,
+        messageId,
+        channel: channel.toLowerCase(),
+        messageText: messageText.substring(0, 500), // Truncate for storage
+        inboundParsed: JSON.stringify({
+          messageText: messageText.substring(0, 200),
+          channel,
+          timestamp: new Date().toISOString(),
+        }),
+        decision: 'processing',
+        autoReplyEnabled: true, // Will be updated
+      },
+    })
+    console.log(`📝 Created AutoReplyLog entry: ${autoReplyLog.id}`)
+  } catch (logError: any) {
+    console.warn('Failed to create AutoReplyLog (table may not exist yet - run migration):', logError.message)
+    // Continue even if logging fails
+  }
 
   try {
-    // Step 1: Check if auto-reply should run
-    const shouldReply = await shouldAutoReply(leadId)
+    // Step 1: Check if we already processed THIS specific message (prevent duplicate replies)
+    // Check for both uppercase and lowercase for backward compatibility
+    const channelLower = channel.toLowerCase()
+    
+    // CRITICAL FIX: Check AutoReplyLog first - most reliable way to prevent duplicates
+    // This checks if we already processed THIS specific messageId (not other messages)
+    // IMPORTANT: Only block if we already replied to THIS exact messageId, not if we replied to a different message
+    const existingLog = await (prisma as any).autoReplyLog.findFirst({
+      where: {
+        messageId: messageId, // CRITICAL: Only check THIS specific messageId
+        leadId: leadId,
+        channel: channelLower,
+        OR: [
+          { decision: 'replied' },
+          { replySent: true },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    if (existingLog) {
+      console.log(`⏭️ [DUPLICATE-CHECK] Already processed THIS message ${messageId} (log ${existingLog.id}, decision: ${existingLog.decision})`)
+      
+      // Update current log to mark as duplicate attempt
+      if (autoReplyLog) {
+        try {
+          await (prisma as any).autoReplyLog.update({
+            where: { id: autoReplyLog.id },
+            data: {
+              decision: 'skipped',
+              skippedReason: `Duplicate attempt - already replied to this exact message (log ${existingLog.id})`,
+            },
+          })
+        } catch (logError) {
+          console.warn('Failed to update AutoReplyLog with duplicate:', logError)
+        }
+      }
+      
+      return { replied: false, reason: 'Already replied to this exact message' }
+    } else {
+      console.log(`✅ [DUPLICATE-CHECK] No existing reply for message ${messageId} - proceeding with AI reply`)
+    }
+    
+    let messageCount = await prisma.message.count({
+      where: {
+        leadId: leadId,
+        OR: [
+          { direction: 'INBOUND' },
+          { direction: 'inbound' },
+          { direction: 'IN' }, // Legacy support
+        ],
+        channel: channelLower,
+      },
+    })
+    let isFirstMessage = messageCount <= 1
+    console.log(`📊 Message count for lead ${leadId} on channel ${channelLower}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
+    
+    // Step 2: Check if auto-reply should run (with first message context and messageText for pattern matching)
+    const shouldReply = await shouldAutoReply(leadId, isFirstMessage, messageText)
+    
+    // Update log with autoReplyEnabled status
+    if (autoReplyLog) {
+      try {
+        await (prisma as any).autoReplyLog.update({
+          where: { id: autoReplyLog.id },
+          data: {
+            autoReplyEnabled: shouldReply.shouldReply,
+            decision: shouldReply.shouldReply ? 'processing' : 'skipped',
+            skippedReason: shouldReply.reason || null,
+          },
+        })
+      } catch (logError) {
+        console.warn('Failed to update AutoReplyLog:', logError)
+      }
+    }
+    
     if (!shouldReply.shouldReply) {
-      console.log(`⏭️ Skipping auto-reply for lead ${leadId}: ${shouldReply.reason}`)
+      console.log(`⏭️ Skipping AI reply for lead ${leadId}: ${shouldReply.reason}`)
       return { replied: false, reason: shouldReply.reason }
     }
+    
+    const agent = shouldReply.agent
+    if (agent) {
+      console.log(`🤖 Using agent profile: ${agent.name} (ID: ${agent.id})`)
+    }
+    
+    console.log(`✅ AI reply approved for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
 
-    // Step 2: Check if needs human attention
-    const humanCheck = needsHumanAttention(messageText)
+    // Step 3: Check if needs human attention (use agent's escalate patterns)
+    // CRITICAL: High-risk messages (angry/legal/threat/payment dispute) should NOT auto-reply
+    // Instead: create human task and optionally send brief "we'll get back" message
+    const humanCheck = needsHumanAttention(messageText, agent)
     if (humanCheck.needsHuman) {
-      console.log(`⚠️ Human attention needed for lead ${leadId}: ${humanCheck.reason}`)
+      console.log(`⚠️ High-risk message detected for lead ${leadId}: ${humanCheck.reason}`)
       
-      // Create task for human
+      // Create task for human (required)
+      let taskCreated = false
       try {
         await createAgentTask(leadId, 'human_request', {
           messageText,
           confidence: 100,
         })
+        taskCreated = true
+        console.log(`✅ Created human task for high-risk message`)
       } catch (error: any) {
         console.error('Failed to create agent task:', error.message)
+      }
+      
+      // Update log with human task creation
+      if (autoReplyLog) {
+        try {
+          await (prisma as any).autoReplyLog.update({
+            where: { id: autoReplyLog.id },
+            data: {
+              decision: 'notified_human',
+              decisionReason: humanCheck.reason,
+              humanTaskCreated: taskCreated,
+              humanTaskReason: humanCheck.reason,
+            },
+          })
+        } catch (logError) {
+          console.warn('Failed to update AutoReplyLog:', logError)
+        }
+      }
+      
+      // Optionally send brief acknowledgment message (user requirement: "optionally send a brief 'we'll get back' message")
+      // For now, we'll skip auto-reply entirely for high-risk messages to avoid escalating the situation
+      // This can be enabled later if needed
+      const sendAcknowledgment = false // Set to true if you want to send "We'll get back to you" message
+      
+      if (sendAcknowledgment) {
+        // Brief acknowledgment (default to English for high-risk messages)
+        const acknowledgments: Record<string, string> = {
+          en: "Thank you for your message. We'll get back to you shortly.",
+          ar: "شكراً لرسالتك. سنعود إليك قريباً.",
+        }
+        const ackText = acknowledgments.en // Use English for high-risk acknowledgment
+        
+        // Send acknowledgment (code continues below, but we'll return early for now)
+        // For now, we skip sending to avoid any risk
       }
       
       return { replied: false, reason: humanCheck.reason }
     }
 
-    // Step 3: Load lead and contact
+    // Step 4: Load lead and contact (also get conversation for logging)
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
       include: {
@@ -180,96 +400,329 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         },
       },
     })
+    
+    // Get conversation for logging
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        contactId: contactId,
+        leadId: leadId,
+        channel: channel.toLowerCase(),
+      },
+      select: { id: true },
+    })
+    
+    // Update log with conversation ID
+    if (autoReplyLog && conversation) {
+      try {
+        await (prisma as any).autoReplyLog.update({
+          where: { id: autoReplyLog.id },
+          data: {
+            conversationId: conversation.id,
+          },
+        })
+      } catch (logError) {
+        console.warn('Failed to update AutoReplyLog with conversation:', logError)
+      }
+    }
 
     if (!lead || !lead.contact) {
+      console.error(`❌ Lead ${leadId} or contact not found`)
       return { replied: false, reason: 'Lead or contact not found' }
     }
 
-    // Step 4: Detect language from message
-    const detectedLanguage = detectLanguage(messageText)
-    console.log(`🌐 Detected language: ${detectedLanguage}`)
-
-    // Step 5: Check if this is the first message (always reply to first messages)
-    const messageCount = await prisma.message.count({
-      where: {
-        leadId: leadId,
-        direction: 'INBOUND',
-        channel: channel.toLowerCase(),
-      },
-    })
-
-    const isFirstMessage = messageCount <= 1
-    console.log(`📨 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
+    // CRITICAL: If contact doesn't have phone number, try to get it from the message
+    // This handles cases where contact was created from a different channel
+    let phoneNumber = lead.contact.phone?.trim() || null
     
-    // For first messages, bypass business hours check
-    if (isFirstMessage && !lead.allowOutsideHours) {
-      console.log(`✅ First message detected - bypassing business hours check`)
+    if (!phoneNumber) {
+      console.warn(`⚠️ Contact ${lead.contact.id} has no phone number - attempting to get from message`)
+      // Try to get phone from the inbound message's conversation
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: {
+          conversation: {
+            include: {
+              contact: {
+                select: { phone: true },
+              },
+            },
+          },
+        },
+      })
+      
+      if (message?.conversation?.contact?.phone) {
+        phoneNumber = message.conversation.contact.phone.trim()
+        console.log(`✅ Found phone number from message conversation: ${phoneNumber}`)
+        
+        // Update contact with phone number for future use
+        try {
+          await prisma.contact.update({
+            where: { id: lead.contact.id },
+            data: { phone: phoneNumber },
+          })
+          console.log(`✅ Updated contact ${lead.contact.id} with phone number ${phoneNumber}`)
+        } catch (updateError: any) {
+          console.warn(`⚠️ Failed to update contact phone: ${updateError.message}`)
+        }
+      }
+    }
+    
+    if (!phoneNumber) {
+      console.log(`⏭️ Auto-reply skipped: Contact ${lead.contact.id} has no phone number and couldn't retrieve from message`)
+      return { replied: false, reason: 'Contact has no phone number' }
     }
 
-    // Step 6: Check if AI can respond (retriever-first chain)
-    // Skip retriever check for first messages - always greet and collect info
+    // @ts-ignore
+    console.log(`✅ Lead ${leadId} loaded: contact phone=${phoneNumber}, autoReplyEnabled=${lead.autoReplyEnabled ?? 'null (defaulting to true)'}`)
+
+    // Step 5: Detect language from message (use agent's language settings)
+    let detectedLanguage = agent?.defaultLanguage || 'en'
+    if (agent?.autoDetectLanguage !== false) {
+      detectedLanguage = detectLanguage(messageText)
+    }
+    console.log(`🌐 Detected language: ${detectedLanguage} (agent: ${agent?.name || 'none'}, autoDetect: ${agent?.autoDetectLanguage ?? true})`)
+
+    // Step 6: Log message count (already determined in Step 1)
+    console.log(`📨 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
+
+    // Step 7: Check if AI can respond (retriever-first chain)
+    // CRITICAL FIX: Retrieval must NEVER block replies
+    // Policy: If autoReplyEnabled and not muted/rate-limited:
+    //   - Always send a reply
+    //   - If retrieval returns useful context -> use it
+    //   - If retrieval empty/low similarity -> send safe fallback reply
+    //   - If message is high-risk -> do NOT auto reply; create human task
     let retrievalResult: any = null
+    let hasUsefulContext = false
+    let retrievalError: string | null = null
+    
     if (!isFirstMessage) {
       try {
+        const similarityThreshold = agent?.similarityThreshold ?? parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7')
         retrievalResult = await retrieveAndGuard(messageText, {
-          similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
+          similarityThreshold,
           topK: 5,
+          // Use agent's training documents if specified
+          trainingDocumentIds: agent?.trainingDocumentIds || undefined,
         })
 
-        if (!retrievalResult.canRespond) {
-          // Mark lead and notify users
-          await markLeadRequiresHuman(leadId, retrievalResult.reason, messageText)
-          
-          const conversation = await prisma.conversation.findFirst({
-            where: {
-              contactId: contactId,
-              leadId: leadId,
-              channel: channel.toLowerCase(),
-            },
-          })
-          
-          await notifyAIUntrainedSubject(
-            leadId,
-            conversation?.id || null,
-            messageText,
-            retrievalResult.reason
-          )
-          
-          return { replied: false, reason: 'AI not trained on this subject' }
+        // Check if retrieval found useful context
+        hasUsefulContext = retrievalResult.canRespond && retrievalResult.relevantDocuments.length > 0
+        
+        if (hasUsefulContext) {
+          console.log(`✅ Retrieval found relevant training: ${retrievalResult.relevantDocuments.length} documents, similarity scores: ${retrievalResult.relevantDocuments.map((d: any) => d.similarity.toFixed(2)).join(', ')}`)
+        } else {
+          console.log(`⚠️ No relevant training found (reason: ${retrievalResult.reason}), will use fallback reply`)
         }
-      } catch (retrievalError: any) {
-        // If retrieval fails, log but continue for first messages
-        console.warn('Retriever chain error (non-blocking):', retrievalError.message)
-        if (!isFirstMessage) {
-          // For non-first messages, fail if retrieval errors
-          return { replied: false, reason: 'Failed to check AI training' }
+        
+        // Update log with retrieval results
+        if (autoReplyLog) {
+          try {
+            const maxSimilarity = retrievalResult.relevantDocuments.length > 0
+              ? Math.max(...retrievalResult.relevantDocuments.map((d: any) => d.similarity))
+              : null
+            await (prisma as any).autoReplyLog.update({
+              where: { id: autoReplyLog.id },
+              data: {
+                retrievalDocsCount: retrievalResult.relevantDocuments.length,
+                retrievalSimilarity: maxSimilarity,
+                retrievalReason: retrievalResult.reason,
+                hasUsefulContext,
+              },
+            })
+          } catch (logError) {
+            console.warn('Failed to update AutoReplyLog with retrieval:', logError)
+          }
         }
+      } catch (retrievalErr: any) {
+        // If retrieval fails, log but ALWAYS continue - don't block replies
+        retrievalError = retrievalErr.message
+        console.warn('Retriever chain error (non-blocking, continuing with fallback):', retrievalError)
+        
+        // Update log with retrieval error
+        if (autoReplyLog) {
+          try {
+            await (prisma as any).autoReplyLog.update({
+              where: { id: autoReplyLog.id },
+              data: {
+                retrievalReason: `Error: ${retrievalError}`,
+                hasUsefulContext: false,
+              },
+            })
+          } catch (logError) {
+            console.warn('Failed to update AutoReplyLog with retrieval error:', logError)
+          }
+        }
+        // Don't return - always allow reply to proceed
       }
     } else {
       // First message - always respond with greeting
       console.log(`👋 First message detected - sending greeting for lead ${leadId}`)
+      
+      // Update log for first message
+      if (autoReplyLog) {
+        try {
+          await (prisma as any).autoReplyLog.update({
+            where: { id: autoReplyLog.id },
+            data: {
+              retrievalReason: 'First message - no retrieval needed',
+              hasUsefulContext: false,
+            },
+          })
+        } catch (logError) {
+          console.warn('Failed to update AutoReplyLog for first message:', logError)
+        }
+      }
     }
 
-    // Step 5: Generate AI reply (with language detection)
-    // Use detected language from message
+    // Step 8: Generate AI reply (with language detection)
+    // CRITICAL: Always generate a reply - use retrieval context if available, otherwise use fallback
+    // CRITICAL: Current inbound message must be FIRST in context so AI responds to it
     const aiContext: AIMessageContext = {
       lead,
       contact: lead.contact,
-      recentMessages: lead.messages.map(m => ({
-        direction: m.direction,
-        body: m.body || '',
-        createdAt: m.createdAt,
-      })),
+      recentMessages: [
+        // CRITICAL: Add current inbound message FIRST so AI responds to it
+        {
+          direction: 'INBOUND',
+          body: messageText, // Current inbound message - AI will respond to this
+          createdAt: new Date(),
+        },
+        // Then add previous messages for context (exclude current if already included)
+        ...lead.messages
+          .filter(m => m.id !== messageId)
+          .map(m => ({
+            direction: m.direction,
+            body: m.body || '',
+            createdAt: m.createdAt,
+          })),
+      ],
       mode: 'QUALIFY' as AIMessageMode, // Default mode
       channel: channel.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT',
       language: detectedLanguage, // Pass detected language to AI context
     }
 
-    console.log(`🤖 Generating AI reply with language: ${detectedLanguage}`)
-    const aiResult = await generateAIAutoresponse(aiContext)
-
-    if (!aiResult.success || !aiResult.text) {
-      // Create task if AI fails
+    console.log(`🤖 Generating AI reply with language: ${detectedLanguage}, agent: ${agent?.name || 'default'}, hasContext: ${hasUsefulContext}`)
+    
+    // CRITICAL: Always try to generate AI reply first (never use saved/cached messages)
+    // Only use fallback if AI generation fails
+    let aiResult: { text: string; success: boolean; error?: string; confidence?: number } | null = null
+    let usedFallback = false
+    
+    try {
+      // Always generate fresh AI reply (not saved/cached)
+      // Pass agent to AI generation for custom prompts and settings
+      console.log(`🤖 [AI-GEN] Calling generateAIAutoresponse with context:`, {
+        leadId: aiContext.lead.id,
+        messageCount: aiContext.recentMessages?.length || 0,
+        firstMessage: aiContext.recentMessages?.[0]?.body?.substring(0, 50) || '',
+        mode: aiContext.mode,
+        channel: aiContext.channel,
+        language: aiContext.language,
+        agentName: agent?.name,
+      })
+      
+      aiResult = await generateAIAutoresponse(aiContext, agent)
+      
+      if (!aiResult || !aiResult.success || !aiResult.text) {
+        console.log(`⚠️ [AI-GEN] AI generation failed or returned empty:`, {
+          success: aiResult?.success,
+          error: aiResult?.error,
+          hasText: !!aiResult?.text,
+        })
+        usedFallback = true
+      } else if (aiResult && aiResult.text) {
+        const replyText = aiResult.text // Store in local variable for type narrowing
+        const replyPreview = replyText.substring(0, 150)
+        console.log(`✅ [AI-GEN] AI generated fresh reply (${replyText.length} chars): "${replyPreview}..."`)
+        
+        // CRITICAL: Validate reply is NOT a template - REJECT if it contains template patterns
+        const templatePatterns = [
+          'thank you for your interest',
+          'to better assist you',
+          'what specific service',
+          'what is your timeline',
+          'looking forward to helping you',
+          'could you please share',
+          'please share: 1.',
+          'please share: 2.',
+        ]
+        const lowerReply = replyText.toLowerCase()
+        const isTemplate = templatePatterns.some(pattern => lowerReply.includes(pattern))
+        
+        if (isTemplate) {
+          console.error(`❌ [AI-GEN] REJECTED: Generated reply contains FORBIDDEN template patterns!`)
+          console.error(`   Reply: "${replyText.substring(0, 200)}..."`)
+          console.error(`   This message will NOT be sent. Using minimal fallback instead.`)
+          
+          // REJECT the template message - use minimal fallback instead
+          aiResult = {
+            text: `Hello! I received your message. Let me review it and get back to you with the information you need.`,
+            success: true,
+            confidence: 30, // Very low confidence for rejected template
+          }
+          usedFallback = true
+        }
+      }
+    } catch (aiError: any) {
+      console.error(`❌ [AI-GEN] AI generation error: ${aiError.message}`, aiError.stack)
+      usedFallback = true
+      aiResult = null
+    }
+    
+    // If AI generation failed or returned empty, use fallback reply
+    if (!aiResult || !aiResult.success || !aiResult.text) {
+      console.log(`📝 Using fallback reply (aiSuccess: ${aiResult?.success || false})`)
+      
+      // Minimal fallback reply (only used if AI completely fails)
+      const fallbackReplies: Record<string, string> = {
+        en: "Hello! I received your message. Let me review it and get back to you with the information you need.",
+        ar: "مرحباً! لقد تلقيت رسالتك. دعني أراجعها وأعود إليك بالمعلومات التي تحتاجها.",
+      }
+      
+      const fallbackText = fallbackReplies[detectedLanguage] || fallbackReplies.en
+      
+      aiResult = {
+        text: fallbackText,
+        success: true,
+        confidence: 50, // Lower confidence for fallback
+      }
+      
+      usedFallback = true
+      
+      // Update log with fallback usage
+      if (autoReplyLog) {
+        try {
+          await (prisma as any).autoReplyLog.update({
+            where: { id: autoReplyLog.id },
+            data: {
+              usedFallback: true,
+              replyText: fallbackText.substring(0, 500),
+            },
+          })
+        } catch (logError) {
+          console.warn('Failed to update AutoReplyLog with fallback:', logError)
+        }
+      }
+    } else {
+      // Update log that we used AI (not fallback)
+      if (autoReplyLog) {
+        try {
+          await (prisma as any).autoReplyLog.update({
+            where: { id: autoReplyLog.id },
+            data: {
+              usedFallback: false,
+              replyText: aiResult.text.substring(0, 500),
+            },
+          })
+        } catch (logError) {
+          console.warn('Failed to update AutoReplyLog with AI reply:', logError)
+        }
+      }
+    }
+    
+    if (!aiResult || !aiResult.text) {
+      // Last resort: create task if we can't generate any reply
       try {
         await createAgentTask(leadId, 'complex_query', {
           messageText,
@@ -278,27 +731,29 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         console.error('Failed to create agent task:', error.message)
       }
       
-      return { replied: false, error: aiResult.error || 'Failed to generate AI reply' }
+      return { replied: false, error: 'Failed to generate any reply (AI and fallback both failed)' }
     }
 
-    // Step 6: Send reply immediately
-    if (channel.toUpperCase() === 'WHATSAPP' && lead.contact.phone) {
+    // Step 9: Send reply immediately
+    // At this point, aiResult.text is guaranteed to exist (checked above)
+    const replyText = aiResult.text
+    const channelUpper = channel.toUpperCase()
+    console.log(`🔍 Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
+    
+    if (channelUpper === 'WHATSAPP' && phoneNumber) {
       try {
-        const result = await sendTextMessage(lead.contact.phone, aiResult.text)
+        console.log(`📤 Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
+        console.log(`📝 Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
+        
+        const result = await sendTextMessage(phoneNumber, replyText)
+        
+        console.log(`📨 WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
         
         if (!result || !result.messageId) {
-          throw new Error('No message ID returned from WhatsApp')
+          throw new Error('No message ID returned from WhatsApp API')
         }
 
-        // Step 7: Save outbound message
-        const conversation = await prisma.conversation.findFirst({
-          where: {
-            contactId: contactId,
-            leadId: leadId,
-            channel: channel.toLowerCase(),
-          },
-        })
-
+        // Step 7: Save outbound message (conversation already loaded above)
         if (conversation) {
           await prisma.message.create({
             data: {
@@ -308,7 +763,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               direction: 'OUTBOUND',
               channel: channel.toLowerCase(),
               type: 'text',
-              body: aiResult.text,
+              body: replyText,
               status: 'SENT',
               providerMessageId: result.messageId,
               rawPayload: JSON.stringify({
@@ -336,32 +791,133 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         await prisma.lead.update({
           where: { id: leadId },
           data: {
+            // @ts-ignore - Prisma types may not be updated yet
             lastAutoReplyAt: new Date(),
             lastContactAt: new Date(),
           },
         })
 
-        console.log(`✅ Auto-reply sent to lead ${leadId} via ${channel}`)
+        console.log(`✅ AI reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
+        
+        // Update structured log with success
+        if (autoReplyLog) {
+          try {
+            // Get conversation ID for log
+            const conversation = await prisma.conversation.findFirst({
+              where: {
+                contactId: contactId,
+                leadId: leadId,
+                channel: channel.toLowerCase(),
+              },
+              select: { id: true },
+            })
+            
+            await (prisma as any).autoReplyLog.update({
+              where: { id: autoReplyLog.id },
+              data: {
+                conversationId: conversation?.id || null,
+                decision: 'replied',
+                decisionReason: 'AI reply sent successfully',
+                replySent: true,
+                replyText: aiResult.text.substring(0, 500),
+                replyStatus: 'sent',
+                replyError: null,
+              },
+            })
+          } catch (logError: any) {
+            console.warn('Failed to update AutoReplyLog with success:', logError.message)
+          }
+        }
+        
         return { replied: true }
       } catch (error: any) {
-        console.error(`❌ Failed to send auto-reply:`, error)
+        console.error(`❌ Failed to send auto-reply to lead ${leadId}:`, {
+          error: error.message,
+          stack: error.stack,
+          phone: phoneNumber,
+          channel: channel,
+        })
+        
+        // Update structured log with error
+        if (autoReplyLog) {
+          try {
+            await (prisma as any).autoReplyLog.update({
+              where: { id: autoReplyLog.id },
+              data: {
+                decision: 'skipped',
+                decisionReason: 'Send failed',
+                replySent: false,
+                replyStatus: 'failed',
+                replyError: error.message || 'Unknown error',
+              },
+            })
+          } catch (logError) {
+            console.warn('Failed to update AutoReplyLog with error:', logError)
+          }
+        }
         
         // Create task for human
         try {
           await createAgentTask(leadId, 'complex_query', {
             messageText: `Failed to send auto-reply: ${error.message}`,
           })
-        } catch (taskError) {
-          console.error('Failed to create task:', taskError)
+          console.log(`✅ Created agent task for failed auto-reply`)
+        } catch (taskError: any) {
+          console.error('❌ Failed to create agent task:', taskError.message)
         }
         
-        return { replied: false, error: error.message }
+        return { replied: false, error: error.message || 'Unknown error sending message' }
       }
+    }
+
+    // Log unsupported channel to database
+    try {
+      await prisma.externalEventLog.create({
+        data: {
+          provider: 'auto-reply',
+          externalId: `auto-reply-unsupported-${leadId}-${Date.now()}`,
+          payload: JSON.stringify({
+            leadId,
+            messageId,
+            contactId,
+            channel,
+            status: 'unsupported',
+            reason: 'Channel not supported or no phone number',
+            hasPhone: !!lead?.contact?.phone,
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      })
+    } catch (logError: any) {
+      console.warn('Failed to log auto-reply unsupported:', logError.message)
     }
 
     return { replied: false, reason: 'Channel not supported or no phone number' }
   } catch (error: any) {
     console.error('Auto-reply error:', error)
+    
+    // Log error to database
+    try {
+      await prisma.externalEventLog.create({
+        data: {
+          provider: 'auto-reply',
+          externalId: `auto-reply-error-${leadId}-${Date.now()}`,
+          payload: JSON.stringify({
+            leadId,
+            messageId,
+            contactId,
+            channel,
+            status: 'error',
+            error: error.message,
+            stack: error.stack,
+            timestamp: new Date().toISOString(),
+          }),
+        },
+      })
+    } catch (logError: any) {
+      console.warn('Failed to log auto-reply error:', logError.message)
+    }
+    
     return { replied: false, error: error.message }
   }
 }

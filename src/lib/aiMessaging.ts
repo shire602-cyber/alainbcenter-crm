@@ -73,10 +73,80 @@ export interface AIMessageContext {
 }
 
 /**
+ * Analyze conversation state to determine what information is missing
+ */
+function analyzeConversationState(lead: any, contact: any, recentMessages: any[]): {
+  hasService: boolean
+  hasNationality: boolean
+  hasExpiryInfo: boolean
+  hasLocation: boolean
+  nextStep: 'service' | 'nationality' | 'other_info' | 'book_call' | 'assign_human'
+} {
+  // Extract all inbound message text
+  const allInboundMessages = recentMessages
+    .filter(m => (m.direction === 'INBOUND' || m.direction === 'inbound'))
+    .map(m => (m.body || '').toLowerCase())
+    .join(' ')
+  
+  // Check if service is known (from lead or mentioned in messages)
+  const serviceKeywords = [
+    'visa', 'family visa', 'employment visa', 'work visa', 'business setup', 'company setup',
+    'renewal', 'freelance', 'investor', 'golden visa', 'emirates id', 'medical',
+    'تأشيرة', 'عائلية', 'عمل', 'شركة', 'تجديد', 'هوية'
+  ]
+  const hasServiceInLead = !!(lead.serviceType || lead.serviceTypeEnum || lead.leadType)
+  const hasServiceInMessages = serviceKeywords.some(keyword => allInboundMessages.includes(keyword.toLowerCase()))
+  const hasService = hasServiceInLead || hasServiceInMessages
+  
+  // Check if nationality is known (from contact or mentioned in messages)
+  const nationalityKeywords = [
+    'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian',
+    'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian',
+    'هندي', 'باكستاني', 'فلبيني', 'مصري', 'بريطاني', 'أمريكي'
+  ]
+  const hasNationalityInContact = !!contact?.nationality
+  const hasNationalityInMessages = nationalityKeywords.some(keyword => allInboundMessages.includes(keyword.toLowerCase()))
+  const hasNationality = hasNationalityInContact || hasNationalityInMessages
+  
+  // Check if expiry info is known (from lead or mentioned in messages)
+  const expiryPattern = /(expir|expir|ends?|due|valid until|valid till|expiry date|expires?|ينتهي|تاريخ انتهاء)/i
+  const hasExpiryInfo = !!lead.expiryDate || expiryPattern.test(allInboundMessages)
+  
+  // Check if location is mentioned in messages
+  const locationKeywords = [
+    'uae', 'dubai', 'abu dhabi', 'sharjah', 'inside', 'outside', 'in uae', 'out of uae',
+    'داخل', 'خارج', 'الإمارات', 'دبي', 'أبو ظبي', 'الشارقة'
+  ]
+  const hasLocation = locationKeywords.some(keyword => allInboundMessages.includes(keyword.toLowerCase()))
+  
+  // Determine next step based on what's missing
+  if (!hasService) {
+    return { hasService: false, hasNationality, hasExpiryInfo, hasLocation, nextStep: 'service' }
+  }
+  if (!hasNationality) {
+    return { hasService: true, hasNationality: false, hasExpiryInfo, hasLocation, nextStep: 'nationality' }
+  }
+  if (!hasExpiryInfo && !hasLocation) {
+    return { hasService: true, hasNationality: true, hasExpiryInfo: false, hasLocation: false, nextStep: 'other_info' }
+  }
+  // If we have service, nationality, and some other info, offer to book call
+  if (hasService && hasNationality && (hasExpiryInfo || hasLocation)) {
+    return { hasService: true, hasNationality: true, hasExpiryInfo, hasLocation, nextStep: 'book_call' }
+  }
+  
+  return { hasService, hasNationality, hasExpiryInfo, hasLocation, nextStep: 'other_info' }
+}
+
+// REMOVED: generateQualificationMessage - This was generating template messages
+// All messages now use AI generation via generateAIAutoresponse()
+// This function is no longer used and has been removed to prevent template messages
+
+/**
  * Generate AI reply text for automation
  */
 export async function generateAIAutoresponse(
-  context: AIMessageContext
+  context: AIMessageContext,
+  agent?: import('./ai/agentProfile').AgentProfile
 ): Promise<{
   text: string
   success: boolean
@@ -137,7 +207,7 @@ export async function generateAIAutoresponse(
       }
     }
 
-    // Generate simple template-based reply (avoid HTTP call in serverless)
+    // Generate structured conversation flow reply
     // Check if this is first message
     const outboundCount = await prisma.message.count({
       where: {
@@ -147,7 +217,7 @@ export async function generateAIAutoresponse(
     })
     
     const isFirstMessage = outboundCount === 0
-    const contactName = lead.contact?.fullName || 'there'
+    const contactName = lead.contact?.fullName || contact?.fullName || 'there'
     
     // Detect language from recent messages or use preferred language
     let detectedLanguage = preferredLanguage
@@ -162,59 +232,40 @@ export async function generateAIAutoresponse(
     }
     console.log(`🌐 Using language for reply: ${detectedLanguage} (preferred: ${preferredLanguage})`)
     
-    let draftText = ''
+    // ALWAYS use AI-generated replies (no templates)
+    // Build conversation context for AI
+    const { buildConversationContextFromLead } = await import('./ai/context')
+    const { generateDraftReply } = await import('./ai/generate')
     
-    if (isFirstMessage && objective === 'qualify') {
-      // First message - always greet and collect info (multi-language)
-      if (detectedLanguage === 'ar') {
-        draftText = `مرحباً! 👋 أهلاً بك في مركز العين للأعمال. أنا هنا لمساعدتك في خدمات تأسيس الأعمال وتأشيرات الإمارات.\n\nللبدء، يرجى مشاركة:\n1. اسمك الكامل\n2. ما هي الخدمة التي تحتاجها؟ (مثل: تأشيرة عائلية، تأسيس شركة، تأشيرة عمل)\n3. جنسيتك\n\nسأقوم بتوصيلك مع المختص المناسب!`
-      } else {
-        draftText = `Hello! 👋 Welcome to Al Ain Business Center. I'm here to help you with UAE business setup and visa services.\n\nTo get started, could you please share:\n1. Your full name\n2. What service do you need? (e.g., Family Visa, Business Setup, Employment Visa)\n3. Your nationality\n\nI'll connect you with the right specialist!`
-      }
-      console.log(`✅ First message greeting generated for lead ${lead.id} (language: ${detectedLanguage})`)
-    } else {
-      // For follow-up messages, use simple template (multi-language)
-      switch (objective) {
-        case 'qualify':
-          if (detectedLanguage === 'ar') {
-            draftText = `مرحباً ${contactName}، شكراً لاهتمامك بخدماتنا. لمساعدتك بشكل أفضل، يرجى مشاركة:\n\n1. ما هي الخدمة المحددة التي تبحث عنها؟\n2. ما هو الجدول الزمني الخاص بك؟\n\nنتطلع لمساعدتك!`
-          } else {
-            draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n\nLooking forward to helping you!`
-          }
-          break
-        case 'followup':
-          if (detectedLanguage === 'ar') {
-            draftText = `مرحباً ${contactName}، أردت متابعة محادثتنا السابقة. كيف يمكننا مساعدتك أكثر؟ يرجى إعلامي إذا كان لديك أي أسئلة.`
-          } else {
-            draftText = `Hi ${contactName}, I wanted to follow up on our previous conversation. How can we assist you further? Please let me know if you have any questions.`
-          }
-          break
-        case 'renewal':
-          const nearestExpiry = lead.expiryDate
-          if (nearestExpiry) {
-            const daysUntil = Math.ceil((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-            if (detectedLanguage === 'ar') {
-              draftText = `مرحباً ${contactName}، أتمنى أن تكون بخير. لاحظت أن خدمتك ستنتهي خلال ${daysUntil} يوم. هل ترغب في المتابعة مع التجديد؟ يمكننا مساعدتك في إتمام العملية بسلاسة.`
-            } else {
-              draftText = `Hi ${contactName}, I hope this message finds you well. I noticed that your service is expiring in ${daysUntil} days. Would you like to proceed with renewal? We can help you complete the process smoothly.`
-            }
-          } else {
-            if (detectedLanguage === 'ar') {
-              draftText = `مرحباً ${contactName}، أردت التواصل بخصوص تجديداتك القادمة. هل هناك شيء يمكننا مساعدتك فيه؟`
-            } else {
-              draftText = `Hi ${contactName}, I wanted to check in regarding your upcoming renewals. Is there anything we can help you with?`
-            }
-          }
-          break
-        default:
-          if (detectedLanguage === 'ar') {
-            draftText = `مرحباً ${contactName}، شكراً لتواصلك مع مركز العين للأعمال. كيف يمكنني مساعدتك اليوم؟`
-          } else {
-            draftText = `Hi ${contactName}, thank you for contacting Al Ain Business Center. How can I assist you today?`
-          }
-      }
-      console.log(`✅ Template reply generated for lead ${lead.id} (objective: ${objective}, language: ${detectedLanguage})`)
+    console.log(`🤖 Building conversation context for AI generation (lead ${lead.id})`)
+    const contextSummary = await buildConversationContextFromLead(lead.id, channel.toLowerCase())
+    const conversationContext = contextSummary.structured
+    
+    // Determine tone based on mode
+    let tone: 'professional' | 'friendly' | 'short' = 'friendly'
+    if (mode === 'RENEWAL' || mode === 'PRICING') {
+      tone = 'professional'
+    } else if (mode === 'FOLLOW_UP' || mode === 'QUALIFY') {
+      tone = 'friendly'
     }
+    
+    // Determine task type for routing
+    let taskType: 'greeting' | 'followup' | 'reminder' | 'complex' | 'other' = 'other'
+    if (isFirstMessage && objective === 'qualify') {
+      taskType = 'greeting'
+    } else if (mode === 'FOLLOW_UP') {
+      taskType = 'followup'
+    } else if (mode === 'RENEWAL' || mode === 'REMIND') {
+      taskType = 'reminder'
+    } else if (mode === 'PRICING' || mode === 'DOCS') {
+      taskType = 'complex'
+    }
+    
+    console.log(`🤖 Generating AI reply using ${tone} tone, ${detectedLanguage} language, task: ${taskType}`)
+    const aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar', agent)
+    
+    const draftText = aiDraftResult.text
+    console.log(`✅ AI-generated reply for lead ${lead.id}: "${draftText.substring(0, 100)}..."`)
 
     if (!draftText || draftText.trim().length === 0) {
       return {
