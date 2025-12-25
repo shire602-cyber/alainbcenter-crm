@@ -65,9 +65,16 @@ export async function GET(req: NextRequest) {
             },
           },
         },
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
       },
       orderBy: {
-        lastMessageAt: 'desc',
+        lastMessageAt: 'desc', // Sort by last message (always has value) - client-side will prioritize inbound
       },
       // Add limit to prevent fetching too many conversations at once
       take: 500, // Reasonable limit for inbox view
@@ -157,6 +164,7 @@ export async function GET(req: NextRequest) {
             channel: conv.channel,
             status: conv.status,
             lastMessageAt: conv.lastMessageAt.toISOString(),
+            lastInboundAt: conv.lastInboundAt?.toISOString() || null,
             unreadCount: conv.unreadCount,
             priorityScore: conv.priorityScore || flags.priorityScore,
             flags: {
@@ -180,14 +188,23 @@ export async function GET(req: NextRequest) {
           }
         })
     
-        // Sort by lastMessageAt desc (most recent first), then priorityScore desc as tiebreaker
-        formatted.sort((a: { lastMessageAt: string; priorityScore: number }, b: { lastMessageAt: string; priorityScore: number }) => {
+        // Sort by lastMessageAt descending (most recent messages on top)
+        // Secondary sort by priorityScore for conversations with same timestamp
+        formatted.sort((a: any, b: any) => {
+          // Primary sort: lastMessageAt (descending - most recent first)
           const timeA = new Date(a.lastMessageAt).getTime()
           const timeB = new Date(b.lastMessageAt).getTime()
           if (timeB !== timeA) {
-            return timeB - timeA
+            return timeB - timeA // Descending - most recent first
           }
-          return b.priorityScore - a.priorityScore
+          // Secondary sort: priorityScore (descending - higher priority first)
+          if (b.priorityScore !== a.priorityScore) {
+            return b.priorityScore - a.priorityScore
+          }
+          // Tertiary sort: lastInboundAt if available
+          const inboundA = a.lastInboundAt ? new Date(a.lastInboundAt).getTime() : 0
+          const inboundB = b.lastInboundAt ? new Date(b.lastInboundAt).getTime() : 0
+          return inboundB - inboundA
         })
 
     return NextResponse.json({ ok: true, conversations: formatted })

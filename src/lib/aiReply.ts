@@ -93,35 +93,51 @@ export async function generateAiReply(
     return !recentMessages.includes(qKeywords.split(' ')[0])
   })
 
-  // Use first 3-4 questions if many are still relevant
-  const questionsToAsk = relevantQuestions.slice(0, 4)
-
-  // Generate friendly WhatsApp-style message
-  // Use helper to get proper greeting name (never "Unknown WHATSAPP User")
-  const { getGreeting } = require('./message-utils')
-  const greeting = `${getGreeting(lead.contact, 'casual')}! 👋`
-  const intro = `Thank you for your interest in our ${context}. To help you better, I'd like to ask a few questions:`
-  const closing = `Please share the details, and I'll get back to you with the best solution! 🙏`
-
-  let message = `${greeting}\n\n${intro}\n\n${questionsToAsk.join('\n')}\n\n${closing}`
-
-  // Try OpenAI if available
-  if (process.env.OPENAI_API_KEY) {
-    try {
-      const integration = await import('@/lib/prisma').then((m) =>
-        m.prisma.integration.findUnique({ where: { name: 'openai' } })
-      )
-
-      if (integration?.isEnabled && integration.apiKey) {
-        const tone = 'friendly' // Default tone for AI replies
-        const openaiMessage = await generateWithOpenAI(lead, recentLogs, questionsToAsk, context, tone)
-        if (openaiMessage) {
-          message = openaiMessage
-        }
-      }
-    } catch (error) {
-      console.error('OpenAI generation failed, using template:', error)
+  // CRITICAL: Use AI generation for ALL messages - no templates
+  // Use the main AI generation system
+  let message = ''
+  
+  try {
+    const { generateAIAutoresponse } = await import('./aiMessaging')
+    const { buildConversationContextFromLead } = await import('./ai/context')
+    
+    // Build conversation context
+    const contextSummary = await buildConversationContextFromLead(lead.id, 'whatsapp')
+    const conversationContext = contextSummary.structured
+    
+    // Create AI context
+    const aiContext = {
+      lead: lead as any,
+      contact: lead.contact,
+      recentMessages: recentLogs.map(log => ({
+        direction: 'INBOUND' as const,
+        body: log.messageSnippet || '',
+        createdAt: new Date(),
+      })),
+      mode: 'QUALIFY' as const,
+      channel: 'WHATSAPP' as const,
+      language: 'en' as const,
     }
+    
+    // Generate AI reply
+    const aiResult = await generateAIAutoresponse(aiContext)
+    
+    if (aiResult.success && aiResult.text) {
+      message = aiResult.text
+      console.log(`✅ AI-generated reply for lead ${lead.id}`)
+    } else {
+      // Last resort minimal fallback (only if AI completely fails)
+      const { getGreeting } = require('./message-utils')
+      const greeting = `${getGreeting(lead.contact, 'casual')}! 👋`
+      message = `${greeting}\n\nI received your message. Let me review it and get back to you with the information you need.`
+      console.warn(`⚠️ AI generation failed for lead ${lead.id}, using minimal fallback`)
+    }
+  } catch (error: any) {
+    console.error(`❌ AI generation error for lead ${lead.id}:`, error.message)
+    // Last resort minimal fallback
+    const { getGreeting } = require('./message-utils')
+    const greeting = `${getGreeting(lead.contact, 'casual')}! 👋`
+    message = `${greeting}\n\nI received your message. Let me review it and get back to you with the information you need.`
   }
 
   // Suggest next follow-up (2-3 days)

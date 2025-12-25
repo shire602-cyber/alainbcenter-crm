@@ -58,24 +58,44 @@ export async function GET(req: NextRequest) {
     let recentWebhookLogs: any[] = []
     
     try {
-      const webhookModel = prisma.externalEventLog
-      if (webhookModel && typeof webhookModel.findFirst === 'function') {
-        // Get last inbound message
-        lastInboundMessage = await webhookModel.findFirst({
+      // Get last inbound message (from Message table)
+      const lastMessage = await prisma.message.findFirst({
           where: {
-            provider: 'whatsapp',
-            externalId: { contains: 'msg-' },
-          },
-          orderBy: { receivedAt: 'desc' },
-        })
+          channel: 'whatsapp',
+          direction: 'INBOUND',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: {
+          id: true,
+          body: true,
+          createdAt: true,
+          providerMessageId: true,
+        },
+      })
 
-        // Get recent 10 webhook logs
-        recentWebhookLogs = await webhookModel.findMany({
-          where: { provider: 'whatsapp' },
+      if (lastMessage) {
+        lastInboundMessage = {
+          externalId: lastMessage.providerMessageId || `msg-${lastMessage.id}`,
+          receivedAt: lastMessage.createdAt,
+          body: lastMessage.body,
+        }
+      }
+
+      // Get recent 10 webhook logs (including auto-reply logs)
+      recentWebhookLogs = await prisma.externalEventLog.findMany({
+        where: { 
+          provider: { in: ['whatsapp', 'auto-reply'] }
+        },
           orderBy: { receivedAt: 'desc' },
           take: 10,
+        select: {
+          id: true,
+          externalId: true,
+          provider: true,
+          payload: true,
+          receivedAt: true,
+        },
         })
-      }
     } catch (error: any) {
       // Model might not exist yet - silently ignore
       console.warn('ExternalEventLog not available:', error?.message || 'Unknown error')
@@ -90,15 +110,43 @@ export async function GET(req: NextRequest) {
       },
       lastInboundMessage: lastInboundMessage
         ? {
-            externalId: lastInboundMessage.externalId,
-            receivedAt: lastInboundMessage.receivedAt,
+            ok: true,
+            kind: 'inbound',
+            info: lastInboundMessage.body?.substring(0, 50) || lastInboundMessage.externalId,
+            createdAt: lastInboundMessage.receivedAt.toISOString(),
           }
         : null,
-      recentWebhookLogs: recentWebhookLogs.map(log => ({
+      recentWebhookLogs: recentWebhookLogs.map(log => {
+        let kind = 'unknown'
+        let info = null
+        let ok = true
+        
+        try {
+          if (log.payload) {
+            const payload = JSON.parse(log.payload)
+            if (log.provider === 'auto-reply') {
+              kind = payload.status || 'auto-reply'
+              info = payload.reason || payload.error || `Lead ${payload.leadId}`
+              ok = payload.status === 'success'
+            } else {
+              kind = 'webhook'
+              info = log.externalId
+            }
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+        
+        return {
         id: log.id,
         externalId: log.externalId,
         receivedAt: log.receivedAt,
-      })),
+          createdAt: log.receivedAt.toISOString(),
+          kind,
+          info,
+          ok,
+        }
+      }),
     })
   } catch (error: any) {
     console.error('GET /api/whatsapp/config error:', error)

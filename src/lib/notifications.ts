@@ -65,29 +65,38 @@ export async function notifyAIUntrainedSubject(
   customerQuery: string,
   reason: string
 ): Promise<void> {
-  const contact = await prisma.lead.findUnique({
-    where: { id: leadId },
-    select: {
-      contact: {
-        select: {
-          fullName: true,
-          phone: true,
+  try {
+    console.log(`🔔 Creating notification for untrained subject (lead ${leadId}, conversation ${conversationId})`)
+    
+    const contact = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        contact: {
+          select: {
+            fullName: true,
+            phone: true,
+          },
         },
       },
-    },
-  })
+    })
 
-  const customerName = contact?.contact?.fullName || contact?.contact?.phone || 'Customer'
-  const queryPreview = customerQuery.length > 50 
-    ? customerQuery.substring(0, 50) + '...' 
-    : customerQuery
+    const customerName = contact?.contact?.fullName || contact?.contact?.phone || 'Customer'
+    const queryPreview = customerQuery.length > 50 
+      ? customerQuery.substring(0, 50) + '...' 
+      : customerQuery
 
-  await createNotificationForAllUsers({
-    type: 'ai_untrained',
-    title: `AI Needs Human Help: ${customerName}`,
-    message: `Customer asked about "${queryPreview}". AI is not trained on this subject. Please reply manually.`,
-    leadId,
-    conversationId: conversationId || undefined,
-  })
+    await createNotificationForAllUsers({
+      type: 'ai_untrained',
+      title: `AI Needs Human Help: ${customerName}`,
+      message: `Customer asked about "${queryPreview}". AI is not trained on this subject. Reason: ${reason}. Please reply manually.`,
+      leadId,
+      conversationId: conversationId || undefined,
+    })
+    
+    console.log(`✅ Notification created successfully for lead ${leadId}`)
+  } catch (error: any) {
+    console.error(`❌ Failed to create notification for untrained subject:`, error.message)
+    // Don't throw - notifications are non-critical
+  }
 }
 

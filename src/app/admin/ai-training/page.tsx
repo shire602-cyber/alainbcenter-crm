@@ -5,6 +5,7 @@
  * 
  * Upload guidance documents and training materials for the AI autopilot
  * to follow when generating responses.
+ * Also manage AI agent profiles and response settings.
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -16,7 +17,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
-import { FileText, Upload, Trash2, BookOpen, Sparkles, Save } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { FileText, Upload, Trash2, BookOpen, Sparkles, Save, Settings } from 'lucide-react'
+import { ResponseSettingsTab } from '@/components/admin/ResponseSettingsTab'
 
 interface TrainingDocument {
   id: number
@@ -29,6 +32,7 @@ interface TrainingDocument {
 
 export default function AITrainingPage() {
   const { showToast } = useToast()
+  const [activeTab, setActiveTab] = useState<'documents' | 'settings'>('documents')
   const [documents, setDocuments] = useState<TrainingDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
@@ -39,6 +43,7 @@ export default function AITrainingPage() {
   const [uploading, setUploading] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [tableError, setTableError] = useState<string | null>(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -48,10 +53,18 @@ export default function AITrainingPage() {
   async function loadDocuments() {
     try {
       setLoading(true)
-      const res = await fetch('/api/admin/ai-training/documents')
+      setTableError(null)
+      const res = await fetch('/api/admin/ai-training/documents', {
+        credentials: 'include',
+      })
       const data = await res.json()
       if (data.ok) {
         setDocuments(data.documents || [])
+        setTableError(null)
+      } else if (data.error && data.error.includes('does not exist')) {
+        // Table doesn't exist - show error banner
+        setTableError(data.error)
+        setDocuments([])
       }
     } catch (error) {
       console.error('Failed to load documents:', error)
@@ -187,6 +200,7 @@ export default function AITrainingPage() {
         setContent('')
         setSelectedFile(null)
         setSelectedDoc(null)
+        setTableError(null) // Clear any previous errors
         // Reset file input
         if (fileInputRef.current) {
           fileInputRef.current.value = ''
@@ -196,6 +210,10 @@ export default function AITrainingPage() {
         const errorMsg = data.error || 'Upload failed'
         console.error('❌ Upload failed:', errorMsg, data)
         showToast(errorMsg, 'error')
+        // Show error banner if it's a table error
+        if (errorMsg.includes('does not exist')) {
+          setTableError(errorMsg)
+        }
       }
     } catch (error: any) {
       console.error('❌ Upload exception:', error)
@@ -250,23 +268,62 @@ export default function AITrainingPage() {
   return (
     <MainLayout>
       <div className="space-y-4">
+        {/* Error Banner */}
+        {tableError && (
+          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="text-red-600 dark:text-red-400">
+                <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
+                  <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
+                </svg>
+              </div>
+              <p className="text-sm font-medium text-red-800 dark:text-red-200">{tableError}</p>
+            </div>
+            <button
+              onClick={() => setTableError(null)}
+              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+            >
+              <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+              </svg>
+            </button>
+          </div>
+        )}
+
         {/* Header - matching other admin pages */}
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-semibold tracking-tight text-foreground">
-              AI Training Area
+              AI Training & Response Settings
             </h1>
             <p className="text-sm text-muted-foreground mt-1">
-              Upload guidance documents and training materials for the AI autopilot
+              Manage training documents and configure AI agent responses
             </p>
           </div>
-          <Button onClick={newDocument} size="sm" className="gap-1.5">
-            <BookOpen className="h-4 w-4" />
-            New Document
-          </Button>
         </div>
 
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
+        <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'documents' | 'settings')}>
+          <TabsList>
+            <TabsTrigger value="documents">
+              <FileText className="h-4 w-4 mr-2" />
+              Training Documents
+            </TabsTrigger>
+            <TabsTrigger value="settings">
+              <Settings className="h-4 w-4 mr-2" />
+              Response Settings
+            </TabsTrigger>
+          </TabsList>
+
+          <TabsContent value="documents" className="mt-4">
+            <div className="flex items-center justify-between mb-4">
+              <div></div>
+              <Button onClick={newDocument} size="sm" className="gap-1.5">
+                <BookOpen className="h-4 w-4" />
+                New Document
+              </Button>
+            </div>
+
+            <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Document List */}
           <BentoCard className="lg:col-span-1" title="Training Documents">
             <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
@@ -430,7 +487,13 @@ export default function AITrainingPage() {
               </div>
             </div>
           </BentoCard>
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings" className="mt-4">
+            <ResponseSettingsTab trainingDocuments={documents.map(d => ({ id: d.id, title: d.title, type: d.type }))} />
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   )

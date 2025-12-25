@@ -438,6 +438,12 @@ export async function POST(req: NextRequest) {
             phoneNumberId,
           })
 
+          console.log(`🔄 [WEBHOOK] About to call handleInboundMessage for ${from}`, {
+            messageId,
+            messageText: messageText.substring(0, 50),
+            hasBody: !!messageText && messageText.trim().length > 0,
+          })
+
           const result = await handleInboundMessage({
             channel: 'WHATSAPP',
             externalId: externalId,
@@ -450,12 +456,41 @@ export async function POST(req: NextRequest) {
             mediaMimeType: mediaMimeType,
           })
 
-          console.log(`✅ Successfully processed inbound message`, {
+          console.log(`✅ [WEBHOOK] Successfully processed inbound message`, {
             messageId,
             conversationId: result.conversation.id,
             leadId: result.lead.id,
             contactId: result.contact.id,
+            messageCreated: !!result.message,
+            createdMessageId: result.message?.id,
+            messageBody: result.message?.body?.substring(0, 50),
           })
+
+          // CRITICAL: Trigger AI reply from webhook level to ensure it always runs
+          // Even if handleInboundMessage had issues, we still have the result
+          if (result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id) {
+            console.log(`🤖 [WEBHOOK] Triggering AI reply from webhook level (backup)`)
+            try {
+              const { handleInboundAutoReply } = await import('@/lib/autoReply')
+              const replyResult = await handleInboundAutoReply({
+                leadId: result.lead.id,
+                messageId: result.message.id,
+                messageText: result.message.body,
+                channel: result.message.channel,
+                contactId: result.contact.id,
+              })
+              console.log(`📊 [WEBHOOK] AI reply result (webhook level):`, replyResult)
+            } catch (autoReplyError: any) {
+              console.error(`❌ [WEBHOOK] AI reply failed at webhook level:`, autoReplyError.message)
+            }
+          } else {
+            console.warn(`⚠️ [WEBHOOK] Cannot trigger AI reply - missing data`, {
+              hasMessage: !!result.message,
+              hasBody: !!result.message?.body,
+              hasLead: !!result.lead,
+              hasContact: !!result.contact,
+            })
+          }
 
           // Update conversation with WhatsApp-specific fields (if schema supports them)
           const waUserWaId = from
@@ -511,9 +546,12 @@ export async function POST(req: NextRequest) {
         } catch (error: any) {
           // Handle unique constraint violation (duplicate message)
           if (error.code === 'P2002' || error.message?.includes('Unique constraint')) {
-            console.log(`⚠️ Duplicate message ${messageId} detected via constraint`)
+            console.log(`⚠️ [WEBHOOK] Duplicate message ${messageId} detected via constraint - NO AI reply for duplicates`)
+            // NO AI reply for duplicates - user requirement: "duplicate messages from customer shouldn't get replies"
+            // Just return success without triggering AI reply
+            return NextResponse.json({ ok: true, duplicate: true })
           } else {
-            console.error(`❌ Error processing inbound message:`, {
+            console.error(`❌ [WEBHOOK] Error processing inbound message:`, {
               error: error.message,
               stack: error.stack,
               messageId,
@@ -539,6 +577,7 @@ export async function POST(req: NextRequest) {
             } catch (logError) {
               console.error('Failed to log error:', logError)
             }
+            return NextResponse.json({ ok: false, error: error.message }, { status: 500 })
           }
         }
       }

@@ -34,12 +34,14 @@ export async function retrieveAndGuard(
     similarityThreshold?: number
     topK?: number
     subjectTags?: string[] // Optional: specific subjects to match
+    trainingDocumentIds?: number[] // Optional: filter by specific training document IDs
   } = {}
 ): Promise<RetrievalResult> {
   const {
     similarityThreshold = 0.7, // Default threshold
     topK = 5,
     subjectTags = [],
+    trainingDocumentIds,
   } = options
 
   try {
@@ -47,6 +49,7 @@ export async function retrieveAndGuard(
     const searchResults = await searchTrainingDocuments(query, {
       topK,
       similarityThreshold,
+      trainingDocumentIds,
     })
 
     // Step 2: Check if we have relevant training

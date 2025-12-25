@@ -132,6 +132,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const [sending, setSending] = useState(false)
   const [messages, setMessages] = useState<any[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
+  const [conversationId, setConversationId] = useState<number | null>(null)
+  const [currentUser, setCurrentUser] = useState<any>(null)
+  const [deletingChat, setDeletingChat] = useState(false)
   
   // Modal states
   const [showTaskModal, setShowTaskModal] = useState(false)
@@ -168,13 +171,46 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     loadUsers()
     loadServiceTypes()
     loadCompliance()
+    // Load current user for admin check
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => setCurrentUser(data.user))
+      .catch(() => {})
   }, [leadId])
 
   useEffect(() => {
     if (lead) {
       loadMessages()
+      // Reload conversation ID when channel changes
+      loadConversationId()
     }
   }, [lead, activeChannel])
+
+  async function loadConversationId() {
+    if (!lead?.contactId) return
+    try {
+      const channelMap: Record<string, string> = {
+        whatsapp: 'whatsapp',
+        email: 'email',
+        instagram: 'instagram',
+        facebook: 'facebook',
+      }
+      const dbChannel = channelMap[activeChannel] || 'whatsapp'
+      const convRes = await fetch(`/api/inbox/conversations?channel=${dbChannel}`)
+      if (convRes.ok) {
+        const convData = await convRes.json()
+        const conversation = convData.conversations?.find((c: any) => c.contact.id === lead.contactId)
+        if (conversation) {
+          setConversationId(conversation.id)
+        } else {
+          setConversationId(null)
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load conversation ID:', err)
+      setConversationId(null)
+    }
+  }
 
   async function loadCompliance() {
     try {
@@ -871,6 +907,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             <Card className="rounded-2xl glass-medium shadow-conversation flex-[2] flex flex-col overflow-hidden min-h-0">
               <CardHeader className="pb-3 flex-shrink-0 p-0">
                 <div className="sticky top-16 z-20 glass-medium border-b px-4 py-2">
+                  <div className="flex items-center justify-between mb-2">
                   <Tabs value={activeChannel} onValueChange={setActiveChannel}>
                     <TabsList>
                     <TabsTrigger value="whatsapp">
@@ -895,6 +932,48 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </TabsTrigger>
                   </TabsList>
                   </Tabs>
+                    {currentUser?.role === 'ADMIN' && conversationId && (
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        onClick={async () => {
+                          if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
+                            return
+                          }
+                          try {
+                            setDeletingChat(true)
+                            const res = await fetch(`/api/admin/conversations/${conversationId}/delete`, {
+                              method: 'DELETE',
+                              credentials: 'include',
+                            })
+                            const data = await res.json()
+                            if (data.ok) {
+                              showToast(`Deleted conversation and ${data.deletedMessages} messages`, 'success')
+                              setConversationId(null)
+                              setMessages([])
+                              await loadLead()
+                              await loadMessages()
+                            } else {
+                              showToast(data.error || 'Failed to delete conversation', 'error')
+                            }
+                          } catch (err: any) {
+                            showToast('Failed to delete conversation', 'error')
+                          } finally {
+                            setDeletingChat(false)
+                          }
+                        }}
+                        disabled={deletingChat}
+                      >
+                        {deletingChat ? (
+                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                        ) : (
+                          <Trash2 className="h-3.5 w-3.5" />
+                        )}
+                        Delete Chat
+                      </Button>
+                    )}
+                  </div>
                 </div>
               </CardHeader>
 

@@ -124,18 +124,8 @@ export async function POST(
         const daysLeft = differenceInDays(parseISO(nearestExpiry.expiryDate.toString()), new Date())
         const isExpired = daysLeft < 0
 
-        // Build renewal prompt
-        const renewalTemplate = isExpired
-          ? `Hi {name}, your {service} expired ${Math.abs(daysLeft)} days ago. We can help you renew quickly. Would you like to proceed?`
-          : daysLeft <= 7
-          ? `Hi {name}, URGENT: Your {service} expires in {expiry_days} days. Let's renew it now to avoid any issues.`
-          : daysLeft <= 30
-          ? `Hi {name}, your {service} expires in {expiry_days} days. We're here to help with renewal. Interested?`
-          : `Hi {name}, your {service} expires on {expiry_date}. We can help renew it smoothly. Shall we proceed?`
-
-        draftText = interpolateTemplate(renewalTemplate, { lead })
-
-        // Try OpenAI enhancement if available
+        // CRITICAL: NO TEMPLATES - Always use AI generation first
+        // Try AI generation first (no template fallback)
         try {
           const aiContext = {
             lead: {
@@ -186,26 +176,27 @@ export async function POST(
           )
 
           if (aiDraft.text) {
-            draftText = interpolateTemplate(aiDraft.text, { lead })
+            draftText = aiDraft.text
+            // Validate it's not a template
+            const lowerText = draftText.toLowerCase()
+            const isTemplate = lowerText.includes('thank you for your interest') ||
+                              lowerText.includes('to better assist you')
+            if (isTemplate) {
+              console.error('❌ AI generated template-like message, rejecting')
+              throw new Error('AI generated template message - rejected')
+            }
+          } else {
+            throw new Error('AI returned empty draft')
           }
         } catch (aiError) {
-          console.warn('AI generation failed, using template:', aiError)
-          // Continue with template
+          console.error('❌ AI generation failed:', aiError)
+          // Minimal fallback - NO template
+          const contactName = lead.contact?.fullName || 'there'
+          draftText = `Hello ${contactName}! This is a reminder about your renewal. When would you like to proceed?`
         }
       } else if (mode === 'FOLLOW_UP') {
-        // Follow-up message
-        const template = `Hi {name}, 
-
-Thank you for your interest in {service}. I wanted to follow up and see if you have any questions or if we can help you move forward.
-
-Looking forward to hearing from you!
-
-Best regards,
-Alain Business Center`
-
-        draftText = interpolateTemplate(template, { lead })
-
-        // Try OpenAI enhancement
+        // CRITICAL: NO TEMPLATES - Always use AI generation
+        // Follow-up message - MUST be AI-generated
         try {
           const aiDraft = await generateDraftReply(
             {
@@ -239,29 +230,27 @@ Alain Business Center`
           )
 
           if (aiDraft.text) {
-            draftText = interpolateTemplate(aiDraft.text, { lead })
+            draftText = aiDraft.text
+            // Validate it's not a template
+            const lowerText = draftText.toLowerCase()
+            const isTemplate = lowerText.includes('thank you for your interest') ||
+                              lowerText.includes('looking forward to hearing')
+            if (isTemplate) {
+              console.error('❌ AI generated template-like message, rejecting')
+              throw new Error('AI generated template message - rejected')
+            }
+          } else {
+            throw new Error('AI returned empty draft')
           }
         } catch (aiError) {
-          console.warn('AI generation failed, using template:', aiError)
+          console.error('❌ AI generation failed:', aiError)
+          // Minimal fallback - NO template
+          const contactName = lead.contact?.fullName || 'there'
+          draftText = `Hello ${contactName}! Just checking in. How can I help you today?`
         }
       } else if (mode === 'QUALIFY') {
-        // Qualification message
-        const template = `Hi {name},
-
-Thank you for your interest in {service}. To better assist you, I'd like to ask a few questions:
-
-1. What specific service do you need?
-2. What is your nationality?
-3. Are you currently in UAE?
-
-Please share these details, and I'll provide you with the best solution!
-
-Best regards,
-Alain Business Center`
-
-        draftText = interpolateTemplate(template, { lead })
-
-        // Try OpenAI for more personalized questions
+        // CRITICAL: NO TEMPLATES - Always use AI generation
+        // Qualification message - MUST be AI-generated, no templates
         try {
           const aiDraft = await generateDraftReply(
             {
@@ -298,31 +287,86 @@ Alain Business Center`
           )
 
           if (aiDraft.text) {
-            draftText = interpolateTemplate(aiDraft.text, { lead })
+            draftText = aiDraft.text
+            // Validate it's not a template
+            const lowerText = draftText.toLowerCase()
+            const isTemplate = lowerText.includes('thank you for your interest') ||
+                              lowerText.includes('looking forward to hearing')
+            if (isTemplate) {
+              console.error('❌ AI generated template-like message, rejecting')
+              throw new Error('AI generated template message - rejected')
+            }
+          } else {
+            throw new Error('AI returned empty draft')
           }
         } catch (aiError) {
-          console.warn('AI generation failed, using template:', aiError)
+          console.error('❌ AI generation failed:', aiError)
+          // Minimal fallback - NO template
+          const contactName = lead.contact?.fullName || 'there'
+          draftText = `Hello ${contactName}! Just checking in. How can I help you today?`
         }
       } else if (mode === 'PRICING') {
-        // Pricing inquiry
-        const template = `Hi {name},
-
-Thank you for your interest in {service} pricing.
-
-I'd be happy to provide you with a detailed quote. To give you the most accurate pricing, could you please share:
-
-1. Specific service requirements
-2. Your nationality
-3. Timeline for completion
-
-Once I have these details, I'll send you a customized quote right away!
-
-Best regards,
-Alain Business Center`
-
-        draftText = interpolateTemplate(template, { lead })
+        // CRITICAL: NO TEMPLATES - Always use AI generation
+        // Pricing inquiry - MUST be AI-generated
+        try {
+          const aiDraft = await generateDraftReply(
+            {
+              messages: recentMessages.map((m) => ({
+                direction: m.direction === 'INBOUND' || m.direction === 'IN' ? 'inbound' : 'outbound',
+                message: m.body || '',
+                channel: m.channel || 'whatsapp',
+                createdAt: m.createdAt,
+              })),
+              contact: {
+                name: (() => {
+                  const { getGreetingName } = require('@/lib/message-utils')
+                  return getGreetingName(lead.contact) || 'there'
+                })(),
+                phone: lead.contact?.phone || '',
+                email: lead.contact?.email || null,
+                nationality: lead.contact?.nationality || null,
+              },
+              lead: {
+                id: lead.id,
+                leadType: lead.leadType,
+                serviceType: lead.serviceType?.name || null,
+                status: lead.status,
+                pipelineStage: lead.pipelineStage,
+                expiryDate: lead.expiryDate,
+                nextFollowUpAt: lead.nextFollowUpAt,
+                aiScore: lead.aiScore,
+                aiNotes: lead.aiNotes,
+              },
+              companyIdentity: 'Alain Business Center',
+            },
+            'professional',
+            'en'
+          )
+          
+          if (aiDraft.text) {
+            draftText = aiDraft.text
+            // Validate it's not a template
+            const lowerText = draftText.toLowerCase()
+            const isTemplate = lowerText.includes('thank you for your interest') ||
+                              lowerText.includes('could you please share')
+            if (isTemplate) {
+              console.error('❌ AI generated template-like message, rejecting')
+              throw new Error('AI generated template message - rejected')
+            }
+          } else {
+            throw new Error('AI returned empty draft')
+          }
+        } catch (aiError) {
+          console.error('❌ AI generation failed:', aiError)
+          // Minimal fallback - NO template
+          const contactName = lead.contact?.fullName || 'there'
+          draftText = `Hello ${contactName}! I can help with pricing. What service are you interested in?`
+        }
+        
+        // OLD TEMPLATE CODE REMOVED - Now using AI only (handled above)
       } else if (mode === 'DOCS') {
-        // Document request - use AI helper if available
+        // CRITICAL: NO TEMPLATES - Always use AI generation
+        // Document request - MUST be AI-generated
         try {
           const { generateDocsReminderMessage } = await import('@/lib/aiDocsReminder')
           const channelForReminder = channel === 'EMAIL' ? 'EMAIL' : 'WHATSAPP'
@@ -330,24 +374,20 @@ Alain Business Center`
             leadId: lead.id,
             channel: channelForReminder,
           })
+          
+          // Validate it's not a template
+          const lowerText = draftText.toLowerCase()
+          const isTemplate = lowerText.includes('thank you for your interest') ||
+                            lowerText.includes('to better assist you')
+          if (isTemplate) {
+            console.error('❌ AI generated template-like message, rejecting')
+            throw new Error('AI generated template message - rejected')
+          }
         } catch (error) {
-          // Fallback to template if AI helper fails
-          console.warn('AI docs reminder failed, using template:', error)
-          const template = `Hi {name},
-
-To proceed with your {service}, we'll need the following documents:
-
-• Passport copy
-• Emirates ID copy (if available)
-• Photo
-• Other required documents
-
-Please upload these documents when convenient, or let me know if you have any questions.
-
-Best regards,
-Alain Business Center`
-
-          draftText = interpolateTemplate(template, { lead })
+          console.error('❌ AI docs reminder failed:', error)
+          // Minimal fallback - NO template
+          const contactName = lead.contact?.fullName || 'there'
+          draftText = `Hello ${contactName}! We need some documents to proceed. What documents do you have available?`
         }
       }
 
