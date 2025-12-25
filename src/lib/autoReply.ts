@@ -636,30 +636,43 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         const replyPreview = replyText.substring(0, 150)
         console.log(`✅ [AI-GEN] AI generated fresh reply (${replyText.length} chars): "${replyPreview}..."`)
         
-        // CRITICAL: Validate reply is NOT a template - REJECT if it contains template patterns
+        // CRITICAL: Validate reply is NOT a template - REJECT only if it's EXACTLY a template
+        // Only reject if it contains MULTIPLE template patterns (more lenient check)
         const templatePatterns = [
-          'thank you for your interest',
-          'to better assist you',
-          'what specific service',
+          'thank you for your interest in our services',
+          'to better assist you, could you please share',
+          'what specific service are you looking for',
           'what is your timeline',
           'looking forward to helping you',
-          'could you please share',
-          'please share: 1.',
-          'please share: 2.',
         ]
         const lowerReply = replyText.toLowerCase()
-        const isTemplate = templatePatterns.some(pattern => lowerReply.includes(pattern))
+        const templateMatches = templatePatterns.filter(pattern => lowerReply.includes(pattern)).length
         
-        if (isTemplate) {
-          console.error(`❌ [AI-GEN] REJECTED: Generated reply contains FORBIDDEN template patterns!`)
+        // Only reject if it contains 2+ template patterns (likely a full template)
+        if (templateMatches >= 2) {
+          console.error(`❌ [AI-GEN] REJECTED: Generated reply contains ${templateMatches} FORBIDDEN template patterns!`)
           console.error(`   Reply: "${replyText.substring(0, 200)}..."`)
-          console.error(`   This message will NOT be sent. Using minimal fallback instead.`)
+          console.error(`   This message will NOT be sent. Generating context-aware fallback instead.`)
           
-          // REJECT the template message - use minimal fallback instead
+          // Generate context-aware fallback based on user's message
+          const userMessage = messageText.toLowerCase()
+          const contactNameForFallback = lead.contact?.fullName || 'there'
+          let contextAwareFallback = ''
+          
+          if (userMessage.includes('business') || userMessage.includes('setup')) {
+            contextAwareFallback = `Hi ${contactNameForFallback}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
+          } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee')) {
+            contextAwareFallback = `Hi ${contactNameForFallback}, I'll get the pricing information for you right away.`
+          } else if (userMessage.includes('renew') || userMessage.includes('expir')) {
+            contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the renewal details for you.`
+          } else {
+            contextAwareFallback = `Hi ${contactNameForFallback}, I received your message about "${messageText.substring(0, 50)}". Let me get the information you need.`
+          }
+          
           aiResult = {
-            text: `Hello! I received your message. Let me review it and get back to you with the information you need.`,
+            text: contextAwareFallback,
             success: true,
-            confidence: 30, // Very low confidence for rejected template
+            confidence: 40, // Low confidence for rejected template
           }
           usedFallback = true
         }
@@ -670,17 +683,39 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       aiResult = null
     }
     
-    // If AI generation failed or returned empty, use fallback reply
+    // If AI generation failed or returned empty, use context-aware fallback reply
     if (!aiResult || !aiResult.success || !aiResult.text) {
-      console.log(`📝 Using fallback reply (aiSuccess: ${aiResult?.success || false})`)
+      console.log(`📝 Using context-aware fallback reply (aiSuccess: ${aiResult?.success || false})`)
       
-      // Minimal fallback reply (only used if AI completely fails)
-      const fallbackReplies: Record<string, string> = {
-        en: "Hello! I received your message. Let me review it and get back to you with the information you need.",
-        ar: "مرحباً! لقد تلقيت رسالتك. دعني أراجعها وأعود إليك بالمعلومات التي تحتاجها.",
+      // Generate context-aware fallback based on user's actual message
+      const userMessage = messageText.toLowerCase()
+      const contactName = lead.contact?.fullName || 'there'
+      
+      let fallbackText = ''
+      
+      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+        fallbackText = detectedLanguage === 'ar' 
+          ? `مرحباً ${contactName}، يسعدني مساعدتك في خدمات تأسيس الشركات. سأجمع التفاصيل وأعود إليك قريباً.`
+          : `Hi ${contactName}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
+      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much')) {
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، سأحضر معلومات الأسعار لك الآن.`
+          : `Hi ${contactName}, I'll get the pricing information for you right away.`
+      } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry')) {
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، سأتحقق من تفاصيل التجديد لك.`
+          : `Hi ${contactName}, I'll check the renewal details for you.`
+      } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper')) {
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، سأتحقق من متطلبات المستندات لك.`
+          : `Hi ${contactName}, I'll check the document requirements for you.`
+      } else {
+        // Generic but still acknowledges their message
+        const messagePreview = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
+          : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
       }
-      
-      const fallbackText = fallbackReplies[detectedLanguage] || fallbackReplies.en
       
       aiResult = {
         text: fallbackText,
