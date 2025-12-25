@@ -628,9 +628,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           hasText: !!aiResult?.text,
         })
         usedFallback = true
-      } else {
-        const replyPreview = aiResult.text.substring(0, 150)
-        console.log(`✅ [AI-GEN] AI generated fresh reply (${aiResult.text.length} chars): "${replyPreview}..."`)
+      } else if (aiResult && aiResult.text) {
+        const replyText = aiResult.text // Store in local variable for type narrowing
+        const replyPreview = replyText.substring(0, 150)
+        console.log(`✅ [AI-GEN] AI generated fresh reply (${replyText.length} chars): "${replyPreview}..."`)
         
         // Check if reply looks like a template
         const templatePatterns = [
@@ -641,7 +642,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           'Looking forward to helping you',
         ]
         const isTemplate = templatePatterns.some(pattern => 
-          aiResult.text.toLowerCase().includes(pattern.toLowerCase())
+          replyText.toLowerCase().includes(pattern.toLowerCase())
         )
         
         if (isTemplate) {
@@ -721,15 +722,17 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     }
 
     // Step 9: Send reply immediately
+    // At this point, aiResult.text is guaranteed to exist (checked above)
+    const replyText = aiResult.text
     const channelUpper = channel.toUpperCase()
     console.log(`🔍 Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
     
     if (channelUpper === 'WHATSAPP' && phoneNumber) {
       try {
         console.log(`📤 Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
-        console.log(`📝 Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
+        console.log(`📝 Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
         
-        const result = await sendTextMessage(phoneNumber, aiResult.text)
+        const result = await sendTextMessage(phoneNumber, replyText)
         
         console.log(`📨 WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
         
@@ -747,7 +750,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               direction: 'OUTBOUND',
               channel: channel.toLowerCase(),
               type: 'text',
-              body: aiResult.text,
+              body: replyText,
               status: 'SENT',
               providerMessageId: result.messageId,
               rawPayload: JSON.stringify({
