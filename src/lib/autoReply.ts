@@ -107,9 +107,12 @@ async function shouldAutoReply(
     const followUpRateLimitSeconds = 10 // Always allow replies after 10 seconds for follow-ups
     console.log(`⏱️ Last auto-reply was ${secondsSinceLastReply.toFixed(0)} seconds ago (follow-up rate limit: ${followUpRateLimitSeconds}s)`)
     
+    // Only block if it's been less than 10 seconds (prevent spam, but allow normal follow-ups)
     if (secondsSinceLastReply < followUpRateLimitSeconds) {
       console.log(`⏭️ Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago (minimum ${followUpRateLimitSeconds}s for follow-ups)`)
       return { shouldReply: false, reason: `Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago`, agent: agent || undefined }
+    } else {
+      console.log(`✅ Rate limit passed: ${secondsSinceLastReply.toFixed(0)} seconds since last reply (>= ${followUpRateLimitSeconds}s)`)
     }
   } else if (isFirstMessage && agent && !agent.firstMessageImmediate) {
     // Agent can disable immediate first message replies
