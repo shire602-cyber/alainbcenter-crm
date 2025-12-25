@@ -205,12 +205,6 @@ export async function POST(req: NextRequest) {
       }, { status: 400 })
     }
 
-    // Determine tone and language based on objective
-    let tone = 'professional'
-    if (objective === 'followup' || objective === 'qualify') {
-      tone = 'friendly'
-    }
-
     // Build training context from retrieved documents
     const relevantTraining = retrievalResult.relevantDocuments
       .map(doc => `${doc.title} (${doc.type}, similarity: ${doc.similarity.toFixed(2)}):\n${doc.content}`)
