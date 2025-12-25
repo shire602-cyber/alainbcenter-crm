@@ -40,14 +40,15 @@ async function shouldAutoReply(
   isFirstMessage: boolean = false,
   messageText?: string
 ): Promise<{ shouldReply: boolean; reason?: string; agent?: AgentProfile }> {
-  console.log(`🔍 Checking shouldAutoReply for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
+  console.log(`🔍 [SHOULD-REPLY] Checking shouldAutoReply for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
+  console.log(`🔍 [SHOULD-REPLY] Message text: "${messageText?.substring(0, 100) || 'none'}..."`)
   
   // Get agent profile for this lead
   const agent = await getAgentProfileForLead(leadId)
   if (!agent) {
-    console.log(`⚠️ No agent profile found for lead ${leadId}, using defaults`)
+    console.log(`⚠️ [SHOULD-REPLY] No agent profile found for lead ${leadId}, using defaults`)
   } else {
-    console.log(`🤖 Using agent profile: ${agent.name} (ID: ${agent.id})`)
+    console.log(`🤖 [SHOULD-REPLY] Using agent profile: ${agent.name} (ID: ${agent.id})`)
   }
 
   // Fetch lead with all fields (fields exist in schema but Prisma types may not be updated)
@@ -70,13 +71,15 @@ async function shouldAutoReply(
   // Check if auto-reply is enabled (treat NULL/undefined as true for backward compatibility)
   // Default to true if not explicitly set to false
   // @ts-ignore - Prisma types may not be updated yet
-  if (lead.autoReplyEnabled === false) {
-    console.log(`⏭️ Auto-reply disabled for lead ${leadId}`)
+  const autoReplyEnabled = lead.autoReplyEnabled
+  console.log(`🔍 [SHOULD-REPLY] autoReplyEnabled: ${autoReplyEnabled} (type: ${typeof autoReplyEnabled})`)
+  if (autoReplyEnabled === false) {
+    console.error(`❌ [SHOULD-REPLY] BLOCKED: Auto-reply disabled for lead ${leadId}`)
     return { shouldReply: false, reason: 'Auto-reply disabled for this lead', agent: agent || undefined }
   }
   // If NULL or undefined, default to true (for leads created before migration)
   // @ts-ignore
-  console.log(`✅ Auto-reply enabled for lead ${leadId} (autoReplyEnabled: ${lead.autoReplyEnabled ?? 'null/undefined - defaulting to true'})`)
+  console.log(`✅ [SHOULD-REPLY] Auto-reply enabled for lead ${leadId} (autoReplyEnabled: ${autoReplyEnabled ?? 'null/undefined - defaulting to true'})`)
 
   // Check if muted
   // @ts-ignore
@@ -166,7 +169,7 @@ async function shouldAutoReply(
     }
   }
 
-  console.log(`✅ Auto-reply check passed for lead ${leadId}`)
+  console.log(`✅ [SHOULD-REPLY] Auto-reply check PASSED for lead ${leadId} - reply will be sent!`)
   return { shouldReply: true, agent: agent || undefined }
 }
 
