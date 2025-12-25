@@ -126,18 +126,46 @@ export async function generateAiReply(
       message = aiResult.text
       console.log(`✅ AI-generated reply for lead ${lead.id}`)
     } else {
-      // Last resort minimal fallback (only if AI completely fails)
+      // Context-aware fallback based on user's message
       const { getGreeting } = require('./message-utils')
       const greeting = `${getGreeting(lead.contact, 'casual')}! 👋`
-      message = `${greeting}\n\nI received your message. Let me review it and get back to you with the information you need.`
-      console.warn(`⚠️ AI generation failed for lead ${lead.id}, using minimal fallback`)
+      const lastMessage = recentLogs[recentLogs.length - 1]?.messageSnippet || ''
+      const userMessage = lastMessage.toLowerCase()
+      
+      let contextAwareMessage = ''
+      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+        contextAwareMessage = `${greeting}\n\nI'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
+      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much')) {
+        contextAwareMessage = `${greeting}\n\nI'll get the pricing information for you right away.`
+      } else if (userMessage.includes('renew') || userMessage.includes('expir')) {
+        contextAwareMessage = `${greeting}\n\nI'll check the renewal details for you.`
+      } else if (userMessage.includes('doc') || userMessage.includes('document')) {
+        contextAwareMessage = `${greeting}\n\nI'll check the document requirements for you.`
+      } else {
+        contextAwareMessage = `${greeting}\n\nI received your message. Let me get back to you with the information you need.`
+      }
+      
+      message = contextAwareMessage
+      console.warn(`⚠️ AI generation failed for lead ${lead.id}, using context-aware fallback`)
     }
   } catch (error: any) {
     console.error(`❌ AI generation error for lead ${lead.id}:`, error.message)
-    // Last resort minimal fallback
+    // Context-aware fallback
     const { getGreeting } = require('./message-utils')
     const greeting = `${getGreeting(lead.contact, 'casual')}! 👋`
-    message = `${greeting}\n\nI received your message. Let me review it and get back to you with the information you need.`
+    const lastMessage = recentLogs[recentLogs.length - 1]?.messageSnippet || ''
+    const userMessage = lastMessage.toLowerCase()
+    
+    let contextAwareMessage = ''
+    if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+      contextAwareMessage = `${greeting}\n\nI'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
+    } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee')) {
+      contextAwareMessage = `${greeting}\n\nI'll get the pricing information for you right away.`
+    } else {
+      contextAwareMessage = `${greeting}\n\nI received your message. Let me get back to you with the information you need.`
+    }
+    
+    message = contextAwareMessage
   }
 
   // Suggest next follow-up (2-3 days)

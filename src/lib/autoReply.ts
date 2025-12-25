@@ -625,11 +625,14 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       aiResult = await generateAIAutoresponse(aiContext, agent)
       
       if (!aiResult || !aiResult.success || !aiResult.text) {
-        console.log(`⚠️ [AI-GEN] AI generation failed or returned empty:`, {
+        console.error(`⚠️ [AI-GEN] AI generation failed or returned empty:`, {
           success: aiResult?.success,
           error: aiResult?.error,
           hasText: !!aiResult?.text,
+          messageText: messageText.substring(0, 100),
+          leadId,
         })
+        console.error(`⚠️ [AI-GEN] This will trigger context-aware fallback based on: "${messageText.substring(0, 100)}"`)
         usedFallback = true
       } else if (aiResult && aiResult.text) {
         const replyText = aiResult.text // Store in local variable for type narrowing
@@ -685,15 +688,19 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     // If AI generation failed or returned empty, use context-aware fallback reply
     if (!aiResult || !aiResult.success || !aiResult.text) {
-      console.log(`📝 Using context-aware fallback reply (aiSuccess: ${aiResult?.success || false})`)
+      console.log(`📝 [FALLBACK] Using context-aware fallback reply (aiSuccess: ${aiResult?.success || false}, error: ${aiResult?.error || 'none'})`)
+      console.log(`📝 [FALLBACK] User message: "${messageText.substring(0, 100)}"`)
       
       // Generate context-aware fallback based on user's actual message
       const userMessage = messageText.toLowerCase()
       const contactName = lead.contact?.fullName || 'there'
       
+      console.log(`📝 [FALLBACK] Detecting context from message (lowercase): "${userMessage.substring(0, 100)}"`)
+      
       let fallbackText = ''
       
       if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+        console.log(`📝 [FALLBACK] Matched: business/setup context`)
         fallbackText = detectedLanguage === 'ar' 
           ? `مرحباً ${contactName}، يسعدني مساعدتك في خدمات تأسيس الشركات. سأجمع التفاصيل وأعود إليك قريباً.`
           : `Hi ${contactName}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
@@ -710,11 +717,25 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           ? `مرحباً ${contactName}، سأتحقق من متطلبات المستندات لك.`
           : `Hi ${contactName}, I'll check the document requirements for you.`
       } else {
-        // Generic but still acknowledges their message
+        // Generic but still acknowledges their message with context
         const messagePreview = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
-          : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
+        // Try to extract key words from the message for better context
+        const hasQuestion = userMessage.includes('?') || userMessage.includes('what') || userMessage.includes('how') || userMessage.includes('when') || userMessage.includes('where')
+        const hasUrgent = userMessage.includes('urgent') || userMessage.includes('asap') || userMessage.includes('quick')
+        
+        if (hasUrgent) {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، أفهم أن هذا عاجل. سأعود إليك قريباً.`
+            : `Hi ${contactName}, I understand this is urgent. I'll get back to you shortly.`
+        } else if (hasQuestion) {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، شكراً لسؤالك. سأعود إليك بالإجابة قريباً.`
+            : `Hi ${contactName}, thanks for your question. I'll get back to you with an answer shortly.`
+        } else {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
+            : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
+        }
       }
       
       aiResult = {
