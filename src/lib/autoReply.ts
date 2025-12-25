@@ -224,7 +224,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     autoReplyLog = await (prisma as any).autoReplyLog.create({
       data: {
           leadId,
-        contactId,
+          contactId,
           messageId,
         channel: channel.toLowerCase(),
         messageText: messageText.substring(0, 500), // Truncate for storage
@@ -252,10 +252,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // This checks if we already processed THIS specific messageId (not other messages)
     // IMPORTANT: Only block if we already replied to THIS exact messageId, not if we replied to a different message
     const existingLog = await (prisma as any).autoReplyLog.findFirst({
-      where: {
+          where: {
         messageId: messageId, // CRITICAL: Only check THIS specific messageId
         leadId: leadId,
-        channel: channelLower,
+            channel: channelLower,
         OR: [
           { decision: 'replied' },
           { replySent: true },
@@ -661,30 +661,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           console.error(`   Reply: "${replyText.substring(0, 200)}..."`)
           console.error(`   This message will NOT be sent. Generating context-aware fallback instead.`)
           
-          // Generate context-aware fallback based on user's message
-          const userMessage = messageText.toLowerCase()
+          // Minimal fallback - AI should handle all responses, this is only for when AI fails
           const contactNameForFallback = lead.contact?.fullName || 'there'
-          let contextAwareFallback = ''
-          
-          if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
-            contextAwareFallback = `Hi ${contactNameForFallback}, I'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
-          } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much')) {
-            contextAwareFallback = `Hi ${contactNameForFallback}, I'll get the pricing information for you right away.`
-          } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry')) {
-            contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the renewal details for you.`
-          } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
-            if (userMessage.includes('family')) {
-              contextAwareFallback = `Hi ${contactNameForFallback}, I'll help you with family visa services. Let me get the details and requirements for you.`
-            } else {
-              contextAwareFallback = `Hi ${contactNameForFallback}, I'll help you with visa services. Let me get the information you need.`
-            }
-          } else if (userMessage.includes('doc') || userMessage.includes('document')) {
-            contextAwareFallback = `Hi ${contactNameForFallback}, I'll check the document requirements for you.`
-          } else {
-            // Even generic fallback should reference their message
-            const messagePreview = messageText.length > 40 ? messageText.substring(0, 40) + '...' : messageText
-            contextAwareFallback = `Hi ${contactNameForFallback}, I received your message about "${messagePreview}". Let me get the information you need.`
-          }
+          const messagePreview = messageText.length > 50 ? messageText.substring(0, 50) + '...' : messageText
+          const contextAwareFallback = `Hi ${contactNameForFallback}, I received your message. Let me get back to you with the information you need.`
           
           aiResult = {
             text: contextAwareFallback,
