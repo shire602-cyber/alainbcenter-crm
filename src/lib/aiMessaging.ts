@@ -238,8 +238,17 @@ export async function generateAIAutoresponse(
     const { generateDraftReply } = await import('./ai/generate')
     
     console.log(`🤖 Building conversation context for AI generation (lead ${lead.id})`)
-    const contextSummary = await buildConversationContextFromLead(lead.id, channel.toLowerCase())
-    const conversationContext = contextSummary.structured
+    let contextSummary
+    let conversationContext
+    try {
+      contextSummary = await buildConversationContextFromLead(lead.id, channel.toLowerCase())
+      conversationContext = contextSummary.structured
+      console.log(`✅ [AI-GEN] Context built successfully: ${conversationContext.messages?.length || 0} messages`)
+    } catch (contextError: any) {
+      console.error(`❌ [AI-GEN] Failed to build conversation context:`, contextError.message)
+      console.error(`❌ [AI-GEN] Context error stack:`, contextError.stack)
+      throw new Error(`Failed to build conversation context: ${contextError.message}`)
+    }
     
     // Determine tone based on mode
     let tone: 'professional' | 'friendly' | 'short' = 'friendly'
