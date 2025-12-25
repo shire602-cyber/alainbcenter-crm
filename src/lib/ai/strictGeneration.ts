@@ -370,10 +370,10 @@ export async function generateStrictAIReply(
         // Lock service on conversation if service was identified
         if (parsed.structured.service && parsed.structured.service !== 'unknown') {
           try {
-            await prisma.conversation.update({
+            await (prisma.conversation.update as any)({
               where: { id: conversation.id },
               data: {
-                lockedService: parsed.structured.service as any,
+                lockedService: parsed.structured.service,
               },
             })
             console.log(`🔒 [STRICT-AI] Locked service "${parsed.structured.service}" on conversation ${conversation.id}`)
