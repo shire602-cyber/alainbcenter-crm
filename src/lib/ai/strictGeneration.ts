@@ -24,6 +24,9 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
   location?: 'inside' | 'outside'
   service?: string
   expiryDate?: string
+  name?: string
+  freezone?: boolean
+  mainland?: boolean
   [key: string]: any
 } {
   const provided: any = {}

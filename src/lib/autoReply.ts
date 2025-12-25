@@ -777,16 +777,37 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       console.log(`📝 [FALLBACK] Using minimal fallback (AI generation failed)`)
       
-      // Simple, generic fallback - AI should be doing the work, not fallbacks
+      // Context-aware fallback - try to be helpful based on what user asked
       let fallbackText = ''
       
-      // Only differentiate for simple greetings vs other messages
       const userMessage = messageText.toLowerCase().trim()
+      const contactName = lead.contact?.fullName || 'there'
+      
+      // Check if this is a business setup/license question
+      const isLicenseQuestion = userMessage.includes('license') || userMessage.includes('trading license') || 
+                                userMessage.includes('business setup') || userMessage.includes('company setup')
+      
+      // Check if this is a visa question
+      const isVisaQuestion = userMessage.includes('visa') || userMessage.includes('freelance') || 
+                            userMessage.includes('family visa') || userMessage.includes('visit visa')
+      
       if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey' || userMessage.length < 3) {
+        // Simple greeting
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، أهلاً بك في مركز عين الأعمال! كيف يمكنني مساعدتك اليوم؟`
           : `Hi ${contactName}, welcome to Al Ain Business Center! How can I help you today?`
+      } else if (isLicenseQuestion) {
+        // Business setup/license question - ask for freezone/mainland
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، شكراً لاهتمامك برخصة التجارة العامة. هل تفضل المنطقة الحرة أم البر الرئيسي؟`
+          : `Hi ${contactName}, thanks for your interest in a general trading license. Would you prefer Freezone or Mainland?`
+      } else if (isVisaQuestion) {
+        // Visa question - ask for nationality and location
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، شكراً لاهتمامك. ما هي جنسيتك وهل أنت داخل الإمارات أم خارجها؟`
+          : `Hi ${contactName}, thanks for your interest. What's your nationality and are you inside or outside UAE?`
       } else {
+        // Generic fallback - but still try to be helpful
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
           : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
