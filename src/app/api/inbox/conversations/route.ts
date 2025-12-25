@@ -188,24 +188,23 @@ export async function GET(req: NextRequest) {
           }
         })
     
-        // Sort by priority score first, then by last message activity
-        // Prioritize inbound messages when available, but always use lastMessageAt as fallback
+        // Sort by lastMessageAt descending (most recent messages on top)
+        // Secondary sort by priorityScore for conversations with same timestamp
         formatted.sort((a: any, b: any) => {
-          // Primary sort: priorityScore (descending - higher priority first)
+          // Primary sort: lastMessageAt (descending - most recent first)
+          const timeA = new Date(a.lastMessageAt).getTime()
+          const timeB = new Date(b.lastMessageAt).getTime()
+          if (timeB !== timeA) {
+            return timeB - timeA // Descending - most recent first
+          }
+          // Secondary sort: priorityScore (descending - higher priority first)
           if (b.priorityScore !== a.priorityScore) {
             return b.priorityScore - a.priorityScore
           }
-          // Secondary sort: lastInboundAt if available (most recent inbound message first)
-          // This ensures conversations with inbound messages appear before outbound-only conversations
+          // Tertiary sort: lastInboundAt if available
           const inboundA = a.lastInboundAt ? new Date(a.lastInboundAt).getTime() : 0
           const inboundB = b.lastInboundAt ? new Date(b.lastInboundAt).getTime() : 0
-          if (inboundB !== inboundA) {
-            return inboundB - inboundA // Descending - most recent first
-          }
-          // Tertiary sort: lastMessageAt (always has value - ensures consistent sorting)
-          const timeA = new Date(a.lastMessageAt).getTime()
-          const timeB = new Date(b.lastMessageAt).getTime()
-          return timeB - timeA
+          return inboundB - inboundA
         })
 
     return NextResponse.json({ ok: true, conversations: formatted })
