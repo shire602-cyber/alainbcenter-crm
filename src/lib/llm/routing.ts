@@ -191,7 +191,11 @@ export class RoutingService {
           escalated: isFallback,
         }
       } catch (error: any) {
-        console.error(`❌ ${provider.name} failed:`, error.message)
+        const errorMsg = error.message || 'Unknown error'
+        console.error(`❌ [LLM-ROUTING] ${provider.name} failed:`, errorMsg)
+        if (error.stack) {
+          console.error(`❌ [LLM-ROUTING] ${provider.name} error stack:`, error.stack)
+        }
         lastError = error
         escalated = true
         // Continue to next provider
@@ -199,7 +203,12 @@ export class RoutingService {
     }
 
     // All providers failed
-    throw new Error(`All LLM providers failed. Last error: ${lastError?.message || 'Unknown error'}`)
+    const finalError = `All LLM providers failed. Last error: ${lastError?.message || 'Unknown error'}`
+    console.error(`❌ [LLM-ROUTING] ${finalError}`)
+    if (lastError?.stack) {
+      console.error(`❌ [LLM-ROUTING] Last error stack:`, lastError.stack)
+    }
+    throw new Error(finalError)
   }
 
   /**
