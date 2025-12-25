@@ -197,7 +197,8 @@ function generateQualificationMessage(
  * Generate AI reply text for automation
  */
 export async function generateAIAutoresponse(
-  context: AIMessageContext
+  context: AIMessageContext,
+  agent?: import('./ai/agentProfile').AgentProfile
 ): Promise<{
   text: string
   success: boolean
@@ -300,8 +301,20 @@ export async function generateAIAutoresponse(
       tone = 'friendly'
     }
     
-    console.log(`🤖 Generating AI reply using ${tone} tone, ${detectedLanguage} language`)
-    const aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar')
+    // Determine task type for routing
+    let taskType: 'greeting' | 'followup' | 'reminder' | 'complex' | 'other' = 'other'
+    if (isFirstMessage && objective === 'qualify') {
+      taskType = 'greeting'
+    } else if (mode === 'FOLLOW_UP') {
+      taskType = 'followup'
+    } else if (mode === 'RENEWAL' || mode === 'REMIND') {
+      taskType = 'reminder'
+    } else if (mode === 'PRICING' || mode === 'DOCS') {
+      taskType = 'complex'
+    }
+    
+    console.log(`🤖 Generating AI reply using ${tone} tone, ${detectedLanguage} language, task: ${taskType}`)
+    const aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar', agent)
     
     const draftText = aiDraftResult.text
     console.log(`✅ AI-generated reply for lead ${lead.id}: "${draftText.substring(0, 100)}..."`)

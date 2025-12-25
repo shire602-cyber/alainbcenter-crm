@@ -487,7 +487,13 @@ export default function AITrainingPage() {
               </div>
             </div>
           </BentoCard>
-        </div>
+            </div>
+          </TabsContent>
+
+          <TabsContent value="settings" className="mt-4">
+            <ResponseSettingsTab trainingDocuments={documents.map(d => ({ id: d.id, title: d.title, type: d.type }))} />
+          </TabsContent>
+        </Tabs>
       </div>
     </MainLayout>
   )

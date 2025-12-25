@@ -74,7 +74,7 @@ export async function GET(req: NextRequest) {
         },
       },
       orderBy: {
-        lastInboundAt: 'desc', // Sort by last received message (inbound) for proper ordering
+        lastMessageAt: 'desc', // Sort by last message (always has value) - client-side will prioritize inbound
       },
       // Add limit to prevent fetching too many conversations at once
       take: 500, // Reasonable limit for inbox view
@@ -188,16 +188,21 @@ export async function GET(req: NextRequest) {
           }
         })
     
-        // Sort by lastInboundAt (last received message) for proper chronological order
-        // This ensures conversations with the most recent inbound messages appear first
+        // Sort by priority score first, then by last message activity
+        // Prioritize inbound messages when available, but always use lastMessageAt as fallback
         formatted.sort((a: any, b: any) => {
-          // Primary sort: lastInboundAt (most recent inbound message first)
+          // Primary sort: priorityScore (descending - higher priority first)
+          if (b.priorityScore !== a.priorityScore) {
+            return b.priorityScore - a.priorityScore
+          }
+          // Secondary sort: lastInboundAt if available (most recent inbound message first)
+          // This ensures conversations with inbound messages appear before outbound-only conversations
           const inboundA = a.lastInboundAt ? new Date(a.lastInboundAt).getTime() : 0
           const inboundB = b.lastInboundAt ? new Date(b.lastInboundAt).getTime() : 0
-          if (inboundA !== inboundB) {
+          if (inboundB !== inboundA) {
             return inboundB - inboundA // Descending - most recent first
           }
-          // Fallback: lastMessageAt if lastInboundAt is null
+          // Tertiary sort: lastMessageAt (always has value - ensures consistent sorting)
           const timeA = new Date(a.lastMessageAt).getTime()
           const timeB = new Date(b.lastMessageAt).getTime()
           return timeB - timeA

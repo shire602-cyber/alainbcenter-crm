@@ -8,6 +8,32 @@ import {
 import { generateCompletion } from '@/lib/llm'
 import type { LLMMessage } from '@/lib/llm/types'
 
+// Helper to detect task type from context
+function detectTaskTypeFromContext(
+  context: ConversationContext,
+  tone: 'professional' | 'friendly' | 'short',
+  isFirstMessage?: boolean
+): 'greeting' | 'followup' | 'reminder' | 'complex' | 'other' {
+  if (isFirstMessage) {
+    return 'greeting'
+  }
+  
+  const lastMessage = context.messages?.[context.messages.length - 1]?.message || ''
+  const messageLower = lastMessage.toLowerCase()
+  
+  if (messageLower.includes('remind') || messageLower.includes('expir') || messageLower.includes('due')) {
+    return 'reminder'
+  }
+  if (messageLower.includes('follow') || messageLower.includes('check in') || messageLower.includes('update')) {
+    return 'followup'
+  }
+  if (messageLower.includes('analyze') || messageLower.includes('complex') || messageLower.includes('legal') || messageLower.includes('compliance')) {
+    return 'complex'
+  }
+  
+  return 'other'
+}
+
 interface DraftReplyResult {
   text: string
   suggestedTags?: string[]
@@ -38,22 +64,27 @@ interface NextActionsResult {
 export async function generateDraftReply(
   context: ConversationContext,
   tone: 'professional' | 'friendly' | 'short',
-  language: 'en' | 'ar' = 'en'
+  language: 'en' | 'ar' = 'en',
+  agent?: import('../ai/agentProfile').AgentProfile
 ): Promise<DraftReplyResult> {
   // Check if any LLM is configured
   const config = await getAIConfig()
   if (!config) {
-    throw new Error('AI not configured. Please set GROQ_API_KEY or OPENAI_API_KEY, or configure integrations.')
+    throw new Error('AI not configured. Please set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY, or configure integrations.')
   }
 
-  const prompt = await buildDraftReplyPrompt(context, tone, language)
+  const prompt = await buildDraftReplyPrompt(context, tone, language, agent)
 
   try {
-    // Use intelligent routing (Llama 3 for simple, GPT-4o for complex)
+    // Use agent's system prompt if available, otherwise use default
+    const systemPrompt = agent?.systemPrompt || 
+      'You are a helpful assistant for a UAE business center. Generate WhatsApp messages that are professional, compliant, and effective.'
+    
+    // Use intelligent routing (Groq for simple, OpenAI/Claude for complex)
     const messages: LLMMessage[] = [
       {
         role: 'system',
-        content: 'You are a helpful assistant for a UAE business center. Generate WhatsApp messages that are professional, compliant, and effective.',
+        content: systemPrompt,
       },
       {
         role: 'user',
@@ -61,13 +92,22 @@ export async function generateDraftReply(
       },
     ]
 
+    // Use agent's max message length if available
+    const maxTokens = agent?.maxMessageLength ? Math.min(agent.maxMessageLength / 2, 500) : 300
+
+    // Detect task type from context
+    const hasOutboundMessages = context.messages?.some(m => m.direction === 'OUTBOUND' || m.direction === 'outbound')
+    const isFirstMessage = !hasOutboundMessages
+    const taskType = detectTaskTypeFromContext(context, tone, isFirstMessage)
+
     const result = await generateCompletion(messages, {
       temperature: 0.7,
-      maxTokens: 300,
+      maxTokens,
     }, {
       leadStage: context.lead?.pipelineStage || context.lead?.status || undefined,
       conversationLength: context.messages?.length,
       hasMultipleQuestions: prompt.includes('?') && (prompt.match(/\?/g) || []).length > 1,
+      taskType,
     })
 
     const text = result.text

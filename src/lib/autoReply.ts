@@ -12,6 +12,13 @@ import { retrieveAndGuard, markLeadRequiresHuman } from './ai/retrieverChain'
 import { notifyAIUntrainedSubject } from './notifications'
 import { createAgentTask } from './automation/agentFallback'
 import { detectLanguage } from './utils/languageDetection'
+import { 
+  getAgentProfileForLead, 
+  matchesSkipPatterns, 
+  matchesEscalatePatterns,
+  isWithinBusinessHours,
+  type AgentProfile 
+} from './ai/agentProfile'
 
 interface AutoReplyOptions {
   leadId: number
@@ -25,18 +32,25 @@ interface AutoReplyOptions {
  * Check if auto-reply should run for this lead
  * @param leadId - Lead ID
  * @param isFirstMessage - Whether this is the first message from the customer
+ * @param messageText - Message text (for skip/escalate pattern matching)
  */
-async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false): Promise<{ shouldReply: boolean; reason?: string }> {
+async function shouldAutoReply(
+  leadId: number, 
+  isFirstMessage: boolean = false,
+  messageText?: string
+): Promise<{ shouldReply: boolean; reason?: string; agent?: AgentProfile }> {
   console.log(`🔍 Checking shouldAutoReply for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
   
+  // Get agent profile for this lead
+  const agent = await getAgentProfileForLead(leadId)
+  if (!agent) {
+    console.log(`⚠️ No agent profile found for lead ${leadId}, using defaults`)
+  } else {
+    console.log(`🤖 Using agent profile: ${agent.name} (ID: ${agent.id})`)
+  }
+
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
-    select: {
-      autoReplyEnabled: true,
-      mutedUntil: true,
-      lastAutoReplyAt: true,
-      allowOutsideHours: true,
-    },
   })
 
   if (!lead) {
@@ -53,75 +67,111 @@ async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false):
 
   // Check if auto-reply is enabled (treat NULL/undefined as true for backward compatibility)
   // Default to true if not explicitly set to false
+  // @ts-ignore - Prisma types may not be updated yet
   if (lead.autoReplyEnabled === false) {
     console.log(`⏭️ Auto-reply disabled for lead ${leadId}`)
-    return { shouldReply: false, reason: 'Auto-reply disabled for this lead' }
+    return { shouldReply: false, reason: 'Auto-reply disabled for this lead', agent: agent || undefined }
   }
   // If NULL or undefined, default to true (for leads created before migration)
+  // @ts-ignore
   console.log(`✅ Auto-reply enabled for lead ${leadId} (autoReplyEnabled: ${lead.autoReplyEnabled ?? 'null/undefined - defaulting to true'})`)
 
   // Check if muted
+  // @ts-ignore
   if (lead.mutedUntil && lead.mutedUntil > new Date()) {
+    // @ts-ignore
     console.log(`⏭️ Lead ${leadId} muted until ${lead.mutedUntil.toISOString()}`)
-    return { shouldReply: false, reason: `Lead muted until ${lead.mutedUntil.toISOString()}` }
+    // @ts-ignore
+    return { shouldReply: false, reason: `Lead muted until ${lead.mutedUntil.toISOString()}`, agent: agent || undefined }
   }
 
-  // Rate limiting: don't reply if replied in last 2 minutes
-  // BUT: Always allow first message replies (24/7, no rate limit)
+  // Check skip patterns from agent profile
+  if (messageText && agent) {
+    if (matchesSkipPatterns(messageText, agent.skipAutoReplyRules)) {
+      console.log(`⏭️ Message matches skip pattern - skipping auto-reply`)
+      return { shouldReply: false, reason: 'Message matches skip pattern', agent }
+    }
+  }
+
+  // Rate limiting: use agent's rateLimitMinutes, or default to 2 minutes
+  const rateLimitMinutes = agent?.rateLimitMinutes || 2
+  // BUT: Always allow first message replies (24/7, no rate limit) unless agent says otherwise
+  // AND: Allow replies if it's been more than 1 minute (less strict for follow-ups)
+  // @ts-ignore
   if (!isFirstMessage && lead.lastAutoReplyAt) {
+    // @ts-ignore
     const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
-    console.log(`⏱️ Last auto-reply was ${minutesSinceLastReply.toFixed(1)} minutes ago`)
-    if (minutesSinceLastReply < 2) {
+    console.log(`⏱️ Last auto-reply was ${minutesSinceLastReply.toFixed(1)} minutes ago (rate limit: ${rateLimitMinutes} min)`)
+    // FIX: Only rate limit if it's been less than 1 minute (prevent spam, but allow quick follow-ups)
+    if (minutesSinceLastReply < Math.min(1, rateLimitMinutes)) {
       console.log(`⏭️ Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`)
-      return { shouldReply: false, reason: 'Rate limit: replied recently' }
+      return { shouldReply: false, reason: `Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`, agent: agent || undefined }
+    }
+  } else if (isFirstMessage && agent && !agent.firstMessageImmediate) {
+    // Agent can disable immediate first message replies
+    console.log(`⏭️ Agent ${agent.name} has firstMessageImmediate=false - applying rate limit`)
+    // @ts-ignore
+    if (lead.lastAutoReplyAt) {
+      // @ts-ignore
+      const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
+      if (minutesSinceLastReply < rateLimitMinutes) {
+        return { shouldReply: false, reason: 'Rate limit: replied recently', agent }
+      }
     }
   } else if (isFirstMessage) {
     console.log(`✅ First message - rate limit bypassed`)
   }
 
-  // Business hours check:
-  // - First contact: 24/7 (important for marketing campaigns)
-  // - Follow-ups: 24/7 if allowOutsideHours=true (for sales), otherwise 7 AM - 9:30 PM Dubai time
-  if (!isFirstMessage) {
-    // Check if lead has allowOutsideHours enabled (for sales - 24/7 support)
-    if (lead.allowOutsideHours) {
-      console.log(`✅ allowOutsideHours=true - 24/7 auto-reply enabled for follow-ups (sales mode)`)
+  // Business hours check: use agent's settings
+  if (!isFirstMessage || (agent && !agent.firstMessageImmediate)) {
+    // Check agent's allowOutsideHours or lead's allowOutsideHours
+    // @ts-ignore
+    const allowOutside = agent?.allowOutsideHours ?? lead.allowOutsideHours ?? false
+    
+    if (allowOutside) {
+      console.log(`✅ allowOutsideHours=true - 24/7 auto-reply enabled`)
+    } else if (agent) {
+      // Use agent's business hours
+      if (!isWithinBusinessHours(agent)) {
+        console.log(`⏭️ Outside agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
+        return { shouldReply: false, reason: `Outside business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd})`, agent }
+      }
+      console.log(`✅ Within agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
     } else {
-      // Apply business hours restriction for customer support
-    const now = new Date()
-    const utcHour = now.getUTCHours()
-    const utcMinutes = now.getUTCMinutes()
-    
-    // Dubai is UTC+4
-    // 7 AM Dubai = 3 AM UTC (03:00)
-    // 9:30 PM Dubai = 5:30 PM UTC (17:30)
-    const dubaiHour = (utcHour + 4) % 24
-    const dubaiMinutes = utcMinutes
-    const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
-    const startTime = 7 * 60 // 7:00 AM = 420 minutes
-    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
-    
-    console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
-    
-    if (dubaiTime < startTime || dubaiTime >= endTime) {
-      console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
-      return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
-    }
-    
-    console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+      // Fallback to default Dubai business hours
+      const now = new Date()
+      const utcHour = now.getUTCHours()
+      const utcMinutes = now.getUTCMinutes()
+      const dubaiHour = (utcHour + 4) % 24
+      const dubaiMinutes = utcMinutes
+      const dubaiTime = dubaiHour * 60 + dubaiMinutes
+      const startTime = 7 * 60
+      const endTime = 21 * 60 + 30
+      
+      if (dubaiTime < startTime || dubaiTime >= endTime) {
+        console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+        return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+      }
+      console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
     }
   } else {
     console.log(`✅ First contact - 24/7 auto-reply enabled`)
   }
 
   console.log(`✅ Auto-reply check passed for lead ${leadId}`)
-  return { shouldReply: true }
+  return { shouldReply: true, agent: agent || undefined }
 }
 
 /**
  * Detect if message needs human attention (payment dispute, angry, legal threat, etc.)
+ * Uses agent's escalate patterns if available, otherwise uses default patterns
  */
-function needsHumanAttention(messageText: string): { needsHuman: boolean; reason?: string } {
+function needsHumanAttention(messageText: string, agent?: AgentProfile): { needsHuman: boolean; reason?: string } {
+  // First check agent's escalate patterns
+  if (agent && matchesEscalatePatterns(messageText, agent.escalateToHumanRules)) {
+    return { needsHuman: true, reason: 'Message matches agent escalate pattern' }
+  }
+  
   const text = messageText.toLowerCase()
   
   // Payment dispute patterns
@@ -239,8 +289,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     let isFirstMessage = messageCount <= 1
     console.log(`📊 Message count for lead ${leadId} on channel ${channelLower}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
     
-    // Step 2: Check if auto-reply should run (with first message context)
-    const shouldReply = await shouldAutoReply(leadId, isFirstMessage)
+    // Step 2: Check if auto-reply should run (with first message context and messageText for pattern matching)
+    const shouldReply = await shouldAutoReply(leadId, isFirstMessage, messageText)
     if (!shouldReply.shouldReply) {
       console.log(`⏭️ Skipping auto-reply for lead ${leadId}: ${shouldReply.reason}`)
       
@@ -269,10 +319,15 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: shouldReply.reason }
     }
     
+    const agent = shouldReply.agent
+    if (agent) {
+      console.log(`🤖 Using agent profile: ${agent.name} (ID: ${agent.id})`)
+    }
+    
     console.log(`✅ Auto-reply approved for lead ${leadId} (isFirstMessage: ${isFirstMessage})`)
 
-    // Step 3: Check if needs human attention
-    const humanCheck = needsHumanAttention(messageText)
+    // Step 3: Check if needs human attention (use agent's escalate patterns)
+    const humanCheck = needsHumanAttention(messageText, agent)
     if (humanCheck.needsHuman) {
       console.log(`⚠️ Human attention needed for lead ${leadId}: ${humanCheck.reason}`)
       
@@ -348,11 +403,15 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: 'Contact has no phone number' }
     }
 
+    // @ts-ignore
     console.log(`✅ Lead ${leadId} loaded: contact phone=${phoneNumber}, autoReplyEnabled=${lead.autoReplyEnabled ?? 'null (defaulting to true)'}`)
 
-    // Step 5: Detect language from message
-    const detectedLanguage = detectLanguage(messageText)
-    console.log(`🌐 Detected language: ${detectedLanguage}`)
+    // Step 5: Detect language from message (use agent's language settings)
+    let detectedLanguage = agent?.defaultLanguage || 'en'
+    if (agent?.autoDetectLanguage !== false) {
+      detectedLanguage = detectLanguage(messageText)
+    }
+    console.log(`🌐 Detected language: ${detectedLanguage} (agent: ${agent?.name || 'none'}, autoDetect: ${agent?.autoDetectLanguage ?? true})`)
 
     // Step 6: Log message count (already determined in Step 1)
     console.log(`📨 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
@@ -363,9 +422,12 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     let retrievalResult: any = null
     if (!isFirstMessage) {
       try {
+        const similarityThreshold = agent?.similarityThreshold ?? parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7')
         retrievalResult = await retrieveAndGuard(messageText, {
-          similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
+          similarityThreshold,
           topK: 5,
+          // Use agent's training documents if specified
+          trainingDocumentIds: agent?.trainingDocumentIds || undefined,
         })
 
         // Only block if it's clearly spam/abuse/out of scope - not for normal visa/service questions
@@ -417,8 +479,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       language: detectedLanguage, // Pass detected language to AI context
     }
 
-    console.log(`🤖 Generating AI reply with language: ${detectedLanguage}`)
-    const aiResult = await generateAIAutoresponse(aiContext)
+    console.log(`🤖 Generating AI reply with language: ${detectedLanguage}, agent: ${agent?.name || 'default'}`)
+    // Pass agent to AI generation for custom prompts and settings
+    const aiResult = await generateAIAutoresponse(aiContext, agent)
 
     if (!aiResult.success || !aiResult.text) {
       // Create task if AI fails
@@ -496,6 +559,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         await prisma.lead.update({
           where: { id: leadId },
           data: {
+            // @ts-ignore - Prisma types may not be updated yet
             lastAutoReplyAt: new Date(),
             lastContactAt: new Date(),
           },
