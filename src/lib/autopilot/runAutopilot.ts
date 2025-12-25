@@ -119,7 +119,6 @@ async function logRun(params: {
   status: 'sent' | 'skipped' | 'failed'
   reason?: string
   message?: string
-  meta?: any
 }): Promise<void> {
   await prisma.automationRunLog.create({
     data: {
@@ -131,7 +130,6 @@ async function logRun(params: {
       status: params.status,
       reason: params.reason,
       message: params.message,
-      // meta field removed - not in schema
     },
   })
 }
