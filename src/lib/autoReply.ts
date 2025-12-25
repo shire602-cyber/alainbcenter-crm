@@ -102,12 +102,12 @@ async function shouldAutoReply(
     // @ts-ignore
     const secondsSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / 1000
     
-    // CRITICAL: For follow-up messages, use a very short rate limit (10 seconds) to allow quick replies
+    // CRITICAL: For follow-up messages, use a very short rate limit (5 seconds) to allow quick replies
     // This ensures second messages get replies quickly, regardless of agent's rateLimitMinutes
-    const followUpRateLimitSeconds = 10 // Always allow replies after 10 seconds for follow-ups
+    const followUpRateLimitSeconds = 5 // Always allow replies after 5 seconds for follow-ups (reduced from 10s)
     console.log(`⏱️ Last auto-reply was ${secondsSinceLastReply.toFixed(0)} seconds ago (follow-up rate limit: ${followUpRateLimitSeconds}s)`)
     
-    // Only block if it's been less than 10 seconds (prevent spam, but allow normal follow-ups)
+    // Only block if it's been less than 5 seconds (prevent spam, but allow normal follow-ups)
     if (secondsSinceLastReply < followUpRateLimitSeconds) {
       console.log(`⏭️ Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago (minimum ${followUpRateLimitSeconds}s for follow-ups)`)
       return { shouldReply: false, reason: `Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago`, agent: agent || undefined }
