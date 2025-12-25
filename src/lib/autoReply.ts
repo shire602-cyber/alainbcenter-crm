@@ -306,10 +306,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       // Update log with skip reason
       if (autoReplyLog) {
-        try {
+      try {
           await (prisma as any).autoReplyLog.update({
             where: { id: autoReplyLog.id },
-            data: {
+          data: {
               decision: 'skipped',
               skippedReason: shouldReply.reason || 'Unknown reason',
             },
@@ -621,8 +621,83 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       })
       
       const startTime = Date.now()
-      // Pass retrieval result to AI generation so it can use training documents
-      aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+      
+      // Use strict AI generation with JSON output
+      try {
+        const { generateStrictAIReply } = await import('./ai/strictGeneration')
+        const { prisma } = await import('./prisma')
+        
+        // Get conversation for strict generation
+        const conversation = await prisma.conversation.findUnique({
+          where: {
+            contactId_channel: {
+              contactId: contactId,
+              channel: channel.toLowerCase(),
+            },
+          },
+        })
+        
+        if (conversation) {
+          console.log(`🤖 [STRICT-AI] Using strict AI generation with JSON output`)
+          const strictResult = await generateStrictAIReply({
+            lead,
+            contact: lead.contact,
+            conversation,
+            currentMessage: messageText,
+            conversationHistory: aiContext.recentMessages || [],
+            agent,
+            language: detectedLanguage,
+          })
+          
+          const duration = Date.now() - startTime
+          console.log(`⏱️ [STRICT-AI] Generation took ${duration}ms`)
+          console.log(`📊 [STRICT-AI] Service: ${strictResult.service}, Needs Human: ${strictResult.needsHuman}, Confidence: ${strictResult.confidence}`)
+          console.log(`📊 [STRICT-AI] Reply preview: ${strictResult.reply.substring(0, 100)}...`)
+          
+          // Log structured output to AutoReplyLog
+          if (autoReplyLog && strictResult.structured) {
+            try {
+              await (prisma as any).autoReplyLog.update({
+                where: { id: autoReplyLog.id },
+                data: {
+                  replyText: strictResult.reply.substring(0, 500),
+                  decisionReason: `Strict AI: service=${strictResult.service}, stage=${strictResult.structured.stage}, confidence=${strictResult.confidence}`,
+                  usedFallback: false,
+                },
+              })
+            } catch (logError) {
+              console.warn('Failed to update AutoReplyLog with strict AI result:', logError)
+            }
+          }
+          
+          // If needs human, create task
+          if (strictResult.needsHuman) {
+            console.log(`👤 [STRICT-AI] Escalating to human (needsHuman=true)`)
+            try {
+              await createAgentTask(leadId, 'complex_query', {
+                messageText: strictResult.reply.substring(0, 200),
+              })
+            } catch (taskError) {
+              console.warn('Failed to create agent task:', taskError)
+            }
+          }
+          
+          aiResult = {
+            text: strictResult.reply,
+            success: true,
+            confidence: strictResult.confidence * 100, // Convert to 0-100 scale
+          }
+        } else {
+          console.warn(`⚠️ [STRICT-AI] No conversation found, falling back to regular AI generation`)
+          // Pass retrieval result to AI generation so it can use training documents
+          aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+        }
+      } catch (strictError: any) {
+        console.error(`❌ [STRICT-AI] Strict generation failed, falling back to regular:`, strictError.message)
+        // Fallback to regular AI generation
+        aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+      }
+      
       const duration = Date.now() - startTime
       console.log(`⏱️ [AI-GEN] AI generation took ${duration}ms`)
       
@@ -702,16 +777,36 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       console.log(`📝 [FALLBACK] Using minimal fallback (AI generation failed)`)
       
-      // Simple, generic fallback - AI should be doing the work, not fallbacks
+      // Context-aware fallback - try to be helpful based on what user asked
       let fallbackText = ''
       
-      // Only differentiate for simple greetings vs other messages
       const userMessage = messageText.toLowerCase().trim()
+      
+      // Check if this is a business setup/license question
+      const isLicenseQuestion = userMessage.includes('license') || userMessage.includes('trading license') || 
+                                userMessage.includes('business setup') || userMessage.includes('company setup')
+      
+      // Check if this is a visa question
+      const isVisaQuestion = userMessage.includes('visa') || userMessage.includes('freelance') || 
+                            userMessage.includes('family visa') || userMessage.includes('visit visa')
+      
       if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey' || userMessage.length < 3) {
+        // Simple greeting
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، أهلاً بك في مركز عين الأعمال! كيف يمكنني مساعدتك اليوم؟`
           : `Hi ${contactName}, welcome to Al Ain Business Center! How can I help you today?`
+      } else if (isLicenseQuestion) {
+        // Business setup/license question - ask for freezone/mainland
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، شكراً لاهتمامك برخصة التجارة العامة. هل تفضل المنطقة الحرة أم البر الرئيسي؟`
+          : `Hi ${contactName}, thanks for your interest in a general trading license. Would you prefer Freezone or Mainland?`
+      } else if (isVisaQuestion) {
+        // Visa question - ask for nationality and location
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، شكراً لاهتمامك. ما هي جنسيتك وهل أنت داخل الإمارات أم خارجها؟`
+          : `Hi ${contactName}, thanks for your interest. What's your nationality and are you inside or outside UAE?`
       } else {
+        // Generic fallback - but still try to be helpful
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
           : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
