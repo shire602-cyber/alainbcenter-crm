@@ -70,6 +70,7 @@ model Contact {
   automationRunLogs AutomationRunLog[]
   aiActionLogs      AIActionLog[]
   aiDrafts          AIDraft[]
+  autoReplyLogs     AutoReplyLog[]
 
   @@index([phone])
   @@index([email])
@@ -179,6 +180,7 @@ model Lead {
   aiActionLogs       AIActionLog[]
   notifications      Notification[]
   reminders          Reminder[]
+  autoReplyLogs      AutoReplyLog[]
 }
 
 model AIAgentProfile {
@@ -297,6 +299,7 @@ model Conversation {
   statusEvents      MessageStatusEvent[]
   tasks             Task[]               @relation("ConversationTasks")
   notifications     Notification[]
+  autoReplyLogs     AutoReplyLog[]
 
   @@unique([contactId, channel])
   @@index([channel, lastMessageAt])
@@ -332,6 +335,7 @@ model Message {
   createdAt         DateTime     @default(now())
 
   statusEvents MessageStatusEvent[]
+  autoReplyLogs AutoReplyLog[]
 
   @@index([conversationId, createdAt])
   @@index([leadId])
@@ -656,4 +660,52 @@ model Notification {
   @@index([leadId])
   @@index([conversationId])
   @@index([type, createdAt])
+}
+
+model AutoReplyLog {
+  id                Int           @id @default(autoincrement())
+  lead               Lead          @relation(fields: [leadId], references: [id])
+  leadId             Int
+  conversation       Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId     Int?
+  contact            Contact?      @relation(fields: [contactId], references: [id])
+  contactId          Int?
+  message            Message?      @relation(fields: [messageId], references: [id])
+  messageId          Int?
+  channel            String        // 'whatsapp' | 'email' | etc.
+  
+  // Inbound message details
+  inboundParsed      String?      // JSON: Parsed inbound message details
+  messageText        String?      // Inbound message text (truncated)
+  
+  // Decision tracking
+  autoReplyEnabled   Boolean       @default(true)
+  decision            String        // 'replied' | 'notified_human' | 'skipped'
+  decisionReason     String?       // Exact reason for decision
+  skippedReason      String?       // If skipped, why
+  
+  // Retrieval results
+  retrievalDocsCount Int?         // Number of documents retrieved
+  retrievalSimilarity Float?      // Highest similarity score
+  retrievalReason    String?      // Retrieval result reason
+  hasUsefulContext   Boolean      @default(false)
+  
+  // Reply details
+  replySent          Boolean       @default(false)
+  replyText          String?       // Reply text sent (truncated)
+  replyStatus        String?       // 'sent' | 'failed' | 'pending'
+  replyError          String?      // Error message if send failed
+  usedFallback       Boolean       @default(false) // Whether fallback reply was used
+  
+  // Human task
+  humanTaskCreated   Boolean       @default(false)
+  humanTaskReason    String?       // Why human task was created
+  
+  createdAt          DateTime      @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([contactId, createdAt])
+  @@index([decision, createdAt])
+  @@index([channel, createdAt])
 }

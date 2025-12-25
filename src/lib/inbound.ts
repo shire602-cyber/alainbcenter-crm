@@ -312,34 +312,56 @@ export async function handleInboundMessage(
   }
 
   // Step 5: Find or create Conversation
-  // CRITICAL: Always find by contactId + channel first (to prevent duplicate conversations)
-  // Only use externalId as a secondary filter if provided
-  let conversation = await prisma.conversation.findFirst({
+  // CRITICAL FIX: Use unique constraint (contactId, channel) as primary lookup key
+  // externalId is ONLY metadata, NOT used for lookup
+  let conversation = await prisma.conversation.findUnique({
     where: {
-      contactId: contact.id,
-      channel: channelLower,
-    },
-    orderBy: {
-      lastMessageAt: 'desc', // Get most recent conversation if multiple exist
+      contactId_channel: {
+        contactId: contact.id,
+        channel: channelLower,
+      },
     },
   })
 
   if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        contactId: contact.id,
-        leadId: lead.id,
-        channel: channelLower,
-        externalId: externalId || null,
-        status: 'open',
-        lastMessageAt: timestamp,
-        lastInboundAt: timestamp,
-        unreadCount: 1,
-      },
-    })
-    console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
+    // Create new conversation using unique constraint
+    try {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: contact.id,
+          leadId: lead.id,
+          channel: channelLower,
+          externalId: externalId || null, // Optional metadata only
+          status: 'open',
+          lastMessageAt: timestamp,
+          lastInboundAt: timestamp,
+          unreadCount: 1,
+        },
+      })
+      console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}, channel ${channelLower}`)
+    } catch (createError: any) {
+      // Handle race condition: if another request created it simultaneously, find it
+      if (createError.code === 'P2002' && createError.meta?.target?.includes('contactId_channel')) {
+        console.log(`⚠️ Race condition: conversation already exists, fetching...`)
+        conversation = await prisma.conversation.findUnique({
+          where: {
+            contactId_channel: {
+              contactId: contact.id,
+              channel: channelLower,
+            },
+          },
+        })
+        if (!conversation) {
+          throw new Error('Failed to create or find conversation after race condition')
+        }
+        console.log(`✅ Found conversation after race condition: ${conversation.id}`)
+      } else {
+        throw createError
+      }
+    }
   } else {
     // Update externalId if we have one and it's missing (for WhatsApp phone number ID tracking)
+    // This is optional metadata, not used for lookup
     if (externalId && !conversation.externalId) {
       conversation = await prisma.conversation.update({
         where: { id: conversation.id },
@@ -355,7 +377,7 @@ export async function handleInboundMessage(
       })
       console.log(`📝 Updated conversation ${conversation.id} with leadId: ${lead.id}`)
     }
-    console.log(`📋 Found existing conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
+    console.log(`📋 Found existing conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}, channel ${channelLower}`)
   }
 
   // Step 6: Create Message record (with idempotency check via providerMessageId)
@@ -634,11 +656,11 @@ export async function handleInboundMessage(
     }
   }
 
-  // Step 9: Immediate auto-reply (no queue, no worker - just reply now)
+  // Step 9: Generate AI reply for inbound message
   // CRITICAL: This must run even if previous steps had errors
-  // BUT: Skip auto-reply for duplicate messages (user requirement: "duplicate messages from customer shouldn't get replies")
+  // BUT: Skip AI reply for duplicate messages (user requirement: "duplicate messages from customer shouldn't get replies")
   // Run synchronously (awaited) to ensure it executes, but wrapped in try-catch so it doesn't fail the webhook
-  console.log(`🔍 [AUTO-REPLY] Pre-check:`, {
+  console.log(`🔍 [AI-REPLY] Pre-check:`, {
     isDuplicate,
     hasMessage: !!message,
     hasBody: !!message?.body,
@@ -653,11 +675,11 @@ export async function handleInboundMessage(
   
   if (!isDuplicate && message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
     try {
-      console.log(`🤖 [AUTO-REPLY] Starting auto-reply process for message ${message.id}`)
-      console.log(`🤖 [AUTO-REPLY] Lead ID: ${lead.id}, Channel: ${message.channel}, Message: "${message.body.substring(0, 100)}..."`)
+      console.log(`🤖 [AI-REPLY] Starting AI reply process for message ${message.id}`)
+      console.log(`🤖 [AI-REPLY] Lead ID: ${lead.id}, Channel: ${message.channel}, Message: "${message.body.substring(0, 100)}..."`)
       
       const { handleInboundAutoReply } = await import('./autoReply')
-      console.log(`📞 [AUTO-REPLY] Calling handleInboundAutoReply...`)
+      console.log(`📞 [AI-REPLY] Calling handleInboundAutoReply...`)
       
       const replyResult = await handleInboundAutoReply({
         leadId: lead.id,
@@ -667,7 +689,7 @@ export async function handleInboundMessage(
         contactId: contact.id,
       })
       
-      console.log(`📊 [AUTO-REPLY] Result:`, {
+      console.log(`📊 [AI-REPLY] Result:`, {
         replied: replyResult.replied,
         reason: replyResult.reason,
         error: replyResult.error,
@@ -676,13 +698,13 @@ export async function handleInboundMessage(
       })
       
       if (replyResult.replied) {
-        console.log(`✅ [AUTO-REPLY] SUCCESS: Auto-reply sent for message ${message.id} to lead ${lead.id}`)
+        console.log(`✅ [AI-REPLY] SUCCESS: AI reply sent for message ${message.id} to lead ${lead.id}`)
       } else {
-        console.log(`⏭️ [AUTO-REPLY] SKIPPED: ${replyResult.reason || replyResult.error} (lead ${lead.id}, message ${message.id})`)
+        console.log(`⏭️ [AI-REPLY] SKIPPED: ${replyResult.reason || replyResult.error} (lead ${lead.id}, message ${message.id})`)
       }
     } catch (error: any) {
-      // Don't fail webhook if auto-reply fails - log and continue
-      console.error('❌ [AUTO-REPLY] ERROR (non-blocking):', {
+      // Don't fail webhook if AI reply fails - log and continue
+      console.error('❌ [AI-REPLY] ERROR (non-blocking):', {
         error: error.message,
         stack: error.stack,
         leadId: lead.id,
@@ -708,9 +730,9 @@ export async function handleInboundMessage(
       }
     }
   } else if (isDuplicate) {
-    console.log(`⏭️ [AUTO-REPLY] SKIPPED: Duplicate message detected - no auto-reply for duplicates (user requirement)`)
+        console.log(`⏭️ [AI-REPLY] SKIPPED: Duplicate message detected - no AI reply for duplicates (user requirement)`)
   } else {
-    console.log(`⏭️ [AUTO-REPLY] SKIPPED: Missing required data`, {
+    console.log(`⏭️ [AI-REPLY] SKIPPED: Missing required data`, {
       hasMessage: !!message,
       hasBody: !!message?.body,
       hasLead: !!lead,
