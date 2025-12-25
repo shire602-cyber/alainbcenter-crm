@@ -714,7 +714,20 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       let fallbackText = ''
       
       // CRITICAL: Fallback MUST match user's message context - check in order of specificity
-      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
+      // Check visa/family FIRST (most specific service requests)
+      if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
+        console.log(`📝 [FALLBACK] Matched: visa/family context`)
+        // More specific message for family visa
+        if (userMessage.includes('family')) {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، سأساعدك في تأشيرة العائلة. سأعود إليك بالتفاصيل والمتطلبات قريباً.`
+            : `Hi ${contactName}, I'll help you with family visa services. Let me get the details and requirements for you.`
+        } else {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. سأعود إليك بالتفاصيل قريباً.`
+            : `Hi ${contactName}, I'll help you with visa services. Let me get the details for you.`
+        }
+      } else if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
         console.log(`📝 [FALLBACK] Matched: business/setup context`)
         fallbackText = detectedLanguage === 'ar' 
           ? `مرحباً ${contactName}، يسعدني مساعدتك في خدمات تأسيس الشركات. سأجمع التفاصيل وأعود إليك قريباً.`
@@ -729,18 +742,6 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         fallbackText = detectedLanguage === 'ar'
           ? `مرحباً ${contactName}، سأتحقق من تفاصيل التجديد لك.`
           : `Hi ${contactName}, I'll check the renewal details for you.`
-      } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence') || userMessage.includes('family')) {
-        console.log(`📝 [FALLBACK] Matched: visa/family context`)
-        // More specific message for family visa
-        if (userMessage.includes('family')) {
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، سأساعدك في تأشيرة العائلة. سأعود إليك بالتفاصيل والمتطلبات قريباً.`
-            : `Hi ${contactName}, I'll help you with family visa services. Let me get the details and requirements for you.`
-        } else {
-          fallbackText = detectedLanguage === 'ar'
-            ? `مرحباً ${contactName}، سأساعدك في خدمات التأشيرة. سأعود إليك بالتفاصيل قريباً.`
-            : `Hi ${contactName}, I'll help you with visa services. Let me get the details for you.`
-        }
       } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper') || userMessage.includes('requirement')) {
         console.log(`📝 [FALLBACK] Matched: document context`)
         fallbackText = detectedLanguage === 'ar'
