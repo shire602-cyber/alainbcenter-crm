@@ -239,8 +239,8 @@ export async function POST(req: NextRequest) {
     
     // Detect language from messages
     const lastMessages = contextSummary.structured.messages.slice(-3)
-    const messageText = lastMessages.map(m => m.message).join(' ')
-    const detectedLanguage = detectLanguage(messageText || '')
+    const messageText = lastMessages.map((m: { message: string }) => m.message).join(' ')
+    const detectedLanguage = detectLanguage(messageText || '') as 'en' | 'ar'
     
     let draftText = ''
     let nextQuestions: string[] = []
@@ -254,7 +254,7 @@ export async function POST(req: NextRequest) {
           contextSummary.structured,
           mode,
           tone,
-          detectedLanguage as 'en' | 'ar'
+          detectedLanguage
         )
         draftText = modeResult.text
       } else {
@@ -262,7 +262,7 @@ export async function POST(req: NextRequest) {
         const aiResult = await generateDraftReply(
           contextSummary.structured,
           tone,
-          detectedLanguage as 'en' | 'ar'
+          detectedLanguage
         )
         draftText = aiResult.text
       }

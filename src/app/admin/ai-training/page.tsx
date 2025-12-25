@@ -5,6 +5,7 @@
  * 
  * Upload guidance documents and training materials for the AI autopilot
  * to follow when generating responses.
+ * Also manage AI agent profiles and response settings.
  */
 
 import { useState, useEffect, useRef } from 'react'
@@ -16,7 +17,9 @@ import { Input } from '@/components/ui/input'
 import { Label } from '@/components/ui/label'
 import { Badge } from '@/components/ui/badge'
 import { useToast } from '@/components/ui/toast'
-import { FileText, Upload, Trash2, BookOpen, Sparkles, Save } from 'lucide-react'
+import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs'
+import { FileText, Upload, Trash2, BookOpen, Sparkles, Save, Settings } from 'lucide-react'
+import { ResponseSettingsTab } from '@/components/admin/ResponseSettingsTab'
 
 interface TrainingDocument {
   id: number
@@ -29,6 +32,7 @@ interface TrainingDocument {
 
 export default function AITrainingPage() {
   const { showToast } = useToast()
+  const [activeTab, setActiveTab] = useState<'documents' | 'settings'>('documents')
   const [documents, setDocuments] = useState<TrainingDocument[]>([])
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState(false)
