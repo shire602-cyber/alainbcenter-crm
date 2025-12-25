@@ -1,4 +1,17 @@
 import { ConversationContext } from './context'
+import { prisma } from '@/lib/prisma'
+
+// Helper to check if lead has uploaded documents
+async function checkIfLeadHasDocuments(leadId: number): Promise<boolean> {
+  try {
+    const docCount = await prisma.document.count({
+      where: { leadId },
+    })
+    return docCount > 0
+  } catch {
+    return false
+  }
+}
 
 const COMPANY_IDENTITY = 'Al Ain Business Center – UAE business setup & visa services'
 
