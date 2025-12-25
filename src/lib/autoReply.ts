@@ -306,10 +306,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       // Update log with skip reason
       if (autoReplyLog) {
-        try {
+      try {
           await (prisma as any).autoReplyLog.update({
             where: { id: autoReplyLog.id },
-            data: {
+          data: {
               decision: 'skipped',
               skippedReason: shouldReply.reason || 'Unknown reason',
             },
@@ -621,8 +621,83 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       })
       
       const startTime = Date.now()
-      // Pass retrieval result to AI generation so it can use training documents
-      aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+      
+      // Use strict AI generation with JSON output
+      try {
+        const { generateStrictAIReply } = await import('./ai/strictGeneration')
+        const { prisma } = await import('./prisma')
+        
+        // Get conversation for strict generation
+        const conversation = await prisma.conversation.findUnique({
+          where: {
+            contactId_channel: {
+              contactId: contactId,
+              channel: channel.toLowerCase(),
+            },
+          },
+        })
+        
+        if (conversation) {
+          console.log(`🤖 [STRICT-AI] Using strict AI generation with JSON output`)
+          const strictResult = await generateStrictAIReply({
+            lead,
+            contact: lead.contact,
+            conversation,
+            currentMessage: messageText,
+            conversationHistory: aiContext.recentMessages || [],
+            agent,
+            language: detectedLanguage,
+          })
+          
+          const duration = Date.now() - startTime
+          console.log(`⏱️ [STRICT-AI] Generation took ${duration}ms`)
+          console.log(`📊 [STRICT-AI] Service: ${strictResult.service}, Needs Human: ${strictResult.needsHuman}, Confidence: ${strictResult.confidence}`)
+          console.log(`📊 [STRICT-AI] Reply preview: ${strictResult.reply.substring(0, 100)}...`)
+          
+          // Log structured output to AutoReplyLog
+          if (autoReplyLog && strictResult.structured) {
+            try {
+              await (prisma as any).autoReplyLog.update({
+                where: { id: autoReplyLog.id },
+                data: {
+                  replyText: strictResult.reply.substring(0, 500),
+                  decisionReason: `Strict AI: service=${strictResult.service}, stage=${strictResult.structured.stage}, confidence=${strictResult.confidence}`,
+                  usedFallback: false,
+                },
+              })
+            } catch (logError) {
+              console.warn('Failed to update AutoReplyLog with strict AI result:', logError)
+            }
+          }
+          
+          // If needs human, create task
+          if (strictResult.needsHuman) {
+            console.log(`👤 [STRICT-AI] Escalating to human (needsHuman=true)`)
+            try {
+              await createAgentTask(leadId, 'complex_query', {
+                messageText: strictResult.reply.substring(0, 200),
+              })
+            } catch (taskError) {
+              console.warn('Failed to create agent task:', taskError)
+            }
+          }
+          
+          aiResult = {
+            text: strictResult.reply,
+            success: true,
+            confidence: strictResult.confidence * 100, // Convert to 0-100 scale
+          }
+        } else {
+          console.warn(`⚠️ [STRICT-AI] No conversation found, falling back to regular AI generation`)
+          // Pass retrieval result to AI generation so it can use training documents
+          aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+        }
+      } catch (strictError: any) {
+        console.error(`❌ [STRICT-AI] Strict generation failed, falling back to regular:`, strictError.message)
+        // Fallback to regular AI generation
+        aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+      }
+      
       const duration = Date.now() - startTime
       console.log(`⏱️ [AI-GEN] AI generation took ${duration}ms`)
       
