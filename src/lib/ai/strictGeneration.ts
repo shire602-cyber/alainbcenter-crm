@@ -373,7 +373,7 @@ export async function generateStrictAIReply(
             await prisma.conversation.update({
               where: { id: conversation.id },
               data: {
-                lockedService: parsed.structured.service,
+                lockedService: parsed.structured.service as any,
               },
             })
             console.log(`🔒 [STRICT-AI] Locked service "${parsed.structured.service}" on conversation ${conversation.id}`)
