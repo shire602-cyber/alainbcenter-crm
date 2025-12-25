@@ -760,10 +760,16 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             : `Hi ${contactName}, I understand this is urgent. I'll get back to you shortly.`
         } else if (hasQuestion) {
           console.log(`📝 [FALLBACK] Matched: question context`)
-          // For "what details" after family visa, provide specific information
-          if (userMessage.includes('detail') && recentMessages && recentMessages.length > 0) {
-            const previousMessage = recentMessages[0]?.body?.toLowerCase() || ''
-            if (previousMessage.includes('family') || previousMessage.includes('visa')) {
+          // For "what details" after family visa, check conversation history
+          if (userMessage.includes('detail')) {
+            // Check if previous messages mentioned visa/family
+            const previousMessages = lead.messages?.filter(m => m.id !== messageId && m.direction === 'INBOUND').slice(-3) || []
+            const hasVisaContext = previousMessages.some(m => {
+              const body = (m.body || '').toLowerCase()
+              return body.includes('family') || body.includes('visa')
+            })
+            
+            if (hasVisaContext) {
               fallbackText = detectedLanguage === 'ar'
                 ? `مرحباً ${contactName}، لتأشيرة العائلة نحتاج: جواز السفر، شهادة الزواج، شهادات ميلاد الأطفال، شهادة الراتب، سجل الإقامة. ما هي جنسيتك وعدد أفراد العائلة؟`
                 : `Hi ${contactName}, for family visa we need: passport, marriage certificate, children birth certificates, salary certificate, residence record. What's your nationality and number of family members?`
