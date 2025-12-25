@@ -275,11 +275,11 @@ export async function POST(req: NextRequest) {
       
       console.log(`✅ AI-generated draft for objective ${objective}: "${draftText.substring(0, 100)}..."`)
     } catch (aiError: any) {
-      console.error('AI generation failed, using fallback:', aiError.message)
-      // Fallback to simple message if AI fails
+      console.error('❌ AI generation failed, using minimal fallback:', aiError.message)
+      // Minimal fallback - NO template phrases
       const contactName = contextSummary.structured.contact?.name || 'there'
-      draftText = `Hi ${contactName}, thank you for contacting Al Ain Business Center. How can I assist you today?`
-      nextQuestions = ['How can I assist you today?']
+      draftText = `Hello ${contactName}! I received your message. How can I help you today?`
+      nextQuestions = ['How can I help you today?']
     }
 
     // Language already detected above
