@@ -283,67 +283,28 @@ export async function generateAIAutoresponse(
     }
     console.log(`🌐 Using language for reply: ${detectedLanguage} (preferred: ${preferredLanguage})`)
     
-    // Analyze conversation to determine what information is missing
-    const conversationAnalysis = analyzeConversationState(lead, contact, recentMessages)
-    console.log(`📊 Conversation state for lead ${lead.id}:`, conversationAnalysis)
+    // ALWAYS use AI-generated replies (no templates)
+    // Build conversation context for AI
+    const { buildConversationContextFromLead } = await import('./ai/context')
+    const { generateDraftReply } = await import('./ai/generate')
     
-    let draftText = ''
+    console.log(`🤖 Building conversation context for AI generation (lead ${lead.id})`)
+    const contextSummary = await buildConversationContextFromLead(lead.id, channel.toLowerCase())
+    const conversationContext = contextSummary.structured
     
-    if (isFirstMessage && objective === 'qualify') {
-      // First message - always greet with Hamdi introduction (multi-language)
-      if (detectedLanguage === 'ar') {
-        draftText = `مرحباً! 👋 أهلاً بك في مركز العين للأعمال. اسمي حمدي، كيف يمكنني مساعدتك؟`
-      } else {
-        draftText = `Hi welcome to alain business center my name is Hamdi, how can i help?`
-      }
-      console.log(`✅ First message greeting generated for lead ${lead.id} (language: ${detectedLanguage})`)
-    } else if (objective === 'qualify') {
-      // Structured qualification flow: service → nationality → other info → book call
-      draftText = generateQualificationMessage(conversationAnalysis, detectedLanguage, contactName)
-      console.log(`✅ Qualification message generated for lead ${lead.id} (step: ${conversationAnalysis.nextStep})`)
-    } else {
-      // For follow-up messages, use simple template (multi-language)
-      switch (objective) {
-        case 'qualify':
-          if (detectedLanguage === 'ar') {
-            draftText = `مرحباً ${contactName}، شكراً لاهتمامك بخدماتنا. لمساعدتك بشكل أفضل، يرجى مشاركة:\n\n1. ما هي الخدمة المحددة التي تبحث عنها؟\n2. ما هو الجدول الزمني الخاص بك؟\n\nنتطلع لمساعدتك!`
-          } else {
-            draftText = `Hi ${contactName}, thank you for your interest in our services. To better assist you, could you please share:\n\n1. What specific service are you looking for?\n2. What is your timeline?\n\nLooking forward to helping you!`
-          }
-          break
-        case 'followup':
-          if (detectedLanguage === 'ar') {
-            draftText = `مرحباً ${contactName}، أردت متابعة محادثتنا السابقة. كيف يمكننا مساعدتك أكثر؟ يرجى إعلامي إذا كان لديك أي أسئلة.`
-          } else {
-            draftText = `Hi ${contactName}, I wanted to follow up on our previous conversation. How can we assist you further? Please let me know if you have any questions.`
-          }
-          break
-        case 'renewal':
-          const nearestExpiry = lead.expiryDate
-          if (nearestExpiry) {
-            const daysUntil = Math.ceil((nearestExpiry.getTime() - Date.now()) / (1000 * 60 * 60 * 24))
-            if (detectedLanguage === 'ar') {
-              draftText = `مرحباً ${contactName}، أتمنى أن تكون بخير. لاحظت أن خدمتك ستنتهي خلال ${daysUntil} يوم. هل ترغب في المتابعة مع التجديد؟ يمكننا مساعدتك في إتمام العملية بسلاسة.`
-            } else {
-              draftText = `Hi ${contactName}, I hope this message finds you well. I noticed that your service is expiring in ${daysUntil} days. Would you like to proceed with renewal? We can help you complete the process smoothly.`
-            }
-          } else {
-            if (detectedLanguage === 'ar') {
-              draftText = `مرحباً ${contactName}، أردت التواصل بخصوص تجديداتك القادمة. هل هناك شيء يمكننا مساعدتك فيه؟`
-            } else {
-              draftText = `Hi ${contactName}, I wanted to check in regarding your upcoming renewals. Is there anything we can help you with?`
-            }
-          }
-          break
-        default:
-          if (detectedLanguage === 'ar') {
-            draftText = `مرحباً ${contactName}، شكراً لتواصلك مع مركز العين للأعمال. كيف يمكنني مساعدتك اليوم؟`
-          } else {
-            draftText = `Hi ${contactName}, thank you for contacting Al Ain Business Center. How can I assist you today?`
-          }
-      }
-      console.log(`✅ Template reply generated for lead ${lead.id} (objective: ${objective}, language: ${detectedLanguage})`)
+    // Determine tone based on mode
+    let tone: 'professional' | 'friendly' | 'short' = 'friendly'
+    if (mode === 'RENEWAL' || mode === 'PRICING') {
+      tone = 'professional'
+    } else if (mode === 'FOLLOW_UP' || mode === 'QUALIFY') {
+      tone = 'friendly'
     }
+    
+    console.log(`🤖 Generating AI reply using ${tone} tone, ${detectedLanguage} language`)
+    const aiDraftResult = await generateDraftReply(conversationContext, tone, detectedLanguage as 'en' | 'ar')
+    
+    const draftText = aiDraftResult.text
+    console.log(`✅ AI-generated reply for lead ${lead.id}: "${draftText.substring(0, 100)}..."`)
 
     if (!draftText || draftText.trim().length === 0) {
       return {

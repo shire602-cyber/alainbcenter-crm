@@ -151,6 +151,10 @@ model Lead {
   mutedUntil        DateTime? // Mute auto-replies until this date
   lastAutoReplyAt   DateTime? // Last auto-reply timestamp (for rate limiting)
   allowOutsideHours Boolean   @default(false) // Allow replies outside business hours
+  
+  // AI Agent Profile assignment
+  aiAgentProfileId  Int?
+  aiAgentProfile    AIAgentProfile? @relation(fields: [aiAgentProfileId], references: [id])
 
   // Info/Quotation sharing tracking (Phase 2)
   infoSharedAt       DateTime? // When information was shared with customer
@@ -175,6 +179,59 @@ model Lead {
   aiActionLogs       AIActionLog[]
   notifications      Notification[]
   reminders          Reminder[]
+}
+
+model AIAgentProfile {
+  id                    Int      @id @default(autoincrement())
+  name                  String   @unique // e.g., "Sales Agent", "Customer Support Agent", "Follow-up Agent"
+  description           String?  // Optional description
+  isActive              Boolean  @default(true)
+  isDefault             Boolean  @default(false) // Only one can be default
+  
+  // Training document associations (which training docs this agent uses)
+  trainingDocumentIds   String?  // JSON array of training document IDs this agent should use
+  
+  // Response Behavior Settings
+  systemPrompt          String?  // Custom system prompt (overrides default)
+  tone                  String   @default("friendly") // professional | friendly | short
+  maxMessageLength      Int      @default(300) // Max characters for first message
+  maxTotalLength        Int      @default(600) // Max characters total
+  maxQuestionsPerMessage Int     @default(2) // Max questions to ask
+  
+  // What to say / What not to say
+  allowedPhrases        String?  // JSON array of phrases/topics to emphasize
+  prohibitedPhrases     String?  // JSON array of phrases/topics to avoid
+  customGreeting        String?  // Custom greeting template
+  customSignoff         String?  // Custom signoff template
+  
+  // Timing Controls
+  responseDelayMin      Int      @default(0) // Minimum seconds before replying
+  responseDelayMax      Int      @default(5) // Maximum seconds before replying
+  rateLimitMinutes     Int      @default(2) // Minutes between auto-replies
+  businessHoursStart    String   @default("07:00") // HH:mm format
+  businessHoursEnd      String   @default("21:30") // HH:mm format
+  timezone              String   @default("Asia/Dubai")
+  allowOutsideHours     Boolean  @default(false) // Allow replies outside business hours
+  firstMessageImmediate Boolean @default(true) // Reply immediately to first message
+  
+  // Response Rules
+  similarityThreshold   Float    @default(0.7) // Training document similarity threshold
+  confidenceThreshold   Int      @default(50) // Minimum confidence to auto-reply
+  escalateToHumanRules  String?  // JSON array of patterns that trigger human escalation
+  skipAutoReplyRules    String?  // JSON array of patterns that skip auto-reply
+  
+  // Language Settings
+  defaultLanguage       String   @default("en") // en | ar
+  autoDetectLanguage    Boolean  @default(true)
+  
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  
+  // Relations
+  leads                 Lead[]  // Leads assigned to this agent
+  
+  @@index([isActive, isDefault])
+  @@index([name])
 }
 
 model ExpiryItem {
