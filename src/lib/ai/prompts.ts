@@ -247,27 +247,54 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
     // Extract information that was already provided
     const lowerText = messageText.toLowerCase()
     if (direction === 'INBOUND' || direction === 'IN') {
-      // Extract nationality mentions
-      if (lowerText.includes('nationality') || lowerText.includes('from') || lowerText.includes('i am') || lowerText.includes('i\'m')) {
-        const nationalityMatch = messageText.match(/(?:nationality|from|i am|i'm)\s+(?:is\s+)?([a-z\s]+)/i)
-        if (nationalityMatch && nationalityMatch[1]) {
-          const nationality = nationalityMatch[1].trim()
-          if (nationality.length > 2 && nationality.length < 30) {
+      // Extract nationality mentions - improved pattern matching
+      const nationalityPatterns = [
+        /(?:nationality|from|i am|i'm|im)\s+(?:is\s+)?([a-z]+(?:\s+[a-z]+)?)/i,
+        /(?:i am|i'm|im)\s+([a-z]+)/i,
+        /\b(somalia|somalian|nigeria|nigerian|indian|pakistani|filipino|egyptian|british|american|canadian|kenyan|ethiopian|sudanese|yemeni|jordanian|lebanese|syrian|palestinian|tunisian|moroccan|algerian|libyan|mauritanian|iraqi|iranian|afghan|bangladeshi|sri lankan|nepali|thai|vietnamese|indonesian|malaysian|singaporean|chinese|japanese|korean|russian|ukrainian|polish|romanian|turkish|saudi|emirati|kuwaiti|qatari|bahraini|omani)\b/i
+      ]
+      
+      for (const pattern of nationalityPatterns) {
+        const match = messageText.match(pattern)
+        if (match && match[1]) {
+          const nationality = match[1].trim()
+          if (nationality.length > 2 && nationality.length < 30 && !nationality.includes('visa') && !nationality.includes('uae')) {
             providedInfo.push(`Nationality: ${nationality}`)
+            break
           }
         }
       }
-      // Extract service mentions
-      if (lowerText.includes('visa') || lowerText.includes('business') || lowerText.includes('setup') || lowerText.includes('renewal')) {
-        if (lowerText.includes('visit visa')) providedInfo.push('Service: Visit Visa')
-        if (lowerText.includes('family visa')) providedInfo.push('Service: Family Visa')
-        if (lowerText.includes('business')) providedInfo.push('Service: Business Setup')
+      // Extract service mentions - improved pattern matching
+      if (lowerText.includes('visa') || lowerText.includes('business') || lowerText.includes('setup') || lowerText.includes('renewal') || lowerText.includes('freelance')) {
+        if (lowerText.includes('freelance')) providedInfo.push('Service: Freelance Visa')
+        if (lowerText.includes('visit visa') || (lowerText.includes('visit') && lowerText.includes('visa'))) providedInfo.push('Service: Visit Visa')
+        if (lowerText.includes('family visa') || (lowerText.includes('family') && lowerText.includes('visa'))) providedInfo.push('Service: Family Visa')
+        if (lowerText.includes('business setup') || (lowerText.includes('business') && lowerText.includes('setup'))) providedInfo.push('Service: Business Setup')
         if (lowerText.includes('renewal')) providedInfo.push('Service: Renewal')
       }
-      // Extract location
-      if (lowerText.includes('inside') || lowerText.includes('outside') || lowerText.includes('in uae') || lowerText.includes('outside uae')) {
-        if (lowerText.includes('outside')) providedInfo.push('Location: Outside UAE')
-        if (lowerText.includes('inside')) providedInfo.push('Location: Inside UAE')
+      
+      // Extract expiry date mentions
+      const datePatterns = [
+        /(?:expir|expires?|expiry|valid until|valid till|until|till)\s+(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{4})/i,
+        /(\d{1,2}(?:st|nd|rd|th)?\s+(?:jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*)/i,
+        /(\d{1,2}\/\d{1,2}\/\d{4})/,
+        /(\d{1,2}-\d{1,2}-\d{4})/
+      ]
+      
+      for (const pattern of datePatterns) {
+        const match = messageText.match(pattern)
+        if (match && match[1]) {
+          providedInfo.push(`Expiry Date: ${match[1]}`)
+          break
+        }
+      }
+      // Extract location - improved pattern matching
+      if (lowerText.includes('inside') || lowerText.includes('outside') || lowerText.includes('in uae') || lowerText.includes('outside uae') || lowerText.includes('im inside') || lowerText.includes('im outside')) {
+        if (lowerText.includes('outside') && !lowerText.includes('inside')) {
+          providedInfo.push('Location: Outside UAE')
+        } else if (lowerText.includes('inside') || lowerText.includes('in uae')) {
+          providedInfo.push('Location: Inside UAE')
+        }
       }
       // Extract passport info
       if (lowerText.includes('passport')) {
@@ -363,16 +390,21 @@ The user's LATEST message (most recent) is: "${lastUserMessage}"
 CRITICAL ANTI-HALLUCINATION RULES:
 1. ONLY use information that is EXPLICITLY stated in the conversation history above
 2. NEVER make up or assume information that wasn't mentioned
-3. If the user said "Nigeria", they are Nigerian - do NOT say they mentioned "Kenyan" or any other nationality
-4. If information is not in the conversation, say "I don't have that information yet" instead of guessing
-5. Read the conversation history CAREFULLY - what did they ACTUALLY say?
+3. If the user said "Somalia", they are Somali - do NOT say they mentioned "Kenyan" or "Nigeria" or any other nationality
+4. If the user said "freelance visa", they want FREELANCE visa - do NOT say they mentioned "visit visa" or any other service
+5. If the user said "19th january", that's the date - do NOT say "15th of February 2024" or any other date
+6. If information is not in the conversation, say "I don't have that information yet" instead of guessing
+7. Read the conversation history CAREFULLY - what did they ACTUALLY say?
+8. NEVER contradict what the user just told you - if they said "freelance visa", acknowledge FREELANCE visa, not visit visa
 
 CRITICAL ANTI-REPETITION RULES:
 1. Check the "INFORMATION ALREADY PROVIDED" section above - DO NOT ask for information that's already there
-2. If nationality was already mentioned, DO NOT ask "what's your nationality?" again
-3. If service was already mentioned, DO NOT ask "what service?" again
-4. If location was already mentioned, DO NOT ask "inside or outside?" again
-5. Read ALL previous messages in the conversation - do NOT repeat questions that were already asked
+2. If nationality was already mentioned (e.g., "Somalia"), DO NOT ask "what's your nationality?" or "can you confirm your nationality?" - they ALREADY told you
+3. If service was already mentioned (e.g., "freelance visa"), DO NOT ask "what service?" or "which service?" - they ALREADY told you
+4. If location was already mentioned (e.g., "inside UAE"), DO NOT ask "inside or outside?" or "are you in the UAE?" - they ALREADY told you
+5. If expiry date was already mentioned (e.g., "19th january"), DO NOT ask for it again - they ALREADY told you
+6. Read ALL previous messages in the conversation - do NOT repeat questions that were already asked
+7. If the user just answered a question in their latest message, acknowledge their answer and move to the NEXT question, don't ask the same thing again
 
 YOU MUST:
 1. Start your reply by DIRECTLY acknowledging what they just said. Your FIRST sentence must respond to: "${lastUserMessage}"
@@ -407,21 +439,24 @@ ${hasDocuments ? '8. NOTE: Documents have been uploaded. If they ask about docum
 Generate a WhatsApp-ready reply that:
 1. STARTS by directly acknowledging their latest message: "${lastUserMessage}" - Your first sentence MUST respond to this
 2. Uses ONLY information from the conversation history - do NOT make up or assume information
-3. If they mentioned a service (like "family visa", "visit visa"), acknowledge it SPECIFICALLY and respond about that service
-4. If they asked a question (like "how much?"), answer it directly or explain what info you need to provide pricing
-5. If they provided information, acknowledge it and ask for the NEXT specific piece needed (but NOT information already provided - check the "INFORMATION ALREADY PROVIDED" section)
-6. DO NOT repeat questions that were already asked - check the conversation history
-7. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (but NOT as a numbered list, and NOT questions already answered)
-8. Keeps it SHORT (under ${maxMessageLength} characters)
-9. NEVER promises approvals or guarantees
-10. Uses ${tone} tone
-11. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
-12. MUST end with: "Best regards, ${agentName}" or similar with your name
+3. If they mentioned a service (like "freelance visa", "family visa", "visit visa"), acknowledge it SPECIFICALLY and respond about THAT service - do NOT confuse it with other services
+4. If they asked a question (like "how much?"), answer it directly using training documents or explain what info you need to provide pricing
+5. If they provided information (nationality, location, service, date), acknowledge it SPECIFICALLY and ask for the NEXT specific piece needed (but NOT information already provided - check the "INFORMATION ALREADY PROVIDED" section)
+6. DO NOT repeat questions that were already asked - check the conversation history and the "INFORMATION ALREADY PROVIDED" section
+7. If they already told you their nationality, location, service, or date, DO NOT ask for it again - use what they told you
+8. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (but NOT as a numbered list, and NOT questions already answered)
+9. Keeps it SHORT (under ${maxMessageLength} characters)
+10. NEVER promises approvals or guarantees
+11. Uses ${tone} tone
+12. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+13. MUST end with: "Best regards, ${agentName}" or similar with your name
 
 CRITICAL REMINDER: 
 - Your reply must be SPECIFIC to "${lastUserMessage}"
 - Use ONLY information from the conversation - do NOT hallucinate
-- Do NOT ask for information already provided
+- Do NOT ask for information already provided (check "INFORMATION ALREADY PROVIDED" section)
+- Do NOT confuse services - if they said "freelance visa", don't say "visit visa"
+- Do NOT confuse dates - if they said "19th january", don't say "15th february"
 - Do NOT use a generic template or numbered list format`
 
     if (agent?.customSignoff) {

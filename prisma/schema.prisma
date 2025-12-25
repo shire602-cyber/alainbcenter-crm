@@ -289,6 +289,7 @@ model Conversation {
   assignedUserId   Int?
   assignedUser     User?     @relation(fields: [assignedUserId], references: [id])
   unreadCount      Int       @default(0)
+  lockedService    String?   // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 

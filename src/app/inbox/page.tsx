@@ -839,7 +839,7 @@ function InboxPageContent() {
                       <div
                         key={msg.id}
                         className={cn(
-                          'flex animate-in fade-in slide-in-from-bottom-2 duration-300',
+                          'flex animate-in fade-in slide-in-from-bottom-2 duration-300 mb-3',
                           isInbound ? 'justify-start' : 'justify-end'
                         )}
                         style={{ animationDelay: `${index * 50}ms` }}
@@ -848,8 +848,8 @@ function InboxPageContent() {
                           className={cn(
                             'max-w-[75%] p-4 rounded-2xl text-sm shadow-md transition-all hover:shadow-lg',
                             isInbound
-                              ? 'bg-white dark:bg-slate-800 text-slate-900 dark:text-slate-100 border border-slate-200 dark:border-slate-700'
-                              : 'bg-primary text-primary-foreground ml-auto shadow-primary/20'
+                              ? 'bg-blue-50 dark:bg-blue-950/30 text-slate-900 dark:text-blue-100 border-2 border-blue-200 dark:border-blue-800 rounded-tl-none'
+                              : 'bg-green-500 dark:bg-green-600 text-white ml-auto shadow-green-500/30 rounded-tr-none'
                           )}
                         >
                           {msg.type === 'text' ? (
