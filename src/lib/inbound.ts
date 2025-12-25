@@ -495,24 +495,79 @@ export async function handleInboundMessage(
         lead
       )
 
-      // Only update if confidence is reasonable (>50) and data is new/better
-      if (extracted.confidence > 50) {
-        const updates: any = {}
-        const contactUpdates: any = {}
+      // CRITICAL FIX: Always update name and nationality when provided, even with lower confidence
+      // User requirement: "when a customer gives their name and nationality lead should be updated automatically"
+      const updates: any = {}
+      const contactUpdates: any = {}
 
-        // Update contact if we have better info
-        if (extracted.name && (!contact.fullName || contact.fullName.includes('Unknown') || contact.fullName.includes('WhatsApp'))) {
-          contactUpdates.fullName = extracted.name
+      // Simple regex fallback for name (e.g., "My name is Herbert", "I am Herbert", "name: Herbert")
+      let extractedName = extracted.name
+      if (!extractedName || extractedName.trim().length === 0) {
+        const namePatterns = [
+          /(?:my\s+name\s+is|i\s+am|name\s*:)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+          /(?:i'm|i'm\s+called|call\s+me)\s+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)*)/i,
+        ]
+        for (const pattern of namePatterns) {
+          const match = body.match(pattern)
+          if (match && match[1] && match[1].trim().length > 1) {
+            extractedName = match[1].trim()
+            console.log(`📝 Regex extracted name: "${extractedName}"`)
+            break
+          }
         }
+      }
+
+      // Update name if extracted (lower threshold for name - it's usually clear)
+      if (extractedName && extractedName.trim().length > 0) {
+        // Always update if current name is missing, unknown, or extracted name is different
+        if (!contact.fullName || 
+            contact.fullName.includes('Unknown') || 
+            contact.fullName.includes('WhatsApp') ||
+            contact.fullName.toLowerCase() !== extractedName.toLowerCase()) {
+          contactUpdates.fullName = extractedName.trim()
+          console.log(`📝 Updating contact name: "${contact.fullName || 'none'}" → "${extractedName}"`)
+        }
+      }
+      
+      // Simple regex fallback for nationality (e.g., "I am german", "I'm german", "nationality: german")
+      let extractedNationality = extracted.nationality
+      if (!extractedNationality || extractedNationality.trim().length === 0) {
+        const nationalityPatterns = [
+          /(?:i\s+am|i'm)\s+(german|british|american|indian|pakistani|filipino|egyptian|lebanese|jordanian|syrian|iraqi|iranian|turkish|russian|chinese|japanese|korean|thai|vietnamese|indonesian|malaysian|singaporean|australian|canadian|french|spanish|italian|greek|dutch|belgian|swiss|austrian|swedish|norwegian|danish|finnish|polish|czech|romanian|bulgarian|hungarian|portuguese|brazilian|mexican|argentinian|south\s+african|nigerian|kenyan|ethiopian|ugandan|tanzanian|ghanaian|moroccan|algerian|tunisian|libyan|sudanese|somali|eritrean|yemeni|omani|bahraini|kuwaiti|qatari|saudi|emirati|afghan|bangladeshi|sri\s+lankan|nepalese|myanmar| cambodian|laotian|mongolian|uzbek|kazakh|azerbaijani|armenian|georgian|ukrainian|belarusian|moldovan|serbian|croatian|bosnian|albanian|macedonian|montenegrin|slovenian|slovak|estonian|latvian|lithuanian|icelandic|maltese|cypriot|luxembourgish|monégasque|andorran|liechtenstein|san\s+marino|vatican|maltese)/i,
+          /(?:nationality|from)\s*:?\s*(german|british|american|indian|pakistani|filipino|egyptian|lebanese|jordanian|syrian|iraqi|iranian|turkish|russian|chinese|japanese|korean|thai|vietnamese|indonesian|malaysian|singaporean|australian|canadian|french|spanish|italian|greek|dutch|belgian|swiss|austrian|swedish|norwegian|danish|finnish|polish|czech|romanian|bulgarian|hungarian|portuguese|brazilian|mexican|argentinian|south\s+african|nigerian|kenyan|ethiopian|ugandan|tanzanian|ghanaian|moroccan|algerian|tunisian|libyan|sudanese|somali|eritrean|yemeni|omani|bahraini|kuwaiti|qatari|saudi|emirati|afghan|bangladeshi|sri\s+lankan|nepalese|myanmar|cambodian|laotian|mongolian|uzbek|kazakh|azerbaijani|armenian|georgian|ukrainian|belarusian|moldovan|serbian|croatian|bosnian|albanian|macedonian|montenegrin|slovenian|slovak|estonian|latvian|lithuanian|icelandic|maltese|cypriot|luxembourgish|monégasque|andorran|liechtenstein|san\s+marino|vatican|maltese)/i,
+        ]
+        for (const pattern of nationalityPatterns) {
+          const match = body.match(pattern)
+          if (match && match[1] && match[1].trim().length > 1) {
+            extractedNationality = match[1].trim()
+            console.log(`📝 Regex extracted nationality: "${extractedNationality}"`)
+            break
+          }
+        }
+      }
+
+      // Update nationality if extracted (lower threshold - it's usually clear)
+      if (extractedNationality && extractedNationality.trim().length > 0) {
+        // Always update if current nationality is missing or extracted nationality is different
+        if (!contact.nationality || 
+            contact.nationality.toLowerCase() !== extractedNationality.toLowerCase()) {
+          contactUpdates.nationality = extractedNationality.trim()
+          console.log(`📝 Updating contact nationality: "${contact.nationality || 'none'}" → "${extractedNationality}"`)
+        }
+      }
+      
+      // Update email/phone only with reasonable confidence (>50)
+      if (extracted.confidence > 50) {
         if (extracted.email && !contact.email) {
           contactUpdates.email = extracted.email
         }
         if (extracted.phone && !contact.phone) {
           contactUpdates.phone = extracted.phone
         }
-        if (extracted.nationality && !contact.nationality) {
-          contactUpdates.nationality = extracted.nationality
-        }
+      }
+      
+      // Update lead fields only with reasonable confidence (>50)
+      if (extracted.confidence > 50) {
 
         // Update lead if we have better info
         if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
@@ -554,23 +609,24 @@ export async function handleInboundMessage(
             ? `${lead.notes}\n\n[AI Extracted]: ${extracted.notes}`
             : extracted.notes
         }
+      } // End of confidence > 50 check for lead fields
 
-        // Apply updates
-        if (Object.keys(contactUpdates).length > 0) {
-          await prisma.contact.update({
-            where: { id: contact.id },
-            data: contactUpdates,
-          })
-          console.log(`✅ Updated contact ${contact.id} with AI-extracted data`)
-        }
+      // Apply contact updates (name/nationality always, email/phone only if confidence > 50)
+      if (Object.keys(contactUpdates).length > 0) {
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: contactUpdates,
+        })
+        console.log(`✅ Updated contact ${contact.id} with AI-extracted data:`, contactUpdates)
+      }
 
-        if (Object.keys(updates).length > 0) {
-          await prisma.lead.update({
-            where: { id: lead.id },
-            data: updates,
-          })
-          console.log(`✅ Updated lead ${lead.id} with AI-extracted data`)
-        }
+      // Apply lead updates (only if confidence > 50)
+      if (Object.keys(updates).length > 0) {
+        await prisma.lead.update({
+          where: { id: lead.id },
+          data: updates,
+        })
+        console.log(`✅ Updated lead ${lead.id} with AI-extracted data`)
       }
     } catch (extractError: any) {
       // Don't fail the whole process if extraction fails

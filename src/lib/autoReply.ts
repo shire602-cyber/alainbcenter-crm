@@ -94,19 +94,19 @@ async function shouldAutoReply(
     }
   }
 
-  // Rate limiting: use agent's rateLimitMinutes, or default to 2 minutes
-  const rateLimitMinutes = agent?.rateLimitMinutes || 2
-  // BUT: Always allow first message replies (24/7, no rate limit) unless agent says otherwise
-  // AND: Allow replies if it's been more than 1 minute (less strict for follow-ups)
+  // Rate limiting: CRITICAL FIX - User wants quick replies, only prevent true spam
+  // Use agent's rateLimitMinutes, or default to 30 seconds (very permissive)
+  const rateLimitMinutes = agent?.rateLimitMinutes || 0.5 // 30 seconds default
   // @ts-ignore
   if (!isFirstMessage && lead.lastAutoReplyAt) {
     // @ts-ignore
-    const minutesSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / (1000 * 60)
-    console.log(`⏱️ Last auto-reply was ${minutesSinceLastReply.toFixed(1)} minutes ago (rate limit: ${rateLimitMinutes} min)`)
-    // FIX: Only rate limit if it's been less than 1 minute (prevent spam, but allow quick follow-ups)
-    if (minutesSinceLastReply < Math.min(1, rateLimitMinutes)) {
-      console.log(`⏭️ Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`)
-      return { shouldReply: false, reason: `Rate limit: replied ${minutesSinceLastReply.toFixed(1)} minutes ago`, agent: agent || undefined }
+    const secondsSinceLastReply = (Date.now() - lead.lastAutoReplyAt.getTime()) / 1000
+    const minutesSinceLastReply = secondsSinceLastReply / 60
+    console.log(`⏱️ Last auto-reply was ${secondsSinceLastReply.toFixed(0)} seconds ago (rate limit: ${rateLimitMinutes * 60}s)`)
+    // CRITICAL: Only rate limit if it's been less than 30 seconds (prevent true spam, but allow quick follow-ups)
+    if (secondsSinceLastReply < Math.max(30, rateLimitMinutes * 60)) {
+      console.log(`⏭️ Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago (minimum 30s)`)
+      return { shouldReply: false, reason: `Rate limit: replied ${secondsSinceLastReply.toFixed(0)} seconds ago`, agent: agent || undefined }
     }
   } else if (isFirstMessage && agent && !agent.firstMessageImmediate) {
     // Agent can disable immediate first message replies
@@ -123,15 +123,16 @@ async function shouldAutoReply(
     console.log(`✅ First message - rate limit bypassed`)
   }
 
-  // Business hours check: use agent's settings
-  if (!isFirstMessage || (agent && !agent.firstMessageImmediate)) {
-    // Check agent's allowOutsideHours or lead's allowOutsideHours
-    // @ts-ignore
-    const allowOutside = agent?.allowOutsideHours ?? lead.allowOutsideHours ?? false
-    
-    if (allowOutside) {
-      console.log(`✅ allowOutsideHours=true - 24/7 auto-reply enabled`)
-    } else if (agent) {
+  // Business hours check: CRITICAL FIX - User wants 24/7 auto-reply for sales leads
+  // Only check business hours if explicitly disabled, otherwise allow 24/7
+  // @ts-ignore
+  const allowOutside = agent?.allowOutsideHours ?? lead.allowOutsideHours ?? true // DEFAULT TO TRUE for 24/7
+  
+  if (allowOutside) {
+    console.log(`✅ 24/7 auto-reply enabled (allowOutsideHours: true)`)
+  } else {
+    // Only enforce business hours if explicitly disabled
+    if (agent) {
       // Use agent's business hours
       if (!isWithinBusinessHours(agent)) {
         console.log(`⏭️ Outside agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
@@ -139,7 +140,7 @@ async function shouldAutoReply(
       }
       console.log(`✅ Within agent business hours (${agent.businessHoursStart} - ${agent.businessHoursEnd} ${agent.timezone})`)
     } else {
-      // Fallback to default Dubai business hours
+      // Fallback to default Dubai business hours (only if allowOutsideHours is explicitly false)
       const now = new Date()
       const utcHour = now.getUTCHours()
       const utcMinutes = now.getUTCMinutes()
@@ -155,8 +156,6 @@ async function shouldAutoReply(
       }
       console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
     }
-  } else {
-    console.log(`✅ First contact - 24/7 auto-reply enabled`)
   }
 
   console.log(`✅ Auto-reply check passed for lead ${leadId}`)
