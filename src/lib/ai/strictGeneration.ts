@@ -63,22 +63,43 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
     provided.mainland = false
   }
   
-  // Extract name
+  // Extract name - improved patterns to catch names in various formats
   const namePatterns = [
-    /(?:my name is|i'm|i am|name is|call me|it's|its)\s+([a-z\s]{2,30})/i,
-    /^([a-z\s]{2,30})$/i, // If message is just a name
+    /(?:my name is|i'm|i am|name is|call me|it's|its|name:|i said|just said)\s+([a-z\s]{2,50})/i,
+    /^([a-z\s]{2,50})$/i, // If message is just a name (like "abdurahman shire")
+    /(?:i'm|i am)\s+([a-z]+(?:\s+[a-z]+){0,2})/i, // "i'm john" or "i am john doe"
   ]
-  for (const pattern of namePatterns) {
-    const match = allText.match(pattern)
-    if (match && match[1]) {
-      const potentialName = match[1].trim()
-      // Exclude common words that aren't names
-      if (potentialName.length >= 2 && potentialName.length <= 30 && 
-          !['hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks', 'thank you'].includes(potentialName.toLowerCase())) {
-        provided.name = potentialName
+  
+  // Also check individual messages for names (not just concatenated text)
+  for (const msg of messages) {
+    const msgText = (msg.body || '').toLowerCase().trim()
+    // If message is just a name (2-50 chars, no punctuation except spaces, not common words)
+    if (msgText.length >= 2 && msgText.length <= 50 && 
+        /^[a-z\s]+$/.test(msgText) && // Only letters and spaces
+        !['hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks', 'thank you', 'freezone', 'mainland', 'inside', 'outside'].includes(msgText)) {
+      // Check if it looks like a name (has at least one space or is a reasonable length)
+      if (msgText.includes(' ') || msgText.length >= 3) {
+        provided.name = msgText.trim()
+        console.log(`📝 [EXTRACT] Extracted name from message: "${provided.name}"`)
         break
       }
     }
+    
+    // Try patterns on individual message
+    for (const pattern of namePatterns) {
+      const match = msgText.match(pattern)
+      if (match && match[1]) {
+        const potentialName = match[1].trim()
+        // Exclude common words that aren't names
+        if (potentialName.length >= 2 && potentialName.length <= 50 && 
+            !['hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks', 'thank you', 'freezone', 'mainland'].includes(potentialName.toLowerCase())) {
+          provided.name = potentialName
+          console.log(`📝 [EXTRACT] Extracted name via pattern: "${provided.name}"`)
+          break
+        }
+      }
+    }
+    if (provided.name) break
   }
   
   // Extract service
@@ -180,9 +201,24 @@ export async function generateStrictAIReply(
     // Continue without training docs, but log warning
   }
   
+  // CRITICAL: Use contact's name from DB if available, otherwise use extracted name
+  const contactNameFromDB = contact?.fullName?.trim()
+  const extractedName = providedInfo.name
+  const finalContactName = (contactNameFromDB && 
+                            !contactNameFromDB.toLowerCase().includes('unknown') && 
+                            !contactNameFromDB.toLowerCase().includes('whatsapp')) 
+                            ? contactNameFromDB 
+                            : (extractedName || 'there')
+  
+  // If we have a name (from DB or extracted), add it to providedInfo
+  if (finalContactName && finalContactName !== 'there') {
+    providedInfo.name = finalContactName
+    console.log(`📝 [STRICT-AI] Using contact name: "${finalContactName}" (from DB: ${!!contactNameFromDB}, extracted: ${!!extractedName})`)
+  }
+  
   // Build strict prompt context
   const promptContext: StrictPromptContext = {
-    contactName: contact?.fullName || 'there',
+    contactName: finalContactName,
     contactNationality: providedInfo.nationality,
     conversationHistory: conversationHistory.map(m => ({
       direction: m.direction as 'INBOUND' | 'OUTBOUND',
