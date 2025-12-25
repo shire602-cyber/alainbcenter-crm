@@ -469,10 +469,31 @@ export async function POST(req: NextRequest) {
 
           // CRITICAL: Trigger AI reply from webhook level to ensure it always runs
           // Even if handleInboundMessage had issues, we still have the result
-          if (result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id) {
-            console.log(`🤖 [WEBHOOK] Triggering AI reply from webhook level (backup)`)
+          console.log(`🔍 [WEBHOOK] Checking conditions for AI reply trigger...`)
+          const canTriggerReply = result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id
+          console.log(`🔍 [WEBHOOK] Can trigger reply: ${canTriggerReply}`, {
+            hasMessage: !!result.message,
+            hasBody: !!result.message?.body,
+            bodyLength: result.message?.body?.length || 0,
+            bodyTrimmed: result.message?.body?.trim().length || 0,
+            hasLead: !!result.lead,
+            leadId: result.lead?.id,
+            hasContact: !!result.contact,
+            contactId: result.contact?.id,
+          })
+          
+          if (canTriggerReply) {
+            console.log(`🚀 [WEBHOOK] CRITICAL: Triggering AI reply from webhook level NOW!`)
+            console.log(`🚀 [WEBHOOK] Input:`, {
+              leadId: result.lead.id,
+              messageId: result.message.id,
+              messageText: result.message.body.substring(0, 100),
+              channel: result.message.channel,
+              contactId: result.contact.id,
+            })
             try {
               const { handleInboundAutoReply } = await import('@/lib/autoReply')
+              console.log(`📞 [WEBHOOK] About to call handleInboundAutoReply...`)
               const replyResult = await handleInboundAutoReply({
                 leadId: result.lead.id,
                 messageId: result.message.id,
@@ -480,16 +501,30 @@ export async function POST(req: NextRequest) {
                 channel: result.message.channel,
                 contactId: result.contact.id,
               })
-              console.log(`📊 [WEBHOOK] AI reply result (webhook level):`, replyResult)
+              console.log(`📊 [WEBHOOK] AI reply result (webhook level):`, {
+                replied: replyResult.replied,
+                reason: replyResult.reason,
+                error: replyResult.error,
+              })
+              if (replyResult.replied) {
+                console.log(`✅ [WEBHOOK] SUCCESS: AI reply was sent!`)
+              } else {
+                console.error(`❌ [WEBHOOK] FAILED: AI reply was NOT sent. Reason: ${replyResult.reason || replyResult.error}`)
+              }
             } catch (autoReplyError: any) {
-              console.error(`❌ [WEBHOOK] AI reply failed at webhook level:`, autoReplyError.message)
+              console.error(`❌ [WEBHOOK] CRITICAL ERROR: AI reply threw exception!`)
+              console.error(`❌ [WEBHOOK] Error message: ${autoReplyError.message}`)
+              console.error(`❌ [WEBHOOK] Error stack:`, autoReplyError.stack)
             }
           } else {
-            console.warn(`⚠️ [WEBHOOK] Cannot trigger AI reply - missing data`, {
+            console.error(`❌ [WEBHOOK] BLOCKED: Cannot trigger AI reply - missing required data!`, {
               hasMessage: !!result.message,
               hasBody: !!result.message?.body,
+              bodyLength: result.message?.body?.length || 0,
               hasLead: !!result.lead,
+              leadId: result.lead?.id,
               hasContact: !!result.contact,
+              contactId: result.contact?.id,
             })
           }
 
