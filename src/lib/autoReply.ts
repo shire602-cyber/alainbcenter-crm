@@ -528,7 +528,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         console.error(`❌ Failed to send auto-reply to lead ${leadId}:`, {
           error: error.message,
           stack: error.stack,
-          phone: lead.contact.phone,
+          phone: phoneNumber,
           channel: channel,
         })
         
