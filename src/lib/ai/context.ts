@@ -25,6 +25,11 @@ export interface ConversationContext {
     channel: string
     createdAt: Date
   }>
+  documents?: Array<{
+    fileName: string
+    category: string
+    createdAt: Date
+  }>
   companyIdentity: string
 }
 
