@@ -88,27 +88,27 @@ async function shouldAutoReply(leadId: number, isFirstMessage: boolean = false):
       console.log(`✅ allowOutsideHours=true - 24/7 auto-reply enabled for follow-ups (sales mode)`)
     } else {
       // Apply business hours restriction for customer support
-      const now = new Date()
-      const utcHour = now.getUTCHours()
-      const utcMinutes = now.getUTCMinutes()
-      
-      // Dubai is UTC+4
-      // 7 AM Dubai = 3 AM UTC (03:00)
-      // 9:30 PM Dubai = 5:30 PM UTC (17:30)
-      const dubaiHour = (utcHour + 4) % 24
-      const dubaiMinutes = utcMinutes
-      const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
-      const startTime = 7 * 60 // 7:00 AM = 420 minutes
-      const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
-      
-      console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
-      
-      if (dubaiTime < startTime || dubaiTime >= endTime) {
-        console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
-        return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
-      }
-      
-      console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+    const now = new Date()
+    const utcHour = now.getUTCHours()
+    const utcMinutes = now.getUTCMinutes()
+    
+    // Dubai is UTC+4
+    // 7 AM Dubai = 3 AM UTC (03:00)
+    // 9:30 PM Dubai = 5:30 PM UTC (17:30)
+    const dubaiHour = (utcHour + 4) % 24
+    const dubaiMinutes = utcMinutes
+    const dubaiTime = dubaiHour * 60 + dubaiMinutes // Total minutes in day
+    const startTime = 7 * 60 // 7:00 AM = 420 minutes
+    const endTime = 21 * 60 + 30 // 9:30 PM = 1290 minutes
+    
+    console.log(`🕐 Current time: UTC ${utcHour}:${utcMinutes.toString().padStart(2, '0')}, Dubai ${dubaiHour}:${dubaiMinutes.toString().padStart(2, '0')} (${dubaiTime} minutes)`)
+    
+    if (dubaiTime < startTime || dubaiTime >= endTime) {
+      console.log(`⏭️ Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
+      return { shouldReply: false, reason: 'Outside business hours for follow-ups (7 AM - 9:30 PM Dubai time)' }
+    }
+    
+    console.log(`✅ Within business hours for follow-ups (7 AM - 9:30 PM Dubai time)`)
     }
   } else {
     console.log(`✅ First contact - 24/7 auto-reply enabled`)
@@ -152,19 +152,12 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 }> {
   const { leadId, messageId, messageText, channel, contactId } = options
 
-  console.log(`🤖 [AUTO-REPLY] handleInboundAutoReply called`, {
-    leadId,
-    messageId,
-    contactId,
-    channel,
-    messageTextLength: messageText?.length || 0,
-    messageTextPreview: messageText?.substring(0, 50) || 'empty',
-  })
-
   if (!messageText || !messageText.trim()) {
-    console.log(`⏭️ [AUTO-REPLY] Skipped: Empty message text for lead ${leadId}`)
+    console.log(`⏭️ Auto-reply skipped: Empty message text for lead ${leadId}`)
     return { replied: false, reason: 'Empty message text' }
   }
+
+  console.log(`🤖 Auto-reply handler called for lead ${leadId}, message: "${messageText.substring(0, 50)}..."`)
 
   // Log auto-reply attempt to database for debugging
   const logId = `auto-reply-${leadId}-${messageId}-${Date.now()}`
@@ -313,12 +306,49 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: 'Lead or contact not found' }
     }
 
-    if (!lead.contact.phone || !lead.contact.phone.trim()) {
-      console.log(`⏭️ Auto-reply skipped: Contact ${lead.contact.id} has no phone number`)
+    // CRITICAL: If contact doesn't have phone number, try to get it from the message
+    // This handles cases where contact was created from a different channel
+    let phoneNumber = lead.contact.phone?.trim() || null
+    
+    if (!phoneNumber) {
+      console.warn(`⚠️ Contact ${lead.contact.id} has no phone number - attempting to get from message`)
+      // Try to get phone from the inbound message's conversation
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        include: {
+          conversation: {
+            include: {
+              contact: {
+                select: { phone: true },
+              },
+            },
+          },
+        },
+      })
+      
+      if (message?.conversation?.contact?.phone) {
+        phoneNumber = message.conversation.contact.phone.trim()
+        console.log(`✅ Found phone number from message conversation: ${phoneNumber}`)
+        
+        // Update contact with phone number for future use
+        try {
+          await prisma.contact.update({
+            where: { id: lead.contact.id },
+            data: { phone: phoneNumber },
+          })
+          console.log(`✅ Updated contact ${lead.contact.id} with phone number ${phoneNumber}`)
+        } catch (updateError: any) {
+          console.warn(`⚠️ Failed to update contact phone: ${updateError.message}`)
+        }
+      }
+    }
+    
+    if (!phoneNumber) {
+      console.log(`⏭️ Auto-reply skipped: Contact ${lead.contact.id} has no phone number and couldn't retrieve from message`)
       return { replied: false, reason: 'Contact has no phone number' }
     }
 
-    console.log(`✅ Lead ${leadId} loaded: contact phone=${lead.contact.phone}, autoReplyEnabled=${lead.autoReplyEnabled ?? 'null (defaulting to true)'}`)
+    console.log(`✅ Lead ${leadId} loaded: contact phone=${phoneNumber}, autoReplyEnabled=${lead.autoReplyEnabled ?? 'null (defaulting to true)'}`)
 
     // Step 5: Detect language from message
     const detectedLanguage = detectLanguage(messageText)
@@ -404,24 +434,20 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 
     // Step 9: Send reply immediately
     const channelUpper = channel.toUpperCase()
-    console.log(`🔍 Checking channel support: ${channelUpper}, has phone: ${!!lead.contact.phone}`)
+    console.log(`🔍 Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
     
-    if (channelUpper === 'WHATSAPP' && lead.contact.phone) {
+    if (channelUpper === 'WHATSAPP' && phoneNumber) {
       try {
-        console.log(`📤 [AUTO-REPLY] Sending WhatsApp message to ${lead.contact.phone} (lead ${leadId})`)
-        console.log(`📝 [AUTO-REPLY] Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
-        console.log(`📞 [AUTO-REPLY] Contact phone number: "${lead.contact.phone}" (length: ${lead.contact.phone.length})`)
+        console.log(`📤 Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
+        console.log(`📝 Message text (first 100 chars): ${aiResult.text.substring(0, 100)}...`)
         
-        const result = await sendTextMessage(lead.contact.phone, aiResult.text)
+        const result = await sendTextMessage(phoneNumber, aiResult.text)
         
-        console.log(`✅ [AUTO-REPLY] WhatsApp API call successful:`, { messageId: result?.messageId, waId: result?.waId })
+        console.log(`📨 WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
         
         if (!result || !result.messageId) {
-          console.error(`❌ [AUTO-REPLY] WhatsApp API did not return message ID. Response:`, result)
           throw new Error('No message ID returned from WhatsApp API')
         }
-        
-        console.log(`✅ [AUTO-REPLY] WhatsApp message sent successfully. Message ID: ${result.messageId}`)
 
         // Step 7: Save outbound message
         const conversation = await prisma.conversation.findFirst({
@@ -541,7 +567,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     } catch (logError: any) {
       console.warn('Failed to log auto-reply unsupported:', logError.message)
     }
-    
+
     return { replied: false, reason: 'Channel not supported or no phone number' }
   } catch (error: any) {
     console.error('Auto-reply error:', error)

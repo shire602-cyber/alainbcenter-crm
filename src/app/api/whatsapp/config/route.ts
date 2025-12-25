@@ -60,7 +60,7 @@ export async function GET(req: NextRequest) {
     try {
       // Get last inbound message (from Message table)
       const lastMessage = await prisma.message.findFirst({
-        where: {
+          where: {
           channel: 'whatsapp',
           direction: 'INBOUND',
         },
@@ -86,8 +86,8 @@ export async function GET(req: NextRequest) {
         where: { 
           provider: { in: ['whatsapp', 'auto-reply'] }
         },
-        orderBy: { receivedAt: 'desc' },
-        take: 10,
+          orderBy: { receivedAt: 'desc' },
+          take: 10,
         select: {
           id: true,
           externalId: true,
@@ -95,7 +95,7 @@ export async function GET(req: NextRequest) {
           payload: true,
           receivedAt: true,
         },
-      })
+        })
     } catch (error: any) {
       // Model might not exist yet - silently ignore
       console.warn('ExternalEventLog not available:', error?.message || 'Unknown error')
@@ -138,9 +138,9 @@ export async function GET(req: NextRequest) {
         }
         
         return {
-          id: log.id,
-          externalId: log.externalId,
-          receivedAt: log.receivedAt,
+        id: log.id,
+        externalId: log.externalId,
+        receivedAt: log.receivedAt,
           createdAt: log.receivedAt.toISOString(),
           kind,
           info,

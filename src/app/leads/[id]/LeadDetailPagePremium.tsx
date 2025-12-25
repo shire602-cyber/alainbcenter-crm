@@ -908,30 +908,30 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               <CardHeader className="pb-3 flex-shrink-0 p-0">
                 <div className="sticky top-16 z-20 glass-medium border-b px-4 py-2">
                   <div className="flex items-center justify-between mb-2">
-                    <Tabs value={activeChannel} onValueChange={setActiveChannel}>
-                      <TabsList>
-                      <TabsTrigger value="whatsapp">
-                        <MessageSquare className="h-4 w-4 mr-2" />
-                        WhatsApp
-                      </TabsTrigger>
-                      <TabsTrigger value="email">
-                        <Mail className="h-4 w-4 mr-2" />
-                        Email
-                      </TabsTrigger>
-                      <TabsTrigger value="instagram">
-                        <Instagram className="h-4 w-4 mr-2" />
-                        Instagram
-                      </TabsTrigger>
-                      <TabsTrigger value="facebook">
-                        <Facebook className="h-4 w-4 mr-2" />
-                        Facebook
-                      </TabsTrigger>
-                      <TabsTrigger value="notes">
-                        <FileText className="h-4 w-4 mr-2" />
-                        Notes
-                      </TabsTrigger>
-                    </TabsList>
-                    </Tabs>
+                  <Tabs value={activeChannel} onValueChange={setActiveChannel}>
+                    <TabsList>
+                    <TabsTrigger value="whatsapp">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      WhatsApp
+                    </TabsTrigger>
+                    <TabsTrigger value="email">
+                      <Mail className="h-4 w-4 mr-2" />
+                      Email
+                    </TabsTrigger>
+                    <TabsTrigger value="instagram">
+                      <Instagram className="h-4 w-4 mr-2" />
+                      Instagram
+                    </TabsTrigger>
+                    <TabsTrigger value="facebook">
+                      <Facebook className="h-4 w-4 mr-2" />
+                      Facebook
+                    </TabsTrigger>
+                    <TabsTrigger value="notes">
+                      <FileText className="h-4 w-4 mr-2" />
+                      Notes
+                    </TabsTrigger>
+                  </TabsList>
+                  </Tabs>
                     {currentUser?.role === 'ADMIN' && conversationId && (
                       <Button
                         variant="ghost"

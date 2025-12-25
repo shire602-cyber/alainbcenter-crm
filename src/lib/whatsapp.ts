@@ -83,15 +83,13 @@ export async function sendTextMessage(
   const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
 
   const normalizedPhone = normalizeToE164(toE164)
-  // WhatsApp Cloud API requires phone number WITHOUT + prefix in the 'to' field
-  const phoneWithoutPlus = normalizedPhone.startsWith('+') ? normalizedPhone.substring(1) : normalizedPhone
 
   const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`
 
   const payload = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to: phoneWithoutPlus,
+    to: normalizedPhone,
     type: 'text',
     text: {
       preview_url: false,
@@ -156,8 +154,6 @@ export async function sendTemplateMessage(
   const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
 
   const normalizedPhone = normalizeToE164(toE164)
-  // WhatsApp Cloud API requires phone number WITHOUT + prefix in the 'to' field
-  const phoneWithoutPlus = normalizedPhone.startsWith('+') ? normalizedPhone.substring(1) : normalizedPhone
 
   const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`
 
@@ -246,8 +242,6 @@ export async function sendMediaMessage(
   const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
 
   const normalizedPhone = normalizeToE164(toE164)
-  // WhatsApp Cloud API requires phone number WITHOUT + prefix in the 'to' field
-  const phoneWithoutPlus = normalizedPhone.startsWith('+') ? normalizedPhone.substring(1) : normalizedPhone
 
   const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${phoneNumberId}/messages`
 
@@ -255,7 +249,7 @@ export async function sendMediaMessage(
   let payload: any = {
     messaging_product: 'whatsapp',
     recipient_type: 'individual',
-    to: phoneWithoutPlus,
+    to: normalizedPhone,
     type: mediaType,
   }
 
