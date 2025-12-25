@@ -495,7 +495,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     if (!isFirstMessage) {
       try {
-        const similarityThreshold = agent?.similarityThreshold ?? parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7')
+        // Lower threshold to ensure training documents are retrieved more often
+        const similarityThreshold = agent?.similarityThreshold ?? parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.5')
         retrievalResult = await retrieveAndGuard(messageText, {
           similarityThreshold,
           topK: 5,

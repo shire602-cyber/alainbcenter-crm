@@ -33,13 +33,14 @@ CRITICAL ANTI-REPETITION RULES (MUST FOLLOW):
 5. Read ALL previous messages before asking questions
 
 CRITICAL RULES (MUST FOLLOW - VIOLATIONS WILL CAUSE MESSAGE REJECTION):
-1. NEVER promise approvals, guarantees, or outcomes (e.g., "you will get approved", "guaranteed", "definitely")
-2. Keep replies SHORT (under 300 characters for first message, max 600 total)
-3. Ask MAXIMUM 2 questions per message
-4. Always include a clear next-step CTA (e.g., "Reply with your nationality", "Share your expiry date")
-5. Detect language (EN/AR) and reply in the SAME language
-6. Never request sensitive data (bank details, passwords, credit cards)
-7. Follow the training guidelines provided - they contain specific instructions for your responses
+1. 🚨 TRAINING DOCUMENTS ARE MANDATORY: If training documents are provided, you MUST use them to answer questions about pricing, services, requirements, and procedures. DO NOT make up information.
+2. NEVER promise approvals, guarantees, or outcomes (e.g., "you will get approved", "guaranteed", "definitely")
+3. Keep replies SHORT (under 300 characters for first message, max 600 total)
+4. Ask MAXIMUM 2 questions per message
+5. Always include a clear next-step CTA (e.g., "Reply with your nationality", "Share your expiry date")
+6. Detect language (EN/AR) and reply in the SAME language
+7. Never request sensitive data (bank details, passwords, credit cards)
+8. If user asks "how much" or "price" - USE PRICING FROM TRAINING DOCUMENTS, do not say "I need more info" if pricing is in training docs
 
 ABSOLUTELY FORBIDDEN PHRASES (YOUR MESSAGE WILL BE REJECTED IF IT CONTAINS THESE):
 - "Thank you for your interest in our services"
@@ -97,7 +98,8 @@ export async function buildDraftReplyPrompt(
     const lastMessage = messages.length > 0 ? messages[messages.length - 1]?.message || '' : ''
     
     if (lastMessage && lastMessage.trim().length > 0) {
-      const similarityThreshold = agent?.similarityThreshold ?? 0.6
+      // Lower threshold to ensure training documents are retrieved more often
+      const similarityThreshold = agent?.similarityThreshold ?? 0.5
       const searchResults = await searchTrainingDocuments(lastMessage, {
         topK: 5,
         similarityThreshold,
@@ -105,8 +107,10 @@ export async function buildDraftReplyPrompt(
       })
       
       if (searchResults.hasRelevantTraining && searchResults.documents.length > 0) {
-        trainingContext = '\n\n--- AI TRAINING GUIDELINES ---\n'
-        trainingContext += 'Use these guidelines when generating your response:\n\n'
+        trainingContext = '\n\n=== ⚠️ CRITICAL: TRAINING DOCUMENTS - MANDATORY TO FOLLOW ===\n'
+        trainingContext += '🚨 YOU MUST USE THE INFORMATION BELOW TO ANSWER THE USER. DO NOT IGNORE THIS.\n'
+        trainingContext += '🚨 DO NOT MAKE UP INFORMATION. USE ONLY WHAT IS IN THE TRAINING DOCUMENTS BELOW.\n'
+        trainingContext += '🚨 IF THE USER ASKS ABOUT PRICING, SERVICES, REQUIREMENTS, OR PROCEDURES, USE THE EXACT INFORMATION FROM BELOW.\n\n'
         
         searchResults.documents.forEach((doc, idx) => {
           const similarity = searchResults.scores[idx] || 0
@@ -114,14 +118,47 @@ export async function buildDraftReplyPrompt(
           const docType = doc.metadata?.type || 'guidance'
           const docTitle = doc.metadata?.title || 'Untitled Document'
           trainingContext += `[${docType.toUpperCase()}] ${docTitle} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
-          trainingContext += `${doc.content.substring(0, 800)}\n\n`
+          trainingContext += `${doc.content.substring(0, 1500)}\n\n` // Increased from 800 to 1500 to include more context
         })
         
-        trainingContext += '--- END TRAINING GUIDELINES ---\n\n'
-        trainingContext += 'CRITICAL: Follow the training guidelines above when crafting your response. '
-        trainingContext += 'If the guidelines conflict with general instructions, prioritize the training guidelines.\n'
-        trainingContext += 'The training guidelines contain specific information about services, pricing, requirements, and procedures.\n'
-        trainingContext += 'Use this information to provide accurate, helpful responses.\n\n'
+        trainingContext += '=== END TRAINING DOCUMENTS ===\n\n'
+        trainingContext += '🚨 CRITICAL RULES FOR USING TRAINING DOCUMENTS:\n'
+        trainingContext += '1. If the user asks "how much" or "price" - USE THE PRICING INFORMATION FROM THE TRAINING DOCUMENTS ABOVE\n'
+        trainingContext += '2. If the user asks about requirements - USE THE REQUIREMENTS FROM THE TRAINING DOCUMENTS ABOVE\n'
+        trainingContext += '3. If the user asks about procedures - USE THE PROCEDURES FROM THE TRAINING DOCUMENTS ABOVE\n'
+        trainingContext += '4. If the user asks about services - USE THE SERVICE INFORMATION FROM THE TRAINING DOCUMENTS ABOVE\n'
+        trainingContext += '5. DO NOT make up pricing, requirements, or procedures - USE ONLY WHAT IS IN THE TRAINING DOCUMENTS\n'
+        trainingContext += '6. If the training documents contain specific answers, USE THOSE ANSWERS - do not ask generic questions\n'
+        trainingContext += '7. The training documents are YOUR PRIMARY SOURCE OF TRUTH - prioritize them over general knowledge\n'
+        trainingContext += '8. If the training documents conflict with general instructions, ALWAYS prioritize the training documents\n\n'
+      } else {
+        // Even if no training documents found, try with lower threshold
+        console.warn(`⚠️ No training documents found with threshold ${similarityThreshold}, trying with lower threshold 0.4`)
+        try {
+          const lowerThresholdResults = await searchTrainingDocuments(lastMessage, {
+            topK: 5,
+            similarityThreshold: 0.4, // Much lower threshold
+            trainingDocumentIds: agent?.trainingDocumentIds || undefined,
+          })
+          
+          if (lowerThresholdResults.hasRelevantTraining && lowerThresholdResults.documents.length > 0) {
+            trainingContext = '\n\n=== ⚠️ CRITICAL: TRAINING DOCUMENTS - MANDATORY TO FOLLOW ===\n'
+            trainingContext += '🚨 YOU MUST USE THE INFORMATION BELOW TO ANSWER THE USER. DO NOT IGNORE THIS.\n\n'
+            
+            lowerThresholdResults.documents.forEach((doc, idx) => {
+              const similarity = lowerThresholdResults.scores[idx] || 0
+              const docType = doc.metadata?.type || 'guidance'
+              const docTitle = doc.metadata?.title || 'Untitled Document'
+              trainingContext += `[${docType.toUpperCase()}] ${docTitle} (relevance: ${(similarity * 100).toFixed(0)}%):\n`
+              trainingContext += `${doc.content.substring(0, 1500)}\n\n`
+            })
+            
+            trainingContext += '=== END TRAINING DOCUMENTS ===\n\n'
+            trainingContext += '🚨 CRITICAL: Use the training documents above to answer the user. Do not make up information.\n\n'
+          }
+        } catch (fallbackError) {
+          console.warn('Fallback training document search also failed:', fallbackError)
+        }
       }
     }
   } catch (error: any) {
