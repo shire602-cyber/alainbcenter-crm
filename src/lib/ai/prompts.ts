@@ -562,7 +562,7 @@ export function buildModeSpecificDraftPrompt(
 - Provides transparent pricing information (if available) or offers a consultation
 - Highlights value and what's included
 - Offers to customize based on their needs
-- Includes a clear next step (e.g., "Schedule a call" or "Reply for detailed quote")`
+- Includes a clear next step (e.g., "What's your nationality?" or "Are you inside or outside UAE?")`
       break
     case 'REMIND':
       modeInstructions = `Generate a REMINDER message that:
@@ -575,7 +575,7 @@ export function buildModeSpecificDraftPrompt(
       break
     case 'BOOK_CALL':
       modeInstructions = `Generate a CALL BOOKING message that:
-- Invites them to schedule a call or consultation
+- Engages with helpful information and asks relevant questions
 - Highlights the benefits of speaking directly
 - Makes it easy to book (e.g., "Reply with your preferred time" or "Click here to book")
 - Suggests available time slots if possible
