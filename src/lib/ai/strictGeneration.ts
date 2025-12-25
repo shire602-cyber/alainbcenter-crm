@@ -41,11 +41,44 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
     }
   }
   
-  // Extract location
+  // Extract location (for visas only - inside/outside UAE)
   if (allText.includes('inside') || allText.includes('in uae') || allText.includes('im inside')) {
-    provided.location = 'inside'
+    // Only set location if this is a visa question, not business setup
+    if (!allText.includes('license') && !allText.includes('business setup') && !allText.includes('trading license')) {
+      provided.location = 'inside'
+    }
   } else if (allText.includes('outside') || allText.includes('outside uae') || allText.includes('im outside')) {
-    provided.location = 'outside'
+    // Only set location if this is a visa question, not business setup
+    if (!allText.includes('license') && !allText.includes('business setup') && !allText.includes('trading license')) {
+      provided.location = 'outside'
+    }
+  }
+  
+  // Extract mainland/freezone (for business setup/license only)
+  if (allText.includes('mainland')) {
+    provided.mainland = true
+    provided.freezone = false
+  } else if (allText.includes('freezone') || allText.includes('free zone')) {
+    provided.freezone = true
+    provided.mainland = false
+  }
+  
+  // Extract name
+  const namePatterns = [
+    /(?:my name is|i'm|i am|name is|call me|it's|its)\s+([a-z\s]{2,30})/i,
+    /^([a-z\s]{2,30})$/i, // If message is just a name
+  ]
+  for (const pattern of namePatterns) {
+    const match = allText.match(pattern)
+    if (match && match[1]) {
+      const potentialName = match[1].trim()
+      // Exclude common words that aren't names
+      if (potentialName.length >= 2 && potentialName.length <= 30 && 
+          !['hi', 'hello', 'hey', 'yes', 'no', 'ok', 'okay', 'thanks', 'thank you'].includes(potentialName.toLowerCase())) {
+        provided.name = potentialName
+        break
+      }
+    }
   }
   
   // Extract service
@@ -59,7 +92,7 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
     provided.service = 'investor_visa'
   } else if (allText.includes('golden visa')) {
     provided.service = 'golden_visa'
-  } else if (allText.includes('business setup') || allText.includes('business setup')) {
+  } else if (allText.includes('business setup') || allText.includes('license') || allText.includes('trading license')) {
     provided.service = 'business_setup'
   }
   
@@ -115,23 +148,36 @@ export async function generateStrictAIReply(
     providedInfo.service = lockedService
   }
   
-  // Retrieve training documents
+  // Retrieve training documents - FORCE retrieval with very low threshold
   let trainingDocs: Array<{ title: string; content: string; type: string }> = []
   try {
-    const retrievalResult = await searchTrainingDocuments(currentMessage, {
-      similarityThreshold: 0.5,
+    // Try with 0.25 threshold first
+    let retrievalResult = await searchTrainingDocuments(currentMessage, {
+      similarityThreshold: 0.25,
       topK: 5,
       trainingDocumentIds: agent?.trainingDocumentIds || undefined,
     })
     
+    // If no results, try with even lower threshold (0.1) to force retrieval
+    if (retrievalResult.documents.length === 0) {
+      console.log(`⚠️ [STRICT-AI] No docs at 0.25 threshold, trying 0.1...`)
+      retrievalResult = await searchTrainingDocuments(currentMessage, {
+        similarityThreshold: 0.1,
+        topK: 5,
+        trainingDocumentIds: agent?.trainingDocumentIds || undefined,
+      })
+    }
+    
     trainingDocs = retrievalResult.documents.map((doc: any) => ({
       title: doc.title || 'Training Document',
-      content: doc.content.substring(0, 1500),
+      content: doc.content.substring(0, 2000), // Increased to 2000 chars for more context
       type: doc.type || 'general',
     }))
+    
+    console.log(`📚 [STRICT-AI] Retrieved ${trainingDocs.length} training documents`)
   } catch (retrievalError) {
-    console.warn('Failed to retrieve training documents:', retrievalError)
-    // Continue without training docs
+    console.warn('⚠️ [STRICT-AI] Failed to retrieve training documents:', retrievalError)
+    // Continue without training docs, but log warning
   }
   
   // Build strict prompt context

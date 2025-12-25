@@ -61,7 +61,11 @@ FORBIDDEN IN CUSTOMER MESSAGES (NEVER SEND):
 - Dates not provided by customer or in database
 - Service confusion (don't say "visit visa" if customer asked "freelance visa")
 
-SERVICE PRICING RULES (USE EXACTLY - DO NOT INVENT):
+SERVICE PRICING RULES (CRITICAL - ONLY USE IF IN TRAINING DOCUMENTS):
+
+⚠️ NEVER INVENT PRICING - If pricing is not in training documents, set needsHuman=true
+⚠️ NEVER mention specific prices (like "AED 15,000") unless it's EXACTLY in the training documents
+⚠️ If training documents don't have pricing for a service, DO NOT guess - set needsHuman=true and offer to connect with a team member
 
 VISIT VISA:
 - Indians/Filipinos/Vietnam/Sri Lanka: AED 400 (30d), AED 750 (60d)
@@ -99,6 +103,8 @@ QUALIFICATION (ONLY 3-4 QUESTIONS MAX):
 2. Nationality (if not provided)
 3. Service-specific questions:
    - For BUSINESS SETUP / LICENSE: Ask "Freezone or Mainland?" (NOT inside/outside UAE)
+     * CRITICAL: If customer already answered "mainland" or "freezone", DO NOT ask again
+     * CRITICAL: Business licenses do NOT have "year" options - do NOT ask "1 year" or "2 year" license
    - For VISAS: Ask "Inside UAE or outside UAE?"
    - For RENEWALS: Ask expiry date
 4. When to start? (ASAP / this week / this month) - only if needed
@@ -153,11 +159,15 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   // Add provided information
   if (Object.keys(providedInfo).length > 0) {
     prompt += `\nINFORMATION ALREADY PROVIDED (DO NOT ASK AGAIN):\n`
+    if (providedInfo.name) prompt += `- Full Name: ${providedInfo.name}\n`
     if (providedInfo.nationality) prompt += `- Nationality: ${providedInfo.nationality}\n`
     if (providedInfo.location) prompt += `- Location: ${providedInfo.location} UAE\n`
     if (providedInfo.service) prompt += `- Service: ${providedInfo.service}\n`
     if (providedInfo.expiryDate) prompt += `- Expiry Date: ${providedInfo.expiryDate}\n`
-    prompt += `\nCRITICAL: Do NOT ask for information already listed above.\n\n`
+    if (providedInfo.mainland) prompt += `- License Type: MAINLAND (already answered)\n`
+    if (providedInfo.freezone) prompt += `- License Type: FREEZONE (already answered)\n`
+    prompt += `\nCRITICAL: Do NOT ask for information already listed above.\n`
+    prompt += `CRITICAL: If "License Type: MAINLAND" or "License Type: FREEZONE" is listed, DO NOT ask "Freezone or Mainland?" again.\n\n`
   }
   
   // Add locked service if exists
@@ -168,11 +178,19 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   
   // Add training documents
   if (trainingDocs && trainingDocs.length > 0) {
-    prompt += `TRAINING DOCUMENTS (USE FOR PRICING/REQUIREMENTS):\n`
+    prompt += `TRAINING DOCUMENTS (MANDATORY - USE FOR PRICING/REQUIREMENTS):\n`
     trainingDocs.forEach((doc, idx) => {
-      prompt += `[${doc.type.toUpperCase()}] ${doc.title}:\n${doc.content.substring(0, 1000)}\n\n`
+      prompt += `[${doc.type.toUpperCase()}] ${doc.title}:\n${doc.content.substring(0, 2000)}\n\n`
     })
-    prompt += `CRITICAL: Use pricing and requirements from training documents above. Do NOT invent.\n\n`
+    prompt += `CRITICAL RULES FOR TRAINING DOCUMENTS:\n`
+    prompt += `1. Use pricing ONLY if it's EXACTLY stated in the documents above\n`
+    prompt += `2. If pricing is NOT in the documents, DO NOT invent - set needsHuman=true\n`
+    prompt += `3. If you see "AED 15,000" or any specific price, it MUST be in the documents above - otherwise DO NOT mention it\n`
+    prompt += `4. Requirements and procedures MUST come from documents above\n\n`
+  } else {
+    prompt += `⚠️ WARNING: NO TRAINING DOCUMENTS FOUND\n`
+    prompt += `CRITICAL: Since no training documents are available, DO NOT invent pricing.\n`
+    prompt += `Set needsHuman=true and offer to connect with a team member for accurate pricing.\n\n`
   }
   
   // Add current message
@@ -182,8 +200,11 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   if (lockedService === 'business_setup' || providedInfo.service === 'business_setup' || 
       currentMessage.toLowerCase().includes('license') || currentMessage.toLowerCase().includes('trading license')) {
     prompt += `SERVICE CONTEXT: This is a BUSINESS SETUP / LICENSE inquiry.
-CRITICAL: Ask "Freezone or Mainland?" NOT "inside/outside UAE"
-Inside/outside UAE is ONLY for visa questions, NOT for business setup.\n\n`
+CRITICAL RULES:
+1. Ask "Freezone or Mainland?" NOT "inside/outside UAE" (inside/outside is ONLY for visas)
+2. If customer already answered "mainland" or "freezone", DO NOT ask again - proceed with next step
+3. Business licenses do NOT have "year" options - do NOT ask "1 year" or "2 year" license
+4. Use pricing ONLY from training documents - if not available, set needsHuman=true\n\n`
   }
   
   prompt += `Generate a WhatsApp reply in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}.
@@ -191,13 +212,17 @@ Inside/outside UAE is ONLY for visa questions, NOT for business setup.\n\n`
 REQUIREMENTS:
 1. Respond directly to: "${currentMessage}"
 2. Use information from conversation history and training documents
-3. Do NOT ask for information already provided
+3. Do NOT ask for information already provided (check "INFORMATION ALREADY PROVIDED" section above)
 4. If service is locked (${lockedService || 'none'}), stay on that service
-5. For BUSINESS SETUP/LICENSE: Ask "Freezone or Mainland?" NOT "inside/outside UAE"
+5. For BUSINESS SETUP/LICENSE: 
+   - Ask "Freezone or Mainland?" NOT "inside/outside UAE"
+   - If customer already answered "mainland" or "freezone", DO NOT ask again
+   - Do NOT ask about "year" options (licenses don't have year options)
 6. ALWAYS ask for full name if not provided yet
 7. Return ONLY valid JSON with the structure specified above
 8. Keep reply under 300 characters, warm and helpful
 9. If training documents have pricing for this service, USE IT - don't ask for more info if pricing is available
+10. NEVER invent pricing - if pricing not in training docs, set needsHuman=true
 
 Return ONLY the JSON object, no explanations.`
   
