@@ -149,9 +149,10 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
 
   if (!hasOutboundMessages) {
     // FIRST MESSAGE - Always greet and collect basic info
+    const agentName = agent?.name || 'an assistant'
     prompt += `\nThis is the FIRST message from the customer. Generate a friendly greeting that:
 1. Welcomes them to Al Ain Business Center
-2. Introduces yourself briefly (keep it very short)
+2. Introduces yourself by name: "I'm ${agentName}" (use the agent name: ${agentName})
 3. Asks for ONLY ${maxQuestions} piece${maxQuestions > 1 ? 's' : ''} of information:
    - Full name
    ${maxQuestions > 1 ? '- What service do you need? (examples: Family Visa, Business Setup, Visit Visa, etc. - NEVER mention Employment Visa)\n' : ''}
@@ -162,29 +163,41 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
 8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
 ${agent?.customGreeting ? `9. Use or adapt this greeting style: "${agent.customGreeting}"\n` : ''}
 
-Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm Hamdi. To help you, please share: 1) Your full name${maxQuestions > 1 ? ' 2) What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)' : ''}"
+Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm ${agentName}. To help you, please share: 1) Your full name${maxQuestions > 1 ? ' 2) What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)' : ''}"
 
-Reply only with the message text, no explanations or metadata.`
+CRITICAL: You MUST include your name "${agentName}" in the greeting. Reply only with the message text, no explanations or metadata.`
   } else {
     // FOLLOW-UP MESSAGE
-    const lastUserMessage = messages.filter(m => m.direction === 'INBOUND' || m.direction === 'inbound').slice(-1)[0]?.message || ''
+    // Get the most recent inbound message (sort by createdAt desc, take first)
+    const inboundMessages = messages
+      .filter(m => m.direction === 'INBOUND' || m.direction === 'inbound')
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+    const lastUserMessage = inboundMessages[0]?.message || ''
+    
+    // Check if documents are uploaded
+    const hasDocuments = lead && lead.id ? await checkIfLeadHasDocuments(lead.id) : false
+    
+    const agentName = agent?.name || 'an assistant'
     prompt += `\nIMPORTANT: The user's latest message is: "${lastUserMessage}"
+${hasDocuments ? '\nNOTE: The customer has uploaded documents. If they are asking about documents, acknowledge that you have received them.\n' : ''}
 
 Generate a WhatsApp-ready reply that:
 1. DIRECTLY responds to what the user just said - address their specific request/question/statement
 2. If they mentioned a service (e.g., "visit visa", "family visa"), acknowledge it and provide relevant next steps
 3. If they asked a question, answer it directly and briefly
-4. If they provided information, acknowledge it and ask for the NEXT piece of information needed
-5. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (NOT ${maxQuestions + 2}-${maxQuestions + 4}, MAX ${maxQuestions})
-6. Highlights urgency if expiry date is close
-7. Includes a clear CTA (e.g., "Reply with your nationality", "Share your expiry date")
-8. Keeps it SHORT (under ${maxMessageLength} characters, max ${maxTotalLength} total)
-9. NEVER promises approvals, guarantees, or outcomes
-10. Uses ${tone} tone
-11. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
-${agent?.customSignoff ? `12. End with or adapt this signoff style: "${agent.customSignoff}"\n` : ''}
+4. If they asked about documents${hasDocuments ? ', acknowledge that documents have been received and are being reviewed' : ', let them know what documents are needed'}
+5. If they provided information, acknowledge it and ask for the NEXT piece of information needed
+6. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (NOT ${maxQuestions + 2}-${maxQuestions + 4}, MAX ${maxQuestions})
+7. Highlights urgency if expiry date is close
+8. Includes a clear CTA (e.g., "Reply with your nationality", "Share your expiry date")
+9. Keeps it SHORT (under ${maxMessageLength} characters, max ${maxTotalLength} total)
+10. NEVER promises approvals, guarantees, or outcomes
+11. Uses ${tone} tone
+12. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+13. Signs off with your name: "${agentName}" (e.g., "Best regards, ${agentName}" or "Thanks, ${agentName}")
+${agent?.customSignoff ? `14. End with or adapt this signoff style: "${agent.customSignoff}"\n` : ''}
 
-CRITICAL: Do NOT send a generic message. Your reply MUST be specific to what the user just said. If they said "visit visa", respond about visit visas. If they said "I want visa", acknowledge their interest and ask which type of visa.
+CRITICAL: Do NOT send a generic message. Your reply MUST be specific to what the user just said. If they said "visit visa", respond about visit visas. If they said "I want visa", acknowledge their interest and ask which type of visa. Always include your name "${agentName}" in the signoff.
 
 Reply only with the message text, no explanations or metadata.`
   }

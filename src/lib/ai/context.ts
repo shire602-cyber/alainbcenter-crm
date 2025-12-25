@@ -223,6 +223,18 @@ export async function buildConversationContextFromLead(
     take: 10,
   })
 
+  // Also check for documents
+  const documents = await prisma.document.findMany({
+    where: { leadId: lead.id },
+    orderBy: { createdAt: 'desc' },
+    take: 5,
+    select: {
+      fileName: true,
+      category: true,
+      createdAt: true,
+    },
+  })
+
   // Combine and sort messages
   const allMessages = [
     ...conversationMessages.map((msg: any) => ({
@@ -266,6 +278,11 @@ export async function buildConversationContextFromLead(
       aiNotes: lead.aiNotes,
     },
     messages: allMessages,
+    documents: documents.map(doc => ({
+      fileName: doc.fileName,
+      category: doc.category || 'OTHER',
+      createdAt: doc.createdAt,
+    })),
     companyIdentity: 'Al Ain Business Center – UAE business setup & visa services',
   }
 
