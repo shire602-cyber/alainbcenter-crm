@@ -98,6 +98,9 @@ export async function sendTextMessage(
   }
 
   try {
+    console.log(`📤 [WHATSAPP-SEND] Sending to ${normalizedPhone} via ${phoneNumberId}`)
+    console.log(`📤 [WHATSAPP-SEND] Payload:`, JSON.stringify(payload).substring(0, 200))
+    
     const response = await fetch(url, {
       method: 'POST',
       headers: {
@@ -107,27 +110,35 @@ export async function sendTextMessage(
       body: JSON.stringify(payload),
     })
 
+    console.log(`📡 [WHATSAPP-SEND] Response status: ${response.status} ${response.statusText}`)
+    
     const data = await response.json()
+    console.log(`📡 [WHATSAPP-SEND] Response data:`, JSON.stringify(data).substring(0, 500))
 
     if (!response.ok) {
       const error = data as WhatsAppError
-      throw new Error(
-        error.error?.message || `WhatsApp API error: ${response.status} ${response.statusText}`
-      )
+      const errorMessage = error.error?.message || `WhatsApp API error: ${response.status} ${response.statusText}`
+      console.error(`❌ [WHATSAPP-SEND] API error:`, errorMessage)
+      console.error(`❌ [WHATSAPP-SEND] Full error:`, JSON.stringify(error))
+      throw new Error(errorMessage)
     }
 
     const result = data as WhatsAppResponse
     const messageId = result.messages?.[0]?.id
 
     if (!messageId) {
+      console.error(`❌ [WHATSAPP-SEND] No message ID in response:`, JSON.stringify(result))
       throw new Error('WhatsApp API did not return a message ID')
     }
 
+    console.log(`✅ [WHATSAPP-SEND] Success! Message ID: ${messageId}`)
     return {
       messageId,
       waId: result.contacts?.[0]?.wa_id,
     }
   } catch (error: any) {
+    console.error(`❌ [WHATSAPP-SEND] Exception caught:`, error.message)
+    console.error(`❌ [WHATSAPP-SEND] Stack:`, error.stack)
     if (error.message.includes('WhatsApp')) {
       throw error
     }
