@@ -146,7 +146,8 @@ function analyzeConversationState(lead: any, contact: any, recentMessages: any[]
  */
 export async function generateAIAutoresponse(
   context: AIMessageContext,
-  agent?: import('./ai/agentProfile').AgentProfile
+  agent?: import('./ai/agentProfile').AgentProfile,
+  retrievalResult?: any // Optional: pre-retrieved training documents
 ): Promise<{
   text: string
   success: boolean
