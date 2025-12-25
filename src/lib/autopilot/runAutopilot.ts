@@ -290,6 +290,7 @@ async function runFollowupDueRule(
         contactId: lead.contactId,
         status: 'sent',
         message,
+        meta: sendResult.raw,
       })
     } else {
       results.failed++
@@ -641,6 +642,7 @@ async function runOverdueRule(
         contactId: lead.contactId,
         status: 'sent',
         message,
+        meta: sendResult.raw,
       })
     } else {
       results.failed++
@@ -743,7 +745,6 @@ export async function runAutopilot(
     timestamp: now.toISOString(),
   }
 }
-
 
 
 
