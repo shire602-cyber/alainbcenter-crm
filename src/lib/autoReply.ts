@@ -787,17 +787,28 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     }
     
     if (!aiResult || !aiResult.text) {
+      console.error(`❌ [AUTO-REPLY] CRITICAL: No reply text generated!`)
+      console.error(`❌ [AUTO-REPLY] aiResult:`, {
+        exists: !!aiResult,
+        success: aiResult?.success,
+        hasText: !!aiResult?.text,
+        error: aiResult?.error,
+      })
+      
       // Last resort: create task if we can't generate any reply
       try {
         await createAgentTask(leadId, 'complex_query', {
           messageText,
         })
+        console.log(`📝 [AUTO-REPLY] Created agent task as fallback`)
       } catch (error: any) {
-        console.error('Failed to create agent task:', error.message)
+        console.error('❌ [AUTO-REPLY] Failed to create agent task:', error.message)
       }
       
       return { replied: false, error: 'Failed to generate any reply (AI and fallback both failed)' }
     }
+    
+    console.log(`✅ [AUTO-REPLY] Reply text generated: ${aiResult.text.length} chars`)
 
     // Step 9: Send reply immediately
     // At this point, aiResult.text is guaranteed to exist (checked above)
@@ -807,16 +818,29 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     if (channelUpper === 'WHATSAPP' && phoneNumber) {
       try {
-        console.log(`📤 Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
-        console.log(`📝 Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
+        console.log(`📤 [SEND] Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
+        console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
+        console.log(`🚀 [SEND] About to call sendTextMessage - this is the critical send step!`)
         
-        const result = await sendTextMessage(phoneNumber, replyText)
+        let result
+        try {
+          result = await sendTextMessage(phoneNumber, replyText)
+          console.log(`✅ [SEND] sendTextMessage returned successfully`)
+        } catch (sendError: any) {
+          console.error(`❌ [SEND] CRITICAL ERROR: sendTextMessage threw exception!`)
+          console.error(`❌ [SEND] Error: ${sendError.message}`)
+          console.error(`❌ [SEND] Stack:`, sendError.stack)
+          throw sendError
+        }
         
-        console.log(`📨 WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
+        console.log(`📨 [SEND] WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
         
         if (!result || !result.messageId) {
+          console.error(`❌ [SEND] CRITICAL: No message ID returned from WhatsApp API!`)
+          console.error(`❌ [SEND] Response:`, JSON.stringify(result))
           throw new Error('No message ID returned from WhatsApp API')
         }
+        console.log(`✅ [SEND] Message ID received: ${result.messageId}`)
 
         // Step 7: Save outbound message (conversation already loaded above)
         if (conversation) {
