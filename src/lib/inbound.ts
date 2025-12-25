@@ -142,13 +142,14 @@ export async function handleInboundMessage(
     })
 
     if (existingMessage) {
-      console.log(`⚠️ Duplicate message ${externalMessageId} detected - returning existing (NO auto-reply for duplicates)`)
+      console.log(`⚠️ [DUPLICATE] Message ${externalMessageId} already exists (ID: ${existingMessage.id}) - NO auto-reply for duplicates`)
       if (!existingMessage.conversation.lead) {
         throw new Error('Message conversation has no associated lead')
       }
       
       // NO auto-reply for duplicates - user requirement: "duplicate messages from customer shouldn't get replies"
-      // Just return the existing message
+      // But log why we're skipping so we can debug
+      console.log(`⏭️ [AUTO-REPLY] SKIPPED: Duplicate message detected via externalMessageId check (${externalMessageId})`)
       
       return {
         lead: existingMessage.conversation.lead,
@@ -311,11 +312,15 @@ export async function handleInboundMessage(
   }
 
   // Step 5: Find or create Conversation
+  // CRITICAL: Always find by contactId + channel first (to prevent duplicate conversations)
+  // Only use externalId as a secondary filter if provided
   let conversation = await prisma.conversation.findFirst({
     where: {
       contactId: contact.id,
       channel: channelLower,
-      ...(externalId ? { externalId } : {}),
+    },
+    orderBy: {
+      lastMessageAt: 'desc', // Get most recent conversation if multiple exist
     },
   })
 
@@ -332,11 +337,25 @@ export async function handleInboundMessage(
         unreadCount: 1,
       },
     })
-    console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}`)
+    console.log(`✅ Created new conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
   } else {
-    // Don't update conversation here - will be updated after message creation
-    // This prevents race conditions with duplicate detection
-    console.log(`📋 Found existing conversation: ${conversation.id}`)
+    // Update externalId if we have one and it's missing (for WhatsApp phone number ID tracking)
+    if (externalId && !conversation.externalId) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { externalId },
+      })
+      console.log(`📝 Updated conversation ${conversation.id} with externalId: ${externalId}`)
+    }
+    // Ensure leadId is set (in case conversation was created before lead)
+    if (conversation.leadId !== lead.id) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { leadId: lead.id },
+      })
+      console.log(`📝 Updated conversation ${conversation.id} with leadId: ${lead.id}`)
+    }
+    console.log(`📋 Found existing conversation: ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
   }
 
   // Step 6: Create Message record (with idempotency check via providerMessageId)
@@ -563,6 +582,19 @@ export async function handleInboundMessage(
   // CRITICAL: This must run even if previous steps had errors
   // BUT: Skip auto-reply for duplicate messages (user requirement: "duplicate messages from customer shouldn't get replies")
   // Run synchronously (awaited) to ensure it executes, but wrapped in try-catch so it doesn't fail the webhook
+  console.log(`🔍 [AUTO-REPLY] Pre-check:`, {
+    isDuplicate,
+    hasMessage: !!message,
+    hasBody: !!message?.body,
+    bodyLength: message?.body?.length || 0,
+    hasLead: !!lead,
+    leadId: lead?.id,
+    hasContact: !!contact,
+    contactId: contact?.id,
+    messageId: message?.id,
+    externalMessageId,
+  })
+  
   if (!isDuplicate && message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
     try {
       console.log(`🤖 [AUTO-REPLY] Starting auto-reply process for message ${message.id}`)

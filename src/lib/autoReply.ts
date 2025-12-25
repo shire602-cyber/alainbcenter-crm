@@ -418,8 +418,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     console.log(`📨 Message count for lead ${leadId}: ${messageCount} (isFirstMessage: ${isFirstMessage})`)
 
     // Step 7: Check if AI can respond (retriever-first chain)
+    // CRITICAL: User requirement - AI should ALWAYS reply unless it's clearly spam/abuse
     // Skip retriever check for first messages - always greet and collect info
-    // For follow-ups, only block if it's clearly out of scope (spam, abuse, etc.)
+    // For follow-ups, ONLY block if it's clearly spam/abuse (not just "no training found")
     let retrievalResult: any = null
     if (!isFirstMessage) {
       try {
@@ -431,69 +432,44 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           trainingDocumentIds: agent?.trainingDocumentIds || undefined,
         })
 
-        // Block if AI cannot respond AND requires human intervention
-        // This includes: no training found, subject tag mismatch, low similarity, errors, etc.
-        if (!retrievalResult.canRespond && retrievalResult.requiresHuman) {
-          // Mark lead and notify users for all out-of-scope queries
-          await markLeadRequiresHuman(leadId, retrievalResult.reason, messageText)
-          
-          const conversation = await prisma.conversation.findFirst({
-            where: {
-              contactId: contactId,
-              leadId: leadId,
-              channel: channel.toLowerCase(),
-            },
-          })
-          
-          await notifyAIUntrainedSubject(
-            leadId,
-            conversation?.id || null,
-            messageText,
-            retrievalResult.reason
-          )
-          
-          // Send suggested response if available, otherwise use default
-          if (retrievalResult.suggestedResponse) {
-            // Send the suggested response before blocking
-            try {
-              const { sendTextMessage } = await import('./whatsapp')
-              const phoneNumber = lead.contact?.phone || null
-              if (phoneNumber && channel.toUpperCase() === 'WHATSAPP') {
-                await sendTextMessage(phoneNumber, retrievalResult.suggestedResponse)
-                // Save the message
-                if (conversation) {
-                  await prisma.message.create({
-                    data: {
-                      conversationId: conversation.id,
-                      leadId: leadId,
-                      contactId: contactId,
-                      direction: 'OUTBOUND',
-                      channel: channel.toLowerCase(),
-                      type: 'text',
-                      body: retrievalResult.suggestedResponse,
-                      status: 'SENT',
-                      rawPayload: JSON.stringify({
-                        automation: true,
-                        autoReply: true,
-                        aiGenerated: false,
-                        requiresHuman: true,
-                        reason: retrievalResult.reason,
-                      }),
-                      sentAt: new Date(),
-                    },
-                  })
-                }
-              }
-            } catch (sendError: any) {
-              console.error('Failed to send suggested response:', sendError.message)
-            }
-          }
-          
-          return { replied: false, reason: retrievalResult.reason || 'Message requires human intervention' }
+        // CRITICAL FIX: Only block if it's clearly spam/abuse, NOT if training is missing
+        // User requirement: "AI should always reply, only escalate to human when it doesn't know what to do"
+        // "No training found" is NOT a reason to block - AI should still reply and ask for clarification
+        // Only block if the message itself is spam/abuse (detected by needsHumanAttention check above)
+        
+        // Check if message is spam/abuse first (this is the real blocker)
+        const spamCheck = needsHumanAttention(messageText, agent)
+        if (spamCheck.needsHuman) {
+          console.log(`🚫 Blocking auto-reply: Spam/abuse detected - ${spamCheck.reason}`)
+          return { replied: false, reason: spamCheck.reason }
         }
-        // If canRespond is false but requiresHuman is also false, log and continue
-        if (!retrievalResult.canRespond && !retrievalResult.requiresHuman) {
-          console.log(`⚠️ Retrieval result indicates cannot respond but doesn't require human - continuing anyway`)
+        
+        // If retrieval found relevant training, use it (will be included in prompt)
+        if (retrievalResult.canRespond) {
+          console.log(`✅ Retrieval found relevant training: ${retrievalResult.relevantDocuments.length} documents`)
+        } else {
+          // No training found or low similarity - but STILL REPLY (user requirement)
+          // Just log it for monitoring, but don't block
+          console.log(`⚠️ No relevant training found (similarity: ${retrievalResult.reason}), but continuing with reply (user requirement: always reply)`)
+          
+          // Log for monitoring but don't block
+          try {
+            await prisma.externalEventLog.create({
+              data: {
+                provider: 'auto-reply',
+                externalId: `no-training-${leadId}-${Date.now()}`,
+                payload: JSON.stringify({
+                  leadId,
+                  messageId,
+                  messageText: messageText.substring(0, 200),
+                  retrievalReason: retrievalResult.reason,
+                  action: 'continuing_with_reply',
+                }),
+              },
+            })
+          } catch (logError) {
+            console.warn('Failed to log no-training event:', logError)
+          }
         }
       } catch (retrievalError: any) {
         // If retrieval fails, log but ALWAYS continue - don't block replies
