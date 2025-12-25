@@ -162,24 +162,40 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
   const maxQuestions = agent?.maxQuestionsPerMessage || 2
 
   if (!hasOutboundMessages) {
-    // FIRST MESSAGE - Always greet and collect basic info
+    // FIRST MESSAGE - Respond naturally to what the user said
     const agentName = agent?.name || 'an assistant'
-    prompt += `\nThis is the FIRST message from the customer. Generate a friendly greeting that:
-1. Welcomes them to Al Ain Business Center
-2. Introduces yourself by name: "I'm ${agentName}" (MUST include: ${agentName})
-3. Asks for ONLY ${maxQuestions} piece${maxQuestions > 1 ? 's' : ''} of information:
-   - Full name
-   ${maxQuestions > 1 ? '- What service do you need? (examples: Family Visa, Business Setup, Visit Visa, etc. - NEVER mention Employment Visa)\n' : ''}
-4. Keeps it SHORT (under ${maxMessageLength} characters, ideally ${Math.floor(maxMessageLength * 0.75)})
-5. Uses friendly, warm tone
-6. NEVER promises approvals or guarantees
-7. NEVER mentions "Employment Visa" as an example
-8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
-${agent?.customGreeting ? `9. Use or adapt this greeting style: "${agent.customGreeting}"\n` : ''}
+    const lastUserMessage = messages.length > 0 
+      ? messages[messages.length - 1]?.message || ''
+      : ''
+    
+    prompt += `\n=== CRITICAL: FIRST MESSAGE REPLY ===
+This is the FIRST message from the customer. Their message was: "${lastUserMessage}"
 
-Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm ${agentName}. To help you, please share: 1) Your full name${maxQuestions > 1 ? ' 2) What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)' : ''}"
+YOU MUST:
+1. Respond DIRECTLY to what they said. If they said "HI" or "hello", greet them naturally. If they mentioned a service (like "family visa"), acknowledge it and respond about that service.
+2. NEVER use a template or generic message like "Welcome to Al Ain Business Center. Please share: 1. Your full name 2. What service..."
+3. NEVER ask for multiple pieces of information in a numbered list format
+4. Your reply must be UNIQUE and based on their actual message: "${lastUserMessage}"
+5. If they just said "HI" or "hello", respond with a friendly greeting and ask ONE simple question (not a numbered list)
+6. If they mentioned a service, acknowledge it and ask ONE follow-up question about that service
+7. Keep it SHORT (under ${maxMessageLength} characters)
+8. Use friendly, warm tone
+9. NEVER promises approvals or guarantees
+10. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+11. Sign off with your name: "${agentName}"
 
-CRITICAL: You MUST include your name "${agentName}" in the greeting. The greeting must start with "I'm ${agentName}" or similar. Reply only with the message text, no explanations or metadata.`
+CRITICAL: Your reply must be SPECIFIC to "${lastUserMessage}". Do NOT use a generic template or numbered list of questions.
+
+Example GOOD replies:
+- If they said "HI": "Hello! 👋 I'm ${agentName} from Al Ain Business Center. How can I help you today?"
+- If they said "family visa": "Great! I can help you with family visa services. What's your nationality?"
+- If they said "visit visa": "I'd be happy to help with visit visa. Are you currently in the UAE?"
+
+Example BAD replies (DO NOT USE):
+- "Welcome to Al Ain Business Center. Please share: 1. Your full name 2. What service..."
+- "Hi, thank you for your interest. To help you, please provide: 1) Full name 2) Service needed..."
+
+Reply only with the message text, no explanations or metadata.`
   } else {
     // FOLLOW-UP MESSAGE
     // Get the most recent inbound message - messages are sorted ascending, so last one is latest
@@ -198,10 +214,11 @@ CRITICAL: You MUST include your name "${agentName}" in the greeting. The greetin
 The user's LATEST message (most recent) is: "${lastUserMessage}"
 
 YOU MUST:
-1. Start your reply by acknowledging what they just said. For example:
+1. Start your reply by DIRECTLY acknowledging what they just said. Your FIRST sentence must respond to: "${lastUserMessage}"
    - If they said "visit visa" → "Great! I can help you with visit visa services."
    - If they said "how much visit visa?" → "For visit visa pricing, I need a few details..."
-   - If they said "hello" → "Hello! How can I assist you today?"
+   - If they said "hello" or "HI" → "Hello! How can I assist you today?"
+   - If they said "jama family visa somalia" → "I can help you with family visa for Somalia. What's your current situation?"
 
 2. NEVER send a generic message like "Hi, thank you for your interest. Please share: 1. What service... 2. Timeline..."
    This is WRONG and REPETITIVE. Your reply MUST be unique and based on what they just said.
@@ -210,27 +227,27 @@ YOU MUST:
 
 4. NEVER use saved messages or templates. Every reply must be freshly generated based on the current conversation and the latest inbound message.
 
-4. If they already mentioned a service (like "visit visa"), acknowledge it and ask for SPECIFIC next information needed for that service.
+5. If they already mentioned a service (like "family visa" or "visit visa"), acknowledge it SPECIFICALLY and ask for the NEXT specific piece of information needed for that service.
 
-5. Always sign off with your name: "${agentName}"
+6. Always sign off with your name: "${agentName}"
    Example: "Best regards, ${agentName}" or "Thanks, ${agentName}"
 
-${hasDocuments ? '6. NOTE: Documents have been uploaded. If they ask about documents, acknowledge receipt.\n' : ''}
+${hasDocuments ? '7. NOTE: Documents have been uploaded. If they ask about documents, acknowledge receipt.\n' : ''}
 === END CRITICAL INSTRUCTIONS ===\n\n
 
 Generate a WhatsApp-ready reply that:
-1. STARTS by directly acknowledging their latest message: "${lastUserMessage}"
-2. If they mentioned "visit visa" or asked about visit visa pricing, respond SPECIFICALLY about visit visas
+1. STARTS by directly acknowledging their latest message: "${lastUserMessage}" - Your first sentence MUST respond to this
+2. If they mentioned a service (like "family visa", "visit visa"), acknowledge it SPECIFICALLY and respond about that service
 3. If they asked a question (like "how much?"), answer it directly or explain what info you need to provide pricing
-4. If they provided information, acknowledge it and ask for the NEXT specific piece needed
-5. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing
+4. If they provided information, acknowledge it and ask for the NEXT specific piece needed (not a numbered list)
+5. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is still missing (but NOT as a numbered list)
 6. Keeps it SHORT (under ${maxMessageLength} characters)
 7. NEVER promises approvals or guarantees
 8. Uses ${tone} tone
 9. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
 10. MUST end with: "Best regards, ${agentName}" or similar with your name
 
-CRITICAL REMINDER: Your reply must be SPECIFIC to "${lastUserMessage}". Do NOT use a generic template.`
+CRITICAL REMINDER: Your reply must be SPECIFIC to "${lastUserMessage}". Do NOT use a generic template or numbered list format.`
 
     if (agent?.customSignoff) {
       prompt += `\n\nCustom signoff style: "${agent.customSignoff}"`
