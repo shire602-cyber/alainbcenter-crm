@@ -9,36 +9,86 @@ export interface AIConfig {
 /**
  * Get AI config from Integration settings or environment variable
  * Never expose to client-side code
+ * Priority: Groq → OpenAI → Anthropic
  */
 export async function getAIConfig(): Promise<AIConfig | null> {
   try {
-    // First, try to get from Integration settings
-    const integration = await prisma.integration.findUnique({
-      where: { name: 'openai' },
+    // Check Groq first (preferred for simple tasks)
+    const groqIntegration = await prisma.integration.findUnique({
+      where: { name: 'groq' },
     })
-
-    if (integration?.isEnabled && integration.apiKey) {
+    if (groqIntegration?.isEnabled && groqIntegration.apiKey) {
       let config: any = {}
       try {
-        config = integration.config ? JSON.parse(integration.config) : {}
+        config = groqIntegration.config ? JSON.parse(groqIntegration.config) : {}
       } catch {
         config = {}
       }
-
       return {
-        provider: (config.provider || 'openai') as 'openai' | 'groq' | 'anthropic',
-        model: config.model || 'gpt-4o-mini',
-        apiKey: integration.apiKey,
+        provider: 'groq',
+        model: config.model || 'llama-3.1-70b-versatile',
+        apiKey: groqIntegration.apiKey,
       }
     }
 
-    // Fallback to environment variable (legacy support)
-    const envKey = process.env.OPENAI_API_KEY
-    if (envKey) {
+    // Fallback to OpenAI
+    const openaiIntegration = await prisma.integration.findUnique({
+      where: { name: 'openai' },
+    })
+    if (openaiIntegration?.isEnabled && openaiIntegration.apiKey) {
+      let config: any = {}
+      try {
+        config = openaiIntegration.config ? JSON.parse(openaiIntegration.config) : {}
+      } catch {
+        config = {}
+      }
+      return {
+        provider: (config.provider || 'openai') as 'openai' | 'groq' | 'anthropic',
+        model: config.model || 'gpt-4o-mini',
+        apiKey: openaiIntegration.apiKey,
+      }
+    }
+
+    // Fallback to Anthropic
+    const anthropicIntegration = await prisma.integration.findUnique({
+      where: { name: 'anthropic' },
+    })
+    if (anthropicIntegration?.isEnabled && anthropicIntegration.apiKey) {
+      let config: any = {}
+      try {
+        config = anthropicIntegration.config ? JSON.parse(anthropicIntegration.config) : {}
+      } catch {
+        config = {}
+      }
+      return {
+        provider: 'anthropic',
+        model: config.model || 'claude-3-5-sonnet-20241022',
+        apiKey: anthropicIntegration.apiKey,
+      }
+    }
+
+    // Environment variable fallbacks (in priority order)
+    if (process.env.GROQ_API_KEY) {
+      return {
+        provider: 'groq',
+        model: 'llama-3.1-70b-versatile',
+        apiKey: process.env.GROQ_API_KEY,
+      }
+    }
+
+    if (process.env.OPENAI_API_KEY) {
       return {
         provider: 'openai',
         model: 'gpt-4o-mini',
-        apiKey: envKey,
+        apiKey: process.env.OPENAI_API_KEY,
+      }
+    }
+
+    if (process.env.ANTHROPIC_API_KEY) {
+      return {
+        provider: 'anthropic',
+        model: 'claude-3-5-sonnet-20241022',
+        apiKey: process.env.ANTHROPIC_API_KEY,
       }
     }
 

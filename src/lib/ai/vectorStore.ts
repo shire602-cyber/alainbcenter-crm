@@ -28,7 +28,12 @@ class InMemoryVectorStore {
     this.embeddings.set(doc.id, embedding)
   }
 
-  async search(queryEmbedding: number[], topK: number = 5, threshold: number = 0.7): Promise<{
+  async search(
+    queryEmbedding: number[], 
+    topK: number = 5, 
+    threshold: number = 0.7,
+    allowedDocumentIds?: number[]
+  ): Promise<{
     documents: VectorDocument[]
     scores: number[]
   }> {
@@ -39,6 +44,13 @@ class InMemoryVectorStore {
       if (score >= threshold) {
         const doc = this.documents.get(id)
         if (doc) {
+          // Filter by allowed document IDs if specified
+          if (allowedDocumentIds && allowedDocumentIds.length > 0) {
+            const docId = doc.metadata.documentId
+            if (!allowedDocumentIds.includes(docId)) {
+              continue // Skip this document
+            }
+          }
           results.push({ doc, score })
         }
       }
@@ -169,20 +181,21 @@ export async function searchTrainingDocuments(
     topK?: number
     similarityThreshold?: number
     type?: string
+    trainingDocumentIds?: number[]
   } = {}
 ): Promise<{
   documents: VectorDocument[]
   scores: number[]
   hasRelevantTraining: boolean
 }> {
-  const { topK = 5, similarityThreshold = 0.7, type } = options
+  const { topK = 5, similarityThreshold = 0.7, type, trainingDocumentIds } = options
 
   try {
     // Generate query embedding
     const queryEmbedding = await generateEmbedding(query)
 
-    // Search vector store
-    const results = await vectorStore.search(queryEmbedding, topK, similarityThreshold)
+    // Search vector store (pass trainingDocumentIds to filter)
+    const results = await vectorStore.search(queryEmbedding, topK, similarityThreshold, trainingDocumentIds)
 
     // Filter by type if specified
     let filteredDocs = results.documents

@@ -362,7 +362,7 @@ export async function handleInboundMessage(
         conversationId: conversation.id,
         leadId: lead.id,
         contactId: contact.id,
-        direction: 'INBOUND', // Use uppercase to match schema (INBOUND | OUTBOUND)
+        direction: 'inbound', // Use lowercase to match schema ('inbound' | 'outbound')
         channel: channelLower,
         type: messageType,
         body: body || null,
@@ -452,7 +452,7 @@ export async function handleInboundMessage(
         leadId: lead.id,
         conversationId: conversation.id,
         channel: channelLower,
-        direction: 'INBOUND', // Use uppercase to match Message direction for consistency
+        direction: 'inbound', // Use lowercase to match schema ('inbound' | 'outbound')
         from: fromAddress || null,
         body: body,
         messageSnippet: body?.substring(0, 200) || 'Inbound message',

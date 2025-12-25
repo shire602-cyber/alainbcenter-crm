@@ -8,7 +8,6 @@ import { Label } from '@/components/ui/label'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { Switch } from '@/components/ui/switch'
-import { Select } from '@/components/ui/select'
 import { useToast } from '@/components/ui/toast'
 import { Bot, Plus, Trash2, Save, Settings, Loader2 } from 'lucide-react'
 import { EmptyState } from '@/components/ui/empty-state'
@@ -57,6 +56,38 @@ interface ResponseSettingsTabProps {
   trainingDocuments: TrainingDocument[]
 }
 
+// Form data type with arrays for JSON fields
+interface AgentFormData {
+  name: string
+  description: string
+  isActive: boolean
+  isDefault: boolean
+  trainingDocumentIds: number[] // Array for form, converted to JSON string when saving
+  systemPrompt: string
+  tone: string
+  maxMessageLength: number
+  maxTotalLength: number
+  maxQuestionsPerMessage: number
+  allowedPhrases: string // Newline-separated for form, converted to JSON array when saving
+  prohibitedPhrases: string
+  customGreeting: string
+  customSignoff: string
+  responseDelayMin: number
+  responseDelayMax: number
+  rateLimitMinutes: number
+  businessHoursStart: string
+  businessHoursEnd: string
+  timezone: string
+  allowOutsideHours: boolean
+  firstMessageImmediate: boolean
+  similarityThreshold: number
+  confidenceThreshold: number
+  escalateToHumanRules: string // Newline-separated for form
+  skipAutoReplyRules: string
+  defaultLanguage: string
+  autoDetectLanguage: boolean
+}
+
 export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabProps) {
   const { showToast } = useToast()
   const [agents, setAgents] = useState<AIAgentProfile[]>([])
@@ -66,7 +97,7 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
   const [isCreating, setIsCreating] = useState(false)
 
   // Form state
-  const [formData, setFormData] = useState<Partial<AIAgentProfile>>({
+  const [formData, setFormData] = useState<Partial<AgentFormData>>({
     name: '',
     description: '',
     isActive: true,
@@ -113,12 +144,34 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
         : ''
 
       setFormData({
-        ...selectedAgent,
+        name: selectedAgent.name,
+        description: selectedAgent.description || '',
+        isActive: selectedAgent.isActive,
+        isDefault: selectedAgent.isDefault,
         trainingDocumentIds: trainingDocIds,
+        systemPrompt: selectedAgent.systemPrompt || '',
+        tone: selectedAgent.tone,
+        maxMessageLength: selectedAgent.maxMessageLength,
+        maxTotalLength: selectedAgent.maxTotalLength,
+        maxQuestionsPerMessage: selectedAgent.maxQuestionsPerMessage,
         allowedPhrases,
         prohibitedPhrases,
+        customGreeting: selectedAgent.customGreeting || '',
+        customSignoff: selectedAgent.customSignoff || '',
+        responseDelayMin: selectedAgent.responseDelayMin,
+        responseDelayMax: selectedAgent.responseDelayMax,
+        rateLimitMinutes: selectedAgent.rateLimitMinutes,
+        businessHoursStart: selectedAgent.businessHoursStart,
+        businessHoursEnd: selectedAgent.businessHoursEnd,
+        timezone: selectedAgent.timezone,
+        allowOutsideHours: selectedAgent.allowOutsideHours,
+        firstMessageImmediate: selectedAgent.firstMessageImmediate,
+        similarityThreshold: selectedAgent.similarityThreshold,
+        confidenceThreshold: selectedAgent.confidenceThreshold,
         escalateToHumanRules: escalateRules,
         skipAutoReplyRules: skipRules,
+        defaultLanguage: selectedAgent.defaultLanguage,
+        autoDetectLanguage: selectedAgent.autoDetectLanguage,
       })
     } else {
       // Reset form
@@ -143,11 +196,14 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
         confidenceThreshold: 50,
         defaultLanguage: 'en',
         autoDetectLanguage: true,
-        trainingDocumentIds: [],
+        trainingDocumentIds: [] as number[],
         allowedPhrases: '',
         prohibitedPhrases: '',
         escalateToHumanRules: '',
         skipAutoReplyRules: '',
+        systemPrompt: '',
+        customGreeting: '',
+        customSignoff: '',
       })
     }
   }, [selectedAgent])
@@ -187,6 +243,19 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
         ...formData,
         trainingDocumentIds: Array.isArray(formData.trainingDocumentIds)
           ? formData.trainingDocumentIds
+          : [],
+        // Convert newline-separated strings to arrays for JSON storage
+        allowedPhrases: formData.allowedPhrases
+          ? formData.allowedPhrases.split('\n').filter((p: string) => p.trim())
+          : [],
+        prohibitedPhrases: formData.prohibitedPhrases
+          ? formData.prohibitedPhrases.split('\n').filter((p: string) => p.trim())
+          : [],
+        escalateToHumanRules: formData.escalateToHumanRules
+          ? formData.escalateToHumanRules.split('\n').filter((p: string) => p.trim())
+          : [],
+        skipAutoReplyRules: formData.skipAutoReplyRules
+          ? formData.skipAutoReplyRules.split('\n').filter((p: string) => p.trim())
           : [],
       }
 
@@ -263,11 +332,14 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
       confidenceThreshold: 50,
       defaultLanguage: 'en',
       autoDetectLanguage: true,
-      trainingDocumentIds: [],
+      trainingDocumentIds: [] as number[],
       allowedPhrases: '',
       prohibitedPhrases: '',
       escalateToHumanRules: '',
       skipAutoReplyRules: '',
+      systemPrompt: '',
+      customGreeting: '',
+      customSignoff: '',
     })
   }
 
@@ -387,26 +459,28 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                 <div className="grid grid-cols-2 gap-4">
                   <div>
                     <Label htmlFor="agent-language">Default Language</Label>
-                    <Select
+                    <select
                       id="agent-language"
                       value={formData.defaultLanguage || 'en'}
                       onChange={(e) => setFormData({ ...formData, defaultLanguage: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
                     >
                       <option value="en">English</option>
                       <option value="ar">Arabic</option>
-                    </Select>
+                    </select>
                   </div>
                   <div>
                     <Label htmlFor="agent-tone">Tone</Label>
-                    <Select
+                    <select
                       id="agent-tone"
                       value={formData.tone || 'friendly'}
                       onChange={(e) => setFormData({ ...formData, tone: e.target.value })}
+                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
                     >
                       <option value="professional">Professional</option>
                       <option value="friendly">Friendly</option>
                       <option value="short">Short</option>
-                    </Select>
+                    </select>
                   </div>
                 </div>
                 <div className="flex items-center gap-4">
@@ -616,16 +690,17 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                 </div>
                 <div>
                   <Label htmlFor="agent-timezone">Timezone</Label>
-                  <Select
+                  <select
                     id="agent-timezone"
                     value={formData.timezone || 'Asia/Dubai'}
                     onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
                   >
                     <option value="Asia/Dubai">Asia/Dubai (UAE)</option>
                     <option value="UTC">UTC</option>
                     <option value="America/New_York">America/New_York</option>
                     <option value="Europe/London">Europe/London</option>
-                  </Select>
+                  </select>
                 </div>
                 <div className="flex items-center gap-4">
                   <div className="flex items-center gap-2">

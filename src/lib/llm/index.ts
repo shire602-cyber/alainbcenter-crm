@@ -22,6 +22,7 @@ export async function generateCompletion(
     conversationLength?: number
     hasMultipleQuestions?: boolean
     requiresReasoning?: boolean
+    taskType?: 'greeting' | 'followup' | 'reminder' | 'complex' | 'other'
   }
 ): Promise<LLMCompletionResult> {
   const routingService = getRoutingService()
@@ -42,6 +43,7 @@ export async function generateCompletionWithDecision(
     conversationLength?: number
     hasMultipleQuestions?: boolean
     requiresReasoning?: boolean
+    taskType?: 'greeting' | 'followup' | 'reminder' | 'complex' | 'other'
   }
 ): Promise<{
   result: LLMCompletionResult

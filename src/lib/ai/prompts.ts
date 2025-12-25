@@ -39,20 +39,24 @@ Tone guidelines:
 export async function buildDraftReplyPrompt(
   context: ConversationContext,
   tone: 'professional' | 'friendly' | 'short',
-  language: 'en' | 'ar'
+  language: 'en' | 'ar',
+  agent?: import('../ai/agentProfile').AgentProfile
 ): Promise<string> {
   const { contact, lead, messages } = context
 
   // Load relevant training documents using vector search
+  // Use agent's training documents if specified
   let trainingContext = ''
   try {
     const { searchTrainingDocuments } = await import('./vectorStore')
     const lastMessage = messages[messages.length - 1]?.message || ''
     
     if (lastMessage && lastMessage.trim().length > 0) {
+      const similarityThreshold = agent?.similarityThreshold ?? 0.6
       const searchResults = await searchTrainingDocuments(lastMessage, {
         topK: 5,
-        similarityThreshold: 0.6,
+        similarityThreshold,
+        trainingDocumentIds: agent?.trainingDocumentIds || undefined,
       })
       
       if (searchResults.hasRelevantTraining && searchResults.documents.length > 0) {
@@ -78,7 +82,32 @@ export async function buildDraftReplyPrompt(
     console.warn('Failed to load training documents for prompt:', error.message)
   }
 
-  let prompt = `${getSystemPrompt()}${trainingContext}
+  // Add agent-specific guidelines
+  let agentGuidelines = ''
+  if (agent) {
+    if (agent.allowedPhrases && agent.allowedPhrases.length > 0) {
+      agentGuidelines += `\n\nIMPORTANT - ALLOWED PHRASES/TOPICS:\n`
+      agentGuidelines += `You MUST emphasize or use these phrases/topics when relevant:\n`
+      agent.allowedPhrases.forEach(phrase => {
+        agentGuidelines += `- ${phrase}\n`
+      })
+    }
+    if (agent.prohibitedPhrases && agent.prohibitedPhrases.length > 0) {
+      agentGuidelines += `\n\nIMPORTANT - PROHIBITED PHRASES/TOPICS:\n`
+      agentGuidelines += `You MUST NEVER use these phrases or discuss these topics:\n`
+      agent.prohibitedPhrases.forEach(phrase => {
+        agentGuidelines += `- ${phrase}\n`
+      })
+    }
+    if (agent.customGreeting) {
+      agentGuidelines += `\n\nCUSTOM GREETING TEMPLATE:\n${agent.customGreeting}\n`
+    }
+    if (agent.customSignoff) {
+      agentGuidelines += `\n\nCUSTOM SIGNOFF TEMPLATE:\n${agent.customSignoff}\n`
+    }
+  }
+
+  let prompt = `${getSystemPrompt()}${trainingContext}${agentGuidelines}
 
 Generate a WhatsApp reply in ${language === 'ar' ? 'Arabic' : 'English'} with ${tone} tone.
 
@@ -114,34 +143,40 @@ ${lead.aiNotes ? `- AI Notes: ${lead.aiNotes}` : ''}
   // Check if this is first message (no outbound messages yet)
   const hasOutboundMessages = messages.some(m => m.direction === 'OUTBOUND' || m.direction === 'outbound')
   
+  const maxMessageLength = agent?.maxMessageLength || 300
+  const maxTotalLength = agent?.maxTotalLength || 600
+  const maxQuestions = agent?.maxQuestionsPerMessage || 2
+
   if (!hasOutboundMessages) {
     // FIRST MESSAGE - Always greet and collect basic info
     prompt += `\nThis is the FIRST message from the customer. Generate a friendly greeting that:
 1. Welcomes them to Al Ain Business Center
 2. Introduces yourself briefly (keep it very short)
-3. Asks for ONLY 2 pieces of information:
+3. Asks for ONLY ${maxQuestions} piece${maxQuestions > 1 ? 's' : ''} of information:
    - Full name
-   - What service do you need? (examples: Family Visa, Business Setup, Visit Visa, etc. - NEVER mention Employment Visa)
-4. Keeps it SHORT (under 200 characters, ideally 150)
+   ${maxQuestions > 1 ? '- What service do you need? (examples: Family Visa, Business Setup, Visit Visa, etc. - NEVER mention Employment Visa)\n' : ''}
+4. Keeps it SHORT (under ${maxMessageLength} characters, ideally ${Math.floor(maxMessageLength * 0.75)})
 5. Uses friendly, warm tone
 6. NEVER promises approvals or guarantees
 7. NEVER mentions "Employment Visa" as an example
 8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+${agent?.customGreeting ? `9. Use or adapt this greeting style: "${agent.customGreeting}"\n` : ''}
 
-Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm Hamdi. To help you, please share: 1) Your full name 2) What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)"
+Example format: "Hello! 👋 Welcome to Al Ain Business Center. I'm Hamdi. To help you, please share: 1) Your full name${maxQuestions > 1 ? ' 2) What service do you need? (e.g., Family Visa, Business Setup, Visit Visa)' : ''}"
 
 Reply only with the message text, no explanations or metadata.`
   } else {
     // FOLLOW-UP MESSAGE
     prompt += `\nGenerate a WhatsApp-ready reply that:
 1. Acknowledges the last message
-2. Asks MAXIMUM 2 qualifying questions if information is missing (NOT 2-4, MAX 2)
+2. Asks MAXIMUM ${maxQuestions} qualifying question${maxQuestions > 1 ? 's' : ''} if information is missing (NOT ${maxQuestions + 2}-${maxQuestions + 4}, MAX ${maxQuestions})
 3. Highlights urgency if expiry date is close
 4. Includes a clear CTA (e.g., "Reply with 1/2/3" or "Share passport copy")
-5. Keeps it SHORT (under 300 characters, max 600 total)
+5. Keeps it SHORT (under ${maxMessageLength} characters, max ${maxTotalLength} total)
 6. NEVER promises approvals, guarantees, or outcomes
 7. Uses ${tone} tone
 8. Is in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'}
+${agent?.customSignoff ? `9. End with or adapt this signoff style: "${agent.customSignoff}"\n` : ''}
 
 Reply only with the message text, no explanations or metadata.`
   }
