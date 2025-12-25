@@ -24,13 +24,38 @@ export class Llama3Provider implements LLMProvider {
   async isAvailable(): Promise<boolean> {
     if (!this.apiKey) {
       // Try to get from database integration
+      // Check both 'groq' integration and 'openai' integration (which might have provider: 'groq' in config)
       try {
         const { prisma } = await import('@/lib/prisma')
         console.log(`🔍 [LLM-PROVIDER] Checking Groq integration in database...`)
-        const integration = await prisma.integration.findUnique({
+        
+        // First try 'groq' integration
+        let integration = await prisma.integration.findUnique({
           where: { name: 'groq' },
         })
-        console.log(`🔍 [LLM-PROVIDER] Groq integration found:`, {
+        
+        // If not found, check 'openai' integration (which might be configured for Groq)
+        if (!integration || !integration.isEnabled || !integration.apiKey) {
+          console.log(`🔍 [LLM-PROVIDER] Groq integration not found, checking 'openai' integration...`)
+          const openaiIntegration = await prisma.integration.findUnique({
+            where: { name: 'openai' },
+          })
+          
+          if (openaiIntegration?.isEnabled && openaiIntegration.apiKey) {
+            // Check if config specifies Groq as provider
+            let config: any = {}
+            try {
+              config = openaiIntegration.config ? JSON.parse(openaiIntegration.config) : {}
+            } catch {}
+            
+            if (config.provider === 'groq') {
+              console.log(`✅ [LLM-PROVIDER] Found Groq config in 'openai' integration`)
+              integration = openaiIntegration
+            }
+          }
+        }
+        
+        console.log(`🔍 [LLM-PROVIDER] Integration check result:`, {
           exists: !!integration,
           isEnabled: integration?.isEnabled,
           hasApiKey: !!integration?.apiKey,
