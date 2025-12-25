@@ -133,16 +133,19 @@ export async function generateAiReply(
       const userMessage = lastMessage.toLowerCase()
       
       let contextAwareMessage = ''
-      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+      if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
         contextAwareMessage = `${greeting}\n\nI'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
-      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much')) {
+      } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much') || userMessage.includes('pricing')) {
         contextAwareMessage = `${greeting}\n\nI'll get the pricing information for you right away.`
-      } else if (userMessage.includes('renew') || userMessage.includes('expir')) {
+      } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry') || userMessage.includes('renewal')) {
         contextAwareMessage = `${greeting}\n\nI'll check the renewal details for you.`
-      } else if (userMessage.includes('doc') || userMessage.includes('document')) {
+      } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence')) {
+        contextAwareMessage = `${greeting}\n\nI'll help you with visa services. Let me get the details for you.`
+      } else if (userMessage.includes('doc') || userMessage.includes('document') || userMessage.includes('paper') || userMessage.includes('requirement')) {
         contextAwareMessage = `${greeting}\n\nI'll check the document requirements for you.`
       } else {
-        contextAwareMessage = `${greeting}\n\nI received your message. Let me get back to you with the information you need.`
+        const messagePreview = lastMessage.length > 40 ? lastMessage.substring(0, 40) + '...' : lastMessage
+        contextAwareMessage = `${greeting}\n\nI received your message about "${messagePreview}". Let me get back to you with the information you need.`
       }
       
       message = contextAwareMessage
@@ -157,12 +160,17 @@ export async function generateAiReply(
     const userMessage = lastMessage.toLowerCase()
     
     let contextAwareMessage = ''
-    if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company')) {
+    if (userMessage.includes('business') || userMessage.includes('setup') || userMessage.includes('company') || userMessage.includes('incorporat')) {
       contextAwareMessage = `${greeting}\n\nI'd be happy to help you with business setup services. Let me gather the details and get back to you shortly.`
-    } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee')) {
+    } else if (userMessage.includes('price') || userMessage.includes('cost') || userMessage.includes('fee') || userMessage.includes('how much') || userMessage.includes('pricing')) {
       contextAwareMessage = `${greeting}\n\nI'll get the pricing information for you right away.`
+    } else if (userMessage.includes('renew') || userMessage.includes('expir') || userMessage.includes('expiry') || userMessage.includes('renewal')) {
+      contextAwareMessage = `${greeting}\n\nI'll check the renewal details for you.`
+    } else if (userMessage.includes('visa') || userMessage.includes('permit') || userMessage.includes('residence')) {
+      contextAwareMessage = `${greeting}\n\nI'll help you with visa services. Let me get the details for you.`
     } else {
-      contextAwareMessage = `${greeting}\n\nI received your message. Let me get back to you with the information you need.`
+      const messagePreview = lastMessage.length > 40 ? lastMessage.substring(0, 40) + '...' : lastMessage
+      contextAwareMessage = `${greeting}\n\nI received your message about "${messagePreview}". Let me get back to you with the information you need.`
     }
     
     message = contextAwareMessage
