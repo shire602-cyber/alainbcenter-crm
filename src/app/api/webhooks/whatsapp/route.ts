@@ -188,6 +188,7 @@ export async function GET(req: NextRequest) {
  * - messages: inbound messages from users
  */
 export async function POST(req: NextRequest) {
+  console.log(`📥 [WEBHOOK] WhatsApp webhook received at ${new Date().toISOString()}`)
   let rawBody: string = ''
   let body: any = null
 
