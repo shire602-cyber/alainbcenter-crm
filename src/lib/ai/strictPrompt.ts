@@ -166,7 +166,9 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   // Add provided information
   if (Object.keys(providedInfo).length > 0) {
     prompt += `\nINFORMATION ALREADY PROVIDED (DO NOT ASK AGAIN):\n`
-    if (providedInfo.name) prompt += `- Full Name: ${providedInfo.name}\n`
+    if (providedInfo.name) {
+      prompt += `- Full Name: ${providedInfo.name} (CRITICAL: Customer's name is "${providedInfo.name}" - DO NOT ask for name again!)\n`
+    }
     if (providedInfo.nationality) prompt += `- Nationality: ${providedInfo.nationality}\n`
     if (providedInfo.location) prompt += `- Location: ${providedInfo.location} UAE\n`
     if (providedInfo.service) prompt += `- Service: ${providedInfo.service}\n`
@@ -174,7 +176,13 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
     if (providedInfo.mainland) prompt += `- License Type: MAINLAND (already answered)\n`
     if (providedInfo.freezone) prompt += `- License Type: FREEZONE (already answered)\n`
     prompt += `\nCRITICAL: Do NOT ask for information already listed above.\n`
+    prompt += `CRITICAL: If "Full Name" is listed above, DO NOT ask "what's your name?" or "can you tell me your name?" - the name is already known!\n`
     prompt += `CRITICAL: If "License Type: MAINLAND" or "License Type: FREEZONE" is listed, DO NOT ask "Freezone or Mainland?" again.\n\n`
+  }
+  
+  // Also check if contact name is in the prompt (from contactName parameter)
+  if (contactName && contactName !== 'there' && !contactName.toLowerCase().includes('unknown')) {
+    prompt += `\nCUSTOMER NAME: The customer's name is "${contactName}". DO NOT ask for their name - it's already known!\n\n`
   }
   
   // Add locked service if exists
@@ -230,7 +238,7 @@ REQUIREMENTS:
    - Ask "Freezone or Mainland?" NOT "inside/outside UAE"
    - If customer already answered "mainland" or "freezone", DO NOT ask again
    - Do NOT ask about "year" options (licenses don't have year options)
-6. ALWAYS ask for full name if not provided yet
+6. ONLY ask for full name if it's NOT already provided (check "INFORMATION ALREADY PROVIDED" section and "CUSTOMER NAME" section above)
 7. Return ONLY valid JSON with the structure specified above
 8. Keep reply under 300 characters, warm and helpful
 9. If training documents have pricing for this service, USE IT - don't ask for more info if pricing is available
