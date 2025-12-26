@@ -768,39 +768,103 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             // Check if this is first message in thread
             const isFirstMessage = conversationMessages.filter(m => m.direction === 'OUTBOUND').length === 0
             
-            console.log(`🎯 [RULE-ENGINE] Executing deterministic rule engine`)
-            console.log(`📋 [RULE-ENGINE] Memory:`, existingMemory)
-            console.log(`📋 [RULE-ENGINE] Is first message:`, isFirstMessage)
+            // CHECK FOR BUSINESS SETUP INTENT FIRST
+            const lowerMessage = messageText.toLowerCase()
+            const conversationFlowKey = (conversation as any).flowKey // flowKey may not be in Prisma types yet
+            const isBusinessSetup = 
+              lowerMessage.includes('business setup') ||
+              lowerMessage.includes('company formation') ||
+              lowerMessage.includes('license') ||
+              lowerMessage.includes('freezone') ||
+              lowerMessage.includes('mainland') ||
+              lowerMessage.includes('marketing license') ||
+              lowerMessage.includes('accounting license') ||
+              lowerMessage.includes('trading license') ||
+              existingMemory.service === 'business_setup' ||
+              conversationFlowKey === 'business_setup'
             
-            const ruleResult = await executeRuleEngine({
-              conversationId: conversation.id,
-              leadId: lead.id,
-              contactId: contactId,
-              currentMessage: messageText,
-              conversationHistory: fullConversationHistory,
-              isFirstMessage,
-              memory: existingMemory,
-            })
-            
-            console.log(`✅ [RULE-ENGINE] Generated reply:`, ruleResult.reply.substring(0, 100))
-            console.log(`📊 [RULE-ENGINE] Needs human:`, ruleResult.needsHuman, ruleResult.handoverReason)
-            
-            // Use rule engine result
-            aiResult = {
-              text: ruleResult.reply,
-              success: true,
-              confidence: 0.95, // Rule engine is deterministic
+            if (isBusinessSetup) {
+              console.log(`🏢 [BUSINESS-SETUP] Detected business setup intent, routing to dedicated handler`)
+              
+              try {
+                const { handleBusinessSetupQualification } = await import('./ai/businessSetupHandler')
+                const contactName = lead.contact?.fullName || undefined
+                
+                // Get triggerProviderMessageId from function parameter (passed from webhook)
+                // triggerProviderMessageId is already destructured from options at line 206
+                const inboundMessageId = triggerProviderMessageId || `msg_${messageId}`
+                
+                const businessResult = await handleBusinessSetupQualification(
+                  conversation.id,
+                  inboundMessageId,
+                  messageText,
+                  contactName
+                )
+                
+                if (businessResult.reply && businessResult.shouldSend) {
+                  console.log(`✅ [BUSINESS-SETUP] Handler generated reply: ${businessResult.reply.substring(0, 100)}`)
+                  
+                  aiResult = {
+                    text: businessResult.reply,
+                    success: true,
+                    confidence: 0.95, // Deterministic handler
+                  }
+                  
+                  // If needs handover, create task
+                  if (businessResult.handoverToHuman) {
+                    await createAgentTask(lead.id, 'complex_query', {
+                      messageText: `Business Setup - Handover required\n\nLast message: ${messageText}`,
+                    })
+                  }
+                  
+                  // Skip rule engine and strict AI
+                  console.log(`✅ [BUSINESS-SETUP] Using business setup handler result, skipping rule engine`)
+                } else {
+                  console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
+                  // Fall through to rule engine
+                }
+              } catch (businessError: any) {
+                console.error(`❌ [BUSINESS-SETUP] Handler failed, falling back to rule engine:`, businessError.message)
+                // Fall through to rule engine
+              }
             }
             
-            // If needs human, create task
-            if (ruleResult.needsHuman) {
-              await createAgentTask(lead.id, 'complex_query', {
-                messageText: `Handover: ${ruleResult.handoverReason || 'Complex case'}\n\nLast message: ${messageText}`,
+            // If business setup handler didn't produce a result, use rule engine
+            if (!aiResult) {
+              console.log(`🎯 [RULE-ENGINE] Executing deterministic rule engine`)
+              console.log(`📋 [RULE-ENGINE] Memory:`, existingMemory)
+              console.log(`📋 [RULE-ENGINE] Is first message:`, isFirstMessage)
+              
+              const ruleResult = await executeRuleEngine({
+                conversationId: conversation.id,
+                leadId: lead.id,
+                contactId: contactId,
+                currentMessage: messageText,
+                conversationHistory: fullConversationHistory,
+                isFirstMessage,
+                memory: existingMemory,
               })
+              
+              console.log(`✅ [RULE-ENGINE] Generated reply:`, ruleResult.reply.substring(0, 100))
+              console.log(`📊 [RULE-ENGINE] Needs human:`, ruleResult.needsHuman, ruleResult.handoverReason)
+              
+              // Use rule engine result
+              aiResult = {
+                text: ruleResult.reply,
+                success: true,
+                confidence: 0.95, // Rule engine is deterministic
+              }
+              
+              // If needs human, create task
+              if (ruleResult.needsHuman) {
+                await createAgentTask(lead.id, 'complex_query', {
+                  messageText: `Handover: ${ruleResult.handoverReason || 'Complex case'}\n\nLast message: ${messageText}`,
+                })
+              }
+              
+              // Skip strict AI generation, use rule engine result
+              console.log(`✅ [RULE-ENGINE] Using rule engine result, skipping strict AI`)
             }
-            
-            // Skip strict AI generation, use rule engine result
-            console.log(`✅ [RULE-ENGINE] Using rule engine result, skipping strict AI`)
           } catch (ruleError: any) {
             console.error(`❌ [RULE-ENGINE] Rule engine failed, falling back to strict AI:`, ruleError.message)
             // Fall through to strict AI generation
@@ -1147,8 +1211,26 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
         }
 
-        // Step 7: Check for duplicate outbound message (idempotency)
-        // Check if we already sent this exact message recently (within last 5 seconds)
+        // Step 7: Check for duplicate outbound message (idempotency) + COOLDOWN
+        // Check if we already sent ANY message recently (within last 3 seconds) - prevents race conditions
+        const recentOutbound = conversation ? await prisma.message.findFirst({
+          where: {
+            conversationId: conversation.id,
+            direction: 'OUTBOUND',
+            createdAt: {
+              gte: new Date(Date.now() - 3000), // Within last 3 seconds (cooldown)
+            },
+          },
+          orderBy: { createdAt: 'desc' },
+        }) : null
+        
+        if (recentOutbound) {
+          console.log(`⚠️ [COOLDOWN] Recent outbound message detected (ID: ${recentOutbound.id}, ${Date.now() - recentOutbound.createdAt.getTime()}ms ago) - cooldown active, skipping send`)
+          console.log(`   This prevents race conditions and duplicate sends from concurrent requests`)
+          return { replied: false, reason: 'Cooldown period active - recent outbound message detected' }
+        }
+        
+        // Also check for exact duplicate message (within last 5 seconds)
         const recentDuplicate = conversation ? await prisma.message.findFirst({
           where: {
             conversationId: conversation.id,
@@ -1240,6 +1322,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             }
           }
         }
+        
         
         // Update structured log with success
         if (autoReplyLog) {
