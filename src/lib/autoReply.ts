@@ -1166,91 +1166,117 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       }
     }
     
-    // Step 10: Send reply immediately
-    // At this point, aiResult.text is guaranteed to exist (checked above)
+    // FIX B: Hard idempotency for outbound replies (transaction-based, BEFORE send)
+    // Step 10: Check outbound idempotency BEFORE sending (transaction-based)
     const replyText = aiResult.text
     const channelUpper = channel.toUpperCase()
-    console.log(`🔍 Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
+    console.log(`🔍 [OUTBOUND] Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
     
     if (channelUpper === 'WHATSAPP' && phoneNumber) {
+      // FIX B: Hard idempotency check BEFORE sending (transaction-based)
+      const { checkOutboundIdempotency, logOutboundMessage } = await import('./webhook/idempotency')
+      
+      // Derive triggerProviderMessageId if missing
+      let effectiveTriggerId = triggerProviderMessageId
+      if (!effectiveTriggerId && conversation) {
+        // Try to get from the inbound message
+        const inboundMessage = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId: conversation.id,
+            direction: 'INBOUND',
+          },
+        })
+        if (inboundMessage?.providerMessageId) {
+          effectiveTriggerId = inboundMessage.providerMessageId
+          console.log(`📊 [OUTBOUND] Derived triggerProviderMessageId from inbound message: ${effectiveTriggerId}`)
+        }
+      }
+      
+      // Check idempotency BEFORE sending
+      if (effectiveTriggerId) {
+        const outboundCheck = await checkOutboundIdempotency('whatsapp', effectiveTriggerId)
+        if (outboundCheck.alreadySent) {
+          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Already sent for inbound ${effectiveTriggerId} - skipping`)
+          return { replied: false, reason: 'Outbound already sent for this inbound message' }
+        }
+      }
+      
+      // Load flow state for logging
+      let flowStep: string | undefined
+      let lastQuestionKey: string | undefined
+      
+      if (conversation) {
+        const { loadFlowState } = await import('./conversation/flowState')
+        const flowState = await loadFlowState(conversation.id)
+        flowStep = flowState.flowStep
+        lastQuestionKey = flowState.lastQuestionKey
+        console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
+      }
+      
+      // FIX B: Log outbound BEFORE sending (transaction-based idempotency)
+      // This creates the idempotency record in a transaction, preventing duplicates
+      let outboundLogId: number | null = null
+      try {
+        // Use transaction to ensure atomicity
+        await prisma.$transaction(async (tx) => {
+          // Check again inside transaction (double-check)
+          if (effectiveTriggerId) {
+            const existing = await (tx as any).outboundMessageLog.findUnique({
+              where: {
+                provider_triggerProviderMessageId: {
+                  provider: 'whatsapp',
+                  triggerProviderMessageId: effectiveTriggerId,
+                },
+              },
+            })
+            if (existing) {
+              throw new Error('OUTBOUND_ALREADY_LOGGED')
+            }
+          }
+          
+          // Create outbound log BEFORE sending (idempotency guarantee)
+          const outboundLog = await (tx as any).outboundMessageLog.create({
+            data: {
+              provider: 'whatsapp',
+              conversationId: conversation!.id,
+              triggerProviderMessageId: effectiveTriggerId || null,
+              outboundTextHash: require('crypto').createHash('sha256').update(replyText).digest('hex'),
+              outboundMessageId: null, // Will be updated after send
+              flowStep: flowStep || null,
+              lastQuestionKey: lastQuestionKey || null,
+            },
+          })
+          outboundLogId = outboundLog.id
+          console.log(`✅ [OUTBOUND-IDEMPOTENCY] Logged outbound BEFORE send (logId: ${outboundLogId})`)
+        })
+      } catch (error: any) {
+        if (error.message === 'OUTBOUND_ALREADY_LOGGED') {
+          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Already logged in transaction - skipping send`)
+          return { replied: false, reason: 'Outbound already logged (duplicate prevented)' }
+        }
+        // Unique constraint violation = already logged
+        if (error.code === 'P2002') {
+          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Unique constraint violation - already logged`)
+          return { replied: false, reason: 'Outbound already logged (unique constraint)' }
+        }
+        throw error
+      }
+      
+      // Now send the message (idempotency already guaranteed)
       try {
         console.log(`📤 [SEND] Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
         console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
-        console.log(`🚀 [SEND] About to call sendTextMessage - this is the critical send step!`)
         
-        let result
-        try {
-          result = await sendTextMessage(phoneNumber, replyText)
-          console.log(`✅ [SEND] sendTextMessage returned successfully`)
-        } catch (sendError: any) {
-          console.error(`❌ [SEND] CRITICAL ERROR: sendTextMessage threw exception!`)
-          console.error(`❌ [SEND] Error: ${sendError.message}`)
-          console.error(`❌ [SEND] Stack:`, sendError.stack)
-          throw sendError
-        }
-        
-        console.log(`📨 [SEND] WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
+        const result = await sendTextMessage(phoneNumber, replyText)
+        console.log(`✅ [SEND] WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
         
         if (!result || !result.messageId) {
-          console.error(`❌ [SEND] CRITICAL: No message ID returned from WhatsApp API!`)
-          console.error(`❌ [SEND] Response:`, JSON.stringify(result))
+          console.error(`❌ [SEND] No message ID returned from WhatsApp API`)
           throw new Error('No message ID returned from WhatsApp API')
         }
-        console.log(`✅ [SEND] Message ID received: ${result.messageId}`)
         
-        // CRITICAL FIX #3 & #6: Load flow state and log outbound message
-        let flowStep: string | undefined
-        let lastQuestionKey: string | undefined
-        
-        if (conversation) {
-          const { loadFlowState } = await import('./conversation/flowState')
-          const flowState = await loadFlowState(conversation.id)
-          flowStep = flowState.flowStep
-          lastQuestionKey = flowState.lastQuestionKey
-          
-          console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
-        }
-
-        // Step 7: Check for duplicate outbound message (idempotency) + COOLDOWN
-        // Check if we already sent ANY message recently (within last 3 seconds) - prevents race conditions
-        const recentOutbound = conversation ? await prisma.message.findFirst({
-          where: {
-            conversationId: conversation.id,
-            direction: 'OUTBOUND',
-            createdAt: {
-              gte: new Date(Date.now() - 3000), // Within last 3 seconds (cooldown)
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        }) : null
-        
-        if (recentOutbound) {
-          console.log(`⚠️ [COOLDOWN] Recent outbound message detected (ID: ${recentOutbound.id}, ${Date.now() - recentOutbound.createdAt.getTime()}ms ago) - cooldown active, skipping send`)
-          console.log(`   This prevents race conditions and duplicate sends from concurrent requests`)
-          return { replied: false, reason: 'Cooldown period active - recent outbound message detected' }
-        }
-        
-        // Also check for exact duplicate message (within last 5 seconds)
-        const recentDuplicate = conversation ? await prisma.message.findFirst({
-          where: {
-            conversationId: conversation.id,
-            direction: 'OUTBOUND',
-            body: replyText,
-            createdAt: {
-              gte: new Date(Date.now() - 5000), // Within last 5 seconds
-            },
-          },
-          orderBy: { createdAt: 'desc' },
-        }) : null
-        
-        if (recentDuplicate) {
-          console.log(`⚠️ [DUPLICATE-OUTBOUND] Duplicate outbound message detected (ID: ${recentDuplicate.id}) - skipping save`)
-          console.log(`   Message: "${replyText.substring(0, 50)}..."`)
-          console.log(`   This prevents duplicate sends from webhook retries`)
-          return { replied: false, reason: 'Duplicate outbound message detected' }
-        }
-        
-        // Step 7: Save outbound message (conversation already loaded above)
+        // Save outbound message
         let savedMessage: any = null
         if (conversation) {
           savedMessage = await prisma.message.create({
@@ -1273,6 +1299,15 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               sentAt: new Date(),
             },
           })
+          
+          // Update outbound log with message ID
+          if (outboundLogId) {
+            await (prisma as any).outboundMessageLog.update({
+              where: { id: outboundLogId },
+              data: { outboundMessageId: savedMessage.id },
+            })
+            console.log(`✅ [OUTBOUND-IDEMPOTENCY] Updated log with messageId: ${savedMessage.id}`)
+          }
 
           // Update conversation
           await prisma.conversation.update({
@@ -1295,34 +1330,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           },
         })
 
-        console.log(`✅ AI reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
-        
-        // CRITICAL FIX #2: Log outbound message for idempotency
-        // BUG FIX #2: Always log outbound, even if triggerProviderMessageId is missing
-        // This ensures we can detect duplicates even if called from inbound.ts (legacy path)
-        if (conversation) {
-          const { logOutboundMessage } = await import('./webhook/idempotency')
-          try {
-            await logOutboundMessage(
-              'whatsapp',
-              conversation.id,
-              triggerProviderMessageId || null, // May be null if called from inbound.ts
-              replyText,
-              savedMessage?.id || null,
-              flowStep,
-              lastQuestionKey
-            )
-            console.log(`📊 [OUTBOUND-LOG] triggerProviderMessageId: ${triggerProviderMessageId || 'none'}, outboundMessageId: ${savedMessage?.id || 'unknown'}, flowStep: ${flowStep || 'unknown'}, lastQuestionKey: ${lastQuestionKey || 'unknown'}`)
-          } catch (logError: any) {
-            // If logging fails due to unique constraint, that's OK - already logged
-            if (logError.code === 'P2002') {
-              console.log(`⚠️ [OUTBOUND-LOG] Outbound already logged (duplicate detected)`)
-            } else {
-              console.warn(`⚠️ [OUTBOUND-LOG] Failed to log outbound (non-blocking):`, logError.message)
-            }
-          }
-        }
-        
+        console.log(`✅ [SEND] AI reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
+        console.log(`📊 [OUTBOUND-LOG] triggerProviderMessageId: ${effectiveTriggerId || 'none'}, outboundMessageId: ${savedMessage?.id || 'unknown'}, flowStep: ${flowStep || 'unknown'}, lastQuestionKey: ${lastQuestionKey || 'unknown'}`)
         
         // Update structured log with success
         if (autoReplyLog) {

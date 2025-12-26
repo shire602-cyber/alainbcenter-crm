@@ -397,6 +397,98 @@ View delivery status in:
 - If duplicate messages: Unique constraint on `whatsappMessageId` prevents duplicates
 - If ngrok URL changes: Update webhook URL in Meta when ngrok restarts
 
+---
+
+## 🧪 Testing WhatsApp Inbound End-to-End
+
+### Automated Test Suite
+
+Run the automated deduplication test suite:
+
+```bash
+# Set webhook URL (default: http://localhost:3000/api/webhooks/whatsapp)
+export WEBHOOK_URL=http://localhost:3000/api/webhooks/whatsapp
+export WHATSAPP_VERIFY_TOKEN=your-verify-token
+
+# Run tests
+node scripts/tests/whatsapp-dedupe-test.js
+```
+
+**Tests included:**
+1. **Duplicate Message ID Test**: Same `providerMessageId` sent twice → Only 1 inbound Message created, only 1 outbound reply sent
+2. **Two Different Messages Test**: Two different messages from same phone → Same conversation reused, 2 outbound replies
+3. **Missing Training Test**: Message with missing training context → Still replies with greeting flow
+
+**Manual Verification Required:**
+After running tests, verify database state:
+
+```sql
+-- Test 1: Check duplicate prevention
+SELECT COUNT(*) FROM "Message" WHERE "providerMessageId" = 'wamid.test1.XXXXX';
+-- Expected: 1 (only one inbound message)
+
+SELECT COUNT(*) FROM "OutboundMessageLog" WHERE "triggerProviderMessageId" = 'wamid.test1.XXXXX';
+-- Expected: 1 (only one outbound logged)
+
+-- Test 2: Check conversation reuse
+SELECT "conversationId" FROM "Message" WHERE "providerMessageId" IN ('wamid.test2a.XXXXX', 'wamid.test2b.XXXXX');
+-- Expected: Both messages have the SAME conversationId
+
+-- Test 3: Check AI reply
+SELECT * FROM "Message" WHERE "providerMessageId" = 'wamid.test3.XXXXX' AND "direction" = 'OUTBOUND';
+-- Expected: At least 1 outbound message exists
+```
+
+### Manual Testing with cURL
+
+**Example webhook payload:**
+
+```bash
+curl -X POST http://localhost:3000/api/webhooks/whatsapp \
+  -H "Content-Type: application/json" \
+  -H "X-Hub-Signature-256: sha256=test-signature" \
+  -d '{
+    "object": "whatsapp_business_account",
+    "entry": [{
+      "id": "WHATSAPP_BUSINESS_ACCOUNT_ID",
+      "changes": [{
+        "value": {
+          "messaging_product": "whatsapp",
+          "metadata": {
+            "display_phone_number": "1234567890",
+            "phone_number_id": "PHONE_NUMBER_ID"
+          },
+          "messages": [{
+            "from": "971501234567",
+            "id": "wamid.test.12345",
+            "timestamp": "1234567890",
+            "type": "text",
+            "text": {
+              "body": "Hi, I need business setup"
+            }
+          }]
+        },
+        "field": "messages"
+      }]
+    }]
+  }'
+```
+
+**Expected database rows after webhook:**
+
+1. **InboundMessageDedup**: 1 row with `providerMessageId = 'wamid.test.12345'`, `processingStatus = 'COMPLETED'`
+2. **Message**: 1 row with `providerMessageId = 'wamid.test.12345'`, `direction = 'INBOUND'`
+3. **OutboundMessageLog**: 1 row with `triggerProviderMessageId = 'wamid.test.12345'`
+4. **Message**: 1 row with `direction = 'OUTBOUND'` (AI reply)
+
+**Key Log Points:**
+- `📨 [WEBHOOK] Processing message` - Webhook received
+- `✅ [IDEMPOTENCY] New message` - Not duplicate
+- `📊 [WEBHOOK-LOG] providerMessageId, dedupeHit, conversationId` - Structured log
+- `🚀 [WEBHOOK] Triggering AI reply` - AI reply triggered
+- `✅ [SEND] AI reply sent successfully` - Outbound sent
+- `📊 [OUTBOUND-LOG] triggerProviderMessageId, outboundMessageId` - Outbound logged
+
 ### Common Issues
 
 **"Invalid phone number format"**
