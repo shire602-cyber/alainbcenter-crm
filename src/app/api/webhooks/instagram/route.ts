@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
-import { handleInboundMessage } from '@/lib/inbound'
+import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 
 /**
  * GET /api/webhooks/instagram
@@ -262,19 +262,22 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Use common inbound handler
+        // Use new AUTO-MATCH pipeline
         try {
-          const result = await handleInboundMessage({
+          const result = await handleInboundMessageAutoMatch({
             channel: 'INSTAGRAM',
-            externalId: from, // Use Instagram user ID as conversation external ID
-            externalMessageId: messageId,
-            fromAddress: from,
+            providerMessageId: messageId,
+            fromPhone: null, // Instagram uses user IDs, not phone numbers
+            fromEmail: null,
             fromName: message.from?.name || null,
-            body: messageText,
-            rawPayload: message,
-            receivedAt: timestamp,
-            mediaUrl: mediaUrl,
-            mediaMimeType: mediaMimeType,
+            text: messageText,
+            timestamp: timestamp,
+            metadata: {
+              externalId: from, // Instagram user ID
+              rawPayload: message,
+              mediaUrl: mediaUrl,
+              mediaMimeType: mediaMimeType,
+            },
           })
 
           console.log(`✅ Processed Instagram message ${messageId} from ${from}`)

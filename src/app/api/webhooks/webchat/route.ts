@@ -8,7 +8,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { handleInboundMessage } from '@/lib/inbound'
+import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 
 export async function POST(req: NextRequest) {
   try {
@@ -43,16 +43,31 @@ export async function POST(req: NextRequest) {
     // Use email if provided, otherwise use sessionId as identifier
     const fromAddress = email || sessionId
 
-    // Use common inbound handler
-    const result = await handleInboundMessage({
+    // Use new AUTO-MATCH pipeline
+    const providerMessageId = `webchat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`
+    
+    let fromPhone: string | null = null
+    let fromEmail: string | null = null
+    
+    if (fromAddress.includes('@')) {
+      fromEmail = fromAddress.toLowerCase().trim()
+    } else {
+      // Could be phone or session ID
+      fromPhone = fromAddress
+    }
+    
+    const result = await handleInboundMessageAutoMatch({
       channel: 'WEBCHAT',
-      externalId: sessionId, // Use session ID as conversation external ID
-      externalMessageId: `webchat_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
-      fromAddress: fromAddress,
+      providerMessageId: providerMessageId,
+      fromPhone: fromPhone,
+      fromEmail: fromEmail,
       fromName: name,
-      body: messageText,
-      rawPayload: body,
-      receivedAt: timestamp,
+      text: messageText,
+      timestamp: timestamp,
+      metadata: {
+        externalId: sessionId,
+        rawPayload: body,
+      },
     })
 
     console.log(`✅ Processed webchat message from ${fromAddress}`)
@@ -60,6 +75,8 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ 
       ok: true,
       messageId: result.message.id,
+      tasksCreated: result.tasksCreated,
+      extractedFields: result.extractedFields,
     })
   } catch (error: any) {
     console.error('❌ Error processing webchat message:', error)
