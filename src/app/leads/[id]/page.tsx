@@ -6,7 +6,7 @@ export default async function Page({
 }: {
   params: Promise<{ id: string }>
 }) {
-  const resolvedParams = await Promise.resolve(params)
+  const resolvedParams = await params
   const leadIdParam = resolvedParams.id
   
   if (!leadIdParam || typeof leadIdParam !== 'string') {

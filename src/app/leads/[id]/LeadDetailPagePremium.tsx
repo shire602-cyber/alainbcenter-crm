@@ -232,11 +232,13 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
         const data = await res.json()
         setLead(data)
       } else {
-        showToast('Failed to load lead', 'error')
+        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        console.error(`Failed to load lead ${leadId}:`, errorData)
+        showToast(`Lead ${leadId} not found: ${errorData.error || 'Unknown error'}`, 'error')
       }
-    } catch (err) {
+    } catch (err: any) {
       console.error('Failed to load lead:', err)
-      showToast('Failed to load lead', 'error')
+      showToast(`Failed to load lead: ${err.message || 'Network error'}`, 'error')
     } finally {
       setLoading(false)
     }
