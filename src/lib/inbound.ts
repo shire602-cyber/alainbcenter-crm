@@ -656,81 +656,21 @@ export async function handleInboundMessage(
     }
   }
 
-  // Step 9: Generate AI reply for inbound message
-  // CRITICAL: This must run even if previous steps had errors
-  // BUT: Skip AI reply for duplicate messages (user requirement: "duplicate messages from customer shouldn't get replies")
-  // Run synchronously (awaited) to ensure it executes, but wrapped in try-catch so it doesn't fail the webhook
-  console.log(`🔍 [AI-REPLY] Pre-check:`, {
-    isDuplicate,
-    hasMessage: !!message,
-    hasBody: !!message?.body,
-    bodyLength: message?.body?.length || 0,
-    hasLead: !!lead,
-    leadId: lead?.id,
-    hasContact: !!contact,
-    contactId: contact?.id,
-    messageId: message?.id,
-    externalMessageId,
-  })
-  
+  // BUG FIX #2: Removed duplicate AI reply call from inbound.ts
+  // The webhook handler (route.ts) is now the SINGLE source of truth for triggering AI replies
+  // This prevents duplicate replies because:
+  // 1. Webhook handler has access to providerMessageId for idempotency logging
+  // 2. Webhook handler can properly log to OutboundMessageLog with triggerProviderMessageId
+  // 3. Inbound handler doesn't have providerMessageId, so it can't log properly
+  // 
+  // The webhook handler will call handleInboundAutoReply with triggerProviderMessageId,
+  // which enables proper outbound idempotency checking and logging.
+  //
+  // Log that we're skipping AI reply here (webhook will handle it)
   if (!isDuplicate && message && message.body && message.body.trim().length > 0 && lead && lead.id && contact && contact.id) {
-    try {
-      console.log(`🤖 [AI-REPLY] Starting AI reply process for message ${message.id}`)
-      console.log(`🤖 [AI-REPLY] Lead ID: ${lead.id}, Channel: ${message.channel}, Message: "${message.body.substring(0, 100)}..."`)
-      
-      const { handleInboundAutoReply } = await import('./autoReply')
-      console.log(`📞 [AI-REPLY] Calling handleInboundAutoReply...`)
-      
-      const replyResult = await handleInboundAutoReply({
-        leadId: lead.id,
-        messageId: message.id,
-        messageText: message.body,
-        channel: message.channel,
-        contactId: contact.id,
-      })
-      
-      console.log(`📊 [AI-REPLY] Result:`, {
-        replied: replyResult.replied,
-        reason: replyResult.reason,
-        error: replyResult.error,
-        leadId: lead.id,
-        messageId: message.id,
-      })
-      
-      if (replyResult.replied) {
-        console.log(`✅ [AI-REPLY] SUCCESS: AI reply sent for message ${message.id} to lead ${lead.id}`)
-      } else {
-        console.log(`⏭️ [AI-REPLY] SKIPPED: ${replyResult.reason || replyResult.error} (lead ${lead.id}, message ${message.id})`)
-      }
-    } catch (error: any) {
-      // Don't fail webhook if AI reply fails - log and continue
-      console.error('❌ [AI-REPLY] ERROR (non-blocking):', {
-        error: error.message,
-        stack: error.stack,
-        leadId: lead.id,
-        messageId: message.id,
-    channel: message.channel,
-      })
-      // Log to database for monitoring
-      try {
-        await prisma.externalEventLog.create({
-      data: {
-        provider: channel.toLowerCase(),
-            externalId: `auto-reply-error-${Date.now()}`,
-        payload: JSON.stringify({
-              error: error.message,
-              stack: error.stack,
-          leadId: lead.id,
-          messageId: message.id,
-        }),
-      },
-        })
-      } catch (logError) {
-        console.warn('Failed to log auto-reply error:', logError)
-      }
-    }
+    console.log(`⏭️ [AI-REPLY] Skipping AI reply in inbound.ts - webhook handler will trigger it with proper idempotency`)
   } else if (isDuplicate) {
-        console.log(`⏭️ [AI-REPLY] SKIPPED: Duplicate message detected - no AI reply for duplicates (user requirement)`)
+    console.log(`⏭️ [AI-REPLY] SKIPPED: Duplicate message detected - no AI reply for duplicates`)
   } else {
     console.log(`⏭️ [AI-REPLY] SKIPPED: Missing required data`, {
       hasMessage: !!message,
