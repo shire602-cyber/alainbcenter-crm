@@ -203,11 +203,6 @@ export async function handleInboundMessage(
     if (contact) {
       console.log(`✅ [INBOUND] Found existing contact via normalized phone: ${normalizedAddress}`)
     }
-  }
-  
-  if (!contact && contactLookupField === 'phone' && normalizedAddress) {
-    // Already checked above, but keep for consistency
-    contact = await findContactByPhone(prisma, normalizedAddress)
   } else if (contactLookupField === 'email' && normalizedAddress) {
     contact = await prisma.contact.findFirst({
       where: { email: normalizedAddress },
