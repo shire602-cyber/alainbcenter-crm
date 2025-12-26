@@ -32,7 +32,11 @@ export default async function IntegrationsPage() {
     { name: 'facebook', provider: 'Meta Lead Ads', config: JSON.stringify({}) },
     { name: 'instagram', provider: 'Meta Lead Ads', config: JSON.stringify({}) },
     { name: 'instagram-messaging', provider: 'Meta Messaging API', config: JSON.stringify({}) },
-    { name: 'openai', provider: 'OpenAI API', config: JSON.stringify({ model: 'gpt-4' }) },
+    // AI Providers - each has its own integration
+    { name: 'deepseek', provider: 'DeepSeek API', config: JSON.stringify({ model: 'deepseek-chat', provider: 'deepseek' }) },
+    { name: 'openai', provider: 'OpenAI API', config: JSON.stringify({ model: 'gpt-4o-mini', provider: 'openai' }) },
+    { name: 'groq', provider: 'Groq API', config: JSON.stringify({ model: 'llama-3.1-8b-instant', provider: 'groq' }) },
+    { name: 'anthropic', provider: 'Anthropic API', config: JSON.stringify({ model: 'claude-3-5-haiku-20241022', provider: 'anthropic' }) },
   ]
 
   for (const integration of requiredIntegrations) {

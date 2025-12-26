@@ -291,6 +291,12 @@ model Conversation {
   unreadCount      Int       @default(0)
   lockedService    String?   // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
   ruleEngineMemory String?   // JSON: Rule engine conversation memory (name, service, nationality, etc.)
+  // Conversation Flow State Machine (persisted)
+  flowKey          String?   // e.g., "family_visa", "freelance_visa", "business_setup"
+  flowStep         String?   // e.g., "WAIT_SPONSOR_VISA_TYPE", "WAIT_FAMILY_LOCATION", "PRICING"
+  lastQuestionKey  String?   // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
+  lastQuestionAt   DateTime? // When we last asked a question
+  collectedData    String?   // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -302,6 +308,8 @@ model Conversation {
   tasks             Task[]               @relation("ConversationTasks")
   notifications     Notification[]
   autoReplyLogs     AutoReplyLog[]
+  inboundMessageDedups InboundMessageDedup[]
+  outboundMessageLogs  OutboundMessageLog[]
 
   @@unique([contactId, channel])
   @@index([channel, lastMessageAt])
@@ -710,4 +718,40 @@ model AutoReplyLog {
   @@index([contactId, createdAt])
   @@index([decision, createdAt])
   @@index([channel, createdAt])
+}
+
+// Inbound message deduplication (hard idempotency)
+model InboundMessageDedup {
+  id                Int       @id @default(autoincrement())
+  provider          String    // 'whatsapp' | 'email' | etc.
+  providerMessageId String    @unique // External provider message ID (e.g., WhatsApp message ID)
+  conversation      Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId    Int?
+  receivedAt        DateTime  @default(now())
+  processedAt       DateTime? // When processing completed
+  processingStatus  String    @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  error             String?  // Error message if processing failed
+  
+  @@index([provider, providerMessageId])
+  @@index([conversationId, receivedAt])
+  @@index([processingStatus, receivedAt])
+}
+
+// Outbound message deduplication (hard idempotency)
+model OutboundMessageLog {
+  id                      Int       @id @default(autoincrement())
+  provider                String    // 'whatsapp' | 'email' | etc.
+  conversation            Conversation @relation(fields: [conversationId], references: [id])
+  conversationId          Int
+  triggerProviderMessageId String?  // The inbound message ID that triggered this outbound
+  outboundTextHash        String    // SHA256 hash of outbound message text for deduplication
+  outboundMessageId       Int?     // Reference to Message.id if created
+  flowStep                String?   // Conversation flow step when sent
+  lastQuestionKey         String?   // Last question key when sent
+  createdAt               DateTime  @default(now())
+  
+  @@unique([provider, triggerProviderMessageId]) // One outbound per inbound message
+  @@index([conversationId, createdAt])
+  @@index([triggerProviderMessageId])
+  @@index([flowStep, createdAt])
 }

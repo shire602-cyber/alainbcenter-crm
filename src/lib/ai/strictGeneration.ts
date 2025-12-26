@@ -29,6 +29,7 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
   name?: string
   freezone?: boolean
   mainland?: boolean
+  sponsor_status?: string
   [key: string]: any
 } {
   // #region agent log
@@ -173,6 +174,24 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
     provided.service = 'golden_visa'
   } else if (allText.includes('business setup') || allText.includes('license') || allText.includes('trading license')) {
     provided.service = 'business_setup'
+  }
+  
+  // Extract sponsor_status (for Family Visa) - check individual messages for simple answers
+  for (const msg of messages) {
+    const msgText = (msg.body || '').toLowerCase().trim()
+    if (msgText === 'partner' || msgText.includes('partner visa')) {
+      provided.sponsor_status = 'partner'
+      console.log(`📝 [EXTRACT] Extracted sponsor_status: partner`)
+      break
+    } else if (msgText === 'employment' || msgText.includes('employment visa')) {
+      provided.sponsor_status = 'employment'
+      console.log(`📝 [EXTRACT] Extracted sponsor_status: employment`)
+      break
+    } else if (msgText === 'investor' || msgText.includes('investor visa')) {
+      provided.sponsor_status = 'investor'
+      console.log(`📝 [EXTRACT] Extracted sponsor_status: investor`)
+      break
+    }
   }
   
   // Extract expiry date
