@@ -1,7 +1,7 @@
 import { prisma } from '@/lib/prisma'
 
 export interface AIConfig {
-  provider: 'openai' | 'groq' | 'anthropic'
+  provider: 'deepseek' | 'openai' | 'groq' | 'anthropic'
   model: string
   apiKey: string
 }
@@ -9,29 +9,29 @@ export interface AIConfig {
 /**
  * Get AI config from Integration settings or environment variable
  * Never expose to client-side code
- * Priority: Groq → OpenAI → Anthropic
+ * Priority: DeepSeek (Primary) → OpenAI (Fallback) → Anthropic → Groq
  */
 export async function getAIConfig(): Promise<AIConfig | null> {
   try {
-    // Check Groq first (preferred for simple tasks)
-    const groqIntegration = await prisma.integration.findUnique({
-      where: { name: 'groq' },
+    // Check DeepSeek first (Primary)
+    const deepseekIntegration = await prisma.integration.findUnique({
+      where: { name: 'deepseek' },
     })
-    if (groqIntegration?.isEnabled && groqIntegration.apiKey) {
+    if (deepseekIntegration?.isEnabled && deepseekIntegration.apiKey) {
       let config: any = {}
       try {
-        config = groqIntegration.config ? JSON.parse(groqIntegration.config) : {}
+        config = deepseekIntegration.config ? JSON.parse(deepseekIntegration.config) : {}
       } catch {
         config = {}
       }
       return {
-        provider: 'groq',
-        model: config.model || 'llama-3.1-70b-versatile',
-        apiKey: groqIntegration.apiKey,
+        provider: 'deepseek',
+        model: config.model || 'deepseek-chat',
+        apiKey: deepseekIntegration.apiKey,
       }
     }
 
-    // Fallback to OpenAI integration (which might be configured for Groq or other providers)
+    // Fallback to OpenAI integration (which might be configured for DeepSeek or other providers)
     const openaiIntegration = await prisma.integration.findUnique({
       where: { name: 'openai' },
     })
@@ -43,8 +43,13 @@ export async function getAIConfig(): Promise<AIConfig | null> {
         config = {}
       }
       // Use provider from config if specified, otherwise default to 'openai'
-      const provider = (config.provider || 'openai') as 'openai' | 'groq' | 'anthropic'
-      const model = config.model || (provider === 'groq' ? 'llama-3.1-70b-versatile' : provider === 'anthropic' ? 'claude-3-5-sonnet-20241022' : 'gpt-4o-mini')
+      const provider = (config.provider || 'openai') as 'deepseek' | 'openai' | 'groq' | 'anthropic'
+      const model = config.model || (
+        provider === 'deepseek' ? 'deepseek-chat' :
+        provider === 'groq' ? 'llama-3.1-70b-versatile' : 
+        provider === 'anthropic' ? 'claude-3-5-sonnet-20241022' : 
+        'gpt-4o-mini'
+      )
       
       return {
         provider,
@@ -72,11 +77,11 @@ export async function getAIConfig(): Promise<AIConfig | null> {
     }
 
     // Environment variable fallbacks (in priority order)
-    if (process.env.GROQ_API_KEY) {
+    if (process.env.DEEPSEEK_API_KEY) {
       return {
-        provider: 'groq',
-        model: 'llama-3.1-70b-versatile',
-        apiKey: process.env.GROQ_API_KEY,
+        provider: 'deepseek',
+        model: 'deepseek-chat',
+        apiKey: process.env.DEEPSEEK_API_KEY,
       }
     }
 
@@ -85,6 +90,14 @@ export async function getAIConfig(): Promise<AIConfig | null> {
         provider: 'openai',
         model: 'gpt-4o-mini',
         apiKey: process.env.OPENAI_API_KEY,
+      }
+    }
+
+    if (process.env.GROQ_API_KEY) {
+      return {
+        provider: 'groq',
+        model: 'llama-3.1-70b-versatile',
+        apiKey: process.env.GROQ_API_KEY,
       }
     }
 

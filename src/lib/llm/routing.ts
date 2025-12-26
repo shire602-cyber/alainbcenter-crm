@@ -2,47 +2,56 @@
  * LLM Routing Service
  * 
  * Routes requests to appropriate LLM based on complexity analysis
- * Implements smart fallback: Groq → OpenAI → Claude → Error
- * Uses Groq for simple tasks, OpenAI/Claude for complex tasks
+ * Implements smart fallback: DeepSeek (Primary) → OpenAI → Claude → Groq → Error
+ * Uses DeepSeek as primary for all tasks, OpenAI as fallback
  */
 
 import type { LLMProvider, LLMMessage, LLMCompletionOptions, LLMCompletionResult, LLMRoutingDecision } from './types'
-import { Llama3Provider } from './providers/llama3'
+import { DeepSeekProvider } from './providers/deepseek'
 import { OpenAIProvider } from './providers/openai'
+import { Llama3Provider } from './providers/llama3'
 import { AnthropicProvider } from './providers/anthropic'
 import { analyzeComplexity, requiresPremiumLLM, type ComplexityLevel } from './complexity'
 import { logUsage } from './usageLogger'
 
 export class RoutingService {
-  private llama3: Llama3Provider
+  private deepseek: DeepSeekProvider
   private openai: OpenAIProvider
+  private llama3: Llama3Provider
   private anthropic: AnthropicProvider
 
   constructor() {
-    this.llama3 = new Llama3Provider()
+    this.deepseek = new DeepSeekProvider()
     this.openai = new OpenAIProvider()
+    this.llama3 = new Llama3Provider()
     this.anthropic = new AnthropicProvider()
   }
 
   /**
    * Get available providers in priority order
+   * Priority: DeepSeek (Primary) → OpenAI (Fallback) → Anthropic → Groq
    */
   private async getAvailableProviders(): Promise<LLMProvider[]> {
     const providers: LLMProvider[] = []
     
-    // Check Groq
-    if (await this.llama3.isAvailable()) {
-      providers.push(this.llama3)
+    // Check DeepSeek first (Primary)
+    if (await this.deepseek.isAvailable()) {
+      providers.push(this.deepseek)
     }
     
-    // Check OpenAI
+    // Check OpenAI (Primary Fallback)
     if (await this.openai.isAvailable()) {
       providers.push(this.openai)
     }
     
-    // Check Anthropic
+    // Check Anthropic (Secondary Fallback)
     if (await this.anthropic.isAvailable()) {
       providers.push(this.anthropic)
+    }
+    
+    // Check Groq (Tertiary Fallback)
+    if (await this.llama3.isAvailable()) {
+      providers.push(this.llama3)
     }
     
     return providers
@@ -91,7 +100,7 @@ export class RoutingService {
     const availableProviders = await this.getAvailableProviders()
     
     if (availableProviders.length === 0) {
-      throw new Error('No LLM providers available. Configure at least one: Groq, OpenAI, or Anthropic.')
+      throw new Error('No LLM providers available. Configure at least one: DeepSeek, OpenAI, Anthropic, or Groq.')
     }
 
     // Analyze complexity
@@ -103,35 +112,28 @@ export class RoutingService {
     const isSimpleTask = taskType === 'greeting' || taskType === 'followup' || taskType === 'reminder'
 
     // Routing strategy:
-    // - Simple tasks (greeting, followup, reminder) → Prefer Groq
-    // - Complex tasks → Prefer OpenAI or Claude
-    // - Fallback: Use whichever is available
+    // - Primary: DeepSeek (for all tasks - cost-effective and high quality)
+    // - Fallback: OpenAI → Anthropic → Groq
+    // - DeepSeek is preferred for both simple and complex tasks
     
     let primaryProvider: LLMProvider | null = null
     let fallbackProviders: LLMProvider[] = []
     
-    if (isSimpleTask && !needsPremium) {
-      // Simple task: Prefer Groq, fallback to OpenAI/Claude
-      if (availableProviders.some(p => p.name === 'llama3')) {
-        primaryProvider = availableProviders.find(p => p.name === 'llama3')!
-        fallbackProviders = availableProviders.filter(p => p.name !== 'llama3')
-      } else {
-        // Groq not available, use first available premium provider
-        primaryProvider = availableProviders[0]
-        fallbackProviders = availableProviders.slice(1)
-      }
+    // Always prefer DeepSeek as primary
+    if (availableProviders.some(p => p.name === 'deepseek')) {
+      primaryProvider = availableProviders.find(p => p.name === 'deepseek')!
+      // Fallback order: OpenAI → Anthropic → Groq
+      fallbackProviders = availableProviders.filter(p => p.name !== 'deepseek').sort((a, b) => {
+        const order = { 'openai': 1, 'anthropic': 2, 'llama3': 3 }
+        return (order[a.name as keyof typeof order] || 99) - (order[b.name as keyof typeof order] || 99)
+      })
     } else {
-      // Complex task: Prefer OpenAI or Claude, fallback to Groq
-      const premiumProviders = availableProviders.filter(p => p.name === 'openai' || p.name === 'anthropic')
-      if (premiumProviders.length > 0) {
-        // Prefer OpenAI over Claude, but use either
-        primaryProvider = premiumProviders.find(p => p.name === 'openai') || premiumProviders[0]
-        fallbackProviders = [
-          ...premiumProviders.filter(p => p !== primaryProvider),
-          ...availableProviders.filter(p => p.name === 'llama3')
-        ]
+      // DeepSeek not available, use OpenAI as primary
+      if (availableProviders.some(p => p.name === 'openai')) {
+        primaryProvider = availableProviders.find(p => p.name === 'openai')!
+        fallbackProviders = availableProviders.filter(p => p.name !== 'openai')
       } else {
-        // No premium available, use Groq
+        // No DeepSeek or OpenAI, use first available
         primaryProvider = availableProviders[0]
         fallbackProviders = availableProviders.slice(1)
       }
@@ -163,10 +165,10 @@ export class RoutingService {
         const decision: LLMRoutingDecision = {
           provider,
           reason: isFallback 
-            ? `Using ${provider.name} as fallback (primary failed)`
-            : isSimpleTask
-              ? `Simple task (${taskType}) - using cost-effective ${provider.name}`
-              : `Complex task - using premium ${provider.name}`,
+            ? `Using ${provider.name} as fallback (DeepSeek primary failed)`
+            : provider.name === 'deepseek'
+              ? `Using DeepSeek (primary) for ${taskType} task`
+              : `Using ${provider.name} (DeepSeek not available)`,
           complexity: analysis.level,
           estimatedCost: this.estimateCost(provider, messages, options),
         }
