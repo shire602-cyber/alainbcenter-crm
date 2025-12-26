@@ -72,7 +72,8 @@ export async function handleInboundMessage(
   const timestamp = receivedAt || new Date()
   const channelLower = channel.toLowerCase()
 
-  // Step 1: Normalize fromAddress per channel
+  // FIX C: Normalize phone for ANY channel if it looks like a phone
+  // This prevents duplicate contacts from inconsistent phone normalization
   let normalizedAddress: string | null = null
   let contactLookupField: 'phone' | 'email' | null = null
 
@@ -83,26 +84,57 @@ export async function handleInboundMessage(
     }
   } else if (channel === 'EMAIL') {
     if (fromAddress) {
-      normalizedAddress = fromAddress.toLowerCase().trim()
-      contactLookupField = 'email'
+      // FIX C: Check if email contains phone-like pattern, normalize if so
+      if (/^\+?[0-9]/.test(fromAddress) && !fromAddress.includes('@')) {
+        try {
+          normalizedAddress = normalizeInboundPhone(fromAddress)
+          contactLookupField = 'phone'
+        } catch {
+          // Not a valid phone, treat as email
+          normalizedAddress = fromAddress.toLowerCase().trim()
+          contactLookupField = 'email'
+        }
+      } else {
+        normalizedAddress = fromAddress.toLowerCase().trim()
+        contactLookupField = 'email'
+      }
     }
   } else if (channel === 'INSTAGRAM' || channel === 'FACEBOOK') {
-    // For social platforms, we'll store the handle/ID in a field
-    // For now, try to find by phone/email if provided, otherwise use fromAddress as identifier
-    normalizedAddress = fromAddress || null
-    // We'll search by phone/email first, then by external ID in conversation
-    contactLookupField = null // Will search by multiple fields
-  } else if (channel === 'WEBCHAT') {
-    // Webchat might provide email or session ID
-    if (fromAddress?.includes('@')) {
-      normalizedAddress = fromAddress.toLowerCase().trim()
-      contactLookupField = 'email'
+    // FIX C: Normalize phone if fromAddress looks like a phone number
+    if (fromAddress && /^\+?[0-9]/.test(fromAddress) && !fromAddress.includes('@')) {
+      try {
+        normalizedAddress = normalizeInboundPhone(fromAddress)
+        contactLookupField = 'phone'
+      } catch {
+        // Not a valid phone, use as-is
+        normalizedAddress = fromAddress || null
+        contactLookupField = null
+      }
     } else {
       normalizedAddress = fromAddress || null
       contactLookupField = null
     }
+  } else if (channel === 'WEBCHAT') {
+    // FIX C: Normalize phone if fromAddress looks like a phone number
+    if (fromAddress) {
+      if (fromAddress.includes('@')) {
+        normalizedAddress = fromAddress.toLowerCase().trim()
+        contactLookupField = 'email'
+      } else if (/^\+?[0-9]/.test(fromAddress)) {
+        try {
+          normalizedAddress = normalizeInboundPhone(fromAddress)
+          contactLookupField = 'phone'
+        } catch {
+          normalizedAddress = fromAddress || null
+          contactLookupField = null
+        }
+      } else {
+        normalizedAddress = fromAddress || null
+        contactLookupField = null
+      }
+    }
   }
-
+  
   // Step 2: Idempotency check - if externalMessageId provided, check for existing message
   if (externalMessageId) {
     const existingMessage = await prisma.message.findUnique({
@@ -161,9 +193,20 @@ export async function handleInboundMessage(
   }
 
   // Step 3: Find or create Contact
+  // FIX C: Before creating a new Contact, attempt findContactByPhone with normalized E.164
+  // This ensures we don't create duplicate contacts due to phone format differences
   let contact = null
 
   if (contactLookupField === 'phone' && normalizedAddress) {
+    // Try to find by normalized phone (E.164)
+    contact = await findContactByPhone(prisma, normalizedAddress)
+    if (contact) {
+      console.log(`✅ [INBOUND] Found existing contact via normalized phone: ${normalizedAddress}`)
+    }
+  }
+  
+  if (!contact && contactLookupField === 'phone' && normalizedAddress) {
+    // Already checked above, but keep for consistency
     contact = await findContactByPhone(prisma, normalizedAddress)
   } else if (contactLookupField === 'email' && normalizedAddress) {
     contact = await prisma.contact.findFirst({
@@ -508,14 +551,26 @@ export async function handleInboundMessage(
   }
 
   // Step 8: AI Data Extraction (Phase 1) - Extract structured data from message
+  // CRITICAL: Make this non-blocking - don't let AI extraction failures prevent auto-reply
   if (body && body.trim().length > 0) {
-    try {
-      const { extractLeadDataFromMessage } = await import('./ai/extractData')
-      const extracted = await extractLeadDataFromMessage(
-        body,
-        contact,
-        lead
-      )
+    // Run AI extraction in background (fire and forget) - don't block message processing
+    // This ensures auto-reply always works even if AI extraction fails
+    ;(async () => {
+      try {
+        const { extractLeadDataFromMessage } = await import('./ai/extractData')
+        // Add timeout to prevent hanging on network errors
+        const extractionPromise = extractLeadDataFromMessage(
+          body,
+          contact,
+          lead
+        )
+        
+        // Set 3 second timeout for AI extraction (prevent hanging on network errors)
+        const timeoutPromise = new Promise((_, reject) => 
+          setTimeout(() => reject(new Error('AI extraction timeout after 3s')), 3000)
+        )
+        
+        const extracted = await Promise.race([extractionPromise, timeoutPromise]) as any
 
       // CRITICAL FIX: Always update name and nationality when provided, even with lower confidence
       // User requirement: "when a customer gives their name and nationality lead should be updated automatically"
@@ -650,10 +705,15 @@ export async function handleInboundMessage(
         })
         console.log(`✅ Updated lead ${lead.id} with AI-extracted data`)
       }
-    } catch (extractError: any) {
-      // Don't fail the whole process if extraction fails
-      console.warn('AI data extraction failed (non-blocking):', extractError.message)
-    }
+      } catch (extractError: any) {
+        // Don't fail the whole process if extraction fails - this is non-blocking
+        console.warn('⚠️ [AI-EXTRACT] AI data extraction failed (non-blocking, continuing):', extractError.message)
+        // Continue - extraction failure should never block message processing or auto-reply
+      }
+    })().catch((unhandledError: any) => {
+      // Catch any unhandled promise rejections in background extraction
+      console.warn('⚠️ [AI-EXTRACT] Unhandled error in background extraction:', unhandledError.message)
+    })
   }
 
   // BUG FIX #2: Removed duplicate AI reply call from inbound.ts
