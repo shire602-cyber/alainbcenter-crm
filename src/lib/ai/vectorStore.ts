@@ -97,30 +97,68 @@ class InMemoryVectorStore {
 const vectorStore = new InMemoryVectorStore()
 
 /**
- * Generate embedding using OpenAI API
+ * Generate embedding using configured AI provider (OpenAI-compatible API)
+ * Falls back to OpenAI if configured provider doesn't support embeddings
  */
 async function generateEmbedding(text: string): Promise<number[]> {
-  const openaiApiKey = process.env.OPENAI_API_KEY
-  if (!openaiApiKey) {
-    throw new Error('OPENAI_API_KEY not configured')
+  // Try to get configured AI provider first
+  let apiKey: string | null = null
+  let apiUrl: string = 'https://api.openai.com/v1/embeddings'
+  let model: string = 'text-embedding-3-small'
+  
+  try {
+    const { getAIConfig } = await import('./client')
+    const config = await getAIConfig()
+    
+    if (config) {
+      // DeepSeek and OpenAI use OpenAI-compatible API
+      // Note: DeepSeek may not support embeddings yet, so we'll try and fallback
+      if (config.provider === 'deepseek') {
+        apiKey = config.apiKey
+        apiUrl = 'https://api.deepseek.com/v1/embeddings'
+        model = 'text-embedding-3-small' // Use OpenAI model name (DeepSeek may not have embeddings)
+      } else if (config.provider === 'openai') {
+        apiKey = config.apiKey
+        apiUrl = 'https://api.openai.com/v1/embeddings'
+        model = 'text-embedding-3-small'
+      }
+      // Groq and Anthropic don't have embeddings, will fallback to OpenAI
+    }
+  } catch (error) {
+    console.warn('Failed to get AI config for embeddings, using OpenAI fallback:', error)
+  }
+  
+  // Fallback to OpenAI if no provider configured or if provider doesn't support embeddings
+  if (!apiKey) {
+    apiKey = process.env.OPENAI_API_KEY || null
+    if (!apiKey) {
+      throw new Error('No embedding provider configured. Set OPENAI_API_KEY or configure DeepSeek/OpenAI integration.')
+    }
+    apiUrl = 'https://api.openai.com/v1/embeddings'
+    model = 'text-embedding-3-small'
   }
 
   try {
-    const response = await fetch('https://api.openai.com/v1/embeddings', {
+    const response = await fetch(apiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': `Bearer ${openaiApiKey}`,
+        'Authorization': `Bearer ${apiKey}`,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'text-embedding-3-small', // Cost-effective, good quality
+        model: model,
         input: text.substring(0, 8000), // Limit to 8000 chars
       }),
     })
 
     if (!response.ok) {
+      // If DeepSeek doesn't support embeddings, fallback to OpenAI
+      if (apiUrl.includes('deepseek.com') && response.status === 404) {
+        console.warn('DeepSeek embeddings not supported, falling back to OpenAI')
+        return generateEmbeddingWithOpenAI(text)
+      }
       const error = await response.json().catch(() => ({ error: 'Unknown error' }))
-      throw new Error(`OpenAI API error: ${error.error?.message || 'Failed to generate embedding'}`)
+      throw new Error(`Embedding API error: ${error.error?.message || 'Failed to generate embedding'}`)
     }
 
     const data = await response.json()
@@ -129,9 +167,47 @@ async function generateEmbedding(text: string): Promise<number[]> {
     }
     return data.data[0].embedding
   } catch (error: any) {
+    // If using DeepSeek and it fails, try OpenAI fallback
+    if (apiUrl.includes('deepseek.com') && !error.message.includes('OPENAI_API_KEY')) {
+      console.warn('DeepSeek embedding failed, falling back to OpenAI:', error.message)
+      return generateEmbeddingWithOpenAI(text)
+    }
     console.error('Embedding generation error:', error)
     throw error
   }
+}
+
+/**
+ * Fallback to OpenAI for embeddings
+ */
+async function generateEmbeddingWithOpenAI(text: string): Promise<number[]> {
+  const openaiApiKey = process.env.OPENAI_API_KEY
+  if (!openaiApiKey) {
+    throw new Error('OPENAI_API_KEY not configured for embeddings fallback')
+  }
+
+  const response = await fetch('https://api.openai.com/v1/embeddings', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${openaiApiKey}`,
+      'Content-Type': 'application/json',
+    },
+    body: JSON.stringify({
+      model: 'text-embedding-3-small',
+      input: text.substring(0, 8000),
+    }),
+  })
+
+  if (!response.ok) {
+    const error = await response.json().catch(() => ({ error: 'Unknown error' }))
+    throw new Error(`OpenAI embedding API error: ${error.error?.message || 'Failed to generate embedding'}`)
+  }
+
+  const data = await response.json()
+  if (!data.data || !Array.isArray(data.data) || data.data.length === 0) {
+    throw new Error('Invalid embedding response: missing or empty data array')
+  }
+  return data.data[0].embedding
 }
 
 /**

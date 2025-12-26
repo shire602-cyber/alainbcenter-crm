@@ -37,8 +37,11 @@ export async function extractLeadDataFromMessage(
   
   // If AI not configured, use basic regex extraction as fallback
   if (!config) {
+    console.log('⚠️ [AI-EXTRACT] No AI config found, using basic extraction')
     return extractBasicData(messageText, existingContact, existingLead)
   }
+
+  console.log(`🔍 [AI-EXTRACT] Using provider: ${config.provider}, model: ${config.model}`)
 
   try {
     // Build prompt for AI extraction
@@ -83,7 +86,32 @@ Return JSON in this exact format:
     let headers: Record<string, string>
     let body: any
 
-    if (config.provider === 'openai') {
+    // Provider priority: DeepSeek (Primary) → OpenAI → Anthropic → Groq
+    if (config.provider === 'deepseek') {
+      // DeepSeek (Primary) - uses OpenAI-compatible API
+      apiUrl = 'https://api.deepseek.com/v1/chat/completions'
+      headers = {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${config.apiKey}`,
+      }
+      body = {
+        model: config.model || 'deepseek-chat',
+        messages: [
+          {
+            role: 'system',
+            content: 'You are a data extraction assistant. Extract structured information from customer messages and return ONLY valid JSON, no explanations.',
+          },
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+        temperature: 0.3,
+        max_tokens: 500,
+        response_format: { type: 'json_object' },
+      }
+    } else if (config.provider === 'openai') {
+      // OpenAI (Fallback #1)
       apiUrl = 'https://api.openai.com/v1/chat/completions'
       headers = {
         'Content-Type': 'application/json',
@@ -105,7 +133,27 @@ Return JSON in this exact format:
         max_tokens: 500,
         response_format: { type: 'json_object' },
       }
+    } else if (config.provider === 'anthropic') {
+      // Anthropic (Fallback #2)
+      apiUrl = 'https://api.anthropic.com/v1/messages'
+      headers = {
+        'Content-Type': 'application/json',
+        'x-api-key': config.apiKey,
+        'anthropic-version': '2023-06-01',
+      }
+      body = {
+        model: config.model,
+        max_tokens: 500,
+        system: 'You are a data extraction assistant. Extract structured information from customer messages and return ONLY valid JSON, no explanations.',
+        messages: [
+          {
+            role: 'user',
+            content: prompt,
+          },
+        ],
+      }
     } else if (config.provider === 'groq') {
+      // Groq (Fallback #3)
       apiUrl = 'https://api.groq.com/openai/v1/chat/completions'
       headers = {
         'Content-Type': 'application/json',
@@ -128,24 +176,9 @@ Return JSON in this exact format:
         response_format: { type: 'json_object' },
       }
     } else {
-      // Anthropic
-      apiUrl = 'https://api.anthropic.com/v1/messages'
-      headers = {
-        'Content-Type': 'application/json',
-        'x-api-key': config.apiKey,
-        'anthropic-version': '2023-06-01',
-      }
-      body = {
-        model: config.model,
-        max_tokens: 500,
-        system: 'You are a data extraction assistant. Extract structured information from customer messages and return ONLY valid JSON, no explanations.',
-        messages: [
-          {
-            role: 'user',
-            content: prompt,
-          },
-        ],
-      }
+      // Unknown provider - fallback to basic extraction
+      console.warn(`Unknown AI provider: ${config.provider}, using basic extraction`)
+      return extractBasicData(messageText, existingContact, existingLead)
     }
 
     const response = await fetch(apiUrl, {
@@ -163,8 +196,10 @@ Return JSON in this exact format:
     let content = ''
     
     if (config.provider === 'anthropic') {
+      // Anthropic uses different response format
       content = data.content?.[0]?.text?.trim() || '{}'
     } else {
+      // DeepSeek, OpenAI, and Groq all use OpenAI-compatible response format
       content = data.choices[0]?.message?.content?.trim() || '{}'
     }
 
