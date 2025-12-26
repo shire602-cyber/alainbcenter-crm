@@ -12,6 +12,27 @@ import type { AIMessageContext } from './aiMessaging'
 import { retrieveAndGuard, markLeadRequiresHuman } from './ai/retrieverChain'
 import { notifyAIUntrainedSubject } from './notifications'
 import { createAgentTask } from './automation/agentFallback'
+
+/**
+ * Calculate similarity between two messages (0-1)
+ * Simple word-based similarity check
+ */
+function calculateMessageSimilarity(msg1: string, msg2: string): number {
+  const words1 = new Set(msg1.toLowerCase().split(/\s+/).filter(w => w.length > 2))
+  const words2 = new Set(msg2.toLowerCase().split(/\s+/).filter(w => w.length > 2))
+  
+  if (words1.size === 0 || words2.size === 0) return 0
+  
+  let intersection = 0
+  for (const word of words1) {
+    if (words2.has(word)) {
+      intersection++
+    }
+  }
+  
+  const union = words1.size + words2.size - intersection
+  return union > 0 ? intersection / union : 0
+}
 import { detectLanguage } from './utils/languageDetection'
 import { 
   getAgentProfileForLead, 
@@ -28,6 +49,7 @@ interface AutoReplyOptions {
   messageText: string
   channel: string
   contactId: number
+  triggerProviderMessageId?: string // WhatsApp message ID that triggered this reply (for outbound idempotency)
 }
 
 /**
@@ -181,7 +203,65 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
   reason?: string
   error?: string
 }> {
-  const { leadId, messageId, messageText, channel, contactId } = options
+  const { leadId, messageId, messageText, channel, contactId, triggerProviderMessageId } = options
+  
+  // CRITICAL FIX #2: Reply idempotency check (hard dedupe)
+  // BUG FIX #2: Check idempotency even if triggerProviderMessageId is missing
+  // This prevents duplicates when called from both inbound.ts and webhook
+  if (channel.toLowerCase() === 'whatsapp') {
+    const { checkOutboundIdempotency } = await import('./webhook/idempotency')
+    
+    // If we have triggerProviderMessageId, check by that (most reliable)
+    if (triggerProviderMessageId) {
+      const outboundCheck = await checkOutboundIdempotency('whatsapp', triggerProviderMessageId)
+      
+      if (outboundCheck.alreadySent) {
+        console.log(`⚠️ [IDEMPOTENCY] Outbound already sent for inbound ${triggerProviderMessageId} - skipping reply`)
+        console.log(`📊 [OUTBOUND-LOG] triggerProviderMessageId: ${triggerProviderMessageId}, outboundMessageId: ${outboundCheck.logRecord?.outboundMessageId || 'unknown'}, flowStep: ${outboundCheck.logRecord?.flowStep || 'unknown'}, lastQuestionKey: ${outboundCheck.logRecord?.lastQuestionKey || 'unknown'}`)
+        return { replied: false, reason: 'Outbound already sent for this inbound message' }
+      }
+    }
+    
+    // BUG FIX #2: Also check by messageId to catch duplicates from inbound.ts calls
+    // Check if we recently sent a reply for this same messageId (within last 30 seconds)
+    const conversation = await prisma.conversation.findFirst({
+      where: {
+        contactId: contactId,
+        leadId: leadId,
+        channel: channel.toLowerCase(),
+      },
+    })
+    
+    if (conversation) {
+      const recentOutbound = await prisma.message.findFirst({
+        where: {
+          conversationId: conversation.id,
+          direction: 'OUTBOUND',
+          createdAt: {
+            gte: new Date(Date.now() - 30000), // Last 30 seconds
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      
+      if (recentOutbound) {
+        // Check if this is likely a duplicate (same conversation, very recent)
+        const recentInbound = await prisma.message.findFirst({
+          where: {
+            id: messageId,
+            conversationId: conversation.id,
+            direction: 'INBOUND',
+          },
+        })
+        
+        if (recentInbound && recentOutbound.createdAt > recentInbound.createdAt) {
+          // Outbound was sent after this inbound - likely a duplicate
+          console.log(`⚠️ [IDEMPOTENCY] Recent outbound detected for message ${messageId} - likely duplicate, skipping`)
+          return { replied: false, reason: 'Recent outbound detected for this message - likely duplicate' }
+        }
+      }
+    }
+  }
 
   if (!messageText || !messageText.trim()) {
     console.log(`⏭️ Auto-reply skipped: Empty message text for lead ${leadId}`)
@@ -647,30 +727,43 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             // Load existing memory from conversation
             const existingMemory = await loadConversationMemory(conversation.id)
             
-            // Get ALL messages from conversation
+            // Get ALL messages from conversation (CRITICAL: Must include current message)
             const conversationMessages = await prisma.message.findMany({
               where: {
                 conversationId: conversation.id,
               },
               orderBy: {
-                createdAt: 'asc',
+                createdAt: 'asc', // Chronological order
               },
               take: 50, // Get more messages for better context
             })
             
-            // Build conversation history
-            const fullConversationHistory = [
-              {
-                direction: 'INBOUND',
-                body: messageText,
-                createdAt: new Date(),
-              },
-              ...conversationMessages.map(m => ({
-                direction: m.direction,
-                body: m.body || '',
-                createdAt: m.createdAt,
-              })),
-            ]
+            // CRITICAL: Build conversation history in chronological order
+            // Include current inbound message if it's not already in the database
+            const currentMessageInDb = conversationMessages.find(m => m.id === messageId)
+            const fullConversationHistory = currentMessageInDb
+              ? conversationMessages.map(m => ({
+                  direction: m.direction,
+                  body: m.body || '',
+                  createdAt: m.createdAt,
+                }))
+              : [
+                  // Current inbound message first (if not in DB yet)
+                  {
+                    direction: 'INBOUND',
+                    body: messageText,
+                    createdAt: new Date(),
+                  },
+                  // Then all previous messages
+                  ...conversationMessages.map(m => ({
+                    direction: m.direction,
+                    body: m.body || '',
+                    createdAt: m.createdAt,
+                  })),
+                ]
+            
+            console.log(`📋 [RULE-ENGINE] Conversation history: ${fullConversationHistory.length} messages`)
+            console.log(`📋 [RULE-ENGINE] Last 3 messages:`, fullConversationHistory.slice(-3).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
             
             // Check if this is first message in thread
             const isFirstMessage = conversationMessages.filter(m => m.direction === 'OUTBOUND').length === 0
@@ -726,24 +819,35 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               orderBy: {
                 createdAt: 'asc', // Chronological order
               },
-              take: 20, // Get last 20 messages for context
+              take: 50, // Get more messages for better context
             })
             
-            // Build conversation history with ALL messages from conversation
-            const fullConversationHistory = [
-              // Current inbound message first
-              {
-                direction: 'INBOUND',
-                body: messageText,
-                createdAt: new Date(),
-              },
-              // Then all previous messages from conversation
-              ...conversationMessages.map(m => ({
-                direction: m.direction,
-                body: m.body || '',
-                createdAt: m.createdAt,
-              })),
-            ]
+            // CRITICAL: Build conversation history in chronological order
+            // Include current inbound message if it's not already in the database
+            const currentMessageInDb = conversationMessages.find(m => m.id === messageId)
+            const fullConversationHistory = currentMessageInDb
+              ? conversationMessages.map(m => ({
+                  direction: m.direction,
+                  body: m.body || '',
+                  createdAt: m.createdAt,
+                }))
+              : [
+                  // Current inbound message first (if not in DB yet)
+                  {
+                    direction: 'INBOUND',
+                    body: messageText,
+                    createdAt: new Date(),
+                  },
+                  // Then all previous messages
+                  ...conversationMessages.map(m => ({
+                    direction: m.direction,
+                    body: m.body || '',
+                    createdAt: m.createdAt,
+                  })),
+                ]
+            
+            console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
+            console.log(`📋 [STRICT-AI] Last 3 messages:`, fullConversationHistory.slice(-3).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
             
             console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
             console.log(`📋 [STRICT-AI] Sample messages:`, fullConversationHistory.slice(-5).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
@@ -900,27 +1004,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       const isVisaQuestion = userMessage.includes('visa') || userMessage.includes('freelance') || 
                             userMessage.includes('family visa') || userMessage.includes('visit visa')
       
-      if (userMessage === 'hi' || userMessage === 'hello' || userMessage === 'hey' || userMessage.length < 3) {
-        // Simple greeting
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، أهلاً بك في مركز عين الأعمال! كيف يمكنني مساعدتك اليوم؟`
-          : `Hi ${contactName}, welcome to Al Ain Business Center! How can I help you today?`
-      } else if (isLicenseQuestion) {
-        // Business setup/license question - ask for freezone/mainland
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، شكراً لاهتمامك برخصة التجارة العامة. هل تفضل المنطقة الحرة أم البر الرئيسي؟`
-          : `Hi ${contactName}, thanks for your interest in a general trading license. Would you prefer Freezone or Mainland?`
-      } else if (isVisaQuestion) {
-        // Visa question - ask for nationality and location
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، شكراً لاهتمامك. ما هي جنسيتك وهل أنت داخل الإمارات أم خارجها؟`
-          : `Hi ${contactName}, thanks for your interest. What's your nationality and are you inside or outside UAE?`
-      } else {
-        // Generic fallback - but still try to be helpful
-        fallbackText = detectedLanguage === 'ar'
-          ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك بالمعلومات قريباً.`
-          : `Hi ${contactName}, I received your message. Let me get back to you with the information you need.`
-      }
+      // BUG FIX #1: Fallback should be minimal acknowledgment only, NO questions
+      // All fallback messages should simply acknowledge receipt without asking questions
+      fallbackText = detectedLanguage === 'ar'
+        ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك قريباً.`
+        : `Hi ${contactName}, I received your message. I'll get back to you shortly.`
       
       aiResult = {
         text: fallbackText,
@@ -985,7 +1073,36 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     console.log(`✅ [AUTO-REPLY] Reply text generated: ${aiResult.text.length} chars`)
 
-    // Step 9: Send reply immediately
+    // Step 9: Check for duplicate reply (deduplication)
+    // CRITICAL: Prevent sending the same message twice
+    if (conversation) {
+      const recentOutbound = await prisma.message.findMany({
+        where: {
+          conversationId: conversation.id,
+          direction: 'OUTBOUND',
+          createdAt: {
+            gte: new Date(Date.now() - 60000), // Last 60 seconds
+          },
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 3,
+      })
+      
+      const replyText = aiResult.text
+      for (const msg of recentOutbound) {
+        if (msg.body && replyText) {
+          const similarity = calculateMessageSimilarity(replyText, msg.body)
+          if (similarity > 0.8) {
+            console.log(`⚠️ [DUPLICATE-CHECK] Reply is >80% similar to recent message (ID: ${msg.id}). Skipping send to prevent loop.`)
+            console.log(`   Recent: "${msg.body.substring(0, 50)}..."`)
+            console.log(`   New: "${replyText.substring(0, 50)}..."`)
+            return { replied: false, reason: 'Duplicate reply detected - preventing loop' }
+          }
+        }
+      }
+    }
+    
+    // Step 10: Send reply immediately
     // At this point, aiResult.text is guaranteed to exist (checked above)
     const replyText = aiResult.text
     const channelUpper = channel.toUpperCase()
@@ -1016,6 +1133,19 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           throw new Error('No message ID returned from WhatsApp API')
         }
         console.log(`✅ [SEND] Message ID received: ${result.messageId}`)
+        
+        // CRITICAL FIX #3 & #6: Load flow state and log outbound message
+        let flowStep: string | undefined
+        let lastQuestionKey: string | undefined
+        
+        if (conversation) {
+          const { loadFlowState } = await import('./conversation/flowState')
+          const flowState = await loadFlowState(conversation.id)
+          flowStep = flowState.flowStep
+          lastQuestionKey = flowState.lastQuestionKey
+          
+          console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
+        }
 
         // Step 7: Check for duplicate outbound message (idempotency)
         // Check if we already sent this exact message recently (within last 5 seconds)
@@ -1035,40 +1165,42 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           console.log(`⚠️ [DUPLICATE-OUTBOUND] Duplicate outbound message detected (ID: ${recentDuplicate.id}) - skipping save`)
           console.log(`   Message: "${replyText.substring(0, 50)}..."`)
           console.log(`   This prevents duplicate sends from webhook retries`)
-        } else {
-          // Step 7: Save outbound message (conversation already loaded above)
-          if (conversation) {
-            await prisma.message.create({
-              data: {
-                conversationId: conversation.id,
-                leadId: leadId,
-                contactId: contactId,
-                direction: 'OUTBOUND',
-                channel: channel.toLowerCase(),
-                type: 'text',
-                body: replyText,
-                status: 'SENT',
-                providerMessageId: result.messageId,
-                rawPayload: JSON.stringify({
-                  automation: true,
-                  autoReply: true,
-                  aiGenerated: true,
-                  confidence: aiResult.confidence,
-                }),
-                sentAt: new Date(),
-              },
-            })
+          return { replied: false, reason: 'Duplicate outbound message detected' }
+        }
+        
+        // Step 7: Save outbound message (conversation already loaded above)
+        let savedMessage: any = null
+        if (conversation) {
+          savedMessage = await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              leadId: leadId,
+              contactId: contactId,
+              direction: 'OUTBOUND',
+              channel: channel.toLowerCase(),
+              type: 'text',
+              body: replyText,
+              status: 'SENT',
+              providerMessageId: result.messageId,
+              rawPayload: JSON.stringify({
+                automation: true,
+                autoReply: true,
+                aiGenerated: true,
+                confidence: aiResult.confidence,
+              }),
+              sentAt: new Date(),
+            },
+          })
 
-            // Update conversation
-            await prisma.conversation.update({
-              where: { id: conversation.id },
-              data: {
-                lastMessageAt: new Date(),
-                lastOutboundAt: new Date(),
-                unreadCount: 0,
-              },
-            })
-          }
+          // Update conversation
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              lastMessageAt: new Date(),
+              lastOutboundAt: new Date(),
+              unreadCount: 0,
+            },
+          })
         }
 
         // Update lead: mark last auto-reply time
@@ -1082,6 +1214,32 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         })
 
         console.log(`✅ AI reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
+        
+        // CRITICAL FIX #2: Log outbound message for idempotency
+        // BUG FIX #2: Always log outbound, even if triggerProviderMessageId is missing
+        // This ensures we can detect duplicates even if called from inbound.ts (legacy path)
+        if (conversation) {
+          const { logOutboundMessage } = await import('./webhook/idempotency')
+          try {
+            await logOutboundMessage(
+              'whatsapp',
+              conversation.id,
+              triggerProviderMessageId || null, // May be null if called from inbound.ts
+              replyText,
+              savedMessage?.id || null,
+              flowStep,
+              lastQuestionKey
+            )
+            console.log(`📊 [OUTBOUND-LOG] triggerProviderMessageId: ${triggerProviderMessageId || 'none'}, outboundMessageId: ${savedMessage?.id || 'unknown'}, flowStep: ${flowStep || 'unknown'}, lastQuestionKey: ${lastQuestionKey || 'unknown'}`)
+          } catch (logError: any) {
+            // If logging fails due to unique constraint, that's OK - already logged
+            if (logError.code === 'P2002') {
+              console.log(`⚠️ [OUTBOUND-LOG] Outbound already logged (duplicate detected)`)
+            } else {
+              console.warn(`⚠️ [OUTBOUND-LOG] Failed to log outbound (non-blocking):`, logError.message)
+            }
+          }
+        }
         
         // Update structured log with success
         if (autoReplyLog) {

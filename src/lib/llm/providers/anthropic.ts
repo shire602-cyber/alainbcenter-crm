@@ -30,6 +30,18 @@ export class AnthropicProvider implements LLMProvider {
         })
         if (integration?.isEnabled && integration.apiKey) {
           this.apiKey = integration.apiKey
+          // Get model from config if available
+          if (integration.config) {
+            try {
+              const config = JSON.parse(integration.config)
+              if (config.model) {
+                // Update model if specified in config
+                (this as any).model = config.model
+              }
+            } catch {
+              // Config parse error, use default
+            }
+          }
           return true
         }
       } catch {

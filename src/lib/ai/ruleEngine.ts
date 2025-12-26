@@ -504,6 +504,15 @@ export interface ConversationMemory {
   investor_type?: string
   service_variant?: string
   pro_scope?: string
+  // State flags to track which questions have been asked
+  has_asked_name?: boolean
+  has_asked_service?: boolean
+  has_asked_nationality?: boolean
+  has_asked_inside_uae?: boolean
+  has_asked_sponsor_status?: boolean
+  has_asked_family_location?: boolean
+  has_asked_license_type?: boolean
+  has_asked_business_activity?: boolean
   [key: string]: any
 }
 
@@ -678,6 +687,44 @@ function extractAndUpdateMemory(
       updates.service_variant = 'visa'
     } else if (lowerMessage.includes('permit') || lowerMessage.includes('permit + visa') || lowerMessage.includes('permit and visa')) {
       updates.service_variant = 'permit'
+    }
+  }
+  
+  // Extract sponsor_status (for Family Visa)
+  if (!currentMemory.sponsor_status) {
+    // Check for explicit answers
+    if (lowerMessage === 'partner' || lowerMessage.includes('partner visa') || lowerMessage.includes('partner visa type')) {
+      updates.sponsor_status = 'partner'
+    } else if (lowerMessage === 'employment' || lowerMessage.includes('employment visa') || lowerMessage.includes('work visa')) {
+      updates.sponsor_status = 'employment'
+    } else if (lowerMessage === 'investor' || lowerMessage.includes('investor visa')) {
+      updates.sponsor_status = 'investor'
+    }
+    
+    // Also check conversation history for answers
+    if (!updates.sponsor_status) {
+      for (const msg of conversationHistory) {
+        const msgText = (msg.body || '').toLowerCase().trim()
+        if (msgText === 'partner' || msgText === 'employment' || msgText === 'investor') {
+          if (msgText === 'partner') {
+            updates.sponsor_status = 'partner'
+          } else if (msgText === 'employment') {
+            updates.sponsor_status = 'employment'
+          } else if (msgText === 'investor') {
+            updates.sponsor_status = 'investor'
+          }
+          break
+        }
+      }
+    }
+  }
+  
+  // Extract investor_type (for Investor Visa)
+  if (!currentMemory.investor_type) {
+    if (lowerMessage.includes('real estate') || lowerMessage.includes('property')) {
+      updates.investor_type = 'real_estate'
+    } else if (lowerMessage.includes('company') || lowerMessage.includes('partner investor')) {
+      updates.investor_type = 'company'
     }
   }
   
@@ -887,6 +934,9 @@ export async function loadConversationMemory(conversationId: number): Promise<Co
  * Execute rule engine - MAIN FUNCTION
  */
 export async function executeRuleEngine(context: RuleEngineContext): Promise<RuleEngineResult> {
+  // Step 0: Check for loops (deduplication)
+  const { isInLoop } = await import('./conversationState')
+  
   // Step 1: Extract information from current message
   const memoryUpdates = extractAndUpdateMemory(
     context.currentMessage,
@@ -898,6 +948,30 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
   const updatedMemory: ConversationMemory = {
     ...context.memory,
     ...memoryUpdates
+  }
+  
+  // Step 1.5: Extract provided info from conversation history to ensure we don't miss anything
+  const { extractProvidedInfo: extractFromHistory } = await import('./conversationState')
+  const historyProvided = extractFromHistory(context.conversationHistory)
+  
+  // Merge history-provided info into memory (only if not already set)
+  if (historyProvided.sponsor_status && !updatedMemory.sponsor_status) {
+    updatedMemory.sponsor_status = historyProvided.sponsor_status
+  }
+  if (historyProvided.service && !updatedMemory.service) {
+    updatedMemory.service = historyProvided.service
+  }
+  if (historyProvided.nationality && !updatedMemory.nationality) {
+    updatedMemory.nationality = historyProvided.nationality
+  }
+  if (historyProvided.inside_uae !== undefined && updatedMemory.inside_uae === undefined) {
+    updatedMemory.inside_uae = historyProvided.inside_uae
+  }
+  if (historyProvided.family_location && !updatedMemory.family_location) {
+    updatedMemory.family_location = historyProvided.family_location
+  }
+  if (historyProvided.license_type && !updatedMemory.license_type) {
+    updatedMemory.license_type = historyProvided.license_type
   }
   
   // Step 2: Determine current state
@@ -973,8 +1047,55 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
       // Execute service flow steps
       for (const step of serviceFlow.steps) {
         if (checkCondition(step.when, updatedMemory, context)) {
+          // CRITICAL: Check if we already asked this question
           if (step.ask) {
+            // Check conversation state machine (persisted)
+            const { wasQuestionAsked, recordQuestionAsked } = await import('../conversation/flowState')
+            const questionKey = step.id || step.ask.substring(0, 50)
+            
+            // Check if question was asked recently (within 3 minutes)
+            const alreadyAsked = await wasQuestionAsked(context.conversationId, questionKey, 3)
+            if (alreadyAsked) {
+              console.log(`⚠️ [RULE-ENGINE] Question ${questionKey} asked recently - skipping`)
+              continue
+            }
+            
+            // Also check conversation history for semantic similarity
+            const { wasQuestionAsked: wasAskedInHistory } = await import('./conversationState')
+            if (wasAskedInHistory(step.ask, context.conversationHistory)) {
+              console.log(`⚠️ [RULE-ENGINE] Question already asked in history, skipping: ${step.ask.substring(0, 50)}...`)
+              continue // Skip this step, try next
+            }
+            
             reply = renderTemplate(step.ask, updatedMemory)
+            
+            // CRITICAL FIX #3: Persist question asked to conversation state
+            await recordQuestionAsked(context.conversationId, questionKey, `WAIT_${questionKey}`)
+            
+            // Also update memory flags
+            const questionId = step.id || step.ask.substring(0, 50)
+            if (!updatedMemory.has_asked_name && questionId.includes('NAME')) {
+              updatedMemory.has_asked_name = true
+            }
+            if (!updatedMemory.has_asked_service && questionId.includes('SERVICE')) {
+              updatedMemory.has_asked_service = true
+            }
+            if (!updatedMemory.has_asked_nationality && questionId.includes('NATIONALITY')) {
+              updatedMemory.has_asked_nationality = true
+            }
+            if (!updatedMemory.has_asked_inside_uae && questionId.includes('INSIDE_UAE')) {
+              updatedMemory.has_asked_inside_uae = true
+            }
+            if (!updatedMemory.has_asked_sponsor_status && questionId.includes('SPONSOR')) {
+              updatedMemory.has_asked_sponsor_status = true
+            }
+            if (!updatedMemory.has_asked_family_location && questionId.includes('FAMILY_LOCATION')) {
+              updatedMemory.has_asked_family_location = true
+            }
+            if (!updatedMemory.has_asked_license_type && questionId.includes('LICENSE_TYPE')) {
+              updatedMemory.has_asked_license_type = true
+            }
+            
             break
           } else if (step.respond) {
             if (step.respond.type === 'price_quote' || step.respond.type === 'conditional_price_quote' || step.respond.type === 'fixed_price_quote') {
@@ -996,7 +1117,14 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
     }
   }
   
-  // Step 4: Validate reply
+  // Step 4: Check for loops (deduplication)
+  if (reply && isInLoop(reply, context.conversationHistory)) {
+    console.log(`⚠️ [RULE-ENGINE] Loop detected! Reply is >80% similar to recent message. Generating clarification request.`)
+    reply = `Thanks for your message. I want to make sure I understand correctly - could you provide a bit more detail about what you need?`
+    needsHuman = false // Don't escalate, just ask for clarification
+  }
+  
+  // Step 5: Validate reply
   const validation = validateReply(reply, updatedMemory, context)
   if (!validation.valid) {
     if (validation.blocked) {
@@ -1010,7 +1138,7 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
     }
   }
   
-  // Step 5: Check for discount request
+  // Step 6: Check for discount request
   if (updatedMemory.customer_requested_discount) {
     needsHuman = true
     handoverReason = 'Discount requested'
@@ -1018,7 +1146,7 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
     reply = renderTemplate(reply, updatedMemory)
   }
   
-  // Step 6: Persist memory to database
+  // Step 7: Persist memory to database and update flow state
   if (Object.keys(memoryUpdates).length > 0) {
     try {
       // Store memory in conversation ruleEngineMemory field
