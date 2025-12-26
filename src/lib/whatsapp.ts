@@ -111,7 +111,7 @@ export async function sendTextMessage(
     })
 
     console.log(`📡 [WHATSAPP-SEND] Response status: ${response.status} ${response.statusText}`)
-    
+
     const data = await response.json()
     console.log(`📡 [WHATSAPP-SEND] Response data:`, JSON.stringify(data).substring(0, 500))
 

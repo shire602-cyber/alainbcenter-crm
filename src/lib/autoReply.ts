@@ -244,8 +244,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         ],
       },
       orderBy: { createdAt: 'desc' },
-    })
-    
+        })
+        
     if (existingLog) {
       console.log(`⏭️ [DUPLICATE-CHECK] Already processed THIS message ${messageId} (log ${existingLog.id}, decision: ${existingLog.decision})`)
       
@@ -314,8 +314,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           data: {
               decision: 'skipped',
               skippedReason: shouldReply.reason || 'Unknown reason',
-            },
-          })
+          },
+        })
         } catch (logError) {
           console.warn('Failed to update AutoReplyLog with skip reason:', logError)
         }
@@ -1017,38 +1017,58 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         }
         console.log(`✅ [SEND] Message ID received: ${result.messageId}`)
 
-        // Step 7: Save outbound message (conversation already loaded above)
-        if (conversation) {
-          await prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              leadId: leadId,
-              contactId: contactId,
-              direction: 'OUTBOUND',
-              channel: channel.toLowerCase(),
-              type: 'text',
-              body: replyText,
-              status: 'SENT',
-              providerMessageId: result.messageId,
-              rawPayload: JSON.stringify({
-                automation: true,
-                autoReply: true,
-                aiGenerated: true,
-                confidence: aiResult.confidence,
-              }),
-              sentAt: new Date(),
+        // Step 7: Check for duplicate outbound message (idempotency)
+        // Check if we already sent this exact message recently (within last 5 seconds)
+        const recentDuplicate = await prisma.message.findFirst({
+          where: {
+            conversationId: conversation.id,
+            direction: 'OUTBOUND',
+            body: replyText,
+            createdAt: {
+              gte: new Date(Date.now() - 5000), // Within last 5 seconds
             },
-          })
+          },
+          orderBy: { createdAt: 'desc' },
+        })
+        
+        if (recentDuplicate) {
+          console.log(`⚠️ [DUPLICATE-OUTBOUND] Duplicate outbound message detected (ID: ${recentDuplicate.id}) - skipping save`)
+          console.log(`   Message: "${replyText.substring(0, 50)}..."`)
+          console.log(`   This prevents duplicate sends from webhook retries`)
+        } else {
+          // Step 7: Save outbound message (conversation already loaded above)
+          if (conversation) {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                leadId: leadId,
+                contactId: contactId,
+                direction: 'OUTBOUND',
+                channel: channel.toLowerCase(),
+                type: 'text',
+                body: replyText,
+                status: 'SENT',
+                providerMessageId: result.messageId,
+                rawPayload: JSON.stringify({
+                  automation: true,
+                  autoReply: true,
+                  aiGenerated: true,
+                  confidence: aiResult.confidence,
+                }),
+                sentAt: new Date(),
+              },
+            })
 
-          // Update conversation
-          await prisma.conversation.update({
-            where: { id: conversation.id },
-            data: {
-              lastMessageAt: new Date(),
-              lastOutboundAt: new Date(),
-              unreadCount: 0,
-            },
-          })
+            // Update conversation
+            await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: {
+                lastMessageAt: new Date(),
+                lastOutboundAt: new Date(),
+                unreadCount: 0,
+              },
+            })
+          }
         }
 
         // Update lead: mark last auto-reply time
@@ -1078,7 +1098,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             
             await (prisma as any).autoReplyLog.update({
               where: { id: autoReplyLog.id },
-            data: {
+              data: {
                 conversationId: conversation?.id || null,
                 decision: 'replied',
                 decisionReason: 'AI reply sent successfully',
@@ -1086,9 +1106,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 replyText: aiResult.text.substring(0, 500),
                 replyStatus: 'sent',
                 replyError: null,
-            },
-          })
-        } catch (logError: any) {
+              },
+            })
+          } catch (logError: any) {
             console.warn('Failed to update AutoReplyLog with success:', logError.message)
           }
         }
