@@ -40,6 +40,7 @@ model User {
   createdTasks          Task[]               @relation("CreatedTasks")
   uploadedDocuments     Document[]           @relation("UploadedDocuments")
   createdAITrainingDocs AITrainingDocument[]
+  staffSettings         StaffSettings?
 }
 
 model ServiceType {
@@ -121,12 +122,16 @@ model Lead {
   priorityScore Int?
   aiScore       Int? // AI-generated score (0-100)
   aiNotes       String? // AI-generated qualification notes
+  dataJson      String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
 
   // Assignment and follow-up
   assignedUserId Int?
   assignedUser   User?     @relation(fields: [assignedUserId], references: [id])
   nextFollowUpAt DateTime?
   lastContactAt  DateTime? // Last communication timestamp
+  lastInboundAt  DateTime? // Last inbound message timestamp (for lead)
+  lastOutboundAt DateTime? // Last outbound message timestamp (for lead)
+  valueEstimate  String? // Revenue estimate (decimal as string)
 
   // Legacy expiry tracking (kept for backward compatibility)
   expiryDate         DateTime?
@@ -152,10 +157,10 @@ model Lead {
   mutedUntil        DateTime? // Mute auto-replies until this date
   lastAutoReplyAt   DateTime? // Last auto-reply timestamp (for rate limiting)
   allowOutsideHours Boolean   @default(false) // Allow replies outside business hours
-  
+
   // AI Agent Profile assignment
-  aiAgentProfileId  Int?
-  aiAgentProfile    AIAgentProfile? @relation(fields: [aiAgentProfileId], references: [id])
+  aiAgentProfileId Int?
+  aiAgentProfile   AIAgentProfile? @relation(fields: [aiAgentProfileId], references: [id])
 
   // Info/Quotation sharing tracking (Phase 2)
   infoSharedAt       DateTime? // When information was shared with customer
@@ -184,74 +189,77 @@ model Lead {
 }
 
 model AIAgentProfile {
-  id                    Int      @id @default(autoincrement())
-  name                  String   @unique // e.g., "Sales Agent", "Customer Support Agent", "Follow-up Agent"
-  description           String?  // Optional description
-  isActive              Boolean  @default(true)
-  isDefault             Boolean  @default(false) // Only one can be default
-  
+  id          Int     @id @default(autoincrement())
+  name        String  @unique // e.g., "Sales Agent", "Customer Support Agent", "Follow-up Agent"
+  description String? // Optional description
+  isActive    Boolean @default(true)
+  isDefault   Boolean @default(false) // Only one can be default
+
   // Training document associations (which training docs this agent uses)
-  trainingDocumentIds   String?  // JSON array of training document IDs this agent should use
-  
+  trainingDocumentIds String? // JSON array of training document IDs this agent should use
+
   // Response Behavior Settings
-  systemPrompt          String?  // Custom system prompt (overrides default)
-  tone                  String   @default("friendly") // professional | friendly | short
-  maxMessageLength      Int      @default(300) // Max characters for first message
-  maxTotalLength        Int      @default(600) // Max characters total
+  systemPrompt           String? // Custom system prompt (overrides default)
+  tone                   String  @default("friendly") // professional | friendly | short
+  maxMessageLength       Int     @default(300) // Max characters for first message
+  maxTotalLength         Int     @default(600) // Max characters total
   maxQuestionsPerMessage Int     @default(2) // Max questions to ask
-  
+
   // What to say / What not to say
-  allowedPhrases        String?  // JSON array of phrases/topics to emphasize
-  prohibitedPhrases     String?  // JSON array of phrases/topics to avoid
-  customGreeting        String?  // Custom greeting template
-  customSignoff         String?  // Custom signoff template
-  
+  allowedPhrases    String? // JSON array of phrases/topics to emphasize
+  prohibitedPhrases String? // JSON array of phrases/topics to avoid
+  customGreeting    String? // Custom greeting template
+  customSignoff     String? // Custom signoff template
+
   // Timing Controls
-  responseDelayMin      Int      @default(0) // Minimum seconds before replying
-  responseDelayMax      Int      @default(5) // Maximum seconds before replying
-  rateLimitMinutes     Int      @default(2) // Minutes between auto-replies
-  businessHoursStart    String   @default("07:00") // HH:mm format
-  businessHoursEnd      String   @default("21:30") // HH:mm format
-  timezone              String   @default("Asia/Dubai")
-  allowOutsideHours     Boolean  @default(false) // Allow replies outside business hours
+  responseDelayMin      Int     @default(0) // Minimum seconds before replying
+  responseDelayMax      Int     @default(5) // Maximum seconds before replying
+  rateLimitMinutes      Int     @default(2) // Minutes between auto-replies
+  businessHoursStart    String  @default("07:00") // HH:mm format
+  businessHoursEnd      String  @default("21:30") // HH:mm format
+  timezone              String  @default("Asia/Dubai")
+  allowOutsideHours     Boolean @default(false) // Allow replies outside business hours
   firstMessageImmediate Boolean @default(true) // Reply immediately to first message
-  
+
   // Response Rules
-  similarityThreshold   Float    @default(0.7) // Training document similarity threshold
-  confidenceThreshold   Int      @default(50) // Minimum confidence to auto-reply
-  escalateToHumanRules  String?  // JSON array of patterns that trigger human escalation
-  skipAutoReplyRules    String?  // JSON array of patterns that skip auto-reply
-  
+  similarityThreshold  Float   @default(0.7) // Training document similarity threshold
+  confidenceThreshold  Int     @default(50) // Minimum confidence to auto-reply
+  escalateToHumanRules String? // JSON array of patterns that trigger human escalation
+  skipAutoReplyRules   String? // JSON array of patterns that skip auto-reply
+
   // Language Settings
-  defaultLanguage       String   @default("en") // en | ar
-  autoDetectLanguage    Boolean  @default(true)
-  
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  
+  defaultLanguage    String  @default("en") // en | ar
+  autoDetectLanguage Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
   // Relations
-  leads                 Lead[]  // Leads assigned to this agent
-  
+  leads Lead[] // Leads assigned to this agent
+
   @@index([isActive, isDefault])
   @@index([name])
 }
 
 model ExpiryItem {
-  id                   Int       @id @default(autoincrement())
-  contact              Contact   @relation(fields: [contactId], references: [id])
-  contactId            Int
-  lead                 Lead?     @relation("LeadExpiryItems", fields: [leadId], references: [id])
-  leadId               Int?
-  type                 String // VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | etc.
-  expiryDate           DateTime
-  reminderScheduleDays String    @default("[90,60,30,7]") // JSON array as string (works for both SQLite and PostgreSQL)
-  lastReminderSentAt   DateTime?
-  notes                String? // Optional notes about the expiry
-  assignedUserId       Int?
-  assignedUser         User?     @relation(fields: [assignedUserId], references: [id])
+  id                      Int       @id @default(autoincrement())
+  contact                 Contact   @relation(fields: [contactId], references: [id])
+  contactId               Int
+  lead                    Lead?     @relation("LeadExpiryItems", fields: [leadId], references: [id])
+  leadId                  Int?
+  type                    String // VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | TRADE_LICENSE_EXPIRY | ESTABLISHMENT_CARD_EXPIRY | INSURANCE_EXPIRY | etc.
+  expiryDate              DateTime
+  reminderScheduleDays    String    @default("[90,60,30,7,3,1]") // JSON array as string (works for both SQLite and PostgreSQL)
+  remindersEnabled        Boolean   @default(true) // Enable/disable reminders for this expiry
+  stopRemindersAfterReply Boolean   @default(true) // Stop reminders after customer replies
+  lastReminderSentAt      DateTime?
+  nextReminderAt          DateTime? // Next reminder due date (computed from reminderScheduleDays)
+  notes                   String? // Optional notes about the expiry
+  assignedUserId          Int?
+  assignedUser            User?     @relation(fields: [assignedUserId], references: [id])
 
   // Renewal tracking fields
-  renewalStatus       String  @default("PENDING") // PENDING | IN_PROGRESS | RENEWED | NOT_RENEWING
+  renewalStatus       String  @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | RENEWED | NOT_RENEWING
   renewalLeadId       Int? // Link to renewal Lead when they sign again
   renewalLead         Lead?   @relation("RenewalExpiryLeads", fields: [renewalLeadId], references: [id])
   lastReminderChannel String? // WHATSAPP | EMAIL | INTERNAL
@@ -266,6 +274,7 @@ model ExpiryItem {
 
   @@index([renewalStatus, expiryDate])
   @@index([renewalLeadId])
+  @@index([leadId, expiryDate])
 }
 
 model Conversation {
@@ -289,25 +298,25 @@ model Conversation {
   assignedUserId   Int?
   assignedUser     User?     @relation(fields: [assignedUserId], references: [id])
   unreadCount      Int       @default(0)
-  lockedService    String?   // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
-  ruleEngineMemory String?   // JSON: Rule engine conversation memory (name, service, nationality, etc.)
+  lockedService    String? // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
+  ruleEngineMemory String? // JSON: Rule engine conversation memory (name, service, nationality, etc.)
   // Conversation Flow State Machine (persisted)
-  flowKey          String?   // e.g., "family_visa", "freelance_visa", "business_setup"
-  flowStep         String?   // e.g., "WAIT_SPONSOR_VISA_TYPE", "WAIT_FAMILY_LOCATION", "PRICING"
-  lastQuestionKey  String?   // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
+  flowKey          String? // e.g., "family_visa", "freelance_visa", "business_setup"
+  flowStep         String? // e.g., "WAIT_SPONSOR_VISA_TYPE", "WAIT_FAMILY_LOCATION", "PRICING"
+  lastQuestionKey  String? // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
   lastQuestionAt   DateTime? // When we last asked a question
-  collectedData    String?   // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
+  collectedData    String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
-  messages          Message[]
-  communicationLogs CommunicationLog[]
-  aiDrafts          AIDraft[]
-  aiActionLogs      AIActionLog[]
-  statusEvents      MessageStatusEvent[]
-  tasks             Task[]               @relation("ConversationTasks")
-  notifications     Notification[]
-  autoReplyLogs     AutoReplyLog[]
+  messages             Message[]
+  communicationLogs    CommunicationLog[]
+  aiDrafts             AIDraft[]
+  aiActionLogs         AIActionLog[]
+  statusEvents         MessageStatusEvent[]
+  tasks                Task[]                @relation("ConversationTasks")
+  notifications        Notification[]
+  autoReplyLogs        AutoReplyLog[]
   inboundMessageDedups InboundMessageDedup[]
   outboundMessageLogs  OutboundMessageLog[]
 
@@ -344,7 +353,7 @@ model Message {
   createdByUser     User?        @relation(fields: [createdByUserId], references: [id])
   createdAt         DateTime     @default(now())
 
-  statusEvents MessageStatusEvent[]
+  statusEvents  MessageStatusEvent[]
   autoReplyLogs AutoReplyLog[]
 
   @@index([conversationId, createdAt])
@@ -512,11 +521,14 @@ model Document {
   storageProvider  String    @default("local") // local | s3 | r2
   storagePath      String? // Server path or S3 key
   url              String? // Public URL if available
-  category         String? // passport | eid | visa | photo | trade_license | other
+  type             String? // PASSPORT | EID | VISA | PHOTO | TRADE_LICENSE | ESTABLISHMENT_CARD | TENANCY_CONTRACT | INSURANCE | OTHER
+  category         String? // Legacy field - passport | eid | visa | photo | trade_license | other (kept for backward compatibility)
+  status           String    @default("MISSING") // MISSING | RECEIVED | APPROVED | REJECTED
   expiryDate       DateTime? // Some documents expire
   notes            String? // Optional notes about the document
   uploadedByUserId Int?
   uploadedByUser   User?     @relation("UploadedDocuments", fields: [uploadedByUserId], references: [id])
+  uploadedAt       DateTime? // When document was uploaded (if status = RECEIVED)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 }
@@ -636,6 +648,19 @@ model AITrainingDocument {
   @@index([createdAt])
 }
 
+model StaffSettings {
+  id                     Int      @id @default(autoincrement())
+  user                   User     @relation(fields: [userId], references: [id])
+  userId                 Int      @unique
+  personalWhatsappNumber String? // Personal WhatsApp number for reminders
+  remindersEnabled       Boolean  @default(true) // Enable/disable reminders
+  timezone               String   @default("Asia/Dubai") // User timezone
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([userId])
+}
+
 model AutomationJob {
   id          String    @id @default(cuid())
   type        String // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
@@ -673,45 +698,45 @@ model Notification {
 }
 
 model AutoReplyLog {
-  id                Int           @id @default(autoincrement())
-  lead               Lead          @relation(fields: [leadId], references: [id])
-  leadId             Int
-  conversation       Conversation? @relation(fields: [conversationId], references: [id])
-  conversationId     Int?
-  contact            Contact?      @relation(fields: [contactId], references: [id])
-  contactId          Int?
-  message            Message?      @relation(fields: [messageId], references: [id])
-  messageId          Int?
-  channel            String        // 'whatsapp' | 'email' | etc.
-  
+  id             Int           @id @default(autoincrement())
+  lead           Lead          @relation(fields: [leadId], references: [id])
+  leadId         Int
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId Int?
+  contact        Contact?      @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  message        Message?      @relation(fields: [messageId], references: [id])
+  messageId      Int?
+  channel        String // 'whatsapp' | 'email' | etc.
+
   // Inbound message details
-  inboundParsed      String?      // JSON: Parsed inbound message details
-  messageText        String?      // Inbound message text (truncated)
-  
+  inboundParsed String? // JSON: Parsed inbound message details
+  messageText   String? // Inbound message text (truncated)
+
   // Decision tracking
-  autoReplyEnabled   Boolean       @default(true)
-  decision            String        // 'replied' | 'notified_human' | 'skipped'
-  decisionReason     String?       // Exact reason for decision
-  skippedReason      String?       // If skipped, why
-  
+  autoReplyEnabled Boolean @default(true)
+  decision         String // 'replied' | 'notified_human' | 'skipped'
+  decisionReason   String? // Exact reason for decision
+  skippedReason    String? // If skipped, why
+
   // Retrieval results
-  retrievalDocsCount Int?         // Number of documents retrieved
-  retrievalSimilarity Float?      // Highest similarity score
-  retrievalReason    String?      // Retrieval result reason
-  hasUsefulContext   Boolean      @default(false)
-  
+  retrievalDocsCount  Int? // Number of documents retrieved
+  retrievalSimilarity Float? // Highest similarity score
+  retrievalReason     String? // Retrieval result reason
+  hasUsefulContext    Boolean @default(false)
+
   // Reply details
-  replySent          Boolean       @default(false)
-  replyText          String?       // Reply text sent (truncated)
-  replyStatus        String?       // 'sent' | 'failed' | 'pending'
-  replyError          String?      // Error message if send failed
-  usedFallback       Boolean       @default(false) // Whether fallback reply was used
-  
+  replySent    Boolean @default(false)
+  replyText    String? // Reply text sent (truncated)
+  replyStatus  String? // 'sent' | 'failed' | 'pending'
+  replyError   String? // Error message if send failed
+  usedFallback Boolean @default(false) // Whether fallback reply was used
+
   // Human task
-  humanTaskCreated   Boolean       @default(false)
-  humanTaskReason    String?       // Why human task was created
-  
-  createdAt          DateTime      @default(now())
+  humanTaskCreated Boolean @default(false)
+  humanTaskReason  String? // Why human task was created
+
+  createdAt DateTime @default(now())
 
   @@index([leadId, createdAt])
   @@index([conversationId, createdAt])
@@ -722,16 +747,16 @@ model AutoReplyLog {
 
 // Inbound message deduplication (hard idempotency)
 model InboundMessageDedup {
-  id                Int       @id @default(autoincrement())
-  provider          String    // 'whatsapp' | 'email' | etc.
-  providerMessageId String    @unique // External provider message ID (e.g., WhatsApp message ID)
+  id                Int           @id @default(autoincrement())
+  provider          String // 'whatsapp' | 'email' | etc.
+  providerMessageId String        @unique // External provider message ID (e.g., WhatsApp message ID)
   conversation      Conversation? @relation(fields: [conversationId], references: [id])
   conversationId    Int?
-  receivedAt        DateTime  @default(now())
+  receivedAt        DateTime      @default(now())
   processedAt       DateTime? // When processing completed
-  processingStatus  String    @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
-  error             String?  // Error message if processing failed
-  
+  processingStatus  String        @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  error             String? // Error message if processing failed
+
   @@index([provider, providerMessageId])
   @@index([conversationId, receivedAt])
   @@index([processingStatus, receivedAt])
@@ -739,17 +764,17 @@ model InboundMessageDedup {
 
 // Outbound message deduplication (hard idempotency)
 model OutboundMessageLog {
-  id                      Int       @id @default(autoincrement())
-  provider                String    // 'whatsapp' | 'email' | etc.
-  conversation            Conversation @relation(fields: [conversationId], references: [id])
-  conversationId          Int
-  triggerProviderMessageId String?  // The inbound message ID that triggered this outbound
-  outboundTextHash        String    // SHA256 hash of outbound message text for deduplication
-  outboundMessageId       Int?     // Reference to Message.id if created
-  flowStep                String?   // Conversation flow step when sent
-  lastQuestionKey         String?   // Last question key when sent
-  createdAt               DateTime  @default(now())
-  
+  id                       Int          @id @default(autoincrement())
+  provider                 String // 'whatsapp' | 'email' | etc.
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  conversationId           Int
+  triggerProviderMessageId String? // The inbound message ID that triggered this outbound
+  outboundTextHash         String // SHA256 hash of outbound message text for deduplication
+  outboundMessageId        Int? // Reference to Message.id if created
+  flowStep                 String? // Conversation flow step when sent
+  lastQuestionKey          String? // Last question key when sent
+  createdAt                DateTime     @default(now())
+
   @@unique([provider, triggerProviderMessageId]) // One outbound per inbound message
   @@index([conversationId, createdAt])
   @@index([triggerProviderMessageId])

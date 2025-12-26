@@ -13,7 +13,7 @@
  */
 
 import { NextRequest, NextResponse } from 'next/server'
-import { handleInboundMessage } from '@/lib/inbound'
+import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 
 export async function POST(req: NextRequest) {
   try {
@@ -58,16 +58,20 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Use common inbound handler
-    const result = await handleInboundMessage({
+    // Use new AUTO-MATCH pipeline
+    const result = await handleInboundMessageAutoMatch({
       channel: 'EMAIL',
-      externalId: threadId, // Email thread ID
-      externalMessageId: messageId,
-      fromAddress: fromEmail,
+      providerMessageId: messageId,
+      fromEmail: fromEmail.toLowerCase().trim(),
+      fromPhone: null,
       fromName: fromName,
-      body: messageBody,
-      rawPayload: body,
-      receivedAt: timestamp,
+      text: messageBody,
+      timestamp: timestamp,
+      metadata: {
+        externalId: threadId,
+        rawPayload: body,
+        subject: subject,
+      },
     })
 
     console.log(`✅ Processed inbound email ${messageId} from ${fromEmail}`)
@@ -75,6 +79,12 @@ export async function POST(req: NextRequest) {
     // Always return 200 to acknowledge receipt
     return NextResponse.json({ ok: true })
   } catch (error: any) {
+    // Handle duplicate message error from pipeline
+    if (error.message === 'DUPLICATE_MESSAGE') {
+      console.log(`✅ Email duplicate message detected - returning 200 OK`)
+      return NextResponse.json({ ok: true }, { status: 200 })
+    }
+    
     console.error('❌ Error processing email webhook:', error)
     // Still return 200 to prevent retries
     return NextResponse.json({ ok: true }, { status: 200 })

@@ -10,7 +10,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
-import { handleInboundMessage } from '@/lib/inbound'
+import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 
 /**
  * GET /api/webhooks/facebook
@@ -192,19 +192,22 @@ export async function POST(req: NextRequest) {
           continue
         }
 
-        // Use common inbound handler
+        // Use new AUTO-MATCH pipeline
         try {
-          const result = await handleInboundMessage({
+          const result = await handleInboundMessageAutoMatch({
             channel: 'FACEBOOK',
-            externalId: senderId, // Use sender ID as conversation external ID
-            externalMessageId: messageId,
-            fromAddress: senderId,
+            providerMessageId: messageId,
+            fromPhone: null, // Facebook uses user IDs, not phone numbers
+            fromEmail: null,
             fromName: event.sender?.name || null,
-            body: processedText || '[Facebook message]',
-            rawPayload: event,
-            receivedAt: timestamp,
-            mediaUrl: mediaUrl,
-            mediaMimeType: mediaMimeType,
+            text: processedText || '[Facebook message]',
+            timestamp: timestamp,
+            metadata: {
+              externalId: senderId, // Facebook sender ID
+              rawPayload: event,
+              mediaUrl: mediaUrl,
+              mediaMimeType: mediaMimeType,
+            },
           })
 
           console.log(`✅ Processed Facebook message ${messageId} from ${senderId}`)

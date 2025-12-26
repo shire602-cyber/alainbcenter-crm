@@ -178,6 +178,14 @@ export async function PATCH(
       updateData.assignedUserId = body.assignedUserId || null
     }
     
+    if (body.aiAgentProfileId !== undefined) {
+      updateData.aiAgentProfileId = body.aiAgentProfileId || null
+    }
+    
+    if (body.valueEstimate !== undefined) {
+      updateData.valueEstimate = body.valueEstimate || null
+    }
+    
     // Legacy fields
     if (body.status !== undefined) {
       updateData.status = body.status
@@ -275,14 +283,6 @@ export async function PATCH(
       }
     }
 
-    // Renewal fields
-    if (body.estimatedRenewalValue !== undefined) {
-      updateData.estimatedRenewalValue = body.estimatedRenewalValue ? body.estimatedRenewalValue.toString() : null
-    }
-    
-    if (body.renewalNotes !== undefined) {
-      updateData.renewalNotes = body.renewalNotes || null
-    }
 
     // Follow-up discipline validation
     // Check if stage is changing to an active stage

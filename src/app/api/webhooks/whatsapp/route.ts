@@ -3,8 +3,8 @@ import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 import { normalizeInboundPhone, findContactByPhone } from '@/lib/phone-inbound'
 import { prepareInboundContext, buildWhatsAppExternalId } from '@/lib/whatsappInbound'
-import { handleInboundMessage } from '@/lib/inbound'
-import { checkInboundIdempotency, markInboundProcessed } from '@/lib/webhook/idempotency'
+import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
+import { markInboundProcessed } from '@/lib/webhook/idempotency'
 
 // Ensure this runs in Node.js runtime (not Edge) for Prisma compatibility
 export const runtime = 'nodejs'
@@ -420,20 +420,6 @@ export async function POST(req: NextRequest) {
         
         console.log(`📨 [WEBHOOK] Processing message ${messageId} from ${from}, type: ${messageType}`)
         
-        // CRITICAL FIX #1: Inbound idempotency check (hard dedupe)
-        // Check BEFORE any processing - return 200 OK immediately if duplicate
-        const idempotencyCheck = await checkInboundIdempotency('whatsapp', messageId)
-        
-        if (idempotencyCheck.isDuplicate) {
-          console.log(`✅ [IDEMPOTENCY] Duplicate message ${messageId} - returning 200 OK immediately (dedupeHit: true)`)
-          // Log for debugging
-          console.log(`📊 [WEBHOOK-LOG] providerMessageId: ${messageId}, contact: ${from}, dedupeHit: true, conversationId: ${idempotencyCheck.conversationId || 'unknown'}`)
-          // Continue to next message (don't process this one)
-          continue
-        }
-        
-        console.log(`✅ [IDEMPOTENCY] New message ${messageId} - proceeding with processing (dedupeHit: false)`)
-        
         // Extract message text/content and media info
         let messageText = message.text?.body || ''
         let mediaUrl: string | null = null
@@ -459,16 +445,16 @@ export async function POST(req: NextRequest) {
           messageText = `[location: ${message.location.latitude}, ${message.location.longitude}]`
         }
 
-        // FIX A: Process synchronously (await all operations) with timeout guard
-        // Keep response under ~5 seconds, but ensure reliability on Vercel serverless
+        // Use new AUTO-MATCH pipeline (replaces handleInboundMessage)
+        // Pipeline handles: deduplication, contact/conversation/lead creation, field extraction, task creation
         const phoneNumberId = value.metadata?.phone_number_id
         const externalId = buildWhatsAppExternalId(phoneNumberId, from)
         
-        console.log(`🔄 [WEBHOOK] Processing message ${messageId} synchronously`, {
+        console.log(`🔄 [WEBHOOK] Processing message ${messageId} with AUTO-MATCH pipeline`, {
           channel: 'WHATSAPP',
           externalId,
-          externalMessageId: messageId,
-          fromAddress: from,
+          providerMessageId: messageId,
+          fromPhone: from,
           bodyLength: messageText?.length || 0,
         })
         
@@ -477,40 +463,47 @@ export async function POST(req: NextRequest) {
           const startTime = Date.now()
           
           try {
-            // Step 1: Process inbound message
-            const result = await handleInboundMessage({
+            // Use new AUTO-MATCH pipeline (handles deduplication internally)
+            const result = await handleInboundMessageAutoMatch({
               channel: 'WHATSAPP',
-              externalId: externalId,
-              externalMessageId: messageId,
-              fromAddress: from,
-              body: messageText,
-              rawPayload: message,
-              receivedAt: timestamp,
-              mediaUrl: mediaUrl,
-              mediaMimeType: mediaMimeType,
+              providerMessageId: messageId,
+              fromPhone: from,
+              fromName: null, // WhatsApp doesn't provide name in webhook
+              text: messageText,
+              timestamp: timestamp,
+              metadata: {
+                externalId: externalId,
+                rawPayload: message,
+                mediaUrl: mediaUrl,
+                mediaMimeType: mediaMimeType,
+              },
             })
 
-            console.log(`✅ [WEBHOOK] Processed inbound message`, {
+            console.log(`✅ [WEBHOOK] AUTO-MATCH pipeline completed`, {
               messageId,
               conversationId: result.conversation?.id,
               leadId: result.lead?.id,
               contactId: result.contact?.id,
+              tasksCreated: result.tasksCreated,
+              extractedFields: Object.keys(result.extractedFields),
               elapsed: `${Date.now() - startTime}ms`,
             })
             
             // Log structured log
-            console.log(`📊 [WEBHOOK-LOG] providerMessageId: ${messageId}, contact: ${from}, conversationId: ${result.conversation?.id}, dedupeHit: false`)
+            console.log(`📊 [WEBHOOK-LOG] providerMessageId: ${messageId}, contact: ${from}, conversationId: ${result.conversation?.id}, dedupeHit: false, tasksCreated: ${result.tasksCreated}`)
             
             // Update idempotency record with conversation ID
-            if (idempotencyCheck.dedupRecord && result.conversation?.id) {
-              try {
-                await prisma.inboundMessageDedup.update({
-                  where: { id: idempotencyCheck.dedupRecord.id },
-                  data: { conversationId: result.conversation.id },
-                })
-              } catch (updateError: any) {
-                console.warn(`⚠️ [WEBHOOK] Failed to update dedup record:`, updateError.message)
-              }
+            try {
+              await prisma.inboundMessageDedup.updateMany({
+                where: { providerMessageId: messageId },
+                data: { 
+                  conversationId: result.conversation?.id || null,
+                  processingStatus: 'COMPLETED',
+                  processedAt: new Date(),
+                },
+              })
+            } catch (updateError: any) {
+              console.warn(`⚠️ [WEBHOOK] Failed to update dedup record:`, updateError.message)
             }
 
             // Step 2: Trigger AI reply with timeout guard
@@ -637,7 +630,17 @@ export async function POST(req: NextRequest) {
             
             console.log(`✅ [WEBHOOK] Completed processing message ${messageId} in ${Date.now() - startTime}ms`)
           } catch (error: any) {
-            console.error(`❌ [WEBHOOK] Error processing message:`, {
+            // Handle duplicate message error from pipeline
+            if (error.message === 'DUPLICATE_MESSAGE') {
+              console.log(`✅ [WEBHOOK] Duplicate message ${messageId} detected by pipeline - returning 200 OK`)
+              console.log(`📊 [WEBHOOK-LOG] providerMessageId: ${messageId}, contact: ${from}, dedupeHit: true`)
+              // Mark as processed
+              await markInboundProcessed(messageId, true, undefined)
+              return // Skip to next message (will continue in outer loop)
+            }
+            
+            // Other errors - log and mark as failed
+            console.error(`❌ [WEBHOOK] Error processing message (AUTO-MATCH pipeline):`, {
               error: error.message,
               messageId,
               from,
