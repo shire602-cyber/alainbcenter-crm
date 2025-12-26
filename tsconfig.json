@@ -42,6 +42,7 @@
     "scripts/**/*",
     "src/scripts/**/*",
     "vitest.config.ts",
+    "tests/**/*",
     "**/*.test.ts",
     "**/__tests__/**"
   ]

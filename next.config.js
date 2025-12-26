@@ -21,13 +21,13 @@ const nextConfig = {
       }
     }
     
-    // Exclude scripts directory from webpack processing
+    // Exclude scripts and tests directories from webpack processing
     config.externals = config.externals || []
     if (typeof config.externals === 'function') {
       const originalExternals = config.externals
       config.externals = [
         (ctx, callback) => {
-          if (ctx.request && ctx.request.includes('/src/scripts/')) {
+          if (ctx.request && (ctx.request.includes('/src/scripts/') || ctx.request.includes('/tests/'))) {
             return callback()
           }
           return originalExternals(ctx, callback)
