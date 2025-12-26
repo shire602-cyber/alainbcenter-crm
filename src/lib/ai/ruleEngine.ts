@@ -210,6 +210,11 @@ const RULE_ENGINE_JSON = {
             "ask": "Are you currently inside the UAE?"
           },
           {
+            "id": "FV_Q2_INSIDE_UAE_OVERSTAY",
+            "when": { "memory_field_equals": { "inside_uae": true } },
+            "ask": null, // Skip this question if already answered
+          },
+          {
             "id": "FV_Q3_PERMIT_OR_VISA",
             "when": { "memory_missing_any": ["service_variant"] },
             "ask": "Do you want visa only (2-year residence), or freelance permit + visa?"
@@ -552,9 +557,10 @@ function extractAndUpdateMemory(
     }
   }
   
-  // Extract service
+  // Extract service - check both current message and conversation history
   if (!currentMemory.service) {
     const serviceIntents = RULE_ENGINE_JSON.routing.service_intents
+    // Check current message first (highest priority)
     for (const [key, intent] of Object.entries(serviceIntents)) {
       for (const keyword of intent.keywords) {
         if (lowerMessage.includes(keyword.toLowerCase())) {
@@ -563,6 +569,18 @@ function extractAndUpdateMemory(
         }
       }
       if (updates.service) break
+    }
+    // If not found in current message, check conversation history
+    if (!updates.service) {
+      for (const [key, intent] of Object.entries(serviceIntents)) {
+        for (const keyword of intent.keywords) {
+          if (allText.includes(keyword.toLowerCase())) {
+            updates.service = intent.display_name
+            break
+          }
+        }
+        if (updates.service) break
+      }
     }
   }
   
@@ -591,12 +609,37 @@ function extractAndUpdateMemory(
     }
   }
   
-  // Extract inside_uae
+  // Extract inside_uae - improved patterns
   if (currentMemory.inside_uae === undefined) {
-    if (lowerMessage.includes('inside') || lowerMessage.includes('in uae') || lowerMessage.includes('im inside')) {
+    // Positive indicators (inside UAE)
+    if (lowerMessage.includes('inside') || 
+        lowerMessage.includes('in uae') || 
+        lowerMessage.includes('im inside') ||
+        lowerMessage === 'yes' ||
+        lowerMessage === 'yea' ||
+        lowerMessage === 'yep' ||
+        lowerMessage === 'yup' ||
+        lowerMessage.includes('already') && (lowerMessage.includes('overstay') || lowerMessage.includes('here') || lowerMessage.includes('uae')) ||
+        lowerMessage.includes('currently in') ||
+        lowerMessage.includes('i am in') ||
+        lowerMessage.includes('im in')) {
       updates.inside_uae = true
-    } else if (lowerMessage.includes('outside') || lowerMessage.includes('outside uae') || lowerMessage.includes('im outside')) {
+    } 
+    // Negative indicators (outside UAE)
+    else if (lowerMessage.includes('outside') || 
+             lowerMessage.includes('outside uae') || 
+             lowerMessage.includes('im outside') ||
+             lowerMessage === 'no' ||
+             lowerMessage.includes('not in uae') ||
+             lowerMessage.includes('not inside')) {
       updates.inside_uae = false
+    }
+    // Check conversation history for context
+    else {
+      // If user said "already overstay" or similar, they're inside
+      if (allText.includes('overstay') || allText.includes('already here') || allText.includes('currently in uae')) {
+        updates.inside_uae = true
+      }
     }
   }
   
