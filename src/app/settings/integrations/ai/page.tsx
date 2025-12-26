@@ -8,14 +8,35 @@ import { prisma } from '@/lib/prisma'
 export default async function AIIntegrationsPage() {
   await requireAdmin()
 
-  // Ensure AI integration exists
-  const aiIntegration = await prisma.integration.findUnique({
-    where: { name: 'openai' },
+  // Ensure AI integration exists (check for deepseek first, then openai)
+  let aiIntegration = await prisma.integration.findUnique({
+    where: { name: 'deepseek' },
   })
 
   if (!aiIntegration) {
+    aiIntegration = await prisma.integration.findUnique({
+      where: { name: 'openai' },
+    })
+  }
+
+  if (!aiIntegration) {
+    // Create default DeepSeek integration (primary)
     await prisma.integration.create({
       data: {
+        name: 'deepseek',
+        provider: 'deepseek',
+        isEnabled: false,
+        config: JSON.stringify({
+          model: 'deepseek-chat',
+          provider: 'deepseek'
+        }),
+      },
+    })
+    
+    // Also ensure openai integration exists for fallback
+    await prisma.integration.upsert({
+      where: { name: 'openai' },
+      create: {
         name: 'openai',
         provider: 'openai',
         isEnabled: false,
@@ -24,11 +45,13 @@ export default async function AIIntegrationsPage() {
           provider: 'openai'
         }),
       },
+      update: {},
     })
   }
 
+  // Get the integration (prefer deepseek, fallback to openai)
   const integration = await prisma.integration.findUnique({
-    where: { name: 'openai' },
+    where: { name: aiIntegration?.name === 'deepseek' ? 'deepseek' : 'openai' },
   })
 
   // Convert Prisma Date to string for component

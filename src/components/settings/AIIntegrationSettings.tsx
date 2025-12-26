@@ -33,9 +33,29 @@ type Integration = {
 // AI Model options with pricing (per 1M tokens)
 const AI_MODELS = [
   {
+    provider: 'deepseek',
+    name: 'deepseek-chat',
+    label: 'DeepSeek Chat (Primary)',
+    inputCost: 0.14,
+    outputCost: 0.28,
+    contextWindow: 64000,
+    speed: 'fast',
+    quality: 'very-high'
+  },
+  {
+    provider: 'deepseek',
+    name: 'deepseek-coder',
+    label: 'DeepSeek Coder',
+    inputCost: 0.14,
+    outputCost: 0.28,
+    contextWindow: 16000,
+    speed: 'fast',
+    quality: 'very-high'
+  },
+  {
     provider: 'openai',
     name: 'gpt-4o-mini',
-    label: 'GPT-4o Mini (OpenAI)',
+    label: 'GPT-4o Mini (OpenAI - Fallback)',
     inputCost: 0.15,
     outputCost: 0.60,
     contextWindow: 128000,
@@ -45,7 +65,7 @@ const AI_MODELS = [
   {
     provider: 'openai',
     name: 'gpt-4o',
-    label: 'GPT-4o (OpenAI)',
+    label: 'GPT-4o (OpenAI - Fallback)',
     inputCost: 2.50,
     outputCost: 10.00,
     contextWindow: 128000,
@@ -97,8 +117,8 @@ const AI_MODELS = [
 export function AIIntegrationSettings({ initialIntegration }: { initialIntegration: Integration | null }) {
   const [integration, setIntegration] = useState<Integration | null>(initialIntegration)
   const [apiKey, setApiKey] = useState('')
-  const [selectedProvider, setSelectedProvider] = useState('openai')
-  const [selectedModel, setSelectedModel] = useState('gpt-4o-mini')
+  const [selectedProvider, setSelectedProvider] = useState('deepseek')
+  const [selectedModel, setSelectedModel] = useState('deepseek-chat')
   const [isEnabled, setIsEnabled] = useState(false)
   const [saving, setSaving] = useState(false)
   const [testing, setTesting] = useState(false)
@@ -116,8 +136,8 @@ export function AIIntegrationSettings({ initialIntegration }: { initialIntegrati
         config = {}
       }
       
-      setSelectedProvider(config.provider || 'openai')
-      setSelectedModel(config.model || 'gpt-4o-mini')
+      setSelectedProvider(config.provider || 'deepseek')
+      setSelectedModel(config.model || 'deepseek-chat')
     }
   }, [integration])
 
@@ -127,11 +147,14 @@ export function AIIntegrationSettings({ initialIntegration }: { initialIntegrati
   async function handleSave() {
     setSaving(true)
     try {
+      // Use 'deepseek' integration name if provider is deepseek, otherwise 'openai'
+      const integrationName = selectedProvider === 'deepseek' ? 'deepseek' : 'openai'
+      
       const res = await fetch('/api/admin/integrations', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: 'openai',
+          name: integrationName,
           provider: selectedProvider,
           apiKey: apiKey.trim() || null,
           config: JSON.stringify({
@@ -223,7 +246,8 @@ export function AIIntegrationSettings({ initialIntegration }: { initialIntegrati
                 }
               }}
             >
-              <option value="openai">OpenAI</option>
+              <option value="deepseek">DeepSeek (Primary - Recommended)</option>
+              <option value="openai">OpenAI (Fallback)</option>
               <option value="groq">Groq (Fastest & Cheapest)</option>
               <option value="anthropic">Anthropic (Claude)</option>
             </Select>
@@ -280,7 +304,7 @@ export function AIIntegrationSettings({ initialIntegration }: { initialIntegrati
           {/* API Key */}
           <div>
             <Label htmlFor="apiKey">
-              API Key {selectedProvider === 'openai' ? '(OpenAI)' : selectedProvider === 'groq' ? '(Groq)' : '(Anthropic)'}
+              API Key {selectedProvider === 'deepseek' ? '(DeepSeek)' : selectedProvider === 'openai' ? '(OpenAI)' : selectedProvider === 'groq' ? '(Groq)' : '(Anthropic)'}
             </Label>
             <Input
               id="apiKey"
@@ -288,7 +312,9 @@ export function AIIntegrationSettings({ initialIntegration }: { initialIntegrati
               value={apiKey}
               onChange={(e) => setApiKey(e.target.value)}
               placeholder={
-                selectedProvider === 'openai' 
+                selectedProvider === 'deepseek'
+                  ? 'sk-...'
+                  : selectedProvider === 'openai' 
                   ? 'sk-...' 
                   : selectedProvider === 'groq'
                   ? 'gsk_...'
@@ -296,6 +322,7 @@ export function AIIntegrationSettings({ initialIntegration }: { initialIntegrati
               }
             />
             <p className="text-xs text-muted-foreground mt-1">
+              {selectedProvider === 'deepseek' && 'Get your API key from https://platform.deepseek.com/api_keys'}
               {selectedProvider === 'openai' && 'Get your API key from https://platform.openai.com/api-keys'}
               {selectedProvider === 'groq' && 'Get your API key from https://console.groq.com/keys'}
               {selectedProvider === 'anthropic' && 'Get your API key from https://console.anthropic.com/settings/keys'}
