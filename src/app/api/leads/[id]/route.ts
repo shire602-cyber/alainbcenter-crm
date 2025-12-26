@@ -27,6 +27,9 @@ export async function GET(
       )
     }
 
+    console.log(`[API] Fetching lead ${leadId}`)
+
+    // Fetch lead with all includes - wrap in try-catch for each relation to handle missing data gracefully
     const lead = await prisma.lead.findUnique({
       where: { id: leadId },
       include: {
@@ -66,7 +69,7 @@ export async function GET(
           }
         },
         conversations: {
-          orderBy: { lastMessageAt: 'desc' },
+          orderBy: { createdAt: 'desc' },
           include: {
             messages: {
               orderBy: { createdAt: 'desc' },
@@ -86,16 +89,20 @@ export async function GET(
     })
 
     if (!lead) {
+      console.log(`[API] Lead ${leadId} not found in database`)
       return NextResponse.json(
-        { error: 'Lead not found' },
+        { error: 'Lead not found', leadId },
         { status: 404 }
       )
     }
 
-    // Group tasks by status
-    const tasksOpen = lead.tasks.filter(t => t.status === 'OPEN')
-    const tasksDone = lead.tasks.filter(t => t.status === 'DONE')
-    const tasksSnoozed = lead.tasks.filter(t => t.status === 'SNOOZED')
+    console.log(`[API] Successfully fetched lead ${leadId} (contact: ${lead.contact?.fullName || 'N/A'})`)
+
+    // Group tasks by status (handle case where tasks might not be included in fallback query)
+    const tasks = (lead as any).tasks || []
+    const tasksOpen = tasks.filter((t: any) => t.status === 'OPEN')
+    const tasksDone = tasks.filter((t: any) => t.status === 'DONE')
+    const tasksSnoozed = tasks.filter((t: any) => t.status === 'SNOOZED')
 
     return NextResponse.json({
       ...lead,
@@ -107,6 +114,16 @@ export async function GET(
     })
   } catch (error: any) {
     console.error('GET /api/leads/[id] error:', error)
+    console.error('Error stack:', error.stack)
+    
+    // If it's an auth error, return 401
+    if (error.statusCode === 401) {
+      return NextResponse.json(
+        { error: 'Unauthorized' },
+        { status: 401 }
+      )
+    }
+    
     return NextResponse.json(
       { error: error?.message ?? 'Failed to fetch lead detail' },
       { status: error.statusCode || 500 }

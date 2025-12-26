@@ -1202,16 +1202,48 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         }
       }
       
+      // BUG FIX #1: Ensure conversation exists before proceeding with outbound logging
+      if (!conversation) {
+        console.error(`❌ [OUTBOUND] Cannot send WhatsApp message: conversation not found for lead ${leadId}, contact ${contactId}, channel ${channel}`)
+        return { replied: false, reason: 'Conversation not found - cannot send outbound message' }
+      }
+
       // Load flow state for logging
       let flowStep: string | undefined
       let lastQuestionKey: string | undefined
       
-      if (conversation) {
-        const { loadFlowState } = await import('./conversation/flowState')
-        const flowState = await loadFlowState(conversation.id)
-        flowStep = flowState.flowStep
-        lastQuestionKey = flowState.lastQuestionKey
-        console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
+      const { loadFlowState } = await import('./conversation/flowState')
+      const flowState = await loadFlowState(conversation.id)
+      flowStep = flowState.flowStep
+      lastQuestionKey = flowState.lastQuestionKey
+      console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
+      
+      // BUG FIX #2: When effectiveTriggerId is null, use fallback idempotency check
+      // SQL unique constraints allow multiple NULLs, so we need a different strategy
+      const outboundTextHash = require('crypto').createHash('sha256').update(replyText).digest('hex')
+      
+      if (!effectiveTriggerId) {
+        // Fallback: Check for duplicate outbound messages within last 30 seconds
+        // using conversationId + outboundTextHash
+        const thirtySecondsAgo = new Date(Date.now() - 30 * 1000)
+        const recentDuplicate = await (prisma as any).outboundMessageLog.findFirst({
+          where: {
+            provider: 'whatsapp',
+            conversationId: conversation.id,
+            outboundTextHash: outboundTextHash,
+            createdAt: {
+              gte: thirtySecondsAgo,
+            },
+            triggerProviderMessageId: null, // Only check records without trigger ID
+          },
+        })
+        
+        if (recentDuplicate) {
+          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Duplicate outbound detected (no trigger ID): same text hash within 30s - skipping`)
+          return { replied: false, reason: 'Duplicate outbound message detected (no trigger ID)' }
+        }
+        
+        console.warn(`⚠️ [OUTBOUND-IDEMPOTENCY] No triggerProviderMessageId available - using fallback deduplication (conversationId + textHash)`)
       }
       
       // FIX B: Log outbound BEFORE sending (transaction-based idempotency)
@@ -1233,22 +1265,39 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             if (existing) {
               throw new Error('OUTBOUND_ALREADY_LOGGED')
             }
+          } else {
+            // BUG FIX #2: Double-check fallback idempotency inside transaction
+            const thirtySecondsAgo = new Date(Date.now() - 30 * 1000)
+            const existing = await (tx as any).outboundMessageLog.findFirst({
+              where: {
+                provider: 'whatsapp',
+                conversationId: conversation.id,
+                outboundTextHash: outboundTextHash,
+                createdAt: {
+                  gte: thirtySecondsAgo,
+                },
+                triggerProviderMessageId: null,
+              },
+            })
+            if (existing) {
+              throw new Error('OUTBOUND_ALREADY_LOGGED')
+            }
           }
           
           // Create outbound log BEFORE sending (idempotency guarantee)
           const outboundLog = await (tx as any).outboundMessageLog.create({
             data: {
               provider: 'whatsapp',
-              conversationId: conversation!.id,
+              conversationId: conversation.id,
               triggerProviderMessageId: effectiveTriggerId || null,
-              outboundTextHash: require('crypto').createHash('sha256').update(replyText).digest('hex'),
+              outboundTextHash: outboundTextHash,
               outboundMessageId: null, // Will be updated after send
               flowStep: flowStep || null,
               lastQuestionKey: lastQuestionKey || null,
             },
           })
           outboundLogId = outboundLog.id
-          console.log(`✅ [OUTBOUND-IDEMPOTENCY] Logged outbound BEFORE send (logId: ${outboundLogId})`)
+          console.log(`✅ [OUTBOUND-IDEMPOTENCY] Logged outbound BEFORE send (logId: ${outboundLogId}, triggerId: ${effectiveTriggerId || 'none'})`)
         })
       } catch (error: any) {
         if (error.message === 'OUTBOUND_ALREADY_LOGGED') {
