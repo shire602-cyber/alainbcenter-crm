@@ -1019,7 +1019,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 
         // Step 7: Check for duplicate outbound message (idempotency)
         // Check if we already sent this exact message recently (within last 5 seconds)
-        const recentDuplicate = await prisma.message.findFirst({
+        const recentDuplicate = conversation ? await prisma.message.findFirst({
           where: {
             conversationId: conversation.id,
             direction: 'OUTBOUND',
@@ -1029,7 +1029,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             },
           },
           orderBy: { createdAt: 'desc' },
-        })
+        }) : null
         
         if (recentDuplicate) {
           console.log(`⚠️ [DUPLICATE-OUTBOUND] Duplicate outbound message detected (ID: ${recentDuplicate.id}) - skipping save`)
