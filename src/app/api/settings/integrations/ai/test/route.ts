@@ -23,7 +23,39 @@ export async function POST(req: NextRequest) {
     }
 
     try {
-      if (provider === 'openai') {
+      if (provider === 'deepseek') {
+        // DeepSeek uses OpenAI-compatible API
+        const response = await fetch('https://api.deepseek.com/v1/chat/completions', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${apiKey}`,
+          },
+          body: JSON.stringify({
+            model: model,
+            messages: [
+              {
+                role: 'system',
+                content: 'You are a helpful assistant.',
+              },
+              {
+                role: 'user',
+                content: 'Say "Hello" in one word.',
+              },
+            ],
+            max_tokens: 10,
+          }),
+        })
+
+        const data = await response.json()
+        
+        if (response.ok && data.choices?.[0]?.message?.content) {
+          testResult.ok = true
+          testResult.response = data.choices[0].message.content
+        } else {
+          testResult.error = data.error?.message || 'Unknown error'
+        }
+      } else if (provider === 'openai') {
         const response = await fetch('https://api.openai.com/v1/chat/completions', {
           method: 'POST',
           headers: {
