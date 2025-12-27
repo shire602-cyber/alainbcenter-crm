@@ -338,13 +338,16 @@ REQUIREMENTS:
 1. Respond directly to: "${currentMessage}"
 2. Use information from conversation history and training documents
 3. Do NOT ask for information already provided (check "INFORMATION ALREADY PROVIDED" section above)
-4. If service is locked (${lockedService || 'none'}), stay on that service
-5. For BUSINESS SETUP/LICENSE: 
+4. 🚨 CRITICAL: FULL NAME MUST BE ASKED FIRST - If name is NOT in "INFORMATION ALREADY PROVIDED" or "CUSTOMER NAME" sections, you MUST ask for name BEFORE asking any service questions
+   - Even if customer mentions a service (business setup, visa, etc.), ask for name first
+   - Example: Customer says "I want business setup" → Reply: "May I know your full name, please?"
+5. If service is locked (${lockedService || 'none'}), stay on that service
+6. For BUSINESS SETUP/LICENSE: 
    - Ask "Freezone or Mainland?" NOT "inside/outside UAE"
    - 🚨 CRITICAL: Check "INFORMATION ALREADY PROVIDED" section above - if "License Type: MAINLAND" or "License Type: FREEZONE" is listed, DO NOT ask again - they already answered!
    - 🚨 FORBIDDEN: Do NOT ask about "year" options (licenses don't have year options) - this is ABSOLUTELY FORBIDDEN
    - If customer said "mainland" or "freezone" in conversation history, they already answered - proceed to next step
-6. ONLY ask for full name if it's NOT already provided (check "INFORMATION ALREADY PROVIDED" section and "CUSTOMER NAME" section above)
+7. ONLY ask for full name if it's NOT already provided (check "INFORMATION ALREADY PROVIDED" section and "CUSTOMER NAME" section above)
 7. Return ONLY valid JSON with the structure specified above
 8. Keep reply under 300 characters, professional and business-focused (NOT casual)
 9. If training documents have pricing for this service, USE IT - don't ask for more info if pricing is available
