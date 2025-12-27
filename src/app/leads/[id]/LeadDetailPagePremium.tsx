@@ -844,23 +844,30 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Type</Label>
                   <Select
-                    value={lead.serviceTypeId?.toString() || (lead.serviceTypeEnum ? serviceTypes.find(st => st.key?.toLowerCase() === lead.serviceTypeEnum?.toLowerCase())?.id.toString() || '') : ''}
-                    onChange={(e) => {
-                      const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
-                      handleSaveField('serviceTypeId', serviceTypeId)
-                    }}
-                    className="text-base"
-                  >
-                    <option value="">Select service...</option>
-                    {serviceTypes.map((st) => (
-                      <option key={st.id} value={st.id.toString()}>
-                        {st.name}
-                      </option>
-                    ))}
-                  </Select>
+                    value={(() => {
+                      if (lead.serviceTypeId) return lead.serviceTypeId.toString()
+                      if (lead.serviceTypeEnum && serviceTypes) {
+                        const matched = serviceTypes.find(st => st.key?.toLowerCase() === lead.serviceTypeEnum?.toLowerCase())
+                        return matched?.id.toString() || ''
+                      }
+                      return ''
+                    })()}
+                        onChange={(e) => {
+                          const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
+                          handleSaveField('serviceTypeId', serviceTypeId)
+                        }}
+                        className="text-base"
+                      >
+                        <option value="">Select service...</option>
+                        {serviceTypes.map((st) => (
+                          <option key={st.id} value={st.id.toString()}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </Select>
                   {lead.serviceTypeEnum && !lead.serviceTypeId && (
                     <p className="text-xs text-muted-foreground mt-1">
-                      Detected: {lead.serviceTypeEnum.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                      Detected: {lead.serviceTypeEnum.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </p>
                   )}
                   {lead.requestedServiceRaw && (
