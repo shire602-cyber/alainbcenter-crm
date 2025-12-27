@@ -868,8 +868,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             
             // CRITICAL FIX: Check if name is missing FIRST - use rule engine to ask for name
             // Only route to business setup handler AFTER name is captured
-            const conversationMemory = await loadConversationMemory(conversation.id)
-            const hasName = conversationMemory.name || lead.contact?.fullName
+            // Use existingMemory which was already loaded above
+            const hasName = existingMemory.name || lead.contact?.fullName
             
             if (isBusinessSetup && hasName) {
               console.log(`🏢 [BUSINESS-SETUP] Detected business setup intent, routing to dedicated handler`)
