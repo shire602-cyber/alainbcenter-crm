@@ -46,6 +46,8 @@ export async function POST(
           { status: 404 }
         )
       }
+      // Allow all users to assign to themselves or AI
+      // Only restrict assigning to OTHER users (ADMIN/MANAGER can assign to anyone)
       if (currentUser.role !== 'ADMIN' && currentUser.role !== 'MANAGER' && assignedUserId !== currentUser.id) {
         return NextResponse.json(
           { error: 'You can only assign to yourself or AI' },
