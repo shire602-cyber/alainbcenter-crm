@@ -14,7 +14,7 @@
 
 import { prisma } from '../prisma'
 import { normalizeInboundPhone, findContactByPhone } from '../phone-inbound'
-import { extractService, extractNationality, extractExpiry, extractCounts, extractIdentity } from './fieldExtractors'
+import { extractService, extractNationality, extractExpiry, extractExpiryHint, extractCounts, extractIdentity } from './fieldExtractors'
 import { createAutoTasks } from './autoTasks'
 import { handleInboundAutoReply } from '../autoReply'
 
@@ -38,6 +38,7 @@ export interface AutoMatchResult {
     service?: string
     nationality?: string
     expiries?: Array<{ type: string; date: Date }>
+    expiryHint?: string | null
     counts?: { partners?: number; visas?: number }
     identity?: { name?: string; email?: string }
   }
@@ -119,9 +120,20 @@ export async function handleInboundMessageAutoMatch(
   const existingData = lead.dataJson ? JSON.parse(lead.dataJson) : {}
   const updatedData = {
     ...existingData,
-    ...extractedFields,
+    service: extractedFields.service,
+    nationality: extractedFields.nationality,
+    expiries: extractedFields.expiries,
+    counts: extractedFields.counts,
+    identity: extractedFields.identity,
     extractedAt: new Date().toISOString(),
   }
+  
+  // Store expiry hint if present (expiry mentioned but no explicit date)
+  if (extractedFields.expiryHint) {
+    updatedData.expiry_hint_text = extractedFields.expiryHint
+    console.log(`📝 [AUTO-MATCH] Stored expiry hint: "${extractedFields.expiryHint}"`)
+  }
+  
   await prisma.lead.update({
     where: { id: lead.id },
     data: { dataJson: JSON.stringify(updatedData) },
@@ -134,6 +146,7 @@ export async function handleInboundMessageAutoMatch(
     channel: input.channel,
     service: extractedFields.service,
     expiries: extractedFields.expiries,
+    expiryHint: extractedFields.expiryHint,
     providerMessageId: input.providerMessageId,
   })
 
@@ -229,7 +242,7 @@ async function findOrCreateContact(input: {
       fullName: input.fromName || 'Unknown',
       phone: input.fromPhone ? normalizeInboundPhone(input.fromPhone) : '',
       email: input.fromEmail?.toLowerCase().trim() || null,
-      source: input.channel.toLowerCase(),
+      source: input.channel.toLowerCase(), // Contact has source field
     }
 
     contact = await prisma.contact.create({ data: contactData })
@@ -390,6 +403,7 @@ async function extractFields(
   const service = extractService(text)
   const nationality = extractNationality(text)
   const expiries = extractExpiry(text)
+  const expiryHint = extractExpiryHint(text)
   const counts = extractCounts(text)
   const identity = extractIdentity(text)
 
@@ -397,6 +411,7 @@ async function extractFields(
     service,
     nationality,
     expiries,
+    expiryHint,
     counts,
     identity,
   }

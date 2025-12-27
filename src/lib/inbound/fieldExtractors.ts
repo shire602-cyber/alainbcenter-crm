@@ -130,17 +130,51 @@ export function extractNationality(text: string): string | undefined {
 
 /**
  * Extract expiry dates from text
+ * HARD RULE: Only extract EXPLICIT dates. Never infer relative dates like "next month", "in 2 weeks", etc.
+ * 
+ * Accepted formats:
+ * - DD/MM/YYYY or DD-MM-YYYY (e.g., 10/02/2026)
+ * - YYYY-MM-DD (e.g., 2026-02-10)
+ * - DD/MM/YY or DD-MM-YY (convert 00-49 to 20YY, 50-99 to 19YY)
+ * - "10 Feb 2026", "10 February 2026"
+ * - "Feb 10 2026" (optional)
+ * 
+ * Rejected formats:
+ * - "next month", "in 30 days", "in 2 weeks"
+ * - "this month", "soon", "end of month"
+ * - "tomorrow", "today" (unless explicit date also included)
+ * - "Feb 2026" (month-year only) -> NOT allowed
+ * - "2026" alone -> NOT allowed
  */
 export function extractExpiry(text: string): Array<{ type: string; date: Date }> {
   const expiries: Array<{ type: string; date: Date }> = []
   const lower = text.toLowerCase()
 
-  // Date patterns
-  const datePatterns = [
-    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g, // DD/MM/YYYY or DD-MM-YYYY
-    /(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{2,4})/gi, // DD MMM YYYY
-    /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{2,4})/gi, // MMM DD, YYYY
+  // Explicit date patterns ONLY (no relative dates)
+  const explicitDatePatterns = [
+    // DD/MM/YYYY or DD-MM-YYYY or YYYY-MM-DD
+    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/g,
+    // YYYY-MM-DD (ISO format)
+    /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/g,
+    // DD MMM YYYY (e.g., "10 Feb 2026")
+    /(\d{1,2})\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{2,4})/gi,
+    // MMM DD, YYYY (e.g., "Feb 10, 2026")
+    /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{2,4})/gi,
   ]
+
+  // Rejected relative date patterns (must NOT match these)
+  const relativeDatePatterns = [
+    /\b(next|this|in)\s+(month|week|year|days?|weeks?|months?|years?)\b/i,
+    /\b(soon|tomorrow|today|end of (month|year))\b/i,
+    /\b(after|before)\s+\w+\b/i, // "after Ramadan", "before Eid"
+  ]
+
+  // Check for relative date mentions (reject if found)
+  const hasRelativeDate = relativeDatePatterns.some(pattern => pattern.test(text))
+  if (hasRelativeDate) {
+    console.log(`⚠️ [EXPIRY-EXTRACT] Rejected relative date mention: "${text.substring(0, 100)}"`)
+    return [] // Return empty - will be handled as hint
+  }
 
   // Expiry type keywords
   const expiryTypes: Record<string, string> = {
@@ -149,39 +183,110 @@ export function extractExpiry(text: string): Array<{ type: string; date: Date }>
     'emirates id': 'EMIRATES_ID_EXPIRY',
     passport: 'PASSPORT_EXPIRY',
     'trade license': 'TRADE_LICENSE_EXPIRY',
+    license: 'TRADE_LICENSE_EXPIRY', // Only if business context
     'establishment card': 'ESTABLISHMENT_CARD_EXPIRY',
+    establishment: 'ESTABLISHMENT_CARD_EXPIRY',
     insurance: 'INSURANCE_EXPIRY',
   }
 
-  // Find expiry mentions
+  // Expiry keywords that trigger extraction
+  const expiryKeywords = ['expir', 'expires', 'expiring', 'expiry', 'valid until', 'valid till']
+
+  // Find expiry mentions with explicit dates
   for (const [keyword, type] of Object.entries(expiryTypes)) {
-    if (lower.includes(keyword) && (lower.includes('expir') || lower.includes('valid until'))) {
-      // Try to find date near the keyword
+    const hasKeyword = lower.includes(keyword)
+    const hasExpiryKeyword = expiryKeywords.some(ek => lower.includes(ek))
+    
+    if (hasKeyword && hasExpiryKeyword) {
+      // Try to find explicit date near the keyword
       const keywordIndex = lower.indexOf(keyword)
       const context = text.substring(Math.max(0, keywordIndex - 50), keywordIndex + 100)
 
-      for (const pattern of datePatterns) {
-        const matches = context.matchAll(pattern)
+      let foundExplicitDate = false
+
+      for (const pattern of explicitDatePatterns) {
+        const matches = Array.from(context.matchAll(pattern))
         for (const match of matches) {
           try {
             let date: Date
+            let year: number
+            let month: number
+            let day: number
+
             if (match[0].includes('/') || match[0].includes('-')) {
-              // DD/MM/YYYY or DD-MM-YYYY
-              const day = parseInt(match[1])
-              const month = parseInt(match[2]) - 1
-              const year = parseInt(match[3].length === 2 ? `20${match[3]}` : match[3])
+              // Check if it's YYYY-MM-DD format (ISO)
+              if (match[1].length === 4) {
+                // YYYY-MM-DD
+                year = parseInt(match[1])
+                month = parseInt(match[2]) - 1
+                day = parseInt(match[3])
+              } else {
+                // DD/MM/YYYY or DD-MM-YYYY
+                day = parseInt(match[1])
+                month = parseInt(match[2]) - 1
+                const yearStr = match[3]
+                
+                // Handle 2-digit years: 00-49 -> 20YY, 50-99 -> 19YY
+                if (yearStr.length === 2) {
+                  const yearNum = parseInt(yearStr)
+                  year = yearNum <= 49 ? 2000 + yearNum : 1900 + yearNum
+                  console.log(`📅 [EXPIRY-EXTRACT] Normalized 2-digit year: ${yearStr} -> ${year}`)
+                } else {
+                  year = parseInt(yearStr)
+                }
+              }
+              
               date = new Date(year, month, day)
             } else {
-              // Try parsing as-is
-              date = new Date(match[0])
+              // Text date format (DD MMM YYYY or MMM DD, YYYY)
+              const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+              const matchLower = match[0].toLowerCase()
+              
+              if (/\d{1,2}\s+[a-z]+\s+\d{2,4}/.test(matchLower)) {
+                // DD MMM YYYY format
+                day = parseInt(match[1])
+                const monthName = match[2].toLowerCase().substring(0, 3)
+                const monthIndex = monthNames.findIndex(m => m === monthName)
+                if (monthIndex === -1) continue
+                month = monthIndex
+                const yearStr = match[3]
+                year = yearStr.length === 2 
+                  ? (parseInt(yearStr) <= 49 ? 2000 + parseInt(yearStr) : 1900 + parseInt(yearStr))
+                  : parseInt(yearStr)
+                date = new Date(year, month, day)
+              } else if (/[a-z]+\s+\d{1,2},?\s+\d{2,4}/.test(matchLower)) {
+                // MMM DD, YYYY format
+                const monthName = match[1].toLowerCase().substring(0, 3)
+                const monthIndex = monthNames.findIndex(m => m === monthName)
+                if (monthIndex === -1) continue
+                month = monthIndex
+                day = parseInt(match[2])
+                const yearStr = match[3]
+                year = yearStr.length === 2
+                  ? (parseInt(yearStr) <= 49 ? 2000 + parseInt(yearStr) : 1900 + parseInt(yearStr))
+                  : parseInt(yearStr)
+                date = new Date(year, month, day)
+              } else {
+                continue // Skip if format doesn't match
+              }
             }
 
+            // Validate date
             if (!isNaN(date.getTime()) && date > new Date()) {
-              expiries.push({ type, date })
-              break // Only take first date per expiry type
+              // Additional validation: ensure it's a reasonable future date (not more than 20 years)
+              const maxFutureDate = new Date()
+              maxFutureDate.setFullYear(maxFutureDate.getFullYear() + 20)
+              
+              if (date <= maxFutureDate) {
+                expiries.push({ type, date })
+                foundExplicitDate = true
+                console.log(`✅ [EXPIRY-EXTRACT] Extracted explicit expiry: ${type} = ${date.toISOString().split('T')[0]}`)
+                break // Only take first date per expiry type
+              }
             }
           } catch (error) {
             // Invalid date, skip
+            console.warn(`⚠️ [EXPIRY-EXTRACT] Failed to parse date: ${match[0]}`, error)
           }
         }
       }
@@ -189,6 +294,60 @@ export function extractExpiry(text: string): Array<{ type: string; date: Date }>
   }
 
   return expiries
+}
+
+/**
+ * Check if text mentions expiry but without explicit date
+ * Returns the full sentence containing the expiry mention
+ */
+export function extractExpiryHint(text: string): string | null {
+  const lower = text.toLowerCase()
+  
+  // Expiry keywords
+  const expiryKeywords = ['expir', 'expires', 'expiring', 'expiry', 'valid until', 'valid till']
+  const expiryTypes = ['visa', 'eid', 'emirates id', 'passport', 'trade license', 'license', 'establishment', 'insurance']
+  
+  // Check if expiry is mentioned
+  const hasExpiryKeyword = expiryKeywords.some(ek => lower.includes(ek))
+  const hasExpiryType = expiryTypes.some(et => lower.includes(et))
+  
+  if (!hasExpiryKeyword || !hasExpiryType) {
+    return null
+  }
+  
+  // Check if explicit date exists (if it does, this is not a hint)
+  const explicitDatePatterns = [
+    /\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/, // DD/MM/YYYY
+    /\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/, // YYYY-MM-DD
+    /\d{1,2}\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{2,4}/i, // DD MMM YYYY
+    /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+\d{1,2},?\s+\d{2,4}/i, // MMM DD, YYYY
+  ]
+  
+  const hasExplicitDate = explicitDatePatterns.some(pattern => pattern.test(text))
+  
+  if (hasExplicitDate) {
+    return null // Has explicit date, not a hint
+  }
+  
+  // Extract the sentence containing the expiry mention
+  const sentences = text.split(/[.!?]\s+/)
+  for (const sentence of sentences) {
+    const sentenceLower = sentence.toLowerCase()
+    if (expiryKeywords.some(ek => sentenceLower.includes(ek)) && 
+        expiryTypes.some(et => sentenceLower.includes(et))) {
+      return sentence.trim()
+    }
+  }
+  
+  // Fallback: return relevant portion of text
+  const expiryIndex = lower.search(new RegExp(expiryKeywords.join('|')))
+  if (expiryIndex !== -1) {
+    const start = Math.max(0, expiryIndex - 30)
+    const end = Math.min(text.length, expiryIndex + 100)
+    return text.substring(start, end).trim()
+  }
+  
+  return null
 }
 
 /**

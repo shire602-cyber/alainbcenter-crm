@@ -72,21 +72,37 @@ export async function POST(req: NextRequest) {
 
     for (const task of overdueTasks) {
       try {
-        await prisma.notification.create({
-          data: {
+        // Check if notification already exists today (dedupe)
+        const today = new Date()
+        today.setHours(0, 0, 0, 0)
+        const existingNotification = await prisma.notification.findFirst({
+          where: {
             type: 'task_assigned',
-            title: 'Overdue task',
-            message: `Task "${task.title}" for lead ${task.lead.contact.fullName} is overdue`,
             leadId: task.leadId,
             conversationId: task.conversationId,
+            createdAt: {
+              gte: today,
+            },
+            message: {
+              contains: `Task "${task.title}"`,
+            },
           },
         })
-        alertsCreated.push(`Overdue task: ${task.id}`)
-      } catch (error: any) {
-        // Skip if notification already exists (dedupe by type+leadId)
-        if (error.code !== 'P2002') {
-          console.error(`Failed to create alert for task ${task.id}:`, error)
+
+        if (!existingNotification) {
+          await prisma.notification.create({
+            data: {
+              type: 'task_assigned',
+              title: 'Overdue task',
+              message: `Task "${task.title}" for lead ${task.lead.contact.fullName} is overdue`,
+              leadId: task.leadId,
+              conversationId: task.conversationId,
+            },
+          })
+          alertsCreated.push(`Overdue task: ${task.id}`)
         }
+      } catch (error: any) {
+        console.error(`Failed to create alert for task ${task.id}:`, error)
       }
     }
 
@@ -235,14 +251,27 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // 5. Send staff reminders for overdue tasks
+    let staffRemindersSent = 0
+    try {
+      const { triggerStaffRemindersForOverdueTasks } = await import('@/lib/inbound/staffReminders')
+      staffRemindersSent = await triggerStaffRemindersForOverdueTasks()
+      console.log(`✅ [DAILY-ALERTS] Sent ${staffRemindersSent} staff reminders for overdue tasks`)
+    } catch (reminderError: any) {
+      console.error(`❌ [DAILY-ALERTS] Failed to send staff reminders:`, reminderError.message)
+      // Non-blocking - don't fail the entire job
+    }
+
     console.log(`✅ [DAILY-ALERTS] Completed`, {
       alertsCreated: alertsCreated.length,
+      staffRemindersSent,
       elapsed: `${Date.now() - startTime}ms`,
     })
 
     return NextResponse.json({
       success: true,
       alertsCreated: alertsCreated.length,
+      staffRemindersSent,
       details: alertsCreated,
     })
   } catch (error: any) {
