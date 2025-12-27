@@ -290,7 +290,7 @@ export async function goldenVisaQualify(
   const lead = await prisma.lead.findUnique({
     where: { id: leadId },
     include: {
-      conversation: {
+      conversations: {
         where: { id: conversationId },
       },
     },
