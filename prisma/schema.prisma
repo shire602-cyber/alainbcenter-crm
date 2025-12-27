@@ -375,7 +375,7 @@ model Message {
   body              String? // Text content (nullable for media-only messages)
   mediaUrl          String? // URL to media file
   mediaMimeType     String? // MIME type for media
-  providerMessageId String?      @unique // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
+  providerMessageId String? // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
   status            String       @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED | PENDING
   payload           String? // JSON: Provider-specific payload/metadata (stored as string - works for both SQLite and PostgreSQL)
   meta              String? // Legacy field - JSON for provider IDs and metadata (kept for backward compatibility)
@@ -392,6 +392,7 @@ model Message {
   replyEngineLogs          ReplyEngineLog[]
   replyEngineLogsAsInbound ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
 
+  @@unique([channel, providerMessageId]) // Prevent duplicate messages when webhooks retry (composite unique)
   @@index([conversationId, createdAt])
   @@index([leadId])
   @@index([contactId])

@@ -843,7 +843,18 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </div>
                 )}
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Type</Label>
+                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Needed</Label>
+                  {/* Show requestedServiceRaw prominently if serviceTypeId not set */}
+                  {lead.requestedServiceRaw && !lead.serviceTypeId && (
+                    <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                        {lead.requestedServiceRaw}
+                      </p>
+                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                        Detected from messages - select service type below to confirm
+                      </p>
+                    </div>
+                  )}
                   <Select
                     value={(() => {
                       if (lead.serviceTypeId) return lead.serviceTypeId.toString()

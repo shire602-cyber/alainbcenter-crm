@@ -448,11 +448,12 @@ async function findOrCreateConversation(input: {
   
   // STEP 3: Use upsert to enforce uniqueness - prevents duplicates at DB level
   // The @@unique([contactId, channel]) constraint ensures only one conversation per contact+channel
+  // CRITICAL: Always use normalized lowercase channel
   const conversation = await prisma.conversation.upsert({
     where: {
       contactId_channel: {
         contactId: input.contactId,
-        channel: channelLower,
+        channel: channelLower, // Always lowercase
       },
     },
     update: {
@@ -462,11 +463,13 @@ async function findOrCreateConversation(input: {
       lastMessageAt: messageTimestamp, // Use actual message timestamp
       // Update status to open if it was closed
       status: 'open',
+      // Ensure channel is normalized (in case it wasn't before)
+      channel: channelLower,
     },
     create: {
       contactId: input.contactId,
       leadId: input.leadId, // CRITICAL: Always link to lead
-      channel: channelLower,
+      channel: channelLower, // Always lowercase
       status: 'open',
       lastInboundAt: messageTimestamp, // Use actual message timestamp
       lastMessageAt: messageTimestamp, // Use actual message timestamp
@@ -595,13 +598,16 @@ async function createCommunicationLog(input: {
                                input.direction.toUpperCase() === 'OUT' ? 'OUTBOUND' :
                                input.direction.toUpperCase()
   
+  // CRITICAL: Normalize channel to lowercase for consistency
+  const normalizedChannel = normalizeChannel(input.channel)
+  
   const message = await prisma.message.create({
     data: {
       conversationId: input.conversationId,
       leadId: input.leadId,
       contactId: input.contactId, // CRITICAL: Link to contact
       direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
-      channel: input.channel.toUpperCase(),
+      channel: normalizedChannel, // Always lowercase for consistency
       type: 'text',
       body: input.text,
       providerMessageId: input.providerMessageId,
@@ -616,7 +622,7 @@ async function createCommunicationLog(input: {
       data: {
         leadId: input.leadId,
         conversationId: input.conversationId,
-        channel: input.channel.toLowerCase(),
+        channel: normalizedChannel, // Use normalized channel
         direction: input.direction.toLowerCase(),
         messageSnippet: input.text.substring(0, 200),
         body: input.text,

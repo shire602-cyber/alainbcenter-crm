@@ -5,6 +5,7 @@
 
 import type { Template } from './types'
 import { renderTemplate } from './templates'
+import { validateAIReply, sanitizeReplyText } from './validation'
 
 const FORBIDDEN_PHRASES = [
   'guaranteed',
