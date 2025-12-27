@@ -1075,13 +1075,13 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
     currentState = 'S1_CAPTURE_NAME'
   }
   
-  // Check if we have name
-  if (updatedMemory.name) {
+  // CRITICAL FIX: Always ask for name FIRST before service flow
+  // Even if service is detected, we must capture name first
+  if (!updatedMemory.name && hasGreeting) {
+    currentState = 'S1_CAPTURE_NAME'
+  } else if (updatedMemory.name && !updatedMemory.service) {
     currentState = 'S2_IDENTIFY_SERVICE'
-  }
-  
-  // Check if we have service
-  if (updatedMemory.service) {
+  } else if (updatedMemory.name && updatedMemory.service) {
     currentState = 'S3_SERVICE_FLOW'
   }
   
@@ -1099,6 +1099,7 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
       reply = renderTemplate(action.template, updatedMemory)
     }
   } else if (currentState === 'S1_CAPTURE_NAME' && !updatedMemory.name) {
+    // CRITICAL: Always ask for name if missing, even if service is detected
     const action = currentStateDef?.actions[0] as any
     if (action?.type === 'ask_question' && action?.template) {
       reply = renderTemplate(action.template, updatedMemory)
