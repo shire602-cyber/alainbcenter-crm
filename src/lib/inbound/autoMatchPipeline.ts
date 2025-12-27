@@ -181,7 +181,7 @@ export async function handleInboundMessageAutoMatch(
         updatedData.business_activity = memory.business_activity
         // Also update businessActivityRaw if not already set
         if (!extractedFields.businessActivityRaw) {
-          updateData.businessActivityRaw = memory.business_activity
+          updatedData.businessActivityRaw = memory.business_activity
         }
       }
       if (memory.partners_count !== undefined) {
