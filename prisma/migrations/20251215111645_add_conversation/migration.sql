@@ -12,18 +12,16 @@ ALTER TABLE "CommunicationLog" ADD COLUMN "meta" TEXT;
 ALTER TABLE "CommunicationLog" ADD COLUMN "to" TEXT;
 
 -- RedefineTables
-PRAGMA defer_foreign_keys=ON;
-PRAGMA foreign_keys=OFF;
 CREATE TABLE "new_Conversation" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "contactId" INTEGER NOT NULL,
     "channel" TEXT NOT NULL DEFAULT 'whatsapp',
     "status" TEXT NOT NULL DEFAULT 'open',
     "assignedToId" INTEGER,
-    "lastMessageAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastMessageAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "unreadCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "Conversation_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 INSERT INTO "new_Conversation" ("channel", "contactId", "createdAt", "id", "lastMessageAt", "updatedAt") SELECT "channel", "contactId", "createdAt", "id", "lastMessageAt", "updatedAt" FROM "Conversation";
@@ -32,8 +30,6 @@ ALTER TABLE "new_Conversation" RENAME TO "Conversation";
 CREATE INDEX "Conversation_channel_lastMessageAt_idx" ON "Conversation"("channel", "lastMessageAt");
 CREATE INDEX "Conversation_contactId_idx" ON "Conversation"("contactId");
 CREATE UNIQUE INDEX "Conversation_contactId_channel_key" ON "Conversation"("contactId", "channel");
-PRAGMA foreign_keys=ON;
-PRAGMA defer_foreign_keys=OFF;
 
 -- CreateIndex
 CREATE UNIQUE INDEX "CommunicationLog_externalId_key" ON "CommunicationLog"("externalId");

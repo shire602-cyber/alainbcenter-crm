@@ -8,28 +8,24 @@
 */
 -- CreateTable
 CREATE TABLE "WebhookEventLog" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "provider" TEXT NOT NULL,
     "ok" BOOLEAN NOT NULL DEFAULT true,
     "info" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- RedefineTables
-PRAGMA defer_foreign_keys=ON;
-PRAGMA foreign_keys=OFF;
 CREATE TABLE "new_WhatsAppTemplate" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "language" TEXT NOT NULL DEFAULT 'en_US',
     "status" TEXT NOT NULL DEFAULT 'approved',
     "body" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 INSERT INTO "new_WhatsAppTemplate" ("createdAt", "id", "language", "name", "status", "updatedAt") SELECT "createdAt", "id", "language", "name", "status", "updatedAt" FROM "WhatsAppTemplate";
 DROP TABLE "WhatsAppTemplate";
 ALTER TABLE "new_WhatsAppTemplate" RENAME TO "WhatsAppTemplate";
 CREATE UNIQUE INDEX "WhatsAppTemplate_name_key" ON "WhatsAppTemplate"("name");
-PRAGMA foreign_keys=ON;
-PRAGMA defer_foreign_keys=OFF;

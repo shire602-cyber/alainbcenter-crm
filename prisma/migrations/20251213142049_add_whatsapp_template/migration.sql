@@ -1,13 +1,13 @@
 -- CreateTable
 CREATE TABLE "WhatsAppTemplate" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "language" TEXT NOT NULL DEFAULT 'en',
     "content" TEXT NOT NULL,
     "status" TEXT NOT NULL DEFAULT 'draft',
     "category" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateIndex

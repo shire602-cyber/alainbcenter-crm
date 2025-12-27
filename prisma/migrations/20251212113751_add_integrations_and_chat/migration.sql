@@ -1,6 +1,6 @@
 -- CreateTable
 CREATE TABLE "Integration" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "name" TEXT NOT NULL,
     "provider" TEXT NOT NULL,
     "isEnabled" BOOLEAN NOT NULL DEFAULT false,
@@ -10,16 +10,16 @@ CREATE TABLE "Integration" (
     "accessToken" TEXT,
     "refreshToken" TEXT,
     "config" TEXT,
-    "lastTestedAt" DATETIME,
+    "lastTestedAt" TIMESTAMP(3),
     "lastTestStatus" TEXT,
     "lastTestMessage" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 
 -- CreateTable
 CREATE TABLE "ChatMessage" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "leadId" INTEGER,
     "contactId" INTEGER,
     "channel" TEXT NOT NULL,
@@ -30,8 +30,8 @@ CREATE TABLE "ChatMessage" (
     "senderEmail" TEXT,
     "attachments" TEXT,
     "metadata" TEXT,
-    "readAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "readAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ChatMessage_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "ChatMessage_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );

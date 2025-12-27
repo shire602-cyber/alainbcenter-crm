@@ -7,7 +7,7 @@ CREATE TABLE IF NOT EXISTS "MessageStatusEvent" (
     "providerStatus" TEXT,
     "errorMessage" TEXT,
     "rawPayload" TEXT,
-    "receivedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "MessageStatusEvent_messageId_fkey" FOREIGN KEY ("messageId") REFERENCES "Message" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "MessageStatusEvent_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
@@ -24,7 +24,7 @@ CREATE TABLE IF NOT EXISTS "MessageStatusEvent" (
 -- ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "mediaMimeType" TEXT;
 -- ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "providerMessageId" TEXT;
 -- ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "rawPayload" TEXT;
--- ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "sentAt" DATETIME;
+-- ALTER TABLE "Message" ADD COLUMN IF NOT EXISTS "sentAt" TIMESTAMP(3);
 
 -- CreateIndex: MessageStatusEvent indexes
 CREATE INDEX IF NOT EXISTS "MessageStatusEvent_messageId_receivedAt_idx" ON "MessageStatusEvent"("messageId", "receivedAt");

@@ -1,0 +1,1 @@
+-- Contact normalization already applied
