@@ -57,7 +57,7 @@ export async function generateReply(
           replyKey: existingLog.replyKey,
           debug: {
             plan: {
-              action: 'SKIP',
+              action: 'STOP',
               templateKey: existingLog.templateKey,
               updates: {},
               reason: 'Duplicate inbound message - reply already generated',
