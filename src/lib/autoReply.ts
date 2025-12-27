@@ -907,6 +907,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                       confidence: 0.95, // Deterministic handler
                     }
                     
+                    // If needs handover, create task
+                    if (businessResult.handoverToHuman) {
+                      await createAgentTask(lead.id, 'complex_query', {
+                        messageText: `Business Setup - Handover required\n\nLast message: ${messageText}`,
+                      })
+                    }
+                    
                     // Skip rule engine and strict AI
                     console.log(`✅ [BUSINESS-SETUP] Using sanitized business setup handler result, skipping rule engine`)
                     break // Exit the try block to skip rule engine
@@ -915,13 +922,6 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                   console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
                   // Fall through to rule engine
                 }
-                  
-                  // If needs handover, create task
-                  if (businessResult.handoverToHuman) {
-                    await createAgentTask(lead.id, 'complex_query', {
-                      messageText: `Business Setup - Handover required\n\nLast message: ${messageText}`,
-                    })
-                  }
                   
                   // Skip rule engine and strict AI
                   console.log(`✅ [BUSINESS-SETUP] Using business setup handler result, skipping rule engine`)
