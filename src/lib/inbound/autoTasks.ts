@@ -25,12 +25,15 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
   let tasksCreated = 0
   const today = format(new Date(), 'yyyy-MM-dd')
 
-  // Task 1: Reply due (always create unless auto-reply succeeded)
-  // Note: This will be marked as DONE if auto-reply succeeds
-  const replyTaskKey = `reply:${input.leadId}:${input.providerMessageId}`
+  // PROBLEM E FIX: Reply due task - unique per lead per day (not per message)
+  // Use upsert to prevent duplicates
+  const replyTaskKey = `reply:${input.leadId}:${today}`
   try {
-    await prisma.task.create({
-      data: {
+    await prisma.task.upsert({
+      where: {
+        idempotencyKey: replyTaskKey,
+      },
+      create: {
         leadId: input.leadId,
         conversationId: input.conversationId,
         title: 'Reply due',
@@ -40,27 +43,36 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
         idempotencyKey: replyTaskKey,
         aiSuggested: true,
       },
+      update: {
+        // Update due date if task already exists (refresh the deadline)
+        dueAt: new Date(Date.now() + 10 * 60 * 1000),
+        status: 'OPEN', // Reopen if it was closed
+      },
     })
     tasksCreated++
-    console.log(`✅ [AUTO-TASKS] Created reply task`)
+    console.log(`✅ [AUTO-TASKS] Created/updated reply task (unique per day)`)
   } catch (error: any) {
     if (error.code !== 'P2002') {
       // Not a duplicate constraint, rethrow
       throw error
     }
     // Duplicate - already exists, skip
+    console.log(`⚠️ [AUTO-TASKS] Reply task already exists for today`)
   }
 
-  // Task 2: Service-specific tasks
+  // PROBLEM E FIX: Service-specific tasks - use upsert for deduplication
   if (input.service === 'MAINLAND_BUSINESS_SETUP' || input.service === 'FREEZONE_BUSINESS_SETUP') {
-    // Quote task (due end of day)
+    // Quote task (due end of day) - unique per lead per day
     const quoteTaskKey = `quote:${input.leadId}:${today}`
     try {
       const endOfDay = new Date()
       endOfDay.setHours(23, 59, 59, 999)
 
-      await prisma.task.create({
-        data: {
+      await prisma.task.upsert({
+        where: {
+          idempotencyKey: quoteTaskKey,
+        },
+        create: {
           leadId: input.leadId,
           conversationId: input.conversationId,
           title: 'Send quotation',
@@ -70,13 +82,19 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
           idempotencyKey: quoteTaskKey,
           aiSuggested: true,
         },
+        update: {
+          // Refresh due date if task already exists
+          dueAt: endOfDay,
+          status: 'OPEN',
+        },
       })
       tasksCreated++
-      console.log(`✅ [AUTO-TASKS] Created quote task`)
+      console.log(`✅ [AUTO-TASKS] Created/updated quote task (unique per day)`)
     } catch (error: any) {
       if (error.code !== 'P2002') {
         throw error
       }
+      console.log(`⚠️ [AUTO-TASKS] Quote task already exists for today`)
     }
   } else if (
     input.service === 'FAMILY_VISA' ||
@@ -84,13 +102,16 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
     input.service === 'VISIT_VISA' ||
     input.service === 'GOLDEN_VISA'
   ) {
-    // Qualification task (due in 2 hours)
+    // PROBLEM E FIX: Qualification task - unique per lead per day
     const qualifyTaskKey = `qualify:${input.leadId}:${today}`
     try {
       const twoHoursLater = new Date(Date.now() + 2 * 60 * 60 * 1000)
 
-      await prisma.task.create({
-        data: {
+      await prisma.task.upsert({
+        where: {
+          idempotencyKey: qualifyTaskKey,
+        },
+        create: {
           leadId: input.leadId,
           conversationId: input.conversationId,
           title: 'Qualify lead',
@@ -100,9 +121,14 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
           idempotencyKey: qualifyTaskKey,
           aiSuggested: true,
         },
+        update: {
+          // Refresh due date if task already exists
+          dueAt: twoHoursLater,
+          status: 'OPEN',
+        },
       })
       tasksCreated++
-      console.log(`✅ [AUTO-TASKS] Created qualification task`)
+      console.log(`✅ [AUTO-TASKS] Created/updated qualification task (unique per day)`)
     } catch (error: any) {
       if (error.code !== 'P2002') {
         throw error

@@ -71,15 +71,35 @@ export async function getWhatsAppCredentials() {
 
 /**
  * Send a text message via WhatsApp Cloud API
+ * STEP 5: Includes outbound idempotency check
  * 
  * @param toE164 - Phone number in E.164 format (e.g., +971501234567)
  * @param body - Message text content
+ * @param options - Optional: contactId, leadId for idempotency check
  * @returns WhatsApp message ID
  */
 export async function sendTextMessage(
   toE164: string,
-  body: string
+  body: string,
+  options?: { contactId?: number; leadId?: number | null; skipIdempotency?: boolean }
 ): Promise<{ messageId: string; waId?: string }> {
+  // STEP 5: Check outbound idempotency before sending
+  if (options?.contactId && !options.skipIdempotency) {
+    const { checkOutboundIdempotency } = await import('./outbound/idempotency')
+    const idempotencyCheck = await checkOutboundIdempotency(
+      options.contactId,
+      options.leadId || null,
+      body,
+      'whatsapp',
+      5 // 5-minute window
+    )
+
+    if (idempotencyCheck.isDuplicate) {
+      console.log(`⚠️ [WHATSAPP] Skipping duplicate message: ${idempotencyCheck.reason}`)
+      throw new Error(`DUPLICATE_MESSAGE: ${idempotencyCheck.reason}`)
+    }
+  }
+
   const { accessToken, phoneNumberId } = await getWhatsAppCredentials()
 
   const normalizedPhone = normalizeToE164(toE164)

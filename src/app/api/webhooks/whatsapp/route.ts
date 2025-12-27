@@ -464,6 +464,7 @@ export async function POST(req: NextRequest) {
           
           try {
             // Use new AUTO-MATCH pipeline (handles deduplication internally)
+            // Pass full webhook entry for waId extraction
             const result = await handleInboundMessageAutoMatch({
               channel: 'WHATSAPP',
               providerMessageId: messageId,
@@ -476,6 +477,8 @@ export async function POST(req: NextRequest) {
                 rawPayload: message,
                 mediaUrl: mediaUrl,
                 mediaMimeType: mediaMimeType,
+                webhookEntry: entry, // Full entry for waId extraction
+                webhookValue: value, // Full value for waId extraction
               },
             })
 

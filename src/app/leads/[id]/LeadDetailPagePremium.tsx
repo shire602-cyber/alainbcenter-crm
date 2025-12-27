@@ -40,6 +40,10 @@ import { ExpiryCountdown } from '@/components/leads/ExpiryCountdown'
 import { AutopilotCard } from '@/components/leads/AutopilotCard'
 import { RemindersCard } from '@/components/leads/RemindersCard'
 import { DarkModeToggle } from '@/components/layout/DarkModeToggle'
+import { ExtractedDataPanel } from '@/components/leads/ExtractedDataPanel'
+import { NextBestAction } from '@/components/leads/NextBestAction'
+import { LeadSummary } from '@/components/leads/LeadSummary'
+import { ForecastCard } from '@/components/leads/ForecastCard'
 import {
   ArrowLeft,
   MessageSquare,
@@ -901,6 +905,26 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
               </CardContent>
             </Card>
+
+            {/* Lead Summary - Phase 5 Feature */}
+            <LeadSummary leadId={leadId} lead={lead} />
+
+            {/* Forecast Card - Deal Probability & Revenue */}
+            <ForecastCard
+              leadId={leadId}
+              dealProbability={lead.dealProbability}
+              expectedRevenueAED={lead.expectedRevenueAED}
+              forecastReasonJson={lead.forecastReasonJson}
+            />
+
+            {/* Extracted Data Panel - Phase 5 Feature */}
+                <ExtractedDataPanel
+                  dataJson={lead.dataJson}
+                  serviceTypeEnum={lead.serviceTypeEnum}
+                  nationality={lead.contact?.nationality}
+                  businessActivityRaw={lead.businessActivityRaw || undefined}
+                  expiryDate={lead.expiryDate || undefined}
+                />
           </div>
 
           {/* MIDDLE COLUMN: Conversation + Activity */}
@@ -1216,6 +1240,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
           {/* RIGHT COLUMN: Expiry, Tasks, Docs, AI */}
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
+            {/* Next Best Action - Phase 5 Feature */}
+            <NextBestAction leadId={leadId} />
+
             {/* Expiry Tracker */}
             <Card className="rounded-2xl glass-soft shadow-sidebar">
               <CardHeader className="pb-4 pt-4 px-5 sticky top-16 bg-card/95 backdrop-blur z-10">

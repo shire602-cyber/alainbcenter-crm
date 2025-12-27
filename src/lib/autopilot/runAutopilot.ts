@@ -267,15 +267,48 @@ async function runFollowupDueRule(
         },
       })
 
-      // Log to ChatMessage
-      await prisma.chatMessage.create({
+      // STEP 2 FIX: Use Message table instead of ChatMessage
+      // Find or create conversation (deterministic routing)
+      let conversation = await prisma.conversation.findUnique({
+        where: {
+          contactId_channel: {
+            contactId: lead.contactId,
+            channel: 'whatsapp',
+          },
+        },
+      })
+
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            contactId: lead.contactId,
+            leadId: lead.id,
+            channel: 'whatsapp',
+            status: 'open',
+            lastMessageAt: new Date(),
+          },
+        })
+      } else if (!conversation.leadId || conversation.leadId !== lead.id) {
+        // Update leadId if different
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { leadId: lead.id },
+        })
+      }
+
+      // Create Message record
+      await prisma.message.create({
         data: {
-          leadId: lead.id,
+          conversationId: conversation.id,
           contactId: lead.contactId,
-          channel: 'whatsapp',
-          direction: 'outbound',
-          message,
-          metadata: JSON.stringify({
+          leadId: lead.id,
+          direction: 'OUTBOUND',
+          channel: 'WHATSAPP',
+          type: 'text',
+          body: message,
+          status: 'SENT',
+          sentAt: new Date(),
+          metadataJson: JSON.stringify({
             externalId: sendResult.externalId,
             automationRule: rule.key,
           }),
@@ -445,15 +478,48 @@ async function runExpiry90Rule(
         },
       })
 
-      // Log to ChatMessage
-      await prisma.chatMessage.create({
+      // STEP 2 FIX: Use Message table instead of ChatMessage
+      // Find or create conversation (deterministic routing)
+      let conversation = await prisma.conversation.findUnique({
+        where: {
+          contactId_channel: {
+            contactId: lead.contactId,
+            channel: 'whatsapp',
+          },
+        },
+      })
+
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            contactId: lead.contactId,
+            leadId: lead.id,
+            channel: 'whatsapp',
+            status: 'open',
+            lastMessageAt: new Date(),
+          },
+        })
+      } else if (!conversation.leadId || conversation.leadId !== lead.id) {
+        // Update leadId if different
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { leadId: lead.id },
+        })
+      }
+
+      // Create Message record
+      await prisma.message.create({
         data: {
-          leadId: lead.id,
+          conversationId: conversation.id,
           contactId: lead.contactId,
-          channel: 'whatsapp',
-          direction: 'outbound',
-          message,
-          metadata: JSON.stringify({
+          leadId: lead.id,
+          direction: 'OUTBOUND',
+          channel: 'WHATSAPP',
+          type: 'text',
+          body: message,
+          status: 'SENT',
+          sentAt: new Date(),
+          metadataJson: JSON.stringify({
             externalId: sendResult.externalId,
             automationRule: rule.key,
           }),
@@ -619,15 +685,48 @@ async function runOverdueRule(
         },
       })
 
-      // Log to ChatMessage
-      await prisma.chatMessage.create({
+      // STEP 2 FIX: Use Message table instead of ChatMessage
+      // Find or create conversation (deterministic routing)
+      let conversation = await prisma.conversation.findUnique({
+        where: {
+          contactId_channel: {
+            contactId: lead.contactId,
+            channel: 'whatsapp',
+          },
+        },
+      })
+
+      if (!conversation) {
+        conversation = await prisma.conversation.create({
+          data: {
+            contactId: lead.contactId,
+            leadId: lead.id,
+            channel: 'whatsapp',
+            status: 'open',
+            lastMessageAt: new Date(),
+          },
+        })
+      } else if (!conversation.leadId || conversation.leadId !== lead.id) {
+        // Update leadId if different
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: { leadId: lead.id },
+        })
+      }
+
+      // Create Message record
+      await prisma.message.create({
         data: {
-          leadId: lead.id,
+          conversationId: conversation.id,
           contactId: lead.contactId,
-          channel: 'whatsapp',
-          direction: 'outbound',
-          message,
-          metadata: JSON.stringify({
+          leadId: lead.id,
+          direction: 'OUTBOUND',
+          channel: 'WHATSAPP',
+          type: 'text',
+          body: message,
+          status: 'SENT',
+          sentAt: new Date(),
+          metadataJson: JSON.stringify({
             externalId: sendResult.externalId,
             automationRule: rule.key,
           }),

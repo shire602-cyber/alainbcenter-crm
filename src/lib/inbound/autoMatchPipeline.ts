@@ -17,6 +17,7 @@ import { normalizeInboundPhone, findContactByPhone } from '../phone-inbound'
 import { extractService, extractNationality, extractExpiry, extractExpiryHint, extractCounts, extractIdentity } from './fieldExtractors'
 import { createAutoTasks } from './autoTasks'
 import { handleInboundAutoReply } from '../autoReply'
+import { upsertContact } from '../contact/upsert'
 
 export interface AutoMatchInput {
   channel: 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
@@ -41,6 +42,7 @@ export interface AutoMatchResult {
     expiryHint?: string | null
     counts?: { partners?: number; visas?: number }
     identity?: { name?: string; email?: string }
+    businessActivityRaw?: string | null
   }
   tasksCreated: number
   autoReplied: boolean
@@ -66,12 +68,15 @@ export async function handleInboundMessageAutoMatch(
     throw new Error('DUPLICATE_MESSAGE')
   }
 
-  // Step 2: FIND/CREATE Contact
-  const contact = await findOrCreateContact({
-    channel: input.channel,
-    fromPhone: input.fromPhone,
-    fromEmail: input.fromEmail,
-    fromName: input.fromName,
+  // Step 2: FIND/CREATE Contact (using new upsert logic with normalization)
+  // Extract waId from webhook payload if available
+  const webhookPayload = input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata?.rawPayload || input.metadata
+  const contact = await upsertContact(prisma, {
+    phone: input.fromPhone || input.fromEmail || 'unknown',
+    fullName: input.fromName || undefined,
+    email: input.fromEmail || null,
+    source: input.channel.toLowerCase(),
+    webhookPayload: webhookPayload, // For extracting waId
   })
 
   // Step 3: FIND/CREATE Lead (smart rules) - MUST be before conversation to get leadId
@@ -79,6 +84,7 @@ export async function handleInboundMessageAutoMatch(
     contactId: contact.id,
     channel: input.channel,
     providerMessageId: input.providerMessageId,
+    timestamp: input.timestamp, // Use actual message timestamp
   })
 
   // Step 4: FIND/CREATE Conversation (linked to lead)
@@ -86,6 +92,7 @@ export async function handleInboundMessageAutoMatch(
     contactId: contact.id,
     channel: input.channel,
     leadId: lead.id, // CRITICAL: Link conversation to lead
+    timestamp: input.timestamp, // Use actual message timestamp
   })
 
   // Step 5: CREATE CommunicationLog
@@ -103,24 +110,24 @@ export async function handleInboundMessageAutoMatch(
   // Step 6: AUTO-EXTRACT FIELDS (deterministic)
   const extractedFields = await extractFields(input.text, contact, lead)
 
-  // Update Contact/Lead with extracted fields
-  if (extractedFields.nationality && !contact.nationality) {
-    await prisma.contact.update({
+  // Update Contact with extracted nationality if needed
+  if (extractedFields.nationality) {
+    // Fetch full contact to check nationality
+    const fullContact = await prisma.contact.findUnique({
       where: { id: contact.id },
-      data: { nationality: extractedFields.nationality },
+      select: { nationality: true },
     })
+    
+    if (!fullContact?.nationality) {
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: { nationality: extractedFields.nationality },
+      })
+      console.log(`✅ [AUTO-MATCH] Updated contact nationality: ${extractedFields.nationality}`)
+    }
   }
 
-  // CRITICAL FIX: Always update service if extracted (even if already set)
-  // This ensures service is updated on every message, not just first
-  if (extractedFields.service) {
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: { serviceTypeEnum: extractedFields.service },
-    })
-    console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} serviceTypeEnum to: ${extractedFields.service}`)
-  }
-
+  // BUG FIX #1: Merge serviceTypeEnum update into single database operation
   // Update dataJson (append, don't overwrite)
   const existingData = lead.dataJson ? JSON.parse(lead.dataJson) : {}
   const updatedData = {
@@ -139,14 +146,83 @@ export async function handleInboundMessageAutoMatch(
     console.log(`📝 [AUTO-MATCH] Stored expiry hint: "${extractedFields.expiryHint}"`)
   }
   
-  // CRITICAL FIX: Always update lead with latest data and serviceTypeEnum
+  // PROBLEM B FIX: Always update lead with latest data IMMEDIATELY
+  // This ensures lead fields are auto-filled as soon as user mentions service/activity
   const updateData: any = { 
     dataJson: JSON.stringify(updatedData),
   }
   
-  // Update serviceTypeEnum if extracted (even if already set - allows refinement)
+  // PROBLEM B: Store raw service text (requestedServiceRaw)
+  // Extract raw service mention from message text
+  if (input.text && input.text.trim().length > 0) {
+    // Try to find service keywords in the message
+    const serviceKeywords = ['freelance', 'family visa', 'golden visa', 'business setup', 'pro', 'accounting', 'renewal', 'visit visa', 'employment visa', 'investor visa']
+    const lowerText = input.text.toLowerCase()
+    for (const keyword of serviceKeywords) {
+      if (lowerText.includes(keyword)) {
+        // Extract the phrase containing the keyword (up to 50 chars)
+        const keywordIndex = lowerText.indexOf(keyword)
+        const start = Math.max(0, keywordIndex - 20)
+        const end = Math.min(lowerText.length, keywordIndex + keyword.length + 30)
+        const rawService = input.text.substring(start, end).trim()
+        updateData.requestedServiceRaw = rawService
+        console.log(`✅ [AUTO-MATCH] Setting requestedServiceRaw: ${rawService}`)
+        break
+      }
+    }
+  }
+  
+  // PROBLEM B: Match service to ServiceType and set serviceTypeId
   if (extractedFields.service) {
     updateData.serviceTypeEnum = extractedFields.service
+    
+    // Try to find matching ServiceType by name (case-insensitive) or code
+    try {
+      // PROBLEM B FIX: Use safer case-insensitive matching (works for both SQLite and PostgreSQL)
+      const serviceLower = extractedFields.service.toLowerCase()
+      const serviceSpaces = extractedFields.service.replace(/_/g, ' ').toLowerCase()
+      
+      // Get all active service types and match in memory (safer for cross-DB compatibility)
+      const allServiceTypes = await prisma.serviceType.findMany({
+        where: { isActive: true },
+      })
+      
+      const serviceType = allServiceTypes.find(st => {
+        const nameLower = (st.name || '').toLowerCase()
+        const codeLower = (st.code || '').toLowerCase()
+        return (
+          nameLower.includes(serviceLower) ||
+          nameLower.includes(serviceSpaces) ||
+          codeLower === serviceLower ||
+          nameLower === serviceLower ||
+          nameLower === serviceSpaces
+        )
+      })
+      
+      if (serviceType) {
+        updateData.serviceTypeId = serviceType.id
+        console.log(`✅ [AUTO-MATCH] Matched serviceTypeId: ${serviceType.id} (${serviceType.name})`)
+      } else {
+        console.log(`⚠️ [AUTO-MATCH] No ServiceType match found for: ${extractedFields.service}`)
+      }
+    } catch (error: any) {
+      console.warn(`⚠️ [AUTO-MATCH] Failed to match ServiceType:`, error.message)
+    }
+    
+    console.log(`✅ [AUTO-MATCH] Setting serviceTypeEnum IMMEDIATELY: ${extractedFields.service}`)
+  }
+  
+  // Store businessActivityRaw immediately if detected (for business_setup)
+  if (extractedFields.businessActivityRaw) {
+    updateData.businessActivityRaw = extractedFields.businessActivityRaw
+    console.log(`✅ [AUTO-MATCH] Setting businessActivityRaw IMMEDIATELY: ${extractedFields.businessActivityRaw}`)
+  }
+  
+  // Update expiryDate if explicit date extracted
+  if (extractedFields.expiries && extractedFields.expiries.length > 0) {
+    // Use first expiry date
+    updateData.expiryDate = extractedFields.expiries[0].date
+    console.log(`✅ [AUTO-MATCH] Setting expiryDate IMMEDIATELY: ${extractedFields.expiries[0].date.toISOString()}`)
   }
   
   await prisma.lead.update({
@@ -154,7 +230,19 @@ export async function handleInboundMessageAutoMatch(
     data: updateData,
   })
   
-  console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} dataJson and serviceTypeEnum: ${extractedFields.service || 'none'}`)
+  console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || 'none'}, serviceTypeId=${updateData.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || 'none'}`)
+
+  // Step 6.5: Recompute deal forecast (non-blocking)
+  try {
+    const { recomputeAndSaveForecast } = await import('../forecast/dealForecast')
+    // Run in background - don't block pipeline
+    recomputeAndSaveForecast(lead.id).catch((err) => {
+      console.warn(`⚠️ [FORECAST] Failed to recompute forecast for lead ${lead.id}:`, err.message)
+    })
+  } catch (err) {
+    // Forecast module not critical - continue
+    console.warn(`⚠️ [FORECAST] Forecast module not available`)
+  }
 
   // Step 7: AUTO-CREATE TASKS/ALERTS
   const tasksCreated = await createAutoTasks({
@@ -227,174 +315,52 @@ async function checkInboundDedupe(
 
 /**
  * Step 2: Find or create Contact
+ * NOTE: Now using upsertContact from ../contact/upsert for proper normalization and deduplication
  */
-async function findOrCreateContact(input: {
-  channel: string
-  fromPhone?: string | null
-  fromEmail?: string | null
-  fromName?: string | null
-}): Promise<any> {
-  let contact = null
-  let normalizedPhone: string | null = null
-
-  // Normalize phone if provided
-  if (input.fromPhone) {
-    try {
-      normalizedPhone = normalizeInboundPhone(input.fromPhone)
-      contact = await findContactByPhone(prisma, normalizedPhone)
-    } catch (error) {
-      // Invalid phone format, continue with email lookup
-      console.warn(`⚠️ [AUTO-MATCH] Failed to normalize phone ${input.fromPhone}:`, error)
-    }
-  }
-
-  // Try email if no phone match (but only if phone was not provided or normalization failed)
-  // This prevents creating duplicate contacts when phone exists but wasn't normalized correctly
-  if (!contact && input.fromEmail) {
-    contact = await prisma.contact.findFirst({
-      where: { email: input.fromEmail.toLowerCase().trim() },
-    })
-  }
-
-  // Create if not found
-  if (!contact) {
-    const contactData: any = {
-      fullName: input.fromName || 'Unknown',
-      phone: normalizedPhone || (input.fromPhone ? input.fromPhone : ''),
-      email: input.fromEmail?.toLowerCase().trim() || null,
-      source: input.channel.toLowerCase(), // Contact has source field
-    }
-
-    // BUG FIX: Before creating, do one more check with the exact phone we're about to use
-    // This prevents race conditions where two messages arrive simultaneously
-    if (contactData.phone) {
-      const existingContact = await prisma.contact.findFirst({
-        where: { phone: contactData.phone },
-      })
-      if (existingContact) {
-        console.log(`✅ [AUTO-MATCH] Found existing contact (race condition check): ${existingContact.id}`)
-        return existingContact
-      }
-    }
-
-    contact = await prisma.contact.create({ data: contactData })
-    console.log(`✅ [AUTO-MATCH] Created new contact: ${contact.id}`)
-  } else {
-    // BUG FIX: Update contact phone if it's missing or different (normalize existing contacts)
-    if (normalizedPhone && contact.phone !== normalizedPhone) {
-      try {
-        // Check if another contact already has this normalized phone
-        const existingWithNormalized = await prisma.contact.findFirst({
-          where: { phone: normalizedPhone },
-        })
-        if (!existingWithNormalized) {
-          // Safe to update - no conflict
-          await prisma.contact.update({
-            where: { id: contact.id },
-            data: { phone: normalizedPhone },
-          })
-          console.log(`✅ [AUTO-MATCH] Updated contact ${contact.id} phone to normalized format: ${normalizedPhone}`)
-        } else {
-          console.warn(`⚠️ [AUTO-MATCH] Contact ${contact.id} has phone ${contact.phone}, but normalized ${normalizedPhone} already exists for contact ${existingWithNormalized.id}`)
-        }
-      } catch (updateError) {
-        console.warn(`⚠️ [AUTO-MATCH] Failed to update contact phone:`, updateError)
-      }
-    }
-    console.log(`✅ [AUTO-MATCH] Found existing contact: ${contact.id}`)
-  }
-
-  return contact
-}
 
 /**
  * Step 3: Find or create Conversation
- * CRITICAL FIX: Prevent duplicates and always link to lead
+ * STEP 3: CRITICAL FIX - Use upsert to enforce uniqueness and prevent duplicates
+ * Enforces one conversation per (contactId, channel) via unique constraint
  */
 async function findOrCreateConversation(input: {
   contactId: number
   channel: string
   leadId: number
+  timestamp?: Date
 }): Promise<any> {
-  const channelUpper = input.channel.toUpperCase()
+  const channelLower = input.channel.toLowerCase() // STEP 3: Use lowercase for consistency
+  // BUG FIX: Use actual message timestamp instead of webhook processing time
+  const messageTimestamp = input.timestamp || new Date()
   
-  // Try to find existing conversation first
-  let conversation = await prisma.conversation.findFirst({
+  // STEP 3: Use upsert to enforce uniqueness - prevents duplicates at DB level
+  // The @@unique([contactId, channel]) constraint ensures only one conversation per contact+channel
+  const conversation = await prisma.conversation.upsert({
     where: {
+      contactId_channel: {
+        contactId: input.contactId,
+        channel: channelLower,
+      },
+    },
+    update: {
+      // Always update leadId to current lead (ensures conversation is linked)
+      leadId: input.leadId,
+      lastInboundAt: messageTimestamp, // Use actual message timestamp
+      lastMessageAt: messageTimestamp, // Use actual message timestamp
+      // Update status to open if it was closed
+      status: 'open',
+    },
+    create: {
       contactId: input.contactId,
-      channel: channelUpper,
+      leadId: input.leadId, // CRITICAL: Always link to lead
+      channel: channelLower,
+      status: 'open',
+      lastInboundAt: messageTimestamp, // Use actual message timestamp
+      lastMessageAt: messageTimestamp, // Use actual message timestamp
     },
   })
-
-  if (conversation) {
-    // CRITICAL: Update leadId if it's null or different (link to current lead)
-    if (!conversation.leadId || conversation.leadId !== input.leadId) {
-      conversation = await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          leadId: input.leadId,
-          lastInboundAt: new Date(),
-          lastMessageAt: new Date(),
-        },
-      })
-      console.log(`✅ [AUTO-MATCH] Updated conversation ${conversation.id} to link to lead ${input.leadId}`)
-    } else {
-      // Just update timestamps
-      conversation = await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastInboundAt: new Date(),
-          lastMessageAt: new Date(),
-        },
-      })
-      console.log(`✅ [AUTO-MATCH] Found existing conversation: ${conversation.id}`)
-    }
-  } else {
-    // Create new conversation - use create with error handling for race conditions
-    try {
-      conversation = await prisma.conversation.create({
-        data: {
-          contactId: input.contactId,
-          leadId: input.leadId, // CRITICAL: Always link to lead
-          channel: channelUpper,
-          status: 'open',
-          lastInboundAt: new Date(),
-          lastMessageAt: new Date(),
-        },
-      })
-      console.log(`✅ [AUTO-MATCH] Created new conversation: ${conversation.id} linked to lead ${input.leadId}`)
-    } catch (error: any) {
-      // Race condition: conversation was created between findFirst and create
-      if (error.code === 'P2002') {
-        // Unique constraint violation - conversation was created by another process
-        conversation = await prisma.conversation.findFirst({
-          where: {
-            contactId: input.contactId,
-            channel: channelUpper,
-          },
-        })
-        if (conversation) {
-          // Update leadId if needed
-          if (!conversation.leadId || conversation.leadId !== input.leadId) {
-            conversation = await prisma.conversation.update({
-              where: { id: conversation.id },
-              data: {
-                leadId: input.leadId,
-                lastInboundAt: new Date(),
-                lastMessageAt: new Date(),
-              },
-            })
-            console.log(`✅ [AUTO-MATCH] Race condition handled: updated conversation ${conversation.id} to link to lead ${input.leadId}`)
-          }
-        } else {
-          throw new Error('Failed to create or find conversation after race condition')
-        }
-      } else {
-        throw error
-      }
-    }
-  }
-
+  
+  console.log(`✅ [AUTO-MATCH] Ensured conversation ${conversation.id} for contact ${input.contactId}, channel ${channelLower}, lead ${input.leadId}`)
   return conversation
 }
 
@@ -405,7 +371,10 @@ async function findOrCreateLead(input: {
   contactId: number
   channel: string
   providerMessageId: string
+  timestamp?: Date
 }): Promise<any> {
+  // BUG FIX: Use actual message timestamp instead of webhook processing time
+  const messageTimestamp = input.timestamp || new Date()
   // Check if this providerMessageId already linked to a lead (idempotency)
   const existingMessage = await prisma.message.findFirst({
     where: {
@@ -451,10 +420,10 @@ async function findOrCreateLead(input: {
         leadId: openLead.id,
       },
     })
-    // Update lastInboundAt
+    // Update lastInboundAt with actual message timestamp
     await prisma.lead.update({
       where: { id: openLead.id },
-      data: { lastInboundAt: new Date() },
+      data: { lastInboundAt: messageTimestamp },
     })
     return openLead
   }
@@ -467,7 +436,7 @@ async function findOrCreateLead(input: {
       status: 'new',
       pipelineStage: 'new',
       lastContactChannel: input.channel.toLowerCase(),
-      lastInboundAt: new Date(),
+      lastInboundAt: messageTimestamp, // Use actual message timestamp
     },
   })
   
@@ -550,13 +519,30 @@ async function createCommunicationLog(input: {
 
 /**
  * Step 6: Extract fields (deterministic)
+ * STEP 4: Enhanced with services seed and business activity extraction
  */
 async function extractFields(
   text: string,
   contact: any,
   lead: any
-): Promise<AutoMatchResult['extractedFields']> {
-  const service = extractService(text)
+): Promise<AutoMatchResult['extractedFields'] & { businessActivityRaw?: string | null }> {
+  // Use enhanced service detection with services seed
+  const { detectServiceFromText, extractBusinessActivityRaw } = await import('./serviceDetection')
+  const serviceDetection = await detectServiceFromText(text)
+  
+  // Use detected service or fallback to legacy extractService
+  const service = serviceDetection.serviceTypeEnum || extractService(text)
+  
+  // STEP 4: Extract business activity (for business_setup services)
+  // Store immediately without questioning
+  let businessActivityRaw: string | null = null
+  if (service === 'MAINLAND_BUSINESS_SETUP' || service === 'FREEZONE_BUSINESS_SETUP' || service?.includes('BUSINESS_SETUP')) {
+    businessActivityRaw = await extractBusinessActivityRaw(text)
+    if (businessActivityRaw) {
+      console.log(`✅ [SERVICE-DETECT] Extracted businessActivityRaw IMMEDIATELY: ${businessActivityRaw}`)
+    }
+  }
+  
   const nationality = extractNationality(text)
   const expiries = extractExpiry(text)
   const expiryHint = extractExpiryHint(text)
@@ -570,6 +556,7 @@ async function extractFields(
     expiryHint,
     counts,
     identity,
+    businessActivityRaw,
   }
 }
 

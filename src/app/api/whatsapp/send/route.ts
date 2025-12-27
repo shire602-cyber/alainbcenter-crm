@@ -146,7 +146,7 @@ export async function POST(req: NextRequest) {
       result = await sendTextMessage(normalizedPhone, message!)
     }
 
-    // Ensure conversation exists
+    // CRITICAL FIX: Use same conversation for inbound/outbound, always link to lead
     let conversation = await prisma.conversation.findUnique({
       where: {
         contactId_channel: {
@@ -160,18 +160,32 @@ export async function POST(req: NextRequest) {
       conversation = await prisma.conversation.create({
         data: {
           contactId: contact.id,
+          leadId: lead.id, // CRITICAL: Always link to lead
           channel: 'whatsapp',
           lastMessageAt: new Date(),
         },
       })
+      console.log(`✅ [WHATSAPP-SEND] Created conversation ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
     } else {
-      // Update last message timestamp
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastMessageAt: new Date(),
-        },
-      })
+      // CRITICAL FIX: Update leadId if it's null or different
+      if (!conversation.leadId || conversation.leadId !== lead.id) {
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            leadId: lead.id, // Link to current lead
+            lastMessageAt: new Date(),
+          },
+        })
+        console.log(`✅ [WHATSAPP-SEND] Updated conversation ${conversation.id} to link to lead ${lead.id}`)
+      } else {
+        // Update last message timestamp
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastMessageAt: new Date(),
+          },
+        })
+      }
     }
 
     // Create communication log
@@ -195,15 +209,18 @@ export async function POST(req: NextRequest) {
       data: logData,
     })
 
-    // Create chat message
-    await prisma.chatMessage.create({
+    // STEP 2 FIX: Use Message table instead of ChatMessage
+    await prisma.message.create({
       data: {
+        conversationId: conversation.id,
         contactId: contact.id,
         leadId: lead.id,
-        channel: 'whatsapp',
-        direction: 'outbound',
-        message: messageContent || 'WhatsApp message',
-        senderName: 'Alain CRM',
+        direction: 'OUTBOUND',
+        channel: 'WHATSAPP',
+        type: 'text',
+        body: messageContent || 'WhatsApp message',
+        status: 'SENT',
+        sentAt: new Date(),
       },
     })
 

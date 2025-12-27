@@ -27,6 +27,9 @@ import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { BentoCard } from '@/components/dashboard/BentoCard'
 import { QuickActions } from '@/components/dashboard/QuickActions'
+import { ForecastRevenueWidget } from '@/components/dashboard/ForecastRevenueWidget'
+import { PipelineForecastWidget } from '@/components/dashboard/PipelineForecastWidget'
+import { AtRiskLeadsWidget } from '@/components/dashboard/AtRiskLeadsWidget'
 
 const STAGES = [
   { value: 'NEW', label: 'New', color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' },
@@ -552,6 +555,13 @@ export default async function DashboardPage() {
                   </div>
             </div>
             </BentoCard>
+          </div>
+
+          {/* Forecast Widgets Row */}
+          <div className="grid gap-2 md:grid-cols-3">
+            <ForecastRevenueWidget />
+            <PipelineForecastWidget />
+            <AtRiskLeadsWidget />
           </div>
         </div>
         <QuickActions />

@@ -365,6 +365,20 @@ export async function PATCH(
       }
     }
 
+    // Recompute deal forecast if stage changed or relevant fields updated
+    if (updateData.stage || updateData.serviceFeeAED !== undefined || updateData.stageProbabilityOverride !== undefined) {
+      try {
+        const { recomputeAndSaveForecast } = await import('@/lib/forecast/dealForecast')
+        // Run in background - don't block request
+        recomputeAndSaveForecast(leadId).catch((err) => {
+          console.warn(`⚠️ [FORECAST] Failed to recompute forecast for lead ${leadId}:`, err.message)
+        })
+      } catch (error) {
+        console.warn('Failed to recompute deal forecast:', error)
+        // Don't fail the request if forecast calculation fails
+      }
+    }
+
     // Trigger STAGE_CHANGE automation if stage changed
     if (updateData.stage && currentLead.stage !== updateData.stage) {
       try {

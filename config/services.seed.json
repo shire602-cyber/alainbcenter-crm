@@ -1,0 +1,143 @@
+{
+  "version": "2025-01-27",
+  "services": [
+    {
+      "slug": "business_setup",
+      "displayName": "Business Setup",
+      "category": "business_setup",
+      "serviceTypeEnum": "MAINLAND_BUSINESS_SETUP",
+      "synonyms": [
+        "business setup",
+        "company formation",
+        "trade license",
+        "mainland license",
+        "freezone license",
+        "marketing license",
+        "general trading license",
+        "professional license",
+        "consultancy license",
+        "it license",
+        "ecommerce license",
+        "restaurant license",
+        "salon license",
+        "cleaning license",
+        "real estate license",
+        "logistics license"
+      ],
+      "defaultQuestions": [
+        "What is your full name?",
+        "What business activity do you want? (e.g., marketing license, general trading, consultancy)",
+        "Mainland or Freezone?",
+        "How many partners/shareholders?",
+        "How many visas do you need?"
+      ],
+      "maxQuestions": 5,
+      "specialOffer": {
+        "triggerSynonyms": ["cheapest", "lowest price", "cheap", "budget"],
+        "message": "For the cheapest option, we recommend our special offer: Professional Mainland License + Investor Visa for AED 12,999. Would you like this offer, or do you want a different setup?"
+      }
+    },
+    {
+      "slug": "freelance_visa",
+      "displayName": "Freelance Visa / Freelance Permit",
+      "category": "visa",
+      "serviceTypeEnum": "FREELANCE_VISA",
+      "synonyms": [
+        "freelance visa",
+        "freelance permit",
+        "freelancer visa",
+        "self employed visa",
+        "freelance license",
+        "freelance residence"
+      ],
+      "defaultQuestions": [
+        "What is your full name?",
+        "What is your nationality?",
+        "Which freelance field/activity do you want? (e.g., marketing, design, IT)",
+        "Do you need only the permit, or permit + visa?",
+        "When do you want to start?"
+      ],
+      "maxQuestions": 5
+    },
+    {
+      "slug": "family_visa",
+      "displayName": "Family Visa",
+      "category": "visa",
+      "serviceTypeEnum": "FAMILY_VISA",
+      "synonyms": [
+        "family visa",
+        "family residence visa",
+        "dependent visa",
+        "spouse visa",
+        "wife visa",
+        "husband visa",
+        "children visa"
+      ],
+      "defaultQuestions": [
+        "What is your full name?",
+        "What is your nationality?",
+        "What is your sponsor's visa type? (Employment / Investor / Partner)",
+        "Where is your family located? (Inside UAE / Outside UAE)",
+        "What is your relationship? (Wife / Husband / Child)"
+      ],
+      "maxQuestions": 5
+    },
+    {
+      "slug": "visit_visa",
+      "displayName": "Visit Visa / Tourist Visa",
+      "category": "visa",
+      "serviceTypeEnum": "VISIT_VISA",
+      "synonyms": [
+        "visit visa",
+        "tourist visa",
+        "visitor visa",
+        "entry visa"
+      ],
+      "defaultQuestions": [
+        "What is your full name?",
+        "What is your nationality?",
+        "30 days or 60 days?",
+        "Where are you now? (Inside UAE / Outside UAE)"
+      ],
+      "maxQuestions": 4
+    },
+    {
+      "slug": "golden_visa",
+      "displayName": "Golden Visa",
+      "category": "visa",
+      "serviceTypeEnum": "GOLDEN_VISA",
+      "synonyms": [
+        "golden visa",
+        "10 year visa",
+        "long term visa",
+        "golden residence"
+      ],
+      "defaultQuestions": [
+        "What is your full name?",
+        "Which Golden Visa category? (Investor / Professional / Entrepreneur / Student / Talent)",
+        "Do you have supporting documents ready?",
+        "When would you like to get started?"
+      ],
+      "maxQuestions": 4
+    }
+  ],
+  "businessActivityRules": {
+    "note": "If user says a specific activity (e.g., marketing license), accept it and store as businessActivityRaw. Do NOT challenge.",
+    "keywordsThatUsuallyIndicateActivity": [
+      "marketing",
+      "trading",
+      "consultancy",
+      "it",
+      "ecommerce",
+      "restaurant",
+      "salon",
+      "cleaning",
+      "real estate",
+      "logistics",
+      "general trading",
+      "professional",
+      "commercial"
+    ]
+  }
+}
+

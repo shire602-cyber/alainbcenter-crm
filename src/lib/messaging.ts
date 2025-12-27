@@ -42,7 +42,7 @@ export async function sendWhatsApp(
     
     const result = await sendTextMessage(contact.phone, text)
 
-    // Ensure conversation exists
+    // CRITICAL FIX: Use same conversation for inbound/outbound, always link to lead
     let conversation = await prisma.conversation.findUnique({
       where: {
         contactId_channel: {
@@ -56,17 +56,31 @@ export async function sendWhatsApp(
       conversation = await prisma.conversation.create({
         data: {
           contactId: contact.id,
+          leadId: lead.id, // CRITICAL: Always link to lead
           channel: 'whatsapp',
           lastMessageAt: new Date(),
         },
       })
+      console.log(`✅ [MESSAGING] Created conversation ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
     } else {
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastMessageAt: new Date(),
-        },
-      })
+      // CRITICAL FIX: Update leadId if it's null or different
+      if (!conversation.leadId || conversation.leadId !== lead.id) {
+        conversation = await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            leadId: lead.id, // Link to current lead
+            lastMessageAt: new Date(),
+          },
+        })
+        console.log(`✅ [MESSAGING] Updated conversation ${conversation.id} to link to lead ${lead.id}`)
+      } else {
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastMessageAt: new Date(),
+          },
+        })
+      }
     }
 
     // Create communication log with message ID
@@ -85,22 +99,37 @@ export async function sendWhatsApp(
       // Fields don't exist yet
     }
 
+    // PROBLEM A FIX: Use Message table instead of ChatMessage for unified inbox
     await Promise.all([
       prisma.communicationLog.create({
         data: logData,
       }),
-      prisma.chatMessage.create({
+      prisma.message.create({
         data: {
+          conversationId: conversation.id,
           contactId: contact.id,
           leadId: lead.id,
-          channel: 'whatsapp',
-          direction: 'outbound',
-          message: text,
+          channel: 'WHATSAPP',
+          direction: 'OUTBOUND',
+          type: 'text',
+          body: text,
+          providerMessageId: result.messageId || null,
+          status: result.messageId ? 'SENT' : 'PENDING',
+          sentAt: new Date(),
         },
       }),
       prisma.lead.update({
         where: { id: lead.id },
-        data: { lastContactAt: new Date() },
+        data: { 
+          lastContactAt: new Date(),
+          lastOutboundAt: new Date(),
+        },
+      }),
+      prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          lastOutboundAt: new Date(),
+        },
       }),
     ])
 
@@ -121,23 +150,49 @@ export async function sendWhatsApp(
     console.log(`   Contact: ${contact.fullName}`)
     console.log(`   Message: ${text.substring(0, 100)}...`)
 
-    // Still create communication log and chat message
+    // PROBLEM A FIX: Use Message table instead of ChatMessage
+    // Find or create conversation
+    let conversation = await prisma.conversation.findUnique({
+      where: {
+        contactId_channel: {
+          contactId: contact.id,
+          channel: 'whatsapp',
+        },
+      },
+    })
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: contact.id,
+          leadId: lead.id,
+          channel: 'whatsapp',
+          lastMessageAt: new Date(),
+        },
+      })
+    }
+
     await Promise.all([
       prisma.communicationLog.create({
         data: {
           leadId: lead.id,
+          conversationId: conversation.id,
           channel: 'whatsapp',
           direction: 'outbound',
           messageSnippet: text.substring(0, 200),
         },
       }),
-      prisma.chatMessage.create({
+      prisma.message.create({
         data: {
+          conversationId: conversation.id,
           contactId: contact.id,
           leadId: lead.id,
-          channel: 'whatsapp',
-          direction: 'outbound',
-          message: text,
+          channel: 'WHATSAPP',
+          direction: 'OUTBOUND',
+          type: 'text',
+          body: text,
+          status: 'PENDING',
+          sentAt: new Date(),
         },
       }),
     ])
@@ -201,23 +256,50 @@ export async function sendWhatsApp(
       }
     }
 
-    // Create communication log and chat message
+    // PROBLEM A FIX: Use Message table instead of ChatMessage
+    // Find or create conversation
+    let conversation = await prisma.conversation.findUnique({
+      where: {
+        contactId_channel: {
+          contactId: contact.id,
+          channel: 'whatsapp',
+        },
+      },
+    })
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: contact.id,
+          leadId: lead.id,
+          channel: 'whatsapp',
+          lastMessageAt: new Date(),
+        },
+      })
+    }
+
     await Promise.all([
       prisma.communicationLog.create({
         data: {
           leadId: lead.id,
+          conversationId: conversation.id,
           channel: 'whatsapp',
           direction: 'outbound',
           messageSnippet: text.substring(0, 200),
         },
       }),
-      prisma.chatMessage.create({
+      prisma.message.create({
         data: {
+          conversationId: conversation.id,
           contactId: contact.id,
           leadId: lead.id,
-          channel: 'whatsapp',
-          direction: 'outbound',
-          message: text,
+          channel: 'WHATSAPP',
+          direction: 'OUTBOUND',
+          type: 'text',
+          body: text,
+          providerMessageId: result.messageId || null,
+          status: result.messageId ? 'SENT' : 'PENDING',
+          sentAt: new Date(),
         },
       }),
     ])
@@ -239,17 +321,46 @@ export async function sendWhatsApp(
       failedLogData.failureReason = error.message || 'Unknown error'
     } catch {}
 
-    await Promise.all([
-      prisma.communicationLog.create({
-        data: failedLogData,
-      }),
-      prisma.chatMessage.create({
+    // PROBLEM A FIX: Use Message table instead of ChatMessage
+    // Find or create conversation
+    let conversation = await prisma.conversation.findUnique({
+      where: {
+        contactId_channel: {
+          contactId: contact.id,
+          channel: 'whatsapp',
+        },
+      },
+    })
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
         data: {
           contactId: contact.id,
           leadId: lead.id,
           channel: 'whatsapp',
-          direction: 'outbound',
-          message: text,
+          lastMessageAt: new Date(),
+        },
+      })
+    }
+
+    await Promise.all([
+      prisma.communicationLog.create({
+        data: {
+          ...failedLogData,
+          conversationId: conversation.id,
+        },
+      }),
+      prisma.message.create({
+        data: {
+          conversationId: conversation.id,
+          contactId: contact.id,
+          leadId: lead.id,
+          channel: 'WHATSAPP',
+          direction: 'OUTBOUND',
+          type: 'text',
+          body: text,
+          status: 'FAILED',
+          rawPayload: JSON.stringify({ error: error.message || 'Unknown error' }),
         },
       }),
     ])
@@ -289,23 +400,49 @@ export async function sendEmail(
     console.log(`   To: ${contact.email}`)
     console.log(`   Subject: ${subject}`)
 
+    // PROBLEM A FIX: Use Message table instead of ChatMessage
+    // Find or create conversation
+    let conversation = await prisma.conversation.findUnique({
+      where: {
+        contactId_channel: {
+          contactId: contact.id,
+          channel: 'email',
+        },
+      },
+    })
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: contact.id,
+          leadId: lead.id,
+          channel: 'email',
+          lastMessageAt: new Date(),
+        },
+      })
+    }
+
     await Promise.all([
       prisma.communicationLog.create({
         data: {
           leadId: lead.id,
+          conversationId: conversation.id,
           channel: 'email',
           direction: 'outbound',
           messageSnippet: text.substring(0, 200),
         },
       }),
-      prisma.chatMessage.create({
+      prisma.message.create({
         data: {
+          conversationId: conversation.id,
           contactId: contact.id,
           leadId: lead.id,
-          channel: 'email',
-          direction: 'outbound',
-          message: `Subject: ${subject}\n\n${text}`,
-          senderEmail: integration?.webhookUrl || 'noreply@alainbcenter.com', // Use webhookUrl as from email
+          channel: 'EMAIL',
+          direction: 'OUTBOUND',
+          type: 'text',
+          body: `Subject: ${subject}\n\n${text}`,
+          status: 'SENT',
+          sentAt: new Date(),
         },
       }),
     ])
@@ -315,23 +452,49 @@ export async function sendEmail(
 
   // TODO: Implement actual SMTP/email API calls based on provider
   // For now, log and create records
+  // PROBLEM A FIX: Use Message table instead of ChatMessage
+  // Find or create conversation
+  let conversation = await prisma.conversation.findUnique({
+    where: {
+      contactId_channel: {
+        contactId: contact.id,
+        channel: 'email',
+      },
+    },
+  })
+
+  if (!conversation) {
+    conversation = await prisma.conversation.create({
+      data: {
+        contactId: contact.id,
+        leadId: lead.id,
+        channel: 'email',
+        lastMessageAt: new Date(),
+      },
+    })
+  }
+
   await Promise.all([
     prisma.communicationLog.create({
       data: {
         leadId: lead.id,
+        conversationId: conversation.id,
         channel: 'email',
         direction: 'outbound',
         messageSnippet: text.substring(0, 200),
       },
     }),
-    prisma.chatMessage.create({
+    prisma.message.create({
       data: {
+        conversationId: conversation.id,
         contactId: contact.id,
         leadId: lead.id,
-        channel: 'email',
-        direction: 'outbound',
-        message: `Subject: ${subject}\n\n${text}`,
-        senderEmail: integration.webhookUrl || 'noreply@alainbcenter.com',
+        channel: 'EMAIL',
+        direction: 'OUTBOUND',
+        type: 'text',
+        body: `Subject: ${subject}\n\n${text}`,
+        status: 'SENT',
+        sentAt: new Date(),
       },
     }),
   ])

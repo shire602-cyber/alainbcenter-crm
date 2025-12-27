@@ -130,6 +130,16 @@ export async function POST(
       console.warn('Failed to mark info as shared after document upload:', error.message)
     }
 
+    // Recompute deal forecast after document upload (non-blocking)
+    try {
+      const { recomputeAndSaveForecast } = await import('@/lib/forecast/dealForecast')
+      recomputeAndSaveForecast(leadId).catch((err) => {
+        console.warn(`⚠️ [FORECAST] Failed to recompute forecast after document upload:`, err.message)
+      })
+    } catch (error) {
+      // Forecast not critical - continue
+    }
+
     return NextResponse.json(document, { status: 201 })
   } catch (error: any) {
     console.error('POST /api/leads/[id]/documents/upload error:', error)

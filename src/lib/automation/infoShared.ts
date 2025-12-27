@@ -85,6 +85,18 @@ export async function markInfoShared(
 
   console.log(`✅ Marked info shared for lead ${leadId}: ${infoType}`)
 
+  // Recompute deal forecast if quotation was sent (non-blocking)
+  if (infoType === 'quotation') {
+    try {
+      const { recomputeAndSaveForecast } = await import('../forecast/dealForecast')
+      recomputeAndSaveForecast(leadId).catch((err) => {
+        console.warn(`⚠️ [FORECAST] Failed to recompute forecast after quotation:`, err.message)
+      })
+    } catch (error) {
+      // Forecast not critical - continue
+    }
+  }
+
   // Trigger INFO_SHARED automation (non-blocking)
   try {
     const lead = await prisma.lead.findUnique({

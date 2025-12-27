@@ -6,8 +6,9 @@ export async function GET(req: NextRequest) {
   try {
     await requireAuthApi()
 
-    // Get all contacts who have chat messages
-    const messages = await prisma.chatMessage.findMany({
+    // STEP 2 FIX: Use Conversation and Message tables instead of ChatMessage
+    // Get all conversations with their latest message
+    const conversations = await prisma.conversation.findMany({
       include: {
         contact: true,
         lead: {
@@ -16,56 +17,38 @@ export async function GET(req: NextRequest) {
             stage: true,
             aiScore: true,
             nextFollowUpAt: true,
-            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
           },
         },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 1,
+        },
       },
-      orderBy: { createdAt: 'desc' },
+      orderBy: { lastMessageAt: 'desc' },
     })
 
-    // Group by contact and get latest message
-    const conversationsMap = new Map<number, {
-      contact: any
-      lastMessage?: any
-      unreadCount: number
-    }>()
-
-    messages.forEach((msg) => {
-      if (!msg.contactId || !msg.contact) return
-
-      const contactId = msg.contactId
-      if (!conversationsMap.has(contactId)) {
-        conversationsMap.set(contactId, {
-          contact: msg.contact,
-          unreadCount: 0,
-        })
-      }
-
-      const conv = conversationsMap.get(contactId)!
+    // Format conversations for frontend
+    const formattedConversations = conversations.map((conv) => {
+      const lastMessage = conv.messages[0]
       
-      // Set last message if not set or this is newer
-      if (!conv.lastMessage || new Date(msg.createdAt) > new Date(conv.lastMessage.createdAt)) {
-        conv.lastMessage = {
-          id: msg.id,
-          message: msg.message,
-          createdAt: msg.createdAt,
-        }
-      }
+      // Count unread inbound messages
+      const unreadCount = lastMessage && 
+        (lastMessage.direction === 'INBOUND' || lastMessage.direction === 'IN') &&
+        !lastMessage.readAt ? 1 : 0
 
-      // Count unread messages
-      if (msg.direction === 'inbound' && !msg.readAt) {
-        conv.unreadCount++
+      return {
+        contact: conv.contact,
+        lead: conv.lead,
+        lastMessage: lastMessage ? {
+          id: lastMessage.id,
+          message: lastMessage.body || '',
+          createdAt: lastMessage.createdAt,
+        } : undefined,
+        unreadCount,
       }
     })
 
-    // Convert to array and sort by last message time
-    const conversations = Array.from(conversationsMap.values()).sort((a, b) => {
-      if (!a.lastMessage) return 1
-      if (!b.lastMessage) return -1
-      return new Date(b.lastMessage.createdAt).getTime() - new Date(a.lastMessage.createdAt).getTime()
-    })
-
-    return NextResponse.json(conversations)
+    return NextResponse.json(formattedConversations)
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Failed to load conversations' },

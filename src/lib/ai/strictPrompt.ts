@@ -140,7 +140,7 @@ REPLY STYLE:
 - NEVER ask casual questions like "what brings you here" or "what brings you to UAE" - stay focused on business services
 - If customer already mentioned a service (business setup, visa, etc.), acknowledge it specifically and ask relevant business questions only
 
-OUTPUT FORMAT (MANDATORY JSON):
+OUTPUT FORMAT (MANDATORY JSON - STRICTLY ENFORCED):
 {
   "reply": "Customer-facing message only (no reasoning, no signatures)",
   "service": "visit_visa|freelance_visa|freelance_permit_visa|investor_visa|pro_work|business_setup|family_visa|golden_visa|unknown",
@@ -150,7 +150,21 @@ OUTPUT FORMAT (MANDATORY JSON):
   "confidence": 0.8
 }
 
-CRITICAL: Return ONLY the JSON object, nothing else.`
+CRITICAL JSON RULES:
+1. You MUST return ONLY valid JSON - no markdown, no code blocks, no explanations
+2. The JSON must be parseable - no trailing commas, no comments
+3. All string values must be properly escaped
+4. The "reply" field is the ONLY text that will be sent to the customer
+5. If you cannot generate valid JSON, the system will reject your output
+
+EXAMPLE VALID OUTPUT (copy this format exactly):
+{"reply":"Hi! I can help you with freelance visa. Are you currently inside or outside UAE?","service":"freelance_visa","stage":"qualify","needsHuman":false,"missing":["location"],"confidence":0.85}
+
+DO NOT include:
+- Markdown code blocks (code fences with json or plain backticks)
+- Explanations before or after JSON
+- Multiple JSON objects
+- Invalid JSON syntax`
 }
 
 /**
@@ -249,6 +263,18 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   
   // Add current message
   prompt += `CURRENT MESSAGE: "${currentMessage}"\n\n`
+  
+  // CRITICAL FIX: Add greeting logic for first message
+  const isFirstMessage = conversationHistory.filter(m => m.direction === 'OUTBOUND').length === 0
+  if (isFirstMessage) {
+    prompt += `\n🚨 FIRST MESSAGE RULES:\n`
+    prompt += `1. This is the FIRST message from you to this customer\n`
+    prompt += `2. You MUST start with a professional greeting that acknowledges their specific request\n`
+    prompt += `3. DO NOT use generic fallback like "I received your message. I'll get back to you shortly."\n`
+    prompt += `4. If they mentioned a service (freelance visa, business setup, etc.), acknowledge it specifically\n`
+    prompt += `5. Example good greeting: "Hi ${contactName}! I can help you with [their specific service]. [Ask first relevant question]"\n`
+    prompt += `6. Example bad greeting: "Hi, I received your message. I'll get back to you shortly." (FORBIDDEN)\n\n`
+  }
   
   // Add service-specific instructions
   if (lockedService === 'business_setup' || providedInfo.service === 'business_setup' || 

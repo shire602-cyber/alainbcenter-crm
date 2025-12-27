@@ -50,12 +50,30 @@ model ServiceType {
   isActive  Boolean  @default(true)
   createdAt DateTime @default(now())
   leads     Lead[]
+  pricing   ServicePricing? // One-to-one relationship with pricing
+}
+
+model ServicePricing {
+  id          Int      @id @default(autoincrement())
+  serviceKey  String   @unique // Service key (e.g., "FREELANCE_VISA", "MAINLAND_BUSINESS_SETUP")
+  defaultFeeAED Int   // Default service fee in AED
+  minFeeAED   Int? // Minimum fee (optional)
+  maxFeeAED   Int? // Maximum fee (optional)
+  serviceType ServiceType? @relation(fields: [serviceTypeId], references: [id])
+  serviceTypeId Int? @unique // Optional link to ServiceType (unique for one-to-one relation)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([serviceKey])
 }
 
 model Contact {
   id               Int      @id @default(autoincrement())
   fullName         String
   phone            String
+  phoneNormalized  String?  @unique // E.164 normalized phone number (e.g., +971501234567)
+  waId             String?  @unique // WhatsApp user ID (wa_id from Meta webhook)
   email            String?
   nationality      String?
   source           String?
@@ -74,6 +92,8 @@ model Contact {
   autoReplyLogs     AutoReplyLog[]
 
   @@index([phone])
+  @@index([phoneNormalized])
+  @@index([waId])
   @@index([email])
   @@index([localSponsorName])
   @@index([companyName])
@@ -123,6 +143,8 @@ model Lead {
   aiScore       Int? // AI-generated score (0-100)
   aiNotes       String? // AI-generated qualification notes
   dataJson      String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
+  businessActivityRaw String? // Raw business activity mentioned by customer (e.g., "marketing license", "general trading") - stored as-is without questioning
+  requestedServiceRaw String? // PROBLEM B FIX: Raw service text mentioned by customer (e.g., "freelance visa", "business setup") - stored exactly as mentioned
 
   // Assignment and follow-up
   assignedUserId Int?
@@ -166,6 +188,15 @@ model Lead {
   infoSharedAt       DateTime? // When information was shared with customer
   quotationSentAt    DateTime? // When quotation was sent to customer
   lastInfoSharedType String? // Type of info shared: "pricing" | "brochure" | "document" | "details" | "quotation"
+
+  // Deal Probability & Revenue Forecasting (Deterministic)
+  dealProbability        Int? // 0-100 probability of closing the deal
+  expectedRevenueAED     Int? // Expected revenue in AED (nullable if service unknown)
+  forecastReasonJson     String? // JSON array of factor strings explaining the probability
+  serviceFeeAED          Int? // Optional: Staff-entered service fee override
+  stageProbabilityOverride Int? // Optional: Manual override for stage-based probability
+  forecastModelVersion   String? // Version of forecast model used (e.g., "forecast_v1")
+  forecastLastComputedAt DateTime? // When forecast was last computed
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -306,6 +337,7 @@ model Conversation {
   lastQuestionKey  String? // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
   lastQuestionAt   DateTime? // When we last asked a question
   collectedData    String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
+  lastAutoReplyKey String? // PROBLEM D FIX: Hash of (ruleEngineVersion + leadId/contactId + lastInboundExternalId + nextQuestionKey) for dedupe
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
