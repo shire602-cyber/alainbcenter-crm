@@ -338,6 +338,7 @@ model Conversation {
   lastQuestionAt   DateTime? // When we last asked a question
   collectedData    String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
   lastAutoReplyKey String? // PROBLEM D FIX: Hash of (ruleEngineVersion + leadId/contactId + lastInboundExternalId + nextQuestionKey) for dedupe
+  aiStateJson      String? // JSON: Reply Engine FSM state (serviceKey, stage, collected, askedQuestionKeys, etc.)
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -385,8 +386,9 @@ model Message {
   createdByUser     User?        @relation(fields: [createdByUserId], references: [id])
   createdAt         DateTime     @default(now())
 
-  statusEvents  MessageStatusEvent[]
-  autoReplyLogs AutoReplyLog[]
+  statusEvents      MessageStatusEvent[]
+  autoReplyLogs     AutoReplyLog[]
+  replyEngineLogs   ReplyEngineLog[]
 
   @@index([conversationId, createdAt])
   @@index([leadId])
@@ -811,4 +813,24 @@ model OutboundMessageLog {
   @@index([conversationId, createdAt])
   @@index([triggerProviderMessageId])
   @@index([flowStep, createdAt])
+}
+
+model ReplyEngineLog {
+  id               Int          @id @default(autoincrement())
+  conversation     Conversation @relation(fields: [conversationId], references: [id])
+  conversationId   Int
+  inboundMessage   Message?     @relation(fields: [inboundMessageId], references: [id])
+  inboundMessageId Int
+  action           String // 'ASK' | 'INFO' | 'OFFER' | 'HANDOVER' | 'STOP'
+  templateKey      String
+  questionKey      String?
+  reason           String
+  extractedFields  String? // JSON: Extracted fields from inbound message
+  replyKey         String @unique // SHA256 hash for idempotency
+  replyText        String? // Final reply text (truncated)
+  createdAt        DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([replyKey])
+  @@index([action, createdAt])
 }

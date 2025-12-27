@@ -525,83 +525,151 @@ export async function POST(req: NextRequest) {
             }
             
             if (canTriggerReply) {
-              console.log(`🚀 [WEBHOOK] Triggering AI reply`, {
+              console.log(`🚀 [WEBHOOK] Triggering reply engine`, {
                 leadId: result.lead.id,
                 messageId: result.message.id,
+                conversationId: result.conversation?.id,
                 elapsed: `${Date.now() - startTime}ms`,
               })
               
               try {
-                const { handleInboundAutoReply } = await import('@/lib/autoReply')
+                // Use new Reply Engine (fail-proof, deterministic)
+                const { generateReply } = await import('@/lib/replyEngine')
                 
-                // Timeout guard: 4 seconds for AI generation
-                const aiReplyPromise = handleInboundAutoReply({
-                  leadId: result.lead.id,
-                  messageId: result.message.id,
-                  messageText: result.message.body,
+                if (!result.conversation?.id) {
+                  console.error(`❌ [WEBHOOK] Cannot use reply engine: conversation not found`)
+                  throw new Error('Conversation not found')
+                }
+                
+                // Get contact name for template variables
+                const contactName = result.contact.fullName || 'there'
+                
+                // Timeout guard: 4 seconds for reply generation
+                const replyEnginePromise = generateReply({
+                  conversationId: result.conversation.id,
+                  inboundMessageId: result.message.id,
+                  inboundText: result.message.body,
                   channel: result.message.channel,
-                  contactId: result.contact.id,
-                  triggerProviderMessageId: messageId,
+                  useLLM: false, // Start with deterministic only
+                  contactName,
+                  language: 'en', // TODO: Detect language
                 })
                 
-                const timeoutPromise = new Promise<{ replied: boolean; reason?: string; error?: string }>((resolve) => {
+                const timeoutPromise = new Promise<{ text: string; replyKey: string; debug: any } | null>((resolve) => {
                   setTimeout(() => {
-                    console.warn(`⏱️ [WEBHOOK] AI reply timeout (4s) - creating task for human follow-up`)
-                    resolve({ replied: false, reason: 'AI reply timeout (4s)' })
+                    console.warn(`⏱️ [WEBHOOK] Reply engine timeout (4s) - creating task for human follow-up`)
+                    resolve(null)
                   }, 4000)
                 })
                 
-                const replyResult = await Promise.race([aiReplyPromise, timeoutPromise])
+                const replyResult = await Promise.race([replyEnginePromise, timeoutPromise])
                 
-                console.log(`📊 [WEBHOOK] AI reply result:`, {
-                  replied: replyResult.replied,
-                  reason: replyResult.reason,
-                  elapsed: `${Date.now() - startTime}ms`,
-                })
-                
-                // Mark reply task as done if auto-reply succeeded
-                if (replyResult.replied && messageId) {
-                  try {
-                    const replyTaskKey = `reply:${result.lead.id}:${messageId}`
-                    const replyTask = await prisma.task.findFirst({
-                      where: {
-                        leadId: result.lead.id,
-                        idempotencyKey: replyTaskKey,
-                        status: 'OPEN',
-                      },
-                    })
-                    
-                    if (replyTask) {
-                      await prisma.task.update({
-                        where: { id: replyTask.id },
-                        data: {
-                          status: 'DONE',
-                          doneAt: new Date(),
-                        },
-                      })
-                      console.log(`✅ [WEBHOOK] Marked reply task as done: ${replyTask.id}`)
-                    }
-                  } catch (taskError: any) {
-                    console.warn(`⚠️ [WEBHOOK] Failed to mark reply task as done:`, taskError.message)
-                    // Non-blocking error
-                  }
-                }
-                
-                if (!replyResult.replied && replyResult.reason?.includes('timeout')) {
-                  // Create task for human follow-up
+                if (!replyResult) {
+                  // Timeout - create task and mark as processed
                   try {
                     const { createAgentTask } = await import('@/lib/automation/agentFallback')
                     await createAgentTask(result.lead.id, 'complex_query', {
-                      messageText: `AI reply timed out for message: ${result.message.body.substring(0, 100)}`,
+                      messageText: `Reply engine timed out for message: ${result.message.body.substring(0, 100)}`,
                     })
-                    console.log(`✅ [WEBHOOK] Created task for AI timeout follow-up`)
+                    console.log(`✅ [WEBHOOK] Created task for reply engine timeout follow-up`)
                   } catch (taskError: any) {
                     console.error(`❌ [WEBHOOK] Failed to create timeout task:`, taskError.message)
                   }
+                  await markInboundProcessed(messageId, false, 'Reply engine timeout (4s)')
+                  return NextResponse.json({ success: true, message: 'Inbound processed, reply engine timeout' })
                 }
                 
-                // Mark as processed
-                await markInboundProcessed(messageId, replyResult.replied, replyResult.error || replyResult.reason || undefined)
+                // Check if reply was skipped (duplicate or stop)
+                if (replyResult.debug.skipped) {
+                  console.log(`⏭️ [WEBHOOK] Reply skipped: ${replyResult.debug.reason}`)
+                  await markInboundProcessed(messageId, false, replyResult.debug.reason || 'Reply skipped')
+                  return NextResponse.json({ success: true, message: 'Inbound processed, reply skipped' })
+                }
+                
+                // Send reply via WhatsApp
+                if (replyResult.text && replyResult.text.trim().length > 0) {
+                  try {
+                    const { sendTextMessage } = await import('@/lib/whatsapp')
+                    const sendResult = await sendTextMessage(
+                      result.contact.phone,
+                      replyResult.text,
+                      {
+                        contactId: result.contact.id,
+                        leadId: result.lead.id,
+                      }
+                    )
+                    
+                    // Create outbound message record
+                    await prisma.message.create({
+                      data: {
+                        conversationId: result.conversation.id,
+                        leadId: result.lead.id,
+                        contactId: result.contact.id,
+                        direction: 'OUTBOUND',
+                        channel: result.message.channel.toLowerCase(),
+                        type: 'text',
+                        body: replyResult.text,
+                        providerMessageId: sendResult.messageId,
+                        status: 'SENT',
+                        sentAt: new Date(),
+                        payload: JSON.stringify({
+                          replyKey: replyResult.replyKey,
+                          templateKey: replyResult.debug.templateKey,
+                          action: replyResult.debug.plan.action,
+                        }),
+                      },
+                    })
+                    
+                    // Update conversation
+                    await prisma.conversation.update({
+                      where: { id: result.conversation.id },
+                      data: {
+                        lastOutboundAt: new Date(),
+                        lastMessageAt: new Date(),
+                      },
+                    })
+                    
+                    console.log(`✅ [WEBHOOK] Reply sent via reply engine`, {
+                      replyKey: replyResult.replyKey,
+                      templateKey: replyResult.debug.templateKey,
+                      action: replyResult.debug.plan.action,
+                      messageId: sendResult.messageId,
+                    })
+                    
+                    // Mark reply task as done
+                    try {
+                      const replyTaskKey = `reply:${result.lead.id}:${messageId}`
+                      const replyTask = await prisma.task.findFirst({
+                        where: {
+                          leadId: result.lead.id,
+                          idempotencyKey: replyTaskKey,
+                          status: 'OPEN',
+                        },
+                      })
+                      
+                      if (replyTask) {
+                        await prisma.task.update({
+                          where: { id: replyTask.id },
+                          data: {
+                            status: 'DONE',
+                            doneAt: new Date(),
+                          },
+                        })
+                        console.log(`✅ [WEBHOOK] Marked reply task as done: ${replyTask.id}`)
+                      }
+                    } catch (taskError: any) {
+                      console.warn(`⚠️ [WEBHOOK] Failed to mark reply task as done:`, taskError.message)
+                    }
+                    
+                    await markInboundProcessed(messageId, true, 'Reply sent via reply engine')
+                  } catch (sendError: any) {
+                    console.error(`❌ [WEBHOOK] Failed to send reply:`, sendError.message)
+                    await markInboundProcessed(messageId, false, `Failed to send reply: ${sendError.message}`)
+                  }
+                } else {
+                  console.warn(`⚠️ [WEBHOOK] Reply engine returned empty text`)
+                  await markInboundProcessed(messageId, false, 'Reply engine returned empty text')
+                }
               } catch (autoReplyError: any) {
                 console.error(`❌ [WEBHOOK] AI reply error:`, {
                   error: autoReplyError.message,
