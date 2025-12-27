@@ -107,9 +107,9 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
     // Check if current reply is very similar to last question (80% similarity)
     if (lastBody.length > 20 && currentBody.length > 20) {
       // Simple similarity check: if >80% of words match, it's a repeat
-      const lastWords = lastBody.split(/\s+/).filter(w => w.length > 3)
-      const currentWords = currentBody.split(/\s+/).filter(w => w.length > 3)
-      const matchingWords = currentWords.filter(w => lastWords.includes(w))
+      const lastWords = lastBody.split(/\s+/).filter((w: string) => w.length > 3)
+      const currentWords = currentBody.split(/\s+/).filter((w: string) => w.length > 3)
+      const matchingWords = currentWords.filter((w: string) => lastWords.includes(w))
       const similarity = lastWords.length > 0 ? matchingWords.length / lastWords.length : 0
       
       if (similarity > 0.8) {
