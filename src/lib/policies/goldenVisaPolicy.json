@@ -1,0 +1,151 @@
+{
+  "version": "1.0",
+  "lastUpdated": "2025-12-27",
+  "categories": [
+    {
+      "key": "real_estate_investor",
+      "label": "Real estate investor",
+      "description": "Property ownership in UAE with minimum value threshold",
+      "minProof": [
+        "Property in UAE with value >= threshold (admin-editable)",
+        "Ownership proof / title deed",
+        "If mortgaged, bank NOC (admin-editable)"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "Do you own a property in the UAE? What is the approximate value in AED?",
+        "Is it fully paid or mortgaged?"
+      ],
+      "likelyEligibleRule": "valueProvided && value >= threshold",
+      "thresholdField": "minPropertyValueAED"
+    },
+    {
+      "key": "professional",
+      "label": "Skilled professional",
+      "description": "High-earning professionals with valid employment",
+      "minProof": [
+        "Valid employment contract",
+        "Salary evidence (admin-editable threshold)",
+        "Degree attestation (admin-editable requirement)",
+        "Job title / profession"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "What is your job title and monthly salary in AED?",
+        "Do you have an attested degree? (yes/partly/no)"
+      ],
+      "likelyEligibleRule": "salaryProvided && salary >= threshold",
+      "thresholdField": "minSalaryAED"
+    },
+    {
+      "key": "entrepreneur",
+      "label": "Entrepreneur / Startup",
+      "description": "Business owners with company ownership and revenue/valuation",
+      "minProof": [
+        "Company ownership",
+        "Revenue/valuation or incubator/authority endorsement (admin-editable)",
+        "Business license"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "Do you own a UAE company or a startup? (UAE / outside UAE)",
+        "Do you have endorsement/approval or strong company documents? (yes/partly/no)"
+      ],
+      "likelyEligibleRule": "companyOwner && docsYesOrPartly",
+      "thresholdField": "minCompanyRevenueAED"
+    },
+    {
+      "key": "talent_media",
+      "label": "Talent / Media personality",
+      "description": "Media professionals, influencers, journalists, filmmakers",
+      "minProof": [
+        "Portfolio/press/proof of work",
+        "Awards/recognition OR strong professional profile (admin-editable)",
+        "Authority endorsement (this is part of our work once other proofs exist)"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "What type of media work do you do (influencer / journalist / presenter / filmmaker / other)?",
+        "Do you have a portfolio, press links, awards, or strong proof of professional work? (yes/partly/no)"
+      ],
+      "likelyEligibleRule": "proofYesOrPartly",
+      "thresholdField": null
+    },
+    {
+      "key": "outstanding_student",
+      "label": "Outstanding student / graduate",
+      "description": "High-achieving students or recent graduates",
+      "minProof": [
+        "Academic standing / GPA / top ranking (admin-editable)",
+        "University documents"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "Are you a student or graduate? Which university and what is your GPA/grade?",
+        "Do you have official transcripts/certificates ready? (yes/partly/no)"
+      ],
+      "likelyEligibleRule": "gpaProvided && docsYesOrPartly",
+      "thresholdField": "minGPA"
+    },
+    {
+      "key": "scientist",
+      "label": "Scientist / Researcher",
+      "description": "Researchers, scientists, academics with publications/recognition",
+      "minProof": [
+        "Research publications / patents",
+        "University/institution affiliation",
+        "Awards/recognition (admin-editable requirement)"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "What is your field of research and do you have publications or patents?",
+        "Do you have proof of your research work? (yes/partly/no)"
+      ],
+      "likelyEligibleRule": "proofYesOrPartly",
+      "thresholdField": null
+    },
+    {
+      "key": "other",
+      "label": "Other category",
+      "description": "Other eligible categories (to be determined)",
+      "minProof": [
+        "Category-specific requirements (to be determined)"
+      ],
+      "questions": [
+        "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+        "Please describe your situation and eligibility criteria"
+      ],
+      "likelyEligibleRule": "manualReviewRequired",
+      "thresholdField": null
+    }
+  ],
+  "globalRules": {
+    "noGuarantees": true,
+    "forbiddenPhrases": [
+      "guaranteed",
+      "approval guaranteed",
+      "100%",
+      "inside contact",
+      "government connection",
+      "definitely approved",
+      "sure to get",
+      "will be approved"
+    ],
+    "authorityApprovalHandledByUsIfProofExists": true,
+    "askMaxQuestions": 4,
+    "maxQuestionsPerReply": 1,
+    "politeRejection": true,
+    "offerAlternatives": [
+      "freelance visa",
+      "investor visa",
+      "business setup",
+      "visit visa"
+    ]
+  },
+  "commonQuestions": {
+    "q1_category": "Which Golden Visa category are you applying under? (Investor / Professional / Entrepreneur / Student / Talent like Media / Scientist / Other)",
+    "q3_documents": "Do you already have supporting documents ready? (yes/partly/no)",
+    "q4_timeline": "When would you like to get started? (ASAP / this week / this month / later)"
+  }
+}
+
