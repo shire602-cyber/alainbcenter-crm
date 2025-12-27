@@ -477,12 +477,17 @@ async function createCommunicationLog(input: {
   timestamp: Date
 }): Promise<any> {
   // CRITICAL FIX: Include contactId to ensure proper linking
+  // PROBLEM FIX: Normalize direction to INBOUND/OUTBOUND (not IN/OUT)
+  const normalizedDirection = input.direction.toUpperCase() === 'IN' ? 'INBOUND' : 
+                               input.direction.toUpperCase() === 'OUT' ? 'OUTBOUND' :
+                               input.direction.toUpperCase()
+  
   const message = await prisma.message.create({
     data: {
       conversationId: input.conversationId,
       leadId: input.leadId,
       contactId: input.contactId, // CRITICAL: Link to contact
-      direction: input.direction.toUpperCase(),
+      direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
       channel: input.channel.toUpperCase(),
       type: 'text',
       body: input.text,
