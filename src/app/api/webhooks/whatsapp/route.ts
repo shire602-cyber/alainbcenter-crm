@@ -507,7 +507,19 @@ export async function POST(req: NextRequest) {
             }
 
             // Step 2: Trigger AI reply with timeout guard
-            const canTriggerReply = result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id
+            // Check if conversation is assigned to a user (skip auto-reply if assigned to user)
+            const conversation = result.conversation ? await prisma.conversation.findUnique({
+              where: { id: result.conversation.id },
+              select: { assignedUserId: true },
+            }) : null
+            
+            const isAssignedToUser = conversation?.assignedUserId !== null && conversation?.assignedUserId !== undefined
+            
+            const canTriggerReply = result.message && result.message.body && result.message.body.trim().length > 0 && result.lead && result.lead.id && result.contact && result.contact.id && !isAssignedToUser
+            
+            if (isAssignedToUser) {
+              console.log(`⏭️ [WEBHOOK] Skipping auto-reply - conversation assigned to user ${conversation.assignedUserId}`)
+            }
             
             if (canTriggerReply) {
               console.log(`🚀 [WEBHOOK] Triggering AI reply`, {

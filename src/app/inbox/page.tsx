@@ -670,11 +670,10 @@ function InboxPageContent() {
                     </div>
                   </div>
                   <div className="flex items-center gap-2 flex-shrink-0">
-                    {/* Assignment Dropdown - Only show for ADMIN, MANAGER, or if conversation is assigned to current user */}
-                    {(user?.role === 'ADMIN' || user?.role === 'MANAGER' || selectedConversation.assignedUser?.id === user?.id) && (
-                      <Select
-                        value={selectedConversation.assignedUser?.id?.toString() || 'ai'}
-                        onChange={async (e) => {
+                    {/* AI/User Toggle - Always visible for all users */}
+                    <Select
+                      value={selectedConversation.assignedUser?.id?.toString() || 'ai'}
+                      onChange={async (e) => {
                         const value = e.target.value
                         if (!selectedConversation) return
                         
@@ -691,7 +690,7 @@ function InboxPageContent() {
                           
                           const data = await res.json()
                           if (res.ok) {
-                            setSuccess(data.message || 'Assignment updated')
+                            setSuccess(data.message || value === 'ai' ? 'Switched to AI mode' : 'Switched to User mode')
                             setError(null)
                             // Reload conversations to get updated assignment
                             await loadConversations()
@@ -720,11 +719,11 @@ function InboxPageContent() {
                               }
                             }
                           } else {
-                            setError(data.error || 'Failed to assign conversation')
+                            setError(data.error || 'Failed to switch mode')
                             setSuccess(null)
                           }
                         } catch (err: any) {
-                          setError('Failed to assign conversation')
+                          setError('Failed to switch mode')
                         } finally {
                           setAssigning(false)
                         }
@@ -733,18 +732,17 @@ function InboxPageContent() {
                       className="h-8 text-xs min-w-[120px]"
                     >
                       <option value="ai">🤖 AI</option>
-                      {user?.role === 'ADMIN' && users.map((u) => (
-                        <option key={u.id} value={u.id.toString()}>
-                          {u.name}
-                        </option>
-                      ))}
-                      {user?.role !== 'ADMIN' && user && (
+                      {user && (
                         <option value={user.id.toString()}>
-                          {user.name} (Me)
+                          👤 {user.name} (Me)
                         </option>
                       )}
+                      {user?.role === 'ADMIN' && users.filter(u => u.id !== user?.id).map((u) => (
+                        <option key={u.id} value={u.id.toString()}>
+                          👤 {u.name}
+                        </option>
+                      ))}
                     </Select>
-                    )}
                     {selectedLead && (
                     <Link href={`/leads/${selectedLead.id}`} target="_blank">
                       <Button variant="outline" size="sm" className="gap-1.5 text-xs">

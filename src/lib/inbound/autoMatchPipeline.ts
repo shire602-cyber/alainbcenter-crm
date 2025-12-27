@@ -399,7 +399,7 @@ async function findOrCreateLead(input: {
 }
 
 /**
- * Step 5: Create CommunicationLog (Message record)
+ * Step 5: Create CommunicationLog (Message record + CommunicationLog)
  */
 async function createCommunicationLog(input: {
   conversationId: number
@@ -423,6 +423,27 @@ async function createCommunicationLog(input: {
       createdAt: input.timestamp,
     },
   })
+
+  // Always create CommunicationLog entry (Phase 1 requirement)
+  try {
+    await prisma.communicationLog.create({
+      data: {
+        leadId: input.leadId,
+        conversationId: input.conversationId,
+        channel: input.channel.toLowerCase(),
+        direction: input.direction.toLowerCase(),
+        messageSnippet: input.text.substring(0, 200),
+        body: input.text,
+        externalId: input.providerMessageId,
+        whatsappMessageId: input.channel.toUpperCase() === 'WHATSAPP' ? input.providerMessageId : null,
+        createdAt: input.timestamp,
+      },
+    })
+    console.log(`✅ [AUTO-MATCH] Created CommunicationLog for message: ${message.id}`)
+  } catch (logError: any) {
+    // Non-blocking - log error but continue
+    console.warn(`⚠️ [AUTO-MATCH] Failed to create CommunicationLog:`, logError.message)
+  }
 
   console.log(`✅ [AUTO-MATCH] Created message: ${message.id}`)
   return message
