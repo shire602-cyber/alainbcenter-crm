@@ -308,7 +308,7 @@ async function runFollowupDueRule(
           body: message,
           status: 'SENT',
           sentAt: new Date(),
-          metadataJson: JSON.stringify({
+          payload: JSON.stringify({
             externalId: sendResult.externalId,
             automationRule: rule.key,
           }),
@@ -519,7 +519,7 @@ async function runExpiry90Rule(
           body: message,
           status: 'SENT',
           sentAt: new Date(),
-          metadataJson: JSON.stringify({
+          payload: JSON.stringify({
             externalId: sendResult.externalId,
             automationRule: rule.key,
           }),
@@ -726,7 +726,7 @@ async function runOverdueRule(
           body: message,
           status: 'SENT',
           sentAt: new Date(),
-          metadataJson: JSON.stringify({
+          payload: JSON.stringify({
             externalId: sendResult.externalId,
             automationRule: rule.key,
           }),
