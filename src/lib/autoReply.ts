@@ -509,6 +509,61 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       return { replied: false, reason: 'Lead or contact not found' }
     }
 
+    // Step 4.5: Check if this is a Golden Visa lead and use qualifier
+    if (conversation) {
+      const { handleGoldenVisaQualification } = await import('./inbound/goldenVisaHandler')
+      const goldenVisaResult = await handleGoldenVisaQualification(
+        leadId,
+        conversation.id,
+        messageText
+      )
+
+      if (goldenVisaResult.shouldUseQualifier && goldenVisaResult.replyText) {
+        console.log(`✅ [GOLDEN-VISA] Using Golden Visa qualifier reply`)
+        
+        // Update log
+        if (autoReplyLog) {
+          try {
+            await (prisma as any).autoReplyLog.update({
+              where: { id: autoReplyLog.id },
+              data: {
+                decision: goldenVisaResult.shouldEscalate ? 'notified_human' : 'replied',
+                replyText: goldenVisaResult.replyText.substring(0, 500),
+                replySent: true,
+                replyStatus: 'sent',
+                humanTaskCreated: goldenVisaResult.taskCreated,
+              },
+            })
+          } catch (logError) {
+            console.warn('Failed to update AutoReplyLog:', logError)
+          }
+        }
+
+        // Send Golden Visa qualifier reply
+        try {
+          const { sendTextMessage } = await import('./whatsapp')
+          await sendTextMessage({
+            to: lead.contact.phone,
+            message: goldenVisaResult.replyText,
+            conversationId: conversation.id,
+            leadId: leadId,
+          })
+
+          // Update lead lastAutoReplyAt
+          await prisma.lead.update({
+            where: { id: leadId },
+            data: { lastAutoReplyAt: new Date() },
+          })
+
+          console.log(`✅ [GOLDEN-VISA] Sent qualifier reply to lead ${leadId}`)
+          return { replied: true, reason: 'Golden Visa qualifier reply sent' }
+        } catch (sendError: any) {
+          console.error(`❌ [GOLDEN-VISA] Failed to send reply:`, sendError.message)
+          return { replied: false, reason: 'Failed to send Golden Visa qualifier reply', error: sendError.message }
+        }
+      }
+    }
+
     // CRITICAL: If contact doesn't have phone number, try to get it from the message
     // This handles cases where contact was created from a different channel
     let phoneNumber = lead.contact.phone?.trim() || null
@@ -1176,17 +1231,46 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     console.log(`🔍 [OUTBOUND] Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
     
     if (channelUpper === 'WHATSAPP' && phoneNumber) {
+      // FIX: Ensure conversation exists before proceeding (find or create)
+      let conversationForOutbound = conversation
+      if (!conversationForOutbound) {
+        // Try to find conversation by contactId and channel
+        conversationForOutbound = await prisma.conversation.findUnique({
+          where: {
+            contactId_channel: {
+              contactId: contactId,
+              channel: channel.toLowerCase(),
+            },
+          },
+        })
+        
+        // If still not found, create it
+        if (!conversationForOutbound) {
+          console.log(`📝 [OUTBOUND] Creating conversation for contact ${contactId}, channel ${channel.toLowerCase()}`)
+          conversationForOutbound = await prisma.conversation.create({
+            data: {
+              contactId: contactId,
+              leadId: leadId,
+              channel: channel.toLowerCase(),
+              status: 'open',
+              lastMessageAt: new Date(),
+            },
+          })
+          console.log(`✅ [OUTBOUND] Created conversation ${conversationForOutbound.id}`)
+        }
+      }
+      
       // FIX B: Hard idempotency check BEFORE sending (transaction-based)
       const { checkOutboundIdempotency, logOutboundMessage } = await import('./webhook/idempotency')
       
       // Derive triggerProviderMessageId if missing
       let effectiveTriggerId = triggerProviderMessageId
-      if (!effectiveTriggerId && conversation) {
+      if (!effectiveTriggerId && conversationForOutbound) {
         // Try to get from the inbound message
         const inboundMessage = await prisma.message.findFirst({
           where: {
             id: messageId,
-            conversationId: conversation.id,
+            conversationId: conversationForOutbound.id,
             direction: 'INBOUND',
           },
         })
@@ -1204,19 +1288,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           return { replied: false, reason: 'Outbound already sent for this inbound message' }
         }
       }
-      
-      // BUG FIX #1: Ensure conversation exists before proceeding with outbound logging
-      if (!conversation) {
-        console.error(`❌ [OUTBOUND] Cannot send WhatsApp message: conversation not found for lead ${leadId}, contact ${contactId}, channel ${channel}`)
-        return { replied: false, reason: 'Conversation not found - cannot send outbound message' }
-      }
 
       // Load flow state for logging
       let flowStep: string | undefined
       let lastQuestionKey: string | undefined
       
       const { loadFlowState } = await import('./conversation/flowState')
-      const flowState = await loadFlowState(conversation.id)
+      const flowState = await loadFlowState(conversationForOutbound.id)
       flowStep = flowState.flowStep
       lastQuestionKey = flowState.lastQuestionKey
       console.log(`📊 [FLOW-STATE] Current state: flowKey=${flowState.flowKey}, flowStep=${flowStep}, lastQuestionKey=${lastQuestionKey}`)
@@ -1232,7 +1310,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         const recentDuplicate = await (prisma as any).outboundMessageLog.findFirst({
           where: {
             provider: 'whatsapp',
-            conversationId: conversation.id,
+            conversationId: conversationForOutbound.id,
             outboundTextHash: outboundTextHash,
             createdAt: {
               gte: thirtySecondsAgo,
@@ -1274,7 +1352,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             const existing = await (tx as any).outboundMessageLog.findFirst({
               where: {
                 provider: 'whatsapp',
-                conversationId: conversation.id,
+                conversationId: conversationForOutbound.id,
                 outboundTextHash: outboundTextHash,
                 createdAt: {
                   gte: thirtySecondsAgo,
@@ -1291,7 +1369,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           const outboundLog = await (tx as any).outboundMessageLog.create({
             data: {
               provider: 'whatsapp',
-              conversationId: conversation.id,
+              conversationId: conversationForOutbound.id,
               triggerProviderMessageId: effectiveTriggerId || null,
               outboundTextHash: outboundTextHash,
               outboundMessageId: null, // Will be updated after send
@@ -1330,10 +1408,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         
         // Save outbound message
         let savedMessage: any = null
-        if (conversation) {
+        if (conversationForOutbound) {
           savedMessage = await prisma.message.create({
             data: {
-              conversationId: conversation.id,
+              conversationId: conversationForOutbound.id,
               leadId: leadId,
               contactId: contactId,
               direction: 'OUTBOUND',
@@ -1365,7 +1443,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
 
           // Update conversation
           await prisma.conversation.update({
-            where: { id: conversation.id },
+            where: { id: conversationForOutbound.id },
             data: {
               lastMessageAt: new Date(),
               lastOutboundAt: new Date(),
