@@ -801,6 +801,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         
         if (conversation) {
           // TRY RULE ENGINE FIRST (deterministic, no hallucinations)
+          // Flag to skip rule engine if business setup handler succeeded
+          let skipRuleEngine = false
+          
           try {
             const { executeRuleEngine, loadConversationMemory } = await import('./ai/ruleEngine')
             
@@ -916,7 +919,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                     
                     // Skip rule engine and strict AI
                     console.log(`✅ [BUSINESS-SETUP] Using sanitized business setup handler result, skipping rule engine`)
-                    break // Exit the try block to skip rule engine
+                    skipRuleEngine = true // Set flag to skip rule engine
                   }
                 } else {
                   console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
@@ -929,7 +932,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             }
             
             // If business setup handler didn't produce a result, use rule engine
-            if (!aiResult) {
+            if (!aiResult && !skipRuleEngine) {
               console.log(`🎯 [RULE-ENGINE] Executing deterministic rule engine`)
               console.log(`📋 [RULE-ENGINE] Memory:`, existingMemory)
               console.log(`📋 [RULE-ENGINE] Is first message:`, isFirstMessage)
