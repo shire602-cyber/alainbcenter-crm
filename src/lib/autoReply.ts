@@ -922,13 +922,6 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                   console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
                   // Fall through to rule engine
                 }
-                  
-                  // Skip rule engine and strict AI
-                  console.log(`✅ [BUSINESS-SETUP] Using business setup handler result, skipping rule engine`)
-                } else {
-                  console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
-                  // Fall through to rule engine
-                }
               } catch (businessError: any) {
                 console.error(`❌ [BUSINESS-SETUP] Handler failed, falling back to rule engine:`, businessError.message)
                 // Fall through to rule engine
