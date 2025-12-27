@@ -542,11 +542,30 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         // Send Golden Visa qualifier reply
         try {
           const { sendTextMessage } = await import('./whatsapp')
-          await sendTextMessage({
-            to: lead.contact.phone,
-            message: goldenVisaResult.replyText,
-            conversationId: conversation.id,
-            leadId: leadId,
+          const result = await sendTextMessage(lead.contact.phone, goldenVisaResult.replyText)
+
+          // Create Message record for outbound reply
+          await prisma.message.create({
+            data: {
+              conversationId: conversation.id,
+              leadId: leadId,
+              direction: 'OUTBOUND',
+              channel: channel.toUpperCase(),
+              type: 'text',
+              body: goldenVisaResult.replyText,
+              providerMessageId: result.messageId,
+              status: 'SENT',
+              sentAt: new Date(),
+            },
+          })
+
+          // Update conversation
+          await prisma.conversation.update({
+            where: { id: conversation.id },
+            data: {
+              lastOutboundAt: new Date(),
+              lastMessageAt: new Date(),
+            },
           })
 
           // Update lead lastAutoReplyAt
@@ -555,7 +574,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             data: { lastAutoReplyAt: new Date() },
           })
 
-          console.log(`✅ [GOLDEN-VISA] Sent qualifier reply to lead ${leadId}`)
+          console.log(`✅ [GOLDEN-VISA] Sent qualifier reply to lead ${leadId}, messageId: ${result.messageId}`)
           return { replied: true, reason: 'Golden Visa qualifier reply sent' }
         } catch (sendError: any) {
           console.error(`❌ [GOLDEN-VISA] Failed to send reply:`, sendError.message)
