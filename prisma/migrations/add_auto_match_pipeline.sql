@@ -12,8 +12,8 @@ CREATE TABLE IF NOT EXISTS "StaffSettings" (
   "personalWhatsappNumber" TEXT,
   "remindersEnabled" BOOLEAN NOT NULL DEFAULT true,
   "timezone" TEXT NOT NULL DEFAULT 'Asia/Dubai',
-  "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-  "updatedAt" DATETIME NOT NULL,
+  "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+  "updatedAt" TIMESTAMP(3) NOT NULL,
   FOREIGN KEY ("userId") REFERENCES "User" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 

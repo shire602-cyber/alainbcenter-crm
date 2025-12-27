@@ -1,9 +1,9 @@
 -- CreateTable
 CREATE TABLE "AutomationRunLog" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "dateKey" TEXT NOT NULL,
     "actionKey" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "ruleId" INTEGER,
     "leadId" INTEGER,
     CONSTRAINT "AutomationRunLog_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "AutomationRule" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -12,10 +12,10 @@ CREATE TABLE "AutomationRunLog" (
 
 -- CreateTable
 CREATE TABLE "ExternalEvent" (
-    "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
+    "id" SERIAL NOT NULL PRIMARY KEY,
     "provider" TEXT NOT NULL,
     "eventId" TEXT NOT NULL,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateIndex

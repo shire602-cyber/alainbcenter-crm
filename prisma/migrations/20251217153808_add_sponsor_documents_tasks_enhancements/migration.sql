@@ -24,19 +24,13 @@ DROP INDEX "ExternalEvent_provider_eventId_key";
 DROP INDEX "WhatsAppTemplate_name_key";
 
 -- DropTable
-PRAGMA foreign_keys=off;
 DROP TABLE "ExternalEvent";
-PRAGMA foreign_keys=on;
 
 -- DropTable
-PRAGMA foreign_keys=off;
 DROP TABLE "WebhookEventLog";
-PRAGMA foreign_keys=on;
 
 -- DropTable
-PRAGMA foreign_keys=off;
 DROP TABLE "WhatsAppTemplate";
-PRAGMA foreign_keys=on;
 
 -- CreateTable
 CREATE TABLE "ExpiryItem" (
@@ -44,13 +38,13 @@ CREATE TABLE "ExpiryItem" (
     "contactId" INTEGER NOT NULL,
     "leadId" INTEGER,
     "type" TEXT NOT NULL,
-    "expiryDate" DATETIME NOT NULL,
+    "expiryDate" TIMESTAMP(3) NOT NULL,
     "reminderScheduleDays" TEXT NOT NULL DEFAULT '[90,60,30,7]',
-    "lastReminderSentAt" DATETIME,
+    "lastReminderSentAt" TIMESTAMP(3),
     "notes" TEXT,
     "assignedUserId" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "ExpiryItem_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "ExpiryItem_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "ExpiryItem_assignedUserId_fkey" FOREIGN KEY ("assignedUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -68,7 +62,7 @@ CREATE TABLE "Message" (
     "meta" TEXT,
     "status" TEXT NOT NULL DEFAULT 'draft',
     "createdByUserId" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "Message_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Message_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Message_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -81,12 +75,10 @@ CREATE TABLE "ExternalEventLog" (
     "provider" TEXT NOT NULL,
     "externalId" TEXT NOT NULL,
     "payload" TEXT,
-    "receivedAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "receivedAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- RedefineTables
-PRAGMA defer_foreign_keys=ON;
-PRAGMA foreign_keys=OFF;
 CREATE TABLE "new_AIActionLog" (
     "id" INTEGER NOT NULL PRIMARY KEY AUTOINCREMENT,
     "kind" TEXT NOT NULL,
@@ -96,7 +88,7 @@ CREATE TABLE "new_AIActionLog" (
     "ok" BOOLEAN NOT NULL DEFAULT true,
     "error" TEXT,
     "meta" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AIActionLog_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "AIActionLog_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "AIActionLog_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -117,7 +109,7 @@ CREATE TABLE "new_AIDraft" (
     "inputSummary" TEXT,
     "draftText" TEXT NOT NULL,
     "createdByUserId" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AIDraft_conversationId_fkey" FOREIGN KEY ("conversationId") REFERENCES "Conversation" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "AIDraft_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "AIDraft_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -144,8 +136,8 @@ CREATE TABLE "new_AutomationRule" (
     "trigger" TEXT,
     "conditions" TEXT,
     "actions" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 INSERT INTO "new_AutomationRule" ("channel", "createdAt", "daysBeforeExpiry", "enabled", "followupAfterDays", "id", "isActive", "key", "name", "schedule", "template", "type", "updatedAt") SELECT "channel", "createdAt", "daysBeforeExpiry", coalesce("enabled", true) AS "enabled", "followupAfterDays", "id", "isActive", "key", "name", "schedule", "template", "type", "updatedAt" FROM "AutomationRule";
 DROP TABLE "AutomationRule";
@@ -165,8 +157,8 @@ CREATE TABLE "new_AutomationRunLog" (
     "idempotencyKey" TEXT,
     "dateKey" TEXT,
     "actionKey" TEXT,
-    "ranAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "ranAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "AutomationRunLog_ruleId_fkey" FOREIGN KEY ("ruleId") REFERENCES "AutomationRule" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "AutomationRunLog_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "AutomationRunLog_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
@@ -185,8 +177,8 @@ CREATE TABLE "new_ChecklistItem" (
     "label" TEXT NOT NULL,
     "required" BOOLEAN NOT NULL DEFAULT true,
     "completed" BOOLEAN NOT NULL DEFAULT false,
-    "completedAt" DATETIME,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "completedAt" TIMESTAMP(3),
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     CONSTRAINT "ChecklistItem_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE RESTRICT ON UPDATE CASCADE
 );
 INSERT INTO "new_ChecklistItem" ("completed", "completedAt", "createdAt", "id", "label", "leadId", "required") SELECT "completed", "completedAt", "createdAt", "id", "label", "leadId", "required" FROM "ChecklistItem";
@@ -201,7 +193,7 @@ CREATE TABLE "new_Contact" (
     "source" TEXT,
     "localSponsorName" TEXT,
     "companyName" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO "new_Contact" ("createdAt", "email", "fullName", "id", "nationality", "phone", "source") SELECT "createdAt", "email", "fullName", "id", "nationality", "phone", "source" FROM "Contact";
 DROP TABLE "Contact";
@@ -217,11 +209,11 @@ CREATE TABLE "new_Conversation" (
     "channel" TEXT NOT NULL DEFAULT 'whatsapp',
     "externalThreadId" TEXT,
     "status" TEXT NOT NULL DEFAULT 'open',
-    "lastMessageAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "lastMessageAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
     "assignedUserId" INTEGER,
     "unreadCount" INTEGER NOT NULL DEFAULT 0,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "Conversation_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Conversation_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Conversation_assignedUserId_fkey" FOREIGN KEY ("assignedUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -242,10 +234,10 @@ CREATE TABLE "new_Document" (
     "storagePath" TEXT,
     "url" TEXT,
     "category" TEXT,
-    "expiryDate" DATETIME,
+    "expiryDate" TIMESTAMP(3),
     "uploadedByUserId" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "Document_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Document_uploadedByUserId_fkey" FOREIGN KEY ("uploadedByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
 );
@@ -263,11 +255,11 @@ CREATE TABLE "new_Integration" (
     "accessToken" TEXT,
     "refreshToken" TEXT,
     "config" TEXT,
-    "lastTestedAt" DATETIME,
+    "lastTestedAt" TIMESTAMP(3),
     "lastTestStatus" TEXT,
     "lastTestMessage" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL
 );
 INSERT INTO "new_Integration" ("accessToken", "apiKey", "apiSecret", "config", "createdAt", "id", "isEnabled", "lastTestMessage", "lastTestStatus", "lastTestedAt", "name", "provider", "refreshToken", "updatedAt", "webhookUrl") SELECT "accessToken", "apiKey", "apiSecret", "config", "createdAt", "id", "isEnabled", "lastTestMessage", "lastTestStatus", "lastTestedAt", "name", "provider", "refreshToken", "updatedAt", "webhookUrl" FROM "Integration";
 DROP TABLE "Integration";
@@ -290,14 +282,14 @@ CREATE TABLE "new_Lead" (
     "aiScore" INTEGER,
     "aiNotes" TEXT,
     "assignedUserId" INTEGER,
-    "nextFollowUpAt" DATETIME,
-    "lastContactAt" DATETIME,
-    "expiryDate" DATETIME,
+    "nextFollowUpAt" TIMESTAMP(3),
+    "lastContactAt" TIMESTAMP(3),
+    "expiryDate" TIMESTAMP(3),
     "autoWorkflowStatus" TEXT,
     "expiry90Sent" BOOLEAN NOT NULL DEFAULT false,
     "expiry30Sent" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "Lead_contactId_fkey" FOREIGN KEY ("contactId") REFERENCES "Contact" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Lead_serviceTypeId_fkey" FOREIGN KEY ("serviceTypeId") REFERENCES "ServiceType" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Lead_assignedUserId_fkey" FOREIGN KEY ("assignedUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -310,14 +302,14 @@ CREATE TABLE "new_Task" (
     "leadId" INTEGER NOT NULL,
     "title" TEXT NOT NULL,
     "type" TEXT NOT NULL,
-    "dueAt" DATETIME,
+    "dueAt" TIMESTAMP(3),
     "status" TEXT NOT NULL DEFAULT 'OPEN',
-    "doneAt" DATETIME,
+    "doneAt" TIMESTAMP(3),
     "assignedUserId" INTEGER,
     "createdByUserId" INTEGER,
     "aiSuggested" BOOLEAN NOT NULL DEFAULT false,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP,
-    "updatedAt" DATETIME NOT NULL,
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    "updatedAt" TIMESTAMP(3) NOT NULL,
     CONSTRAINT "Task_leadId_fkey" FOREIGN KEY ("leadId") REFERENCES "Lead" ("id") ON DELETE RESTRICT ON UPDATE CASCADE,
     CONSTRAINT "Task_assignedUserId_fkey" FOREIGN KEY ("assignedUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE,
     CONSTRAINT "Task_createdByUserId_fkey" FOREIGN KEY ("createdByUserId") REFERENCES "User" ("id") ON DELETE SET NULL ON UPDATE CASCADE
@@ -331,14 +323,12 @@ CREATE TABLE "new_User" (
     "email" TEXT NOT NULL,
     "password" TEXT NOT NULL,
     "role" TEXT NOT NULL DEFAULT 'AGENT',
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 INSERT INTO "new_User" ("createdAt", "email", "id", "name", "password", "role") SELECT "createdAt", "email", "id", "name", "password", "role" FROM "User";
 DROP TABLE "User";
 ALTER TABLE "new_User" RENAME TO "User";
 CREATE UNIQUE INDEX "User_email_key" ON "User"("email");
-PRAGMA foreign_keys=ON;
-PRAGMA defer_foreign_keys=OFF;
 
 -- CreateIndex
 CREATE INDEX "Message_conversationId_createdAt_idx" ON "Message"("conversationId", "createdAt");

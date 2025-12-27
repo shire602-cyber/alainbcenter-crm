@@ -10,7 +10,7 @@ CREATE TABLE "AIDraft" (
     "inputSummary" TEXT,
     "draftText" TEXT NOT NULL,
     "createdByUserId" INTEGER,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateTable
@@ -23,7 +23,7 @@ CREATE TABLE "AIActionLog" (
     "ok" BOOLEAN NOT NULL DEFAULT true,
     "error" TEXT,
     "meta" TEXT,
-    "createdAt" DATETIME NOT NULL DEFAULT CURRENT_TIMESTAMP
+    "createdAt" TIMESTAMP(3) NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 
 -- CreateIndex
