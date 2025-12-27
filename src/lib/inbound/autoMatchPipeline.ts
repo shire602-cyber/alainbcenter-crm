@@ -71,17 +71,27 @@ export async function handleInboundMessageAutoMatch(
   // Step 2: FIND/CREATE Contact (using new upsert logic with normalization)
   // Extract waId from webhook payload if available
   const webhookPayload = input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata?.rawPayload || input.metadata
-  const contact = await upsertContact(prisma, {
+  const contactResult = await upsertContact(prisma, {
     phone: input.fromPhone || input.fromEmail || 'unknown',
     fullName: input.fromName || undefined,
     email: input.fromEmail || null,
     source: input.channel.toLowerCase(),
     webhookPayload: webhookPayload, // For extracting waId
   })
+  
+  // Fetch full contact record with all fields
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactResult.id },
+    select: { id: true, phone: true, phoneNormalized: true, waId: true, fullName: true, email: true, nationality: true },
+  })
+  
+  if (!contact) {
+    throw new Error(`Failed to fetch contact after upsert: ${contactResult.id}`)
+  }
 
   // Step 3: FIND/CREATE Lead (smart rules) - MUST be before conversation to get leadId
   const lead = await findOrCreateLead({
-    contactId: contact.id,
+    contactId: contactResult.id,
     channel: input.channel,
     providerMessageId: input.providerMessageId,
     timestamp: input.timestamp, // Use actual message timestamp
@@ -89,7 +99,7 @@ export async function handleInboundMessageAutoMatch(
 
   // Step 4: FIND/CREATE Conversation (linked to lead)
   const conversation = await findOrCreateConversation({
-    contactId: contact.id,
+    contactId: contactResult.id,
     channel: input.channel,
     leadId: lead.id, // CRITICAL: Link conversation to lead
     timestamp: input.timestamp, // Use actual message timestamp
