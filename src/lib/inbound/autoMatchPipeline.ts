@@ -74,23 +74,25 @@ export async function handleInboundMessageAutoMatch(
     fromName: input.fromName,
   })
 
-  // Step 3: FIND/CREATE Conversation
-  const conversation = await findOrCreateConversation({
-    contactId: contact.id,
-    channel: input.channel,
-  })
-
-  // Step 4: FIND/CREATE Lead (smart rules)
+  // Step 3: FIND/CREATE Lead (smart rules) - MUST be before conversation to get leadId
   const lead = await findOrCreateLead({
     contactId: contact.id,
     channel: input.channel,
     providerMessageId: input.providerMessageId,
   })
 
+  // Step 4: FIND/CREATE Conversation (linked to lead)
+  const conversation = await findOrCreateConversation({
+    contactId: contact.id,
+    channel: input.channel,
+    leadId: lead.id, // CRITICAL: Link conversation to lead
+  })
+
   // Step 5: CREATE CommunicationLog
   const message = await createCommunicationLog({
     conversationId: conversation.id,
     leadId: lead.id,
+    contactId: contact.id, // CRITICAL: Include contactId
     channel: input.channel,
     direction: 'in',
     text: input.text,
@@ -109,22 +111,25 @@ export async function handleInboundMessageAutoMatch(
     })
   }
 
-  if (extractedFields.service && !lead.serviceTypeEnum) {
+  // CRITICAL FIX: Always update service if extracted (even if already set)
+  // This ensures service is updated on every message, not just first
+  if (extractedFields.service) {
     await prisma.lead.update({
       where: { id: lead.id },
       data: { serviceTypeEnum: extractedFields.service },
     })
+    console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} serviceTypeEnum to: ${extractedFields.service}`)
   }
 
   // Update dataJson (append, don't overwrite)
   const existingData = lead.dataJson ? JSON.parse(lead.dataJson) : {}
   const updatedData = {
     ...existingData,
-    service: extractedFields.service,
-    nationality: extractedFields.nationality,
-    expiries: extractedFields.expiries,
-    counts: extractedFields.counts,
-    identity: extractedFields.identity,
+    service: extractedFields.service || existingData.service, // Preserve existing if new is null
+    nationality: extractedFields.nationality || existingData.nationality,
+    expiries: extractedFields.expiries || existingData.expiries || [],
+    counts: extractedFields.counts || existingData.counts || {},
+    identity: extractedFields.identity || existingData.identity || {},
     extractedAt: new Date().toISOString(),
   }
   
@@ -134,10 +139,22 @@ export async function handleInboundMessageAutoMatch(
     console.log(`📝 [AUTO-MATCH] Stored expiry hint: "${extractedFields.expiryHint}"`)
   }
   
+  // CRITICAL FIX: Always update lead with latest data and serviceTypeEnum
+  const updateData: any = { 
+    dataJson: JSON.stringify(updatedData),
+  }
+  
+  // Update serviceTypeEnum if extracted (even if already set - allows refinement)
+  if (extractedFields.service) {
+    updateData.serviceTypeEnum = extractedFields.service
+  }
+  
   await prisma.lead.update({
     where: { id: lead.id },
-    data: { dataJson: JSON.stringify(updatedData) },
+    data: updateData,
   })
+  
+  console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} dataJson and serviceTypeEnum: ${extractedFields.service || 'none'}`)
 
   // Step 7: AUTO-CREATE TASKS/ALERTS
   const tasksCreated = await createAutoTasks({
@@ -292,35 +309,90 @@ async function findOrCreateContact(input: {
 
 /**
  * Step 3: Find or create Conversation
+ * CRITICAL FIX: Prevent duplicates and always link to lead
  */
 async function findOrCreateConversation(input: {
   contactId: number
   channel: string
+  leadId: number
 }): Promise<any> {
+  const channelUpper = input.channel.toUpperCase()
+  
+  // Try to find existing conversation first
   let conversation = await prisma.conversation.findFirst({
     where: {
       contactId: input.contactId,
-      channel: input.channel.toUpperCase(),
+      channel: channelUpper,
     },
   })
 
-  if (!conversation) {
-    conversation = await prisma.conversation.create({
-      data: {
-        contactId: input.contactId,
-        channel: input.channel.toUpperCase(),
-        status: 'open',
-        lastInboundAt: new Date(),
-      },
-    })
-    console.log(`✅ [AUTO-MATCH] Created new conversation: ${conversation.id}`)
+  if (conversation) {
+    // CRITICAL: Update leadId if it's null or different (link to current lead)
+    if (!conversation.leadId || conversation.leadId !== input.leadId) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          leadId: input.leadId,
+          lastInboundAt: new Date(),
+          lastMessageAt: new Date(),
+        },
+      })
+      console.log(`✅ [AUTO-MATCH] Updated conversation ${conversation.id} to link to lead ${input.leadId}`)
+    } else {
+      // Just update timestamps
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          lastInboundAt: new Date(),
+          lastMessageAt: new Date(),
+        },
+      })
+      console.log(`✅ [AUTO-MATCH] Found existing conversation: ${conversation.id}`)
+    }
   } else {
-    // Update lastInboundAt
-    conversation = await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { lastInboundAt: new Date() },
-    })
-    console.log(`✅ [AUTO-MATCH] Found existing conversation: ${conversation.id}`)
+    // Create new conversation - use create with error handling for race conditions
+    try {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: input.contactId,
+          leadId: input.leadId, // CRITICAL: Always link to lead
+          channel: channelUpper,
+          status: 'open',
+          lastInboundAt: new Date(),
+          lastMessageAt: new Date(),
+        },
+      })
+      console.log(`✅ [AUTO-MATCH] Created new conversation: ${conversation.id} linked to lead ${input.leadId}`)
+    } catch (error: any) {
+      // Race condition: conversation was created between findFirst and create
+      if (error.code === 'P2002') {
+        // Unique constraint violation - conversation was created by another process
+        conversation = await prisma.conversation.findFirst({
+          where: {
+            contactId: input.contactId,
+            channel: channelUpper,
+          },
+        })
+        if (conversation) {
+          // Update leadId if needed
+          if (!conversation.leadId || conversation.leadId !== input.leadId) {
+            conversation = await prisma.conversation.update({
+              where: { id: conversation.id },
+              data: {
+                leadId: input.leadId,
+                lastInboundAt: new Date(),
+                lastMessageAt: new Date(),
+              },
+            })
+            console.log(`✅ [AUTO-MATCH] Race condition handled: updated conversation ${conversation.id} to link to lead ${input.leadId}`)
+          }
+        } else {
+          throw new Error('Failed to create or find conversation after race condition')
+        }
+      } else {
+        throw error
+      }
+    }
   }
 
   return conversation
@@ -386,6 +458,17 @@ async function findOrCreateLead(input: {
     },
   })
   
+  // CRITICAL FIX: Link all existing conversations for this contact to the new lead
+  await prisma.conversation.updateMany({
+    where: {
+      contactId: input.contactId,
+      leadId: null, // Only update conversations not linked to a lead
+    },
+    data: {
+      leadId: newLead.id,
+    },
+  })
+  
   // Update contact source if not set
   await prisma.contact.update({
     where: { id: input.contactId },
@@ -394,7 +477,7 @@ async function findOrCreateLead(input: {
     },
   })
 
-  console.log(`✅ [AUTO-MATCH] Created new lead: ${newLead.id}`)
+  console.log(`✅ [AUTO-MATCH] Created new lead: ${newLead.id} and linked existing conversations`)
   return newLead
 }
 
@@ -404,16 +487,19 @@ async function findOrCreateLead(input: {
 async function createCommunicationLog(input: {
   conversationId: number
   leadId: number
+  contactId: number
   channel: string
   direction: 'in' | 'out'
   text: string
   providerMessageId: string
   timestamp: Date
 }): Promise<any> {
+  // CRITICAL FIX: Include contactId to ensure proper linking
   const message = await prisma.message.create({
     data: {
       conversationId: input.conversationId,
       leadId: input.leadId,
+      contactId: input.contactId, // CRITICAL: Link to contact
       direction: input.direction.toUpperCase(),
       channel: input.channel.toUpperCase(),
       type: 'text',
