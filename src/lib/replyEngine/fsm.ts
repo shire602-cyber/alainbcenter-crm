@@ -57,7 +57,7 @@ export async function saveFSMState(
     await prisma.conversation.update({
       where: { id: conversationId },
       data: {
-        aiStateJson: JSON.stringify(state),
+        ruleEngineMemory: JSON.stringify(state),
       },
     })
   } catch (error) {
