@@ -438,6 +438,19 @@ async function findOrCreateLead(input: {
 
   if (openLead) {
     console.log(`✅ [AUTO-MATCH] Found open lead: ${openLead.id}`)
+    // CRITICAL FIX: Link conversations to this lead if not already linked
+    await prisma.conversation.updateMany({
+      where: {
+        contactId: input.contactId,
+        OR: [
+          { leadId: null },
+          { leadId: { not: openLead.id } },
+        ],
+      },
+      data: {
+        leadId: openLead.id,
+      },
+    })
     // Update lastInboundAt
     await prisma.lead.update({
       where: { id: openLead.id },
