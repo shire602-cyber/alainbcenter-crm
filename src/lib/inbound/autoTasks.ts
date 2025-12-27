@@ -14,6 +14,7 @@ export interface AutoTaskInput {
   channel: string
   service?: string
   expiries?: Array<{ type: string; date: Date }>
+  expiryHint?: string | null // Expiry mentioned but no explicit date
   providerMessageId: string
 }
 
@@ -109,10 +110,10 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
     }
   }
 
-  // Task 3: Expiry tasks
+  // Task 3: Expiry tasks (only for explicit dates)
   if (input.expiries && input.expiries.length > 0) {
     for (const expiry of input.expiries) {
-      // Create LeadExpiry record
+      // Create LeadExpiry record (only explicit dates)
       try {
         const expiryItem = await prisma.expiryItem.create({
           data: {
@@ -128,13 +129,13 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
           },
         })
 
+        // Calculate next reminder date (90 days before expiry)
+        const nextReminder = new Date(expiry.date)
+        nextReminder.setDate(nextReminder.getDate() - 90)
+
         // Create renewal follow-up task
         const renewalTaskKey = `renewal:${input.leadId}:${expiry.type}:${format(expiry.date, 'yyyy-MM-dd')}`
         try {
-          // Calculate next reminder date (90 days before expiry)
-          const nextReminder = new Date(expiry.date)
-          nextReminder.setDate(nextReminder.getDate() - 90)
-
           await prisma.task.create({
             data: {
               leadId: input.leadId,
@@ -157,6 +158,55 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
       } catch (error: any) {
         console.error(`❌ [AUTO-TASKS] Failed to create expiry item:`, error.message)
         // Continue with other tasks
+      }
+    }
+  }
+
+  // Task 4: Expiry hint confirmation (expiry mentioned but no explicit date)
+  if (input.expiryHint) {
+    const today = format(new Date(), 'yyyy-MM-dd')
+    const confirmTaskKey = `confirm-expiry:${input.leadId}:${today}`
+    
+    try {
+      const endOfDay = new Date()
+      endOfDay.setHours(23, 59, 59, 999)
+
+      await prisma.task.create({
+        data: {
+          leadId: input.leadId,
+          conversationId: input.conversationId,
+          title: 'Confirm expiry date',
+          type: 'DOCUMENT_REQUEST', // Using existing type for docs/confirmation tasks
+          dueAt: endOfDay,
+          status: 'OPEN',
+          idempotencyKey: confirmTaskKey,
+          aiSuggested: true,
+        },
+      })
+      tasksCreated++
+      console.log(`✅ [AUTO-TASKS] Created expiry confirmation task for hint: "${input.expiryHint}"`)
+
+      // Create alert/notification
+      try {
+        await prisma.notification.create({
+          data: {
+            type: 'system',
+            title: 'Expiry mentioned but no date provided',
+            message: `Expiry mentioned but no explicit date provided — confirm on call. Hint: "${input.expiryHint}"`,
+            leadId: input.leadId,
+            conversationId: input.conversationId,
+          },
+        })
+        console.log(`✅ [AUTO-TASKS] Created alert for expiry hint`)
+      } catch (alertError: any) {
+        // Non-blocking - alert might already exist
+        if (alertError.code !== 'P2002') {
+          console.warn(`⚠️ [AUTO-TASKS] Failed to create alert:`, alertError.message)
+        }
+      }
+    } catch (error: any) {
+      if (error.code !== 'P2002') {
+        throw error
       }
     }
   }

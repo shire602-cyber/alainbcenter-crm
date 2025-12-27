@@ -544,6 +544,34 @@ export async function POST(req: NextRequest) {
                   elapsed: `${Date.now() - startTime}ms`,
                 })
                 
+                // Mark reply task as done if auto-reply succeeded
+                if (replyResult.replied && messageId) {
+                  try {
+                    const replyTaskKey = `reply:${result.lead.id}:${messageId}`
+                    const replyTask = await prisma.task.findFirst({
+                      where: {
+                        leadId: result.lead.id,
+                        idempotencyKey: replyTaskKey,
+                        status: 'OPEN',
+                      },
+                    })
+                    
+                    if (replyTask) {
+                      await prisma.task.update({
+                        where: { id: replyTask.id },
+                        data: {
+                          status: 'DONE',
+                          doneAt: new Date(),
+                        },
+                      })
+                      console.log(`✅ [WEBHOOK] Marked reply task as done: ${replyTask.id}`)
+                    }
+                  } catch (taskError: any) {
+                    console.warn(`⚠️ [WEBHOOK] Failed to mark reply task as done:`, taskError.message)
+                    // Non-blocking error
+                  }
+                }
+                
                 if (!replyResult.replied && replyResult.reason?.includes('timeout')) {
                   // Create task for human follow-up
                   try {

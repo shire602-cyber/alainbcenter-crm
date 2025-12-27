@@ -224,10 +224,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     // BUG FIX #2: Also check by messageId to catch duplicates from inbound.ts calls
     // Check if we recently sent a reply for this same messageId (within last 30 seconds)
+    // BUG FIX: Remove leadId from query - conversation is unique by (contactId, channel) only
     const conversation = await prisma.conversation.findFirst({
       where: {
         contactId: contactId,
-        leadId: leadId,
         channel: channel.toLowerCase(),
       },
     })
@@ -481,10 +481,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     })
     
     // Get conversation for logging
+    // BUG FIX: Remove leadId from query - conversation is unique by (contactId, channel) only
     const conversation = await prisma.conversation.findFirst({
       where: {
         contactId: contactId,
-        leadId: leadId,
         channel: channel.toLowerCase(),
       },
       select: { id: true },
@@ -765,8 +765,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             console.log(`📋 [RULE-ENGINE] Conversation history: ${fullConversationHistory.length} messages`)
             console.log(`📋 [RULE-ENGINE] Last 3 messages:`, fullConversationHistory.slice(-3).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
             
-            // Check if this is first message in thread
-            const isFirstMessage = conversationMessages.filter(m => m.direction === 'OUTBOUND').length === 0
+            // BUG FIX: Don't shadow outer isFirstMessage variable - use the one calculated at line 363
+            // The outer isFirstMessage is based on messageCount <= 1 (inbound messages)
+            // This check is for outbound messages, but we should use the outer variable for consistency
+            // const isFirstMessage = conversationMessages.filter(m => m.direction === 'OUTBOUND').length === 0
+            // Use the outer isFirstMessage variable instead (calculated at line 363)
             
             // CHECK FOR BUSINESS SETUP INTENT FIRST
             const lowerMessage = messageText.toLowerCase()
@@ -1350,12 +1353,14 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           })
           
           // Update outbound log with message ID
-          if (outboundLogId) {
+          if (outboundLogId && savedMessage) {
             await (prisma as any).outboundMessageLog.update({
               where: { id: outboundLogId },
               data: { outboundMessageId: savedMessage.id },
             })
             console.log(`✅ [OUTBOUND-IDEMPOTENCY] Updated log with messageId: ${savedMessage.id}`)
+          } else if (outboundLogId && !savedMessage) {
+            console.warn(`⚠️ [OUTBOUND-IDEMPOTENCY] Cannot update log: savedMessage is null (logId: ${outboundLogId})`)
           }
 
           // Update conversation
@@ -1386,10 +1391,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         if (autoReplyLog) {
           try {
             // Get conversation ID for log
+            // BUG FIX: Remove leadId from query - conversation is unique by (contactId, channel) only
             const conversation = await prisma.conversation.findFirst({
               where: {
                 contactId: contactId,
-                leadId: leadId,
                 channel: channel.toLowerCase(),
               },
               select: { id: true },
@@ -1397,7 +1402,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             
             await (prisma as any).autoReplyLog.update({
               where: { id: autoReplyLog.id },
-              data: {
+            data: {
                 conversationId: conversation?.id || null,
                 decision: 'replied',
                 decisionReason: 'AI reply sent successfully',
@@ -1405,10 +1410,38 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 replyText: aiResult.text.substring(0, 500),
                 replyStatus: 'sent',
                 replyError: null,
+            },
+          })
+        } catch (logError: any) {
+            console.warn('Failed to update AutoReplyLog with success:', logError.message)
+          }
+        }
+        
+        // Mark reply task as done if it exists
+        if (triggerProviderMessageId) {
+          try {
+            const replyTaskKey = `reply:${leadId}:${triggerProviderMessageId}`
+            const replyTask = await prisma.task.findFirst({
+              where: {
+                leadId: leadId,
+                idempotencyKey: replyTaskKey,
+                status: 'OPEN',
               },
             })
-          } catch (logError: any) {
-            console.warn('Failed to update AutoReplyLog with success:', logError.message)
+            
+            if (replyTask) {
+              await prisma.task.update({
+                where: { id: replyTask.id },
+                data: {
+                  status: 'DONE',
+                  doneAt: new Date(),
+                },
+              })
+              console.log(`✅ [AUTO-REPLY] Marked reply task as done: ${replyTask.id}`)
+            }
+          } catch (taskError: any) {
+            console.warn(`⚠️ [AUTO-REPLY] Failed to mark reply task as done:`, taskError.message)
+            // Non-blocking error
           }
         }
         

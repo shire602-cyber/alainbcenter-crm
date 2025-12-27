@@ -1231,6 +1231,43 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 </div>
               </CardHeader>
               <CardContent className="space-y-3 px-5 pb-5">
+                {/* Unverified Expiry Hints */}
+                {lead.dataJson && (() => {
+                  try {
+                    const data = JSON.parse(lead.dataJson)
+                    if (data.expiry_hint_text) {
+                      return (
+                        <div className="p-3 rounded-lg border border-yellow-200 bg-yellow-50/50 dark:bg-yellow-900/10 dark:border-yellow-800/50">
+                          <div className="flex items-start gap-2 mb-2">
+                            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                              <p className="text-xs font-medium text-yellow-900 dark:text-yellow-100 mb-1">
+                                Unverified Expiry Hint
+                              </p>
+                              <p className="text-xs text-yellow-700 dark:text-yellow-300 italic">
+                                "{data.expiry_hint_text}"
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="w-full mt-2 text-xs h-7 border-yellow-300 dark:border-yellow-700"
+                            onClick={() => setShowExpiryModal(true)}
+                          >
+                            <Calendar className="h-3 w-3 mr-1" />
+                            Confirm Date
+                          </Button>
+                        </div>
+                      )
+                    }
+                  } catch (e) {
+                    // Invalid JSON, ignore
+                  }
+                  return null
+                })()}
+
+                {/* Verified Expiry Items */}
                 {lead.expiryItems && lead.expiryItems.length > 0 ? (
                   lead.expiryItems.map((expiry: any) => {
                     const daysLeft = differenceInDays(parseISO(expiry.expiryDate), new Date())
@@ -1360,6 +1397,48 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
             {/* Reminders Card */}
             <RemindersCard leadId={leadId} />
+
+            {/* Alerts/Notifications Card */}
+            {lead.notifications && lead.notifications.length > 0 && (
+              <Card className="rounded-2xl glass-soft shadow-sidebar">
+                <CardHeader className="pb-4 pt-4 px-5 sticky top-16 bg-card/95 backdrop-blur z-10">
+                  <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Alerts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 px-5 pb-5">
+                  {lead.notifications
+                    .filter((n: any) => !n.isRead)
+                    .slice(0, 5)
+                    .map((notification: any) => (
+                      <div
+                        key={notification.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+                      >
+                        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                            {notification.title}
+                          </p>
+                          <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                            {format(parseISO(notification.createdAt), 'MMM dd, yyyy HH:mm')}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  {lead.notifications.filter((n: any) => !n.isRead).length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      <CheckCircle2 className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                      <p>No unread alerts</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+            )}
 
             {/* Documents Card - Enhanced with Compliance */}
             <DocumentsCardEnhanced 

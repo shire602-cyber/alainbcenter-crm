@@ -84,6 +84,10 @@ export async function GET(
         messages: {
           orderBy: { createdAt: 'desc' },
           take: 20, // Recent messages for timeline
+        },
+        notifications: {
+          orderBy: { createdAt: 'desc' },
+          take: 10, // Recent alerts/notifications
         }
       },
     })

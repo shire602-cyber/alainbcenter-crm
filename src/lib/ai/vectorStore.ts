@@ -100,7 +100,7 @@ const vectorStore = new InMemoryVectorStore()
  * Generate embedding using configured AI provider (OpenAI-compatible API)
  * Falls back to OpenAI if configured provider doesn't support embeddings
  */
-async function generateEmbedding(text: string): Promise<number[]> {
+async function generateEmbedding(text: string): Promise<number[] | null> {
   // Try to get configured AI provider first
   let apiKey: string | null = null
   let apiUrl: string = 'https://api.openai.com/v1/embeddings'
@@ -132,7 +132,9 @@ async function generateEmbedding(text: string): Promise<number[]> {
   if (!apiKey) {
     apiKey = process.env.OPENAI_API_KEY || null
     if (!apiKey) {
-      throw new Error('No embedding provider configured. Set OPENAI_API_KEY or configure DeepSeek/OpenAI integration.')
+      // Don't throw - return null to allow graceful degradation
+      console.warn('⚠️ [EMBEDDINGS] No embedding provider configured. Vector search will return empty results. Set OPENAI_API_KEY or configure DeepSeek/OpenAI integration.')
+      return null as any // Return null to signal no embedding available
     }
     apiUrl = 'https://api.openai.com/v1/embeddings'
     model = 'text-embedding-3-small'
@@ -180,10 +182,12 @@ async function generateEmbedding(text: string): Promise<number[]> {
 /**
  * Fallback to OpenAI for embeddings
  */
-async function generateEmbeddingWithOpenAI(text: string): Promise<number[]> {
+async function generateEmbeddingWithOpenAI(text: string): Promise<number[] | null> {
   const openaiApiKey = process.env.OPENAI_API_KEY
   if (!openaiApiKey) {
-    throw new Error('OPENAI_API_KEY not configured for embeddings fallback')
+    // Don't throw - return null to allow graceful degradation
+    console.warn('⚠️ [EMBEDDINGS] OPENAI_API_KEY not configured for embeddings fallback. Vector search will return empty results.')
+    return null
   }
 
   const response = await fetch('https://api.openai.com/v1/embeddings', {
@@ -225,6 +229,12 @@ export async function indexTrainingDocument(documentId: number): Promise<void> {
 
     // Generate embedding
     const embedding = await generateEmbedding(document.content)
+    
+    // If embedding generation failed (no API key), skip indexing
+    if (!embedding) {
+      console.warn(`⚠️ [VECTOR-STORE] Cannot index document ${documentId} - no API key configured. Skipping vector indexing.`)
+      return // Skip indexing but don't throw error
+    }
 
     // Store in vector store
     await vectorStore.addDocument(
@@ -269,6 +279,16 @@ export async function searchTrainingDocuments(
   try {
     // Generate query embedding
     const queryEmbedding = await generateEmbedding(query)
+    
+    // If embedding generation failed (no API key), return empty results
+    if (!queryEmbedding) {
+      console.warn('⚠️ [VECTOR-SEARCH] Cannot generate embedding - no API key configured. Returning empty results.')
+      return {
+        documents: [],
+        scores: [],
+        hasRelevantTraining: false,
+      }
+    }
 
     // Search vector store (pass trainingDocumentIds to filter)
     const results = await vectorStore.search(queryEmbedding, topK, similarityThreshold, trainingDocumentIds)

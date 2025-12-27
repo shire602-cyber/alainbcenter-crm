@@ -120,23 +120,96 @@ export async function handleInboundMessage(
     // Handle duplicate message error gracefully
     if (error.message === 'DUPLICATE_MESSAGE') {
       console.log(`⚠️ [INBOUND] Duplicate message detected (legacy wrapper)`)
-      // Try to find existing message and return it
       const { prisma } = await import('./prisma')
-      const existingMessage = await prisma.message.findFirst({
-        where: {
-          providerMessageId: providerMessageId,
-        },
-        include: {
-          conversation: {
-            include: {
-              contact: true,
-              lead: true,
+      
+      let existingMessage: any = null
+      
+      // BUG FIX: If externalMessageId was provided, use it for lookup (consistent identifier)
+      if (input.externalMessageId) {
+        existingMessage = await prisma.message.findFirst({
+          where: {
+            providerMessageId: input.externalMessageId,
+          },
+          include: {
+            conversation: {
+              include: {
+                contact: true,
+                lead: true,
+              },
             },
           },
-        },
-      })
+        })
+      }
+      
+      // If not found and externalMessageId was missing (random ID generated),
+      // search by conversation + body + timestamp (within 5 second window)
+      if (!existingMessage && (!input.externalMessageId || fromPhone || fromEmail)) {
+        // First, find the conversation
+        let conversation: any = null
+        if (fromPhone) {
+          try {
+            const normalizedPhone = normalizeInboundPhone(fromPhone)
+            const contact = await prisma.contact.findFirst({
+              where: { phone: normalizedPhone },
+            })
+            if (contact) {
+              conversation = await prisma.conversation.findFirst({
+                where: {
+                  contactId: contact.id,
+                  channel: input.channel.toLowerCase(), // BUG FIX: Use lowercase to match database storage format
+                },
+              })
+            }
+          } catch {
+            // Phone normalization failed, try without normalization
+          }
+        } else if (fromEmail) {
+          const contact = await prisma.contact.findFirst({
+            where: { email: fromEmail.toLowerCase().trim() },
+          })
+          if (contact) {
+            conversation = await prisma.conversation.findFirst({
+              where: {
+                contactId: contact.id,
+                channel: input.channel.toLowerCase(), // BUG FIX: Use lowercase to match database storage format
+              },
+            })
+          }
+        }
+        
+        // If conversation found, search for recent message with same body
+        if (conversation) {
+          const timestamp = input.receivedAt || new Date()
+          const fiveSecondsAgo = new Date(timestamp.getTime() - 5000)
+          const fiveSecondsLater = new Date(timestamp.getTime() + 5000)
+          
+          existingMessage = await prisma.message.findFirst({
+            where: {
+              conversationId: conversation.id,
+              direction: 'INBOUND',
+              body: input.body,
+              createdAt: {
+                gte: fiveSecondsAgo,
+                lte: fiveSecondsLater,
+              },
+            },
+            include: {
+              conversation: {
+                include: {
+                  contact: true,
+                  lead: true,
+                },
+              },
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          })
+        }
+      }
 
-      if (existingMessage && existingMessage.conversation.lead) {
+      if (existingMessage && existingMessage.conversation?.lead) {
+        console.log(`✅ [INBOUND] Found existing duplicate message: ${existingMessage.id}`)
         return {
           lead: existingMessage.conversation.lead,
           conversation: existingMessage.conversation,
@@ -146,6 +219,12 @@ export async function handleInboundMessage(
       }
 
       // If we can't find existing, throw
+      console.error(`❌ [INBOUND] Duplicate message detected but cannot find existing record`, {
+        hasExternalMessageId: !!input.externalMessageId,
+        fromPhone: !!fromPhone,
+        fromEmail: !!fromEmail,
+        bodyLength: input.body?.length || 0,
+      })
       throw new Error('Duplicate message and cannot find existing record')
     }
 
