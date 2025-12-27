@@ -78,16 +78,15 @@ export async function handleGoldenVisaQualification(
   // Create task and alert if should escalate
   if (result.shouldEscalate && result.taskTitle) {
     try {
-      // Create task
+      // Create task (HIGH priority indicated in title)
       await prisma.task.create({
         data: {
           leadId,
           conversationId,
-          title: result.taskTitle,
+          title: `[HIGH PRIORITY] ${result.taskTitle}`,
           type: 'FOLLOW_UP',
           dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // Due in 24 hours
           status: 'OPEN',
-          priority: 'HIGH',
           idempotencyKey: `golden_visa_consultation_${leadId}`,
           aiSuggested: true,
         },
