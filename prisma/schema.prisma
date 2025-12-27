@@ -44,26 +44,26 @@ model User {
 }
 
 model ServiceType {
-  id        Int      @id @default(autoincrement())
+  id        Int             @id @default(autoincrement())
   name      String
-  code      String?  @unique
-  isActive  Boolean  @default(true)
-  createdAt DateTime @default(now())
+  code      String?         @unique
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
   leads     Lead[]
   pricing   ServicePricing? // One-to-one relationship with pricing
 }
 
 model ServicePricing {
-  id          Int      @id @default(autoincrement())
-  serviceKey  String   @unique // Service key (e.g., "FREELANCE_VISA", "MAINLAND_BUSINESS_SETUP")
-  defaultFeeAED Int   // Default service fee in AED
-  minFeeAED   Int? // Minimum fee (optional)
-  maxFeeAED   Int? // Maximum fee (optional)
-  serviceType ServiceType? @relation(fields: [serviceTypeId], references: [id])
-  serviceTypeId Int? @unique // Optional link to ServiceType (unique for one-to-one relation)
-  isActive    Boolean  @default(true)
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            Int          @id @default(autoincrement())
+  serviceKey    String       @unique // Service key (e.g., "FREELANCE_VISA", "MAINLAND_BUSINESS_SETUP")
+  defaultFeeAED Int // Default service fee in AED
+  minFeeAED     Int? // Minimum fee (optional)
+  maxFeeAED     Int? // Maximum fee (optional)
+  serviceType   ServiceType? @relation(fields: [serviceTypeId], references: [id])
+  serviceTypeId Int?         @unique // Optional link to ServiceType (unique for one-to-one relation)
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
 
   @@index([serviceKey])
 }
@@ -138,11 +138,11 @@ model Lead {
   pipelineStage String  @default("new")
   urgency       String?
 
-  notes         String?
-  priorityScore Int?
-  aiScore       Int? // AI-generated score (0-100)
-  aiNotes       String? // AI-generated qualification notes
-  dataJson      String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
+  notes               String?
+  priorityScore       Int?
+  aiScore             Int? // AI-generated score (0-100)
+  aiNotes             String? // AI-generated qualification notes
+  dataJson            String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
   businessActivityRaw String? // Raw business activity mentioned by customer (e.g., "marketing license", "general trading") - stored as-is without questioning
   requestedServiceRaw String? // PROBLEM B FIX: Raw service text mentioned by customer (e.g., "freelance visa", "business setup") - stored exactly as mentioned
 
@@ -190,13 +190,13 @@ model Lead {
   lastInfoSharedType String? // Type of info shared: "pricing" | "brochure" | "document" | "details" | "quotation"
 
   // Deal Probability & Revenue Forecasting (Deterministic)
-  dealProbability        Int? // 0-100 probability of closing the deal
-  expectedRevenueAED     Int? // Expected revenue in AED (nullable if service unknown)
-  forecastReasonJson     String? // JSON array of factor strings explaining the probability
-  serviceFeeAED          Int? // Optional: Staff-entered service fee override
+  dealProbability          Int? // 0-100 probability of closing the deal
+  expectedRevenueAED       Int? // Expected revenue in AED (nullable if service unknown)
+  forecastReasonJson       String? // JSON array of factor strings explaining the probability
+  serviceFeeAED            Int? // Optional: Staff-entered service fee override
   stageProbabilityOverride Int? // Optional: Manual override for stage-based probability
-  forecastModelVersion   String? // Version of forecast model used (e.g., "forecast_v1")
-  forecastLastComputedAt DateTime? // When forecast was last computed
+  forecastModelVersion     String? // Version of forecast model used (e.g., "forecast_v1")
+  forecastLastComputedAt   DateTime? // When forecast was last computed
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -352,6 +352,7 @@ model Conversation {
   autoReplyLogs        AutoReplyLog[]
   inboundMessageDedups InboundMessageDedup[]
   outboundMessageLogs  OutboundMessageLog[]
+  replyEngineLogs      ReplyEngineLog[]
 
   @@unique([contactId, channel])
   @@index([channel, lastMessageAt])
@@ -386,9 +387,10 @@ model Message {
   createdByUser     User?        @relation(fields: [createdByUserId], references: [id])
   createdAt         DateTime     @default(now())
 
-  statusEvents      MessageStatusEvent[]
-  autoReplyLogs     AutoReplyLog[]
-  replyEngineLogs   ReplyEngineLog[]
+  statusEvents             MessageStatusEvent[]
+  autoReplyLogs            AutoReplyLog[]
+  replyEngineLogs          ReplyEngineLog[]
+  replyEngineLogsAsInbound ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
 
   @@index([conversationId, createdAt])
   @@index([leadId])
@@ -819,16 +821,18 @@ model ReplyEngineLog {
   id               Int          @id @default(autoincrement())
   conversation     Conversation @relation(fields: [conversationId], references: [id])
   conversationId   Int
-  inboundMessage   Message?     @relation(fields: [inboundMessageId], references: [id])
+  inboundMessage   Message?     @relation("ReplyEngineLogInboundMessage", fields: [inboundMessageId], references: [id])
   inboundMessageId Int
   action           String // 'ASK' | 'INFO' | 'OFFER' | 'HANDOVER' | 'STOP'
   templateKey      String
   questionKey      String?
   reason           String
   extractedFields  String? // JSON: Extracted fields from inbound message
-  replyKey         String @unique // SHA256 hash for idempotency
+  replyKey         String       @unique // SHA256 hash for idempotency
   replyText        String? // Final reply text (truncated)
   createdAt        DateTime     @default(now())
+  Message          Message?     @relation(fields: [messageId], references: [id])
+  messageId        Int?
 
   @@index([conversationId, createdAt])
   @@index([replyKey])
