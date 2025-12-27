@@ -274,6 +274,37 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   // Add current message
   prompt += `CURRENT MESSAGE: "${currentMessage}"\n\n`
   
+  // CRITICAL: Check if customer is asking about timeline after quote promise
+  const lowerMessage = currentMessage.toLowerCase()
+  const isTimelineQuestion = lowerMessage.includes('how long') || 
+                             lowerMessage.includes('when') || 
+                             lowerMessage.includes('timeline') ||
+                             lowerMessage.includes('how soon') ||
+                             lowerMessage.includes('asap') ||
+                             lowerMessage.includes('timeframe')
+  
+  // Check if we recently promised a quote or response
+  const recentOutbound = conversationHistory
+    .filter(m => m.direction === 'OUTBOUND')
+    .slice(-3)
+  const recentlyPromisedQuote = recentOutbound.some(msg => {
+    const body = (msg.body || '').toLowerCase()
+    return body.includes('quote') || body.includes('prepare') || body.includes('team member') || body.includes('call you')
+  })
+  
+  if (isTimelineQuestion && recentlyPromisedQuote) {
+    prompt += `\n🚨 TIMELINE QUESTION AFTER QUOTE PROMISE:\n`
+    prompt += `1. Customer is asking about timeline after you promised a quote/response\n`
+    prompt += `2. You MUST reply with helpful, realistic timeframe\n`
+    prompt += `3. Examples of good replies:\n`
+    prompt += `   - "We'll get you the quote ASAP, usually within 24 hours"\n`
+    prompt += `   - "Our team will prepare it as soon as possible, typically within 1-2 business days"\n`
+    prompt += `   - "We'll send it to you ASAP, usually by end of day"\n`
+    prompt += `   - "We'll get it to you as soon as possible, typically within 24-48 hours"\n`
+    prompt += `4. Keep it brief, professional, and reassuring\n`
+    prompt += `5. DO NOT ignore timeline questions - always respond helpfully\n\n`
+  }
+  
   // CRITICAL FIX: Add greeting logic for first message
   const isFirstMessage = conversationHistory.filter(m => m.direction === 'OUTBOUND').length === 0
   if (isFirstMessage) {
