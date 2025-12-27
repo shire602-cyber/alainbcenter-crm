@@ -96,6 +96,39 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
     }
   }
   
+  // PROBLEM C: Check if reply repeats customer's message with "noted"
+  // Get last N inbound messages (customer messages)
+  const lastInboundMessages = conversationHistory
+    .filter((m: any) => {
+      const dir = (m.direction || '').toLowerCase()
+      return dir === 'inbound' || dir === 'in' || dir === 'customer'
+    })
+    .slice(-2)
+  
+  for (const customerMsg of lastInboundMessages) {
+    const customerBody = (customerMsg.body || customerMsg.message || '').toLowerCase().trim()
+    if (customerBody.length > 5) {
+      // Extract key words from customer message (3+ chars)
+      const customerWords = customerBody.split(/\s+/).filter((w: string) => w.length >= 3)
+      // Check if reply contains customer's words followed by "noted"
+      const replyLower = reply.toLowerCase()
+      for (const word of customerWords.slice(0, 5)) { // Check first 5 words
+        if (replyLower.includes(word) && replyLower.includes('noted')) {
+          // Check if the word appears near "noted" (within 50 chars)
+          const wordIndex = replyLower.indexOf(word)
+          const notedIndex = replyLower.indexOf('noted')
+          if (Math.abs(wordIndex - notedIndex) < 50) {
+            return {
+              sanitized: '',
+              blocked: true,
+              reason: `Blocked: Repeats customer's words with "noted" (unprofessional)`,
+            }
+          }
+        }
+      }
+    }
+  }
+  
   // PROBLEM C: Check if reply repeats the last assistant question
   // Get last N outbound messages (assistant questions)
   const lastOutboundMessages = conversationHistory
