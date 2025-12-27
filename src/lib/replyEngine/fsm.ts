@@ -35,7 +35,7 @@ export async function loadFSMState(conversationId: number): Promise<FSMState> {
   }
 
   try {
-    const parsed = JSON.parse(conversation.aiStateJson)
+    const parsed = JSON.parse(conversation.ruleEngineMemory)
     return {
       ...DEFAULT_STATE,
       ...parsed,
