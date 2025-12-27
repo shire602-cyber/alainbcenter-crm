@@ -100,6 +100,11 @@ export async function DELETE(
         where: { conversationId: conversationId },
       })
 
+      // Delete outbound message logs (they reference conversation via conversationId)
+      await (tx as any).outboundMessageLog.deleteMany({
+        where: { conversationId: conversationId },
+      })
+
       // Delete chat messages (if ChatMessage model exists)
       // Note: ChatMessage doesn't have conversationId, so we delete by contactId
       if (conversation.contactId) {

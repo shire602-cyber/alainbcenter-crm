@@ -218,18 +218,21 @@ async function findOrCreateContact(input: {
   fromName?: string | null
 }): Promise<any> {
   let contact = null
+  let normalizedPhone: string | null = null
 
   // Normalize phone if provided
   if (input.fromPhone) {
     try {
-      const normalizedPhone = normalizeInboundPhone(input.fromPhone)
+      normalizedPhone = normalizeInboundPhone(input.fromPhone)
       contact = await findContactByPhone(prisma, normalizedPhone)
     } catch (error) {
       // Invalid phone format, continue with email lookup
+      console.warn(`⚠️ [AUTO-MATCH] Failed to normalize phone ${input.fromPhone}:`, error)
     }
   }
 
-  // Try email if no phone match
+  // Try email if no phone match (but only if phone was not provided or normalization failed)
+  // This prevents creating duplicate contacts when phone exists but wasn't normalized correctly
   if (!contact && input.fromEmail) {
     contact = await prisma.contact.findFirst({
       where: { email: input.fromEmail.toLowerCase().trim() },
@@ -240,14 +243,47 @@ async function findOrCreateContact(input: {
   if (!contact) {
     const contactData: any = {
       fullName: input.fromName || 'Unknown',
-      phone: input.fromPhone ? normalizeInboundPhone(input.fromPhone) : '',
+      phone: normalizedPhone || (input.fromPhone ? input.fromPhone : ''),
       email: input.fromEmail?.toLowerCase().trim() || null,
       source: input.channel.toLowerCase(), // Contact has source field
+    }
+
+    // BUG FIX: Before creating, do one more check with the exact phone we're about to use
+    // This prevents race conditions where two messages arrive simultaneously
+    if (contactData.phone) {
+      const existingContact = await prisma.contact.findFirst({
+        where: { phone: contactData.phone },
+      })
+      if (existingContact) {
+        console.log(`✅ [AUTO-MATCH] Found existing contact (race condition check): ${existingContact.id}`)
+        return existingContact
+      }
     }
 
     contact = await prisma.contact.create({ data: contactData })
     console.log(`✅ [AUTO-MATCH] Created new contact: ${contact.id}`)
   } else {
+    // BUG FIX: Update contact phone if it's missing or different (normalize existing contacts)
+    if (normalizedPhone && contact.phone !== normalizedPhone) {
+      try {
+        // Check if another contact already has this normalized phone
+        const existingWithNormalized = await prisma.contact.findFirst({
+          where: { phone: normalizedPhone },
+        })
+        if (!existingWithNormalized) {
+          // Safe to update - no conflict
+          await prisma.contact.update({
+            where: { id: contact.id },
+            data: { phone: normalizedPhone },
+          })
+          console.log(`✅ [AUTO-MATCH] Updated contact ${contact.id} phone to normalized format: ${normalizedPhone}`)
+        } else {
+          console.warn(`⚠️ [AUTO-MATCH] Contact ${contact.id} has phone ${contact.phone}, but normalized ${normalizedPhone} already exists for contact ${existingWithNormalized.id}`)
+        }
+      } catch (updateError) {
+        console.warn(`⚠️ [AUTO-MATCH] Failed to update contact phone:`, updateError)
+      }
+    }
     console.log(`✅ [AUTO-MATCH] Found existing contact: ${contact.id}`)
   }
 

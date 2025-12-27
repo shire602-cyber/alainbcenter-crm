@@ -99,8 +99,9 @@ export async function POST(
       )
     }
 
-    // Only allow WhatsApp channel
-    if (conversation.channel !== 'whatsapp') {
+    // Only allow WhatsApp channel (check both lowercase and uppercase for compatibility)
+    const channelLower = conversation.channel?.toLowerCase()
+    if (channelLower !== 'whatsapp') {
       return NextResponse.json(
         {
           ok: false,
