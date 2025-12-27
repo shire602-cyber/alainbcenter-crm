@@ -154,9 +154,66 @@ export async function handleInboundMessageAutoMatch(
     service: extractedFields.service || existingData.service, // Preserve existing if new is null
     nationality: extractedFields.nationality || existingData.nationality,
     expiries: extractedFields.expiries || existingData.expiries || [],
-    counts: extractedFields.counts || existingData.counts || {},
+    counts: {
+      ...(existingData.counts || {}),
+      ...(extractedFields.counts || {}), // Merge counts (partners, visas)
+    },
     identity: extractedFields.identity || existingData.identity || {},
     extractedAt: new Date().toISOString(),
+  }
+  
+  // CRITICAL FIX: Store business setup specific data from rule engine memory
+  // This ensures partners, visas, timeline, license_type, business_activity are saved
+  try {
+    const conversation = await prisma.conversation.findFirst({
+      where: { leadId: lead.id, channel: input.channel.toLowerCase() },
+      select: { ruleEngineMemory: true },
+    })
+    
+    if (conversation?.ruleEngineMemory) {
+      const memory = JSON.parse(conversation.ruleEngineMemory)
+      
+      // Store business setup fields
+      if (memory.license_type) {
+        updatedData.license_type = memory.license_type
+      }
+      if (memory.business_activity) {
+        updatedData.business_activity = memory.business_activity
+        // Also update businessActivityRaw if not already set
+        if (!extractedFields.businessActivityRaw) {
+          updateData.businessActivityRaw = memory.business_activity
+        }
+      }
+      if (memory.partners_count !== undefined) {
+        updatedData.partners_count = memory.partners_count
+        // Also update counts
+        updatedData.counts = {
+          ...updatedData.counts,
+          partners: memory.partners_count,
+        }
+      }
+      if (memory.visas_count !== undefined) {
+        updatedData.visas_count = memory.visas_count
+        // Also update counts
+        updatedData.counts = {
+          ...updatedData.counts,
+          visas: memory.visas_count,
+        }
+      }
+      if (memory.timeline_intent) {
+        updatedData.timeline_intent = memory.timeline_intent
+      }
+      if (memory.name && (!contact.fullName || contact.fullName === 'Unknown' || contact.fullName.startsWith('Contact +'))) {
+        // Update contact name if extracted
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: { fullName: memory.name },
+        })
+        console.log(`✅ [AUTO-MATCH] Updated contact name from rule engine: ${memory.name}`)
+      }
+    }
+  } catch (error: any) {
+    console.warn(`⚠️ [AUTO-MATCH] Failed to read rule engine memory:`, error.message)
   }
   
   // Store expiry hint if present (expiry mentioned but no explicit date)

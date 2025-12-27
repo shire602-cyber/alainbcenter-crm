@@ -80,6 +80,8 @@ const RULE_ENGINE_JSON = {
         "license_type": { "type": "string", "required": false },
         "business_activity": { "type": "string", "required": false },
         "new_or_renewal": { "type": "string", "required": false },
+        "partners_count": { "type": "integer", "required": false },
+        "visas_count": { "type": "integer", "required": false },
         "golden_category": { "type": "string", "required": false }
       },
       "rules": {
@@ -331,19 +333,29 @@ const RULE_ENGINE_JSON = {
           {
             "id": "BS_Q2_ACTIVITY",
             "when": { "memory_missing_any": ["business_activity"] },
-            "ask": "What business activity do you need? (e.g., General Trading, Foodstuff Trading, IT Services)"
+            "ask": "What business activity do you need? (e.g., General Trading, Foodstuff Trading, IT Services, Consulting)"
           },
           {
-            "id": "BS_Q3_NEW_OR_RENEWAL",
-            "when": { "memory_missing_any": ["new_or_renewal"] },
-            "ask": "Is this a new license or renewal?"
+            "id": "BS_Q3_PARTNERS",
+            "when": { "memory_missing_any": ["partners_count"] },
+            "ask": "How many partners/shareholders will be on the license? (1/2/3+)"
+          },
+          {
+            "id": "BS_Q4_VISAS",
+            "when": { "memory_missing_any": ["visas_count"] },
+            "ask": "How many residence visas do you need? (0/1/2/3+)"
+          },
+          {
+            "id": "BS_Q5_TIMELINE",
+            "when": { "memory_missing_any": ["timeline_intent"] },
+            "ask": "When would you like to get started? (ASAP / this week / this month / later)"
           },
           {
             "id": "BS_NEXT",
             "when": { "always": true },
             "respond": {
               "type": "next_step",
-              "template": "Perfect. Once I confirm your nationality and when you want to start, our team will share the best option and exact package pricing. Do you want a visa included as well?"
+              "template": "Perfect! I'll prepare your personalized quote and a team member will call you to finalize details."
             }
           }
         ]
@@ -499,6 +511,8 @@ export interface ConversationMemory {
   license_type?: string // 'freezone' | 'mainland'
   business_activity?: string
   new_or_renewal?: string
+  partners_count?: number
+  visas_count?: number
   golden_category?: string
   sponsor_status?: string
   investor_type?: string
@@ -663,12 +677,85 @@ function extractAndUpdateMemory(
   
   // Extract business_activity
   if (!currentMemory.business_activity) {
-    const activityKeywords = ['general trading', 'foodstuff', 'it services', 'consulting', 'trading', 'import export']
+    const activityKeywords = ['general trading', 'foodstuff', 'it services', 'consulting', 'trading', 'import export', 'marketing', 'advertising', 'real estate', 'construction', 'tourism', 'hospitality', 'retail', 'wholesale']
     for (const keyword of activityKeywords) {
       if (lowerMessage.includes(keyword)) {
         updates.business_activity = keyword
         break
       }
+    }
+    // If no keyword match, try to extract any activity mentioned
+    if (!updates.business_activity && lowerMessage.length > 10) {
+      // Look for phrases like "I need [activity]" or "looking for [activity]"
+      const activityPatterns = [
+        /(?:need|want|looking for|require)\s+([a-z\s]{5,30}?)(?:\s+(?:license|setup|company|business))?/i,
+        /([a-z\s]{5,30}?)\s+(?:license|setup|company|business)/i,
+      ]
+      for (const pattern of activityPatterns) {
+        const match = lowerMessage.match(pattern)
+        if (match && match[1]) {
+          const candidate = match[1].trim()
+          // Filter out common false positives
+          if (!['mainland', 'freezone', 'license', 'visa', 'setup', 'company'].some(word => candidate.includes(word))) {
+            updates.business_activity = candidate
+            break
+          }
+        }
+      }
+    }
+  }
+  
+  // Extract partners_count
+  if (!currentMemory.partners_count) {
+    const partnerPatterns = [
+      /(\d+)\s+partner/i,
+      /(\d+)\s+shareholder/i,
+      /partner[:\s]+(\d+)/i,
+      /shareholder[:\s]+(\d+)/i,
+      /^(\d+)$/i, // Just a number (if context suggests partners)
+    ]
+    for (const pattern of partnerPatterns) {
+      const match = lowerMessage.match(pattern)
+      if (match && match[1]) {
+        const count = parseInt(match[1])
+        if (!isNaN(count) && count > 0 && count <= 10) {
+          updates.partners_count = count
+          break
+        }
+      }
+    }
+  }
+  
+  // Extract visas_count
+  if (!currentMemory.visas_count) {
+    const visaPatterns = [
+      /(\d+)\s+visa/i,
+      /visa[:\s]+(\d+)/i,
+      /(\d+)\s+residence/i,
+      /^(\d+)\s+visas/i,
+    ]
+    for (const pattern of visaPatterns) {
+      const match = lowerMessage.match(pattern)
+      if (match && match[1]) {
+        const count = parseInt(match[1])
+        if (!isNaN(count) && count >= 0 && count <= 10) {
+          updates.visas_count = count
+          break
+        }
+      }
+    }
+  }
+  
+  // Extract timeline_intent
+  if (!currentMemory.timeline_intent) {
+    if (lowerMessage.includes('asap') || lowerMessage.includes('as soon as possible') || lowerMessage.includes('urgent')) {
+      updates.timeline_intent = 'ASAP'
+    } else if (lowerMessage.includes('this week') || lowerMessage.includes('next week')) {
+      updates.timeline_intent = 'this week'
+    } else if (lowerMessage.includes('this month') || lowerMessage.includes('next month')) {
+      updates.timeline_intent = 'this month'
+    } else if (lowerMessage.includes('later') || lowerMessage.includes('not urgent') || lowerMessage.includes('flexible')) {
+      updates.timeline_intent = 'later'
     }
   }
   
