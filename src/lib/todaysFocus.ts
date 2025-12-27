@@ -312,13 +312,13 @@ async function getRenewalsDue(userId?: number): Promise<FocusItem[]> {
         priority,
         title: `Renewal: ${item.type} for ${item.contact.fullName}`,
         reason,
-        leadId: item.leadId || item.contact.leads?.[0]?.id || 0,
+        leadId: item.leadId || item.lead?.id || 0,
         leadStage: item.lead?.stage,
         contactName: item.contact.fullName,
         action: {
           type: 'view' as const,
           label: 'View Renewal',
-          url: `/leads/${item.leadId || item.contact.leads?.[0]?.id || 0}?tab=renewals`,
+          url: `/leads/${item.leadId || item.lead?.id || 0}?tab=renewals`,
         },
         dueAt: item.expiryDate,
         metadata: {

@@ -145,12 +145,28 @@ export async function processFollowupsDue(options?: { dryRun?: boolean }): Promi
 
         if (aiResult.success && aiResult.text) {
           // Send follow-up
-          await sendTextMessage({
-            to: lead.contact.phone,
-            message: aiResult.text,
-            conversationId: conversation.id,
-            leadId: lead.id,
-          })
+          const result = await sendTextMessage(
+            lead.contact.phone,
+            aiResult.text
+          )
+          
+          // Create message record for tracking
+          if (result.messageId) {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                leadId: lead.id,
+                contactId: lead.contactId,
+                direction: 'OUTBOUND',
+                channel: 'whatsapp',
+                type: 'text',
+                body: aiResult.text,
+                providerMessageId: result.messageId,
+                status: 'SENT',
+                sentAt: new Date(),
+              },
+            })
+          }
 
           // Update lead
           await prisma.lead.update({
