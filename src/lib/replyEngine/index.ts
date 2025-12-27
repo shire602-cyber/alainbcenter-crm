@@ -101,7 +101,20 @@ export async function generateReply(
     }
 
     // Step 3: Run extractor -> updatedState
-    const extracted = extractFields(inboundText)
+    // CRITICAL: Get conversation history for better service detection
+    const conversationMessages = await prisma.message.findMany({
+      where: { conversationId },
+      orderBy: { createdAt: 'asc' },
+      take: 20, // Get recent messages for context
+    })
+    
+    // Combine all message text for better extraction
+    const allMessageText = conversationMessages
+      .map(m => m.body || '')
+      .join(' ')
+    
+    // Extract from current message + conversation history
+    const extracted = extractFields(inboundText + ' ' + allMessageText)
     const mergedCollected = mergeExtractedFields(state.collected, extracted)
     const updatedState = {
       ...state,
