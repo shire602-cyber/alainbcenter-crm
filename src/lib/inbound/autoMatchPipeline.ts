@@ -18,6 +18,7 @@ import { extractService, extractNationality, extractExpiry, extractExpiryHint, e
 import { createAutoTasks } from './autoTasks'
 import { handleInboundAutoReply } from '../autoReply'
 import { upsertContact } from '../contact/upsert'
+import { normalizeChannel } from '../utils/channelNormalize'
 
 export interface AutoMatchInput {
   channel: 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
@@ -137,7 +138,18 @@ export async function handleInboundMessageAutoMatch(
   }
 
   // Step 6: AUTO-EXTRACT FIELDS (deterministic)
-  const extractedFields = await extractFields(input.text, contact, lead)
+  let extractedFields: any = {}
+  try {
+    extractedFields = await extractFields(input.text, contact, lead)
+  } catch (extractError: any) {
+    console.error(`❌ [AUTO-MATCH] Field extraction failed:`, extractError.message)
+    // Continue with empty extractedFields - don't block pipeline
+    extractedFields = {}
+  }
+
+  // CRITICAL FIX: Initialize updateData IMMEDIATELY after extraction
+  // This ensures updateData exists before any assignments
+  const updateData: any = {}
 
   // Update Contact with extracted nationality if needed
   if (extractedFields.nationality) {
@@ -234,11 +246,12 @@ export async function handleInboundMessageAutoMatch(
   
   // PROBLEM B FIX: Always update lead with latest data IMMEDIATELY
   // This ensures lead fields are auto-filled as soon as user mentions service/activity
-  const updateData: any = { 
-    dataJson: JSON.stringify(updatedData),
-  }
+  // Note: updateData was already initialized above after extraction
   
-  // PROBLEM B: Store raw service text (requestedServiceRaw)
+  // Set dataJson from updatedData
+  updateData.dataJson = JSON.stringify(updatedData)
+  
+  // PROBLEM B: Store raw service text (requestedServiceRaw) - ALWAYS set if service mentioned
   // Extract raw service mention from message text
   if (input.text && input.text.trim().length > 0) {
     // Try to find service keywords in the message
@@ -259,7 +272,9 @@ export async function handleInboundMessageAutoMatch(
     }
   }
   
-  // PROBLEM B: Match service to ServiceType and set serviceTypeId
+  // PROBLEM B: Match service to ServiceType and set serviceTypeId/serviceTypeEnum
+  // CRITICAL: Always set at least one of: serviceTypeEnum, serviceTypeId, or requestedServiceRaw
+  // If extractService found a service, use it; otherwise, requestedServiceRaw was set above if keyword found
   if (extractedFields.service) {
     updateData.serviceTypeEnum = extractedFields.service
     
@@ -312,12 +327,23 @@ export async function handleInboundMessageAutoMatch(
     console.log(`✅ [AUTO-MATCH] Setting expiryDate IMMEDIATELY: ${extractedFields.expiries[0].date.toISOString()}`)
   }
   
-  await prisma.lead.update({
-    where: { id: lead.id },
-    data: updateData,
-  })
-  
-  console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || 'none'}, serviceTypeId=${updateData.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || 'none'}`)
+  // CRITICAL FIX: Wrap lead update in try/catch to prevent pipeline crash
+  try {
+    await prisma.lead.update({
+      where: { id: lead.id },
+      data: updateData,
+    })
+    
+    console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || 'none'}, serviceTypeId=${updateData.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || 'none'}`)
+  } catch (updateError: any) {
+    console.error(`❌ [AUTO-MATCH] Failed to update lead ${lead.id}:`, {
+      error: updateError.message,
+      updateData: Object.keys(updateData),
+      stack: updateError.stack,
+    })
+    // Don't throw - continue pipeline even if lead update fails
+    // This prevents blocking message processing
+  }
 
   // Step 6.5: Recompute deal forecast (non-blocking)
   try {
@@ -385,7 +411,7 @@ async function checkInboundDedupe(
   try {
     await prisma.inboundMessageDedup.create({
       data: {
-        provider: channel.toLowerCase(),
+        provider: normalizeChannel(channel),
         providerMessageId,
         processingStatus: 'PROCESSING',
       },
@@ -416,7 +442,7 @@ async function findOrCreateConversation(input: {
   leadId: number
   timestamp?: Date
 }): Promise<any> {
-  const channelLower = input.channel.toLowerCase() // STEP 3: Use lowercase for consistency
+  const channelLower = normalizeChannel(input.channel) // STEP 3: Use normalized channel
   // BUG FIX: Use actual message timestamp instead of webhook processing time
   const messageTimestamp = input.timestamp || new Date()
   

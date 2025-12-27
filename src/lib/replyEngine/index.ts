@@ -39,6 +39,43 @@ export async function generateReply(
   } = options
 
   try {
+    // Step 0: Check database-level idempotency FIRST (prevents race conditions)
+    // Check if we already generated a reply for this inbound message
+    try {
+      const existingLog = await (prisma as any).replyEngineLog.findFirst({
+        where: {
+          conversationId,
+          inboundMessageId,
+        },
+        orderBy: { createdAt: 'desc' },
+      })
+      
+      if (existingLog && existingLog.replyKey) {
+        console.log(`[REPLY-ENGINE] Duplicate detected in database (inboundMessageId: ${inboundMessageId}), skipping`)
+        return {
+          text: existingLog.replyText || '',
+          replyKey: existingLog.replyKey,
+          debug: {
+            plan: {
+              action: 'SKIP',
+              templateKey: existingLog.templateKey,
+              updates: {},
+              reason: 'Duplicate inbound message - reply already generated',
+            },
+            extractedFields: existingLog.extractedFields ? JSON.parse(existingLog.extractedFields) : {},
+            templateKey: existingLog.templateKey,
+            skipped: true,
+            reason: 'Duplicate inbound message - reply already generated',
+          },
+        }
+      }
+    } catch (dbError: any) {
+      // ReplyEngineLog table might not exist yet, continue
+      if (!dbError.message?.includes('does not exist') && !dbError.code?.includes('P2001')) {
+        console.warn(`[REPLY-ENGINE] Error checking idempotency:`, dbError.message)
+      }
+    }
+
     // Step 1: Load conversation + FSM state
     const state = await loadFSMState(conversationId)
 

@@ -60,12 +60,18 @@ export function extractService(text: string): string | undefined {
     return 'MAINLAND_BUSINESS_SETUP' // Default to mainland, can be refined later
   }
   
-  // Generic "license" (only if not already matched above)
-  if (
-    lower.includes('license') &&
-    (lower.includes('mainland') || lower.includes('freezone') || lower.includes('free zone'))
-  ) {
-    return 'MAINLAND_BUSINESS_SETUP' // Default to mainland, can be refined later
+  // Generic "license" - FIX: "license" alone is commonly used for business setup
+  // Check if it's in context of business/company, or if it's standalone (common shorthand)
+  if (lower.includes('license')) {
+    // If it mentions mainland/freezone, definitely business setup
+    if (lower.includes('mainland') || lower.includes('freezone') || lower.includes('free zone')) {
+      return 'MAINLAND_BUSINESS_SETUP'
+    }
+    // If it's just "license" without other context, assume business setup (most common use case)
+    // Exclude if it's clearly about something else (e.g., "driving license", "visa license")
+    if (!lower.includes('driving') && !lower.includes('visa license') && !lower.includes('work license')) {
+      return 'MAINLAND_BUSINESS_SETUP' // Default to mainland, can be refined later
+    }
   }
 
   // PRO services
