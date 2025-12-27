@@ -993,6 +993,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
             console.log(`📋 [STRICT-AI] Sample messages:`, fullConversationHistory.slice(-5).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
             
+            // CRITICAL FIX: Apply strict qualification rules to ALL services, not just Golden Visa
+            const { validateQualificationRules } = await import('./ai/strictQualification')
+            
+            // Generate AI reply first
             const strictResult = await generateStrictAIReply({
               lead,
               contact: lead.contact,
@@ -1002,6 +1006,15 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               agent,
               language: detectedLanguage,
             })
+            
+            // Validate reply against strict rules
+            if (strictResult.reply && conversation) {
+              const validation = await validateQualificationRules(conversation.id, strictResult.reply)
+              if (!validation.isValid && validation.sanitizedReply) {
+                console.warn(`⚠️ [STRICT-AI] Reply violated rules: ${validation.error}, using sanitized version`)
+                strictResult.reply = validation.sanitizedReply
+              }
+            }
             
             const duration = Date.now() - startTime
             console.log(`⏱️ [STRICT-AI] Generation took ${duration}ms`)
