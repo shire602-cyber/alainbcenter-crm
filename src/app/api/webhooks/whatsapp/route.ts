@@ -600,13 +600,15 @@ export async function POST(req: NextRequest) {
                     )
                     
                     // Create outbound message record
+                    // CRITICAL: Use same conversationId and normalized channel
+                    const { normalizeChannel } = await import('@/lib/utils/channelNormalize')
                     await prisma.message.create({
                       data: {
-                        conversationId: result.conversation.id,
+                        conversationId: result.conversation.id, // Same conversation as inbound
                         leadId: result.lead.id,
                         contactId: result.contact.id,
                         direction: 'OUTBOUND',
-                        channel: result.message.channel.toLowerCase(),
+                        channel: normalizeChannel(result.message.channel), // Normalized lowercase
                         type: 'text',
                         body: replyResult.text,
                         providerMessageId: sendResult.messageId,
