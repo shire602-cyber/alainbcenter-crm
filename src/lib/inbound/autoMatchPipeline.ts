@@ -107,6 +107,25 @@ export async function handleInboundMessageAutoMatch(
     timestamp: input.timestamp || new Date(),
   })
 
+  // CRITICAL FIX: Update conversation unreadCount and lastMessageAt after message is created
+  // This ensures inbox shows new messages immediately
+  try {
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        lastMessageAt: input.timestamp || new Date(),
+        lastInboundAt: input.timestamp || new Date(),
+        unreadCount: {
+          increment: 1, // Increment unread count for new inbound message
+        },
+      },
+    })
+    console.log(`✅ [AUTO-MATCH] Updated conversation ${conversation.id} unreadCount and lastMessageAt`)
+  } catch (updateError: any) {
+    console.warn(`⚠️ [AUTO-MATCH] Failed to update conversation unreadCount:`, updateError.message)
+    // Non-blocking - continue processing
+  }
+
   // Step 6: AUTO-EXTRACT FIELDS (deterministic)
   const extractedFields = await extractFields(input.text, contact, lead)
 
