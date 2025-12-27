@@ -242,7 +242,8 @@ export async function handleInboundMessageAutoMatch(
   // Extract raw service mention from message text
   if (input.text && input.text.trim().length > 0) {
     // Try to find service keywords in the message
-    const serviceKeywords = ['freelance', 'family visa', 'golden visa', 'business setup', 'pro', 'accounting', 'renewal', 'visit visa', 'employment visa', 'investor visa']
+    // CRITICAL: Include "business license" variations for better detection
+    const serviceKeywords = ['freelance', 'family visa', 'golden visa', 'business setup', 'business license', 'trading license', 'company license', 'pro', 'accounting', 'renewal', 'visit visa', 'employment visa', 'investor visa']
     const lowerText = input.text.toLowerCase()
     for (const keyword of serviceKeywords) {
       if (lowerText.includes(keyword)) {
