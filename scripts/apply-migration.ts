@@ -45,6 +45,13 @@ async function main() {
     `
     console.log('✅ Added lastAutoReplyKey to Conversation table')
     
+    // businessActivityRaw migration
+    console.log('\n📝 Adding businessActivityRaw to Lead table...')
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "businessActivityRaw" TEXT;
+    `
+    console.log('✅ Added businessActivityRaw to Lead table')
+    
     // Deal Forecast migration
     console.log('\n📊 Applying Deal Forecast fields...')
     await prisma.$executeRaw`
