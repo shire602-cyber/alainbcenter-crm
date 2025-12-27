@@ -61,6 +61,11 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
     /you said "[^"]+"/i,
     /you mentioned "[^"]+"/i,
     
+    // Repeating customer's words with "noted" (awkward and unprofessional)
+    /\b\w+\s+noted/i, // Pattern like "license noted", "mainland noted"
+    /perfect\s*[—\-]\s*[^.]+\s+noted/i, // Pattern like "Perfect — im looking for license noted"
+    /\b\w+\s+[—\-]\s*[^.]+\s+noted/i, // Pattern like "X — Y noted"
+    
     // Promises/guarantees
     /guaranteed/i,
     /approval guaranteed/i,
