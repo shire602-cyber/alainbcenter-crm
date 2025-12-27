@@ -45,6 +45,73 @@ async function main() {
     `
     console.log('✅ Added lastAutoReplyKey to Conversation table')
     
+    // Deal Forecast migration
+    console.log('\n📊 Applying Deal Forecast fields...')
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "dealProbability" INTEGER;
+    `
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "expectedRevenueAED" INTEGER;
+    `
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "forecastReasonJson" TEXT;
+    `
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "serviceFeeAED" INTEGER;
+    `
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "stageProbabilityOverride" INTEGER;
+    `
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "forecastModelVersion" TEXT;
+    `
+    await prisma.$executeRaw`
+      ALTER TABLE "Lead" ADD COLUMN IF NOT EXISTS "forecastLastComputedAt" TIMESTAMP;
+    `
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS "Lead_dealProbability_idx" ON "Lead"("dealProbability");
+    `
+    await prisma.$executeRaw`
+      CREATE INDEX IF NOT EXISTS "Lead_expectedRevenueAED_idx" ON "Lead"("expectedRevenueAED");
+    `
+    console.log('✅ Deal Forecast fields applied')
+    
+    // ServicePricing table
+    console.log('\n💰 Checking ServicePricing table...')
+    try {
+      const tableExists = await prisma.$queryRaw`
+        SELECT EXISTS (
+          SELECT FROM information_schema.tables 
+          WHERE table_schema = 'public' 
+          AND table_name = 'ServicePricing'
+        );
+      `
+      if (!(tableExists as any[])[0]?.exists) {
+        await prisma.$executeRaw`
+          CREATE TABLE "ServicePricing" (
+            "id" SERIAL PRIMARY KEY,
+            "serviceKey" TEXT UNIQUE NOT NULL,
+            "defaultFeeAED" INTEGER NOT NULL,
+            "minFeeAED" INTEGER,
+            "maxFeeAED" INTEGER,
+            "serviceTypeId" INTEGER,
+            "isActive" BOOLEAN DEFAULT true,
+            "createdAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            "updatedAt" TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+            FOREIGN KEY ("serviceTypeId") REFERENCES "ServiceType"("id") ON DELETE SET NULL
+          );
+        `
+        await prisma.$executeRaw`
+          CREATE INDEX IF NOT EXISTS "ServicePricing_serviceKey_idx" ON "ServicePricing"("serviceKey");
+        `
+        console.log('✅ Created ServicePricing table')
+      } else {
+        console.log('✅ ServicePricing table already exists')
+      }
+    } catch (error: any) {
+      console.log('⚠️ ServicePricing table check skipped:', error.message)
+    }
+    
     console.log('\n✅ All migrations applied successfully!')
   } catch (error: any) {
     console.error('❌ Migration failed:', error.message)
