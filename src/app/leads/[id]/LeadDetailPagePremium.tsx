@@ -698,7 +698,11 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-4">
                     <h1 className="text-3xl font-bold truncate">
-                      {lead.contact?.fullName || 'Unnamed Lead'}
+                      {lead.contact?.fullName && lead.contact.fullName !== 'Unknown' && !lead.contact.fullName.startsWith('Contact +')
+                        ? lead.contact.fullName
+                        : lead.contact?.phone
+                        ? `Contact ${lead.contact.phone.replace(/^\+/, '')}`
+                        : 'Unnamed Lead'}
                     </h1>
                     <AIScoreBadgePremium score={lead.aiScore} />
                     {compliance && compliance.status !== 'GOOD' && (
@@ -774,21 +778,33 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           {/* LEFT COLUMN: Lead Snapshot */}
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
             {/* Contact Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot">
-              <CardHeader className="pb-3 pt-4 px-5">
-                <CardTitle className="text-base font-semibold text-section-header">Contact</CardTitle>
+            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-colors">
+              <CardHeader className="pb-3 pt-4 px-5 border-b border-border/50">
+                <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
+                  <User className="h-4 w-4" />
+                  Contact
+                </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 px-5 pb-5">
+              <CardContent className="space-y-4 px-5 pb-5 pt-4">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">Name</Label>
                   <InlineEditableField
-                    value={lead.contact?.fullName}
+                    value={
+                      lead.contact?.fullName && 
+                      lead.contact.fullName !== 'Unknown' && 
+                      !lead.contact.fullName.startsWith('Contact +')
+                        ? lead.contact.fullName
+                        : lead.contact?.phone
+                        ? `Contact ${lead.contact.phone.replace(/^\+/, '')}`
+                        : 'Unknown Contact'
+                    }
                     onSave={async (value) => {
                       // Would need contact update endpoint
                       showToast('Contact update coming soon', 'info')
                       return Promise.resolve()
                     }}
-                    className="text-base"
+                    className="text-base font-medium"
+                    placeholder="Enter contact name"
                   />
                 </div>
                 {lead.contact?.phone && (
@@ -819,10 +835,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
                   </div>
                 )}
+                {lead.contact?.nationality && (
+                  <div>
+                    <Label className="text-sm font-medium text-muted-foreground mb-2 block">Nationality</Label>
+                    <span className="text-base">{lead.contact.nationality}</span>
+                  </div>
+                )}
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Type</Label>
                   <Select
-                    value={lead.serviceTypeId?.toString() || ''}
+                    value={lead.serviceTypeId?.toString() || (lead.serviceTypeEnum ? serviceTypes.find(st => st.key?.toLowerCase() === lead.serviceTypeEnum?.toLowerCase())?.id.toString() || '') : ''}
                     onChange={(e) => {
                       const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
                       handleSaveField('serviceTypeId', serviceTypeId)
@@ -836,16 +858,29 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       </option>
                     ))}
                   </Select>
+                  {lead.serviceTypeEnum && !lead.serviceTypeId && (
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Detected: {lead.serviceTypeEnum.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                    </p>
+                  )}
+                  {lead.requestedServiceRaw && (
+                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
+                      Customer mentioned: "{lead.requestedServiceRaw}"
+                    </p>
+                  )}
                 </div>
               </CardContent>
             </Card>
 
             {/* Pipeline Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot">
-              <CardHeader className="pb-4 pt-4 px-5">
-                <CardTitle className="text-base font-semibold text-section-header">Pipeline</CardTitle>
+            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-colors">
+              <CardHeader className="pb-4 pt-4 px-5 border-b border-border/50">
+                <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Pipeline
+                </CardTitle>
               </CardHeader>
-              <CardContent className="px-5 pb-6">
+              <CardContent className="px-5 pb-6 pt-4">
                 <div className="pipeline-highlight">
                   <PipelineProgress
                     currentStage={lead.stage || lead.pipelineStage || 'NEW'}
@@ -856,10 +891,13 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             </Card>
 
             {/* AI Insight Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot">
-              <CardHeader className="pb-3">
+            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-colors">
+              <CardHeader className="pb-3 border-b border-border/50">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold text-section-header">AI Insight</CardTitle>
+                  <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
+                    <Sparkles className="h-4 w-4" />
+                    AI Insight
+                  </CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -897,10 +935,15 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     animateOnUpdate={true}
                   />
                 </div>
-                {lead.aiNotes && (
+                {lead.aiNotes ? (
                   <div>
                     <Label className="text-sm font-medium text-muted-foreground mb-2 block">Notes</Label>
                     <p className="text-sm text-muted-foreground leading-relaxed">{lead.aiNotes}</p>
+                  </div>
+                ) : (
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground">No AI insights yet</p>
+                    <p className="text-xs text-muted-foreground mt-1">AI will analyze this lead as more data is collected</p>
                   </div>
                 )}
               </CardContent>
