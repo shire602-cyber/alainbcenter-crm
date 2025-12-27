@@ -1105,9 +1105,28 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
               reply = renderTemplate(step.respond.template, updatedMemory)
             } else if (step.respond.type === 'next_step' || step.respond.type === 'handover_soft') {
               reply = renderTemplate(step.respond.template, updatedMemory)
+              // CRITICAL FIX: Don't escalate to human too early - only escalate if customer explicitly requests or complex case
+              // For simple replies like "tomorrow", continue the conversation
               if (step.respond.type === 'handover_soft') {
-                needsHuman = true
-                handoverReason = 'Service-specific handover'
+                // Only escalate if customer explicitly requested human OR if it's a complex case
+                const lowerMessage = context.currentMessage.toLowerCase()
+                const explicitHumanRequest = lowerMessage.includes('speak to human') || 
+                                            lowerMessage.includes('talk to someone') ||
+                                            lowerMessage.includes('human agent') ||
+                                            lowerMessage.includes('real person')
+                
+                // Don't escalate for simple timeline answers like "tomorrow", "next week", etc.
+                const isSimpleTimelineAnswer = lowerMessage.match(/^(tomorrow|next week|next month|asap|later|soon)$/i)
+                
+                if (!explicitHumanRequest && isSimpleTimelineAnswer) {
+                  // Continue conversation, don't escalate
+                  needsHuman = false
+                  // Don't set handoverReason - it's optional in the interface
+                  console.log(`✅ [RULE-ENGINE] Simple timeline answer detected, continuing conversation instead of escalating`)
+                } else {
+                  needsHuman = true
+                  handoverReason = 'Service-specific handover'
+                }
               }
             }
             break

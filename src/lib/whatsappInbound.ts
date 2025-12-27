@@ -20,60 +20,57 @@ export interface InboundMessageContext {
 
 /**
  * Normalize phone number and find/create contact and lead
+ * STEP 1 FIX: Now uses upsertContact for proper normalization
  */
 export async function findOrCreateLeadFromPhone(
   prisma: PrismaClient,
-  rawPhone: string
-): Promise<{ contact: Contact; lead: Lead }> {
-  // Normalize phone number
-  let normalizedPhone: string
-  try {
-    normalizedPhone = normalizeInboundPhone(rawPhone)
-  } catch (error: any) {
-    throw new Error(`Failed to normalize phone ${rawPhone}: ${error.message}`)
-  }
+  rawPhone: string,
+  webhookPayload?: any
+): Promise<{ contact: Contact; lead: any }> {
+  // STEP 1 FIX: Use upsertContact for proper normalization and deduplication
+  const { upsertContact } = await import('./contact/upsert')
+  
+  const contactResult = await upsertContact(prisma, {
+    phone: rawPhone,
+    source: 'whatsapp',
+    webhookPayload: webhookPayload,
+  })
 
-  // Find or create contact
-  let contact = await findContactByPhone(prisma, normalizedPhone)
-
-  if (!contact) {
-    // Create new contact
-    contact = await prisma.contact.create({
-      data: {
-        fullName: `WhatsApp User ${normalizedPhone.slice(-4)}`,
-        phone: normalizedPhone,
-        source: 'whatsapp',
-      },
-      include: {
-        leads: {
-          where: {
-            OR: [
-              { stage: { notIn: ['COMPLETED_WON', 'LOST'] } },
-              { pipelineStage: { notIn: ['completed', 'lost'] } },
-            ],
-          },
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            contactId: true,
-            stage: true,
-            pipelineStage: true,
-            leadType: true,
-            serviceTypeId: true,
-            priority: true,
-            aiScore: true,
-            nextFollowUpAt: true,
-            lastContactAt: true,
-            expiryDate: true,
-            autopilotEnabled: true,
-            createdAt: true,
-            updatedAt: true,
-            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
-          },
+  // Fetch contact with leads
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactResult.id },
+    include: {
+      leads: {
+        where: {
+          OR: [
+            { stage: { notIn: ['COMPLETED_WON', 'LOST'] } },
+            { pipelineStage: { notIn: ['completed', 'lost'] } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 1,
+        select: {
+          id: true,
+          contactId: true,
+          stage: true,
+          pipelineStage: true,
+          leadType: true,
+          serviceTypeId: true,
+          priority: true,
+          aiScore: true,
+          nextFollowUpAt: true,
+          lastContactAt: true,
+          expiryDate: true,
+          autopilotEnabled: true,
+          createdAt: true,
+          updatedAt: true,
         },
       },
-    })
+    },
+  })
+
+  if (!contact) {
+    throw new Error(`Failed to fetch contact after upsert: ${contactResult.id}`)
   }
 
   // Find or create lead
@@ -95,13 +92,21 @@ export async function findOrCreateLeadFromPhone(
     })
   } else {
     // Update existing lead's last contact
-    lead = await prisma.lead.update({
+    await prisma.lead.update({
       where: { id: lead.id },
       data: {
         lastContactAt: new Date(),
         lastContactChannel: 'whatsapp',
       },
     })
+    // Re-fetch to get full lead object with all fields
+    const updatedLead = await prisma.lead.findUnique({
+      where: { id: lead.id },
+    })
+    if (!updatedLead) {
+      throw new Error(`Failed to fetch lead after update: ${lead.id}`)
+    }
+    lead = updatedLead
   }
 
   return { contact, lead }
@@ -117,6 +122,7 @@ export async function findOrCreateConversation(
   channel: string,
   externalId?: string
 ): Promise<Conversation> {
+  // CRITICAL FIX: Always use the same conversation for inbound/outbound
   // Try to find existing conversation
   let conversation = await prisma.conversation.findUnique({
     where: {
@@ -132,7 +138,7 @@ export async function findOrCreateConversation(
     conversation = await prisma.conversation.create({
       data: {
         contactId,
-        leadId,
+        leadId, // CRITICAL: Always link to lead
         channel: channel.toLowerCase(),
         externalId: externalId || null,
         status: 'open',
@@ -140,12 +146,25 @@ export async function findOrCreateConversation(
         unreadCount: 0,
       },
     })
-  } else if (externalId && !conversation.externalId) {
-    // Update externalId if we have one and it's missing
-    conversation = await prisma.conversation.update({
-      where: { id: conversation.id },
-      data: { externalId },
-    })
+    console.log(`✅ [CONV] Created conversation ${conversation.id} for contact ${contactId}, lead ${leadId}`)
+  } else {
+    // CRITICAL FIX: Update leadId if it's null or different (link to current lead)
+    if (!conversation.leadId || conversation.leadId !== leadId) {
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          leadId: leadId, // Link to current lead
+          ...(externalId && !conversation.externalId ? { externalId } : {}),
+        },
+      })
+      console.log(`✅ [CONV] Updated conversation ${conversation.id} to link to lead ${leadId}`)
+    } else if (externalId && !conversation.externalId) {
+      // Update externalId if we have one and it's missing
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { externalId },
+      })
+    }
   }
 
   return conversation

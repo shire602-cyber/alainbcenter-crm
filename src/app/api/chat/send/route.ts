@@ -33,14 +33,47 @@ export async function POST(req: NextRequest) {
 
     const lead = contact.leads[0] || null
 
-    // Create chat message
-    const chatMessage = await prisma.chatMessage.create({
+    // STEP 2 FIX: Use Message table instead of ChatMessage
+    // Find or create conversation (deterministic routing)
+    let conversation = await prisma.conversation.findUnique({
+      where: {
+        contactId_channel: {
+          contactId: contact.id,
+          channel: channel.toLowerCase(),
+        },
+      },
+    })
+
+    if (!conversation) {
+      conversation = await prisma.conversation.create({
+        data: {
+          contactId: contact.id,
+          leadId: lead?.id || null,
+          channel: channel.toLowerCase(),
+          status: 'open',
+          lastMessageAt: new Date(),
+        },
+      })
+    } else if (lead && (!conversation.leadId || conversation.leadId !== lead.id)) {
+      // Update leadId if different
+      conversation = await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: { leadId: lead.id },
+      })
+    }
+
+    // Create Message record (replaces ChatMessage)
+    const messageRecord = await prisma.message.create({
       data: {
-        contactId,
+        conversationId: conversation.id,
+        contactId: contact.id,
         leadId: lead?.id || null,
-        channel,
-        direction: 'outbound',
-        message,
+        direction: 'OUTBOUND',
+        channel: channel.toUpperCase(),
+        type: 'text',
+        body: message,
+        status: 'SENT',
+        sentAt: new Date(),
       },
     })
 
@@ -50,11 +83,20 @@ export async function POST(req: NextRequest) {
         await sendWhatsApp(lead, contact, message)
       } catch (error) {
         console.error('Failed to send WhatsApp message:', error)
-        // Message is still saved in chat
+        // Update message status to failed
+        await prisma.message.update({
+          where: { id: messageRecord.id },
+          data: { status: 'FAILED' },
+        })
       }
     }
 
-    return NextResponse.json(chatMessage)
+    return NextResponse.json({
+      id: messageRecord.id,
+      message: messageRecord.body,
+      createdAt: messageRecord.createdAt,
+      direction: messageRecord.direction,
+    })
   } catch (error: any) {
     return NextResponse.json(
       { error: error.message || 'Failed to send message' },

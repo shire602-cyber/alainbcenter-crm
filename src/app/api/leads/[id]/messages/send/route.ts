@@ -236,9 +236,20 @@ export async function POST(
         where: { id: lead.id },
         data: {
           lastContactAt: new Date(),
+          lastOutboundAt: new Date(), // Update lastOutboundAt for forecast
           lastContactChannel: dbChannel,
         },
       })
+
+      // Recompute deal forecast (non-blocking)
+      try {
+        const { recomputeAndSaveForecast } = await import('@/lib/forecast/dealForecast')
+        recomputeAndSaveForecast(lead.id).catch((err) => {
+          console.warn(`⚠️ [FORECAST] Failed to recompute forecast:`, err.message)
+        })
+      } catch (error) {
+        // Forecast not critical - continue
+      }
 
       // Create CommunicationLog for backward compatibility
       try {

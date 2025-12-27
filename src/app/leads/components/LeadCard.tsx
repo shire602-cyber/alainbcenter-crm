@@ -15,7 +15,7 @@ import {
   PIPELINE_STAGE_LABELS,
   getAiScoreCategory,
 } from '@/lib/constants'
-import { Flame, TrendingUp, Snowflake } from 'lucide-react'
+import { Flame, TrendingUp, Snowflake, DollarSign } from 'lucide-react'
 
 type Lead = {
   id: number
@@ -36,6 +36,8 @@ type Lead = {
   expiryItems?: Array<{ id: number; type: string; expiryDate: string; renewalStatus?: string }>
   renewalProbability?: number | null
   estimatedRenewalValue?: string | null
+  dealProbability?: number | null
+  expectedRevenueAED?: number | null
 }
 
 interface LeadCardProps {
@@ -138,6 +140,31 @@ export const LeadCard = memo(function LeadCard({
             ) : lead.expiryDate ? (
               <ExpiryChip expiryDate={lead.expiryDate} type="LEGACY_EXPIRY" compact />
             ) : null}
+          </div>
+        )}
+
+        {/* Deal Forecast */}
+        {(lead.dealProbability !== null && lead.dealProbability !== undefined) && (
+          <div className="flex items-center gap-2 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+            <Badge
+              variant="outline"
+              className={cn(
+                'text-xs',
+                lead.dealProbability >= 70 && 'bg-green-50 text-green-700 border-green-200',
+                lead.dealProbability >= 50 && lead.dealProbability < 70 && 'bg-yellow-50 text-yellow-700 border-yellow-200',
+                lead.dealProbability >= 30 && lead.dealProbability < 50 && 'bg-orange-50 text-orange-700 border-orange-200',
+                lead.dealProbability < 30 && 'bg-red-50 text-red-700 border-red-200'
+              )}
+            >
+              <TrendingUp className="h-3 w-3 mr-1" />
+              {lead.dealProbability}% probability
+            </Badge>
+            {lead.expectedRevenueAED !== null && lead.expectedRevenueAED !== undefined && (
+              <Badge variant="outline" className="text-xs bg-blue-50 text-blue-700 border-blue-200">
+                <DollarSign className="h-3 w-3 mr-1" />
+                {lead.expectedRevenueAED.toLocaleString()} AED
+              </Badge>
+            )}
           </div>
         )}
 

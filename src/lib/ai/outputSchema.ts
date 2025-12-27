@@ -16,7 +16,8 @@ export interface AIStructuredOutput {
 
 /**
  * Sanitize AI reply before sending
- * Blocks reasoning, meta text, signatures, and invented facts
+ * PROBLEM C FIX: Enhanced validation to prevent hallucinations and meta text
+ * Blocks reasoning, meta text, signatures, invented facts, and repeated questions
  */
 export function sanitizeReply(reply: string, conversationHistory: any[]): {
   sanitized: string
@@ -25,9 +26,9 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
 } {
   const lowerReply = reply.toLowerCase()
   
-  // FORBIDDEN PATTERNS - Block if found
+  // PROBLEM C: FORBIDDEN PATTERNS - Block if found
   const forbiddenPatterns = [
-    // Reasoning/planning
+    // Reasoning/planning/meta text
     /let's proceed/i,
     /i should/i,
     /i will/i,
@@ -42,6 +43,10 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
     /let me analyze/i,
     /let me check/i,
     /let me review/i,
+    /i should ask/i, // PROBLEM C: Block meta questions
+    /system/i, // PROBLEM C: Block system references
+    /prompt/i, // PROBLEM C: Block prompt references
+    /let's/i, // PROBLEM C: Block casual planning
     
     // Signatures
     /best regards/i,
@@ -82,6 +87,37 @@ export function sanitizeReply(reply: string, conversationHistory: any[]): {
         sanitized: '',
         blocked: true,
         reason: `Blocked: Contains forbidden pattern "${pattern}"`,
+      }
+    }
+  }
+  
+  // PROBLEM C: Check if reply repeats the last assistant question
+  // Get last N outbound messages (assistant questions)
+  const lastOutboundMessages = conversationHistory
+    .filter((m: any) => {
+      const dir = (m.direction || '').toLowerCase()
+      return dir === 'outbound' || dir === 'out' || dir === 'assistant'
+    })
+    .slice(-3) // Last 3 outbound messages
+  
+  for (const lastMsg of lastOutboundMessages) {
+    const lastBody = (lastMsg.body || lastMsg.message || '').toLowerCase().trim()
+    const currentBody = reply.toLowerCase().trim()
+    
+    // Check if current reply is very similar to last question (80% similarity)
+    if (lastBody.length > 20 && currentBody.length > 20) {
+      // Simple similarity check: if >80% of words match, it's a repeat
+      const lastWords = lastBody.split(/\s+/).filter(w => w.length > 3)
+      const currentWords = currentBody.split(/\s+/).filter(w => w.length > 3)
+      const matchingWords = currentWords.filter(w => lastWords.includes(w))
+      const similarity = lastWords.length > 0 ? matchingWords.length / lastWords.length : 0
+      
+      if (similarity > 0.8) {
+        return {
+          sanitized: '',
+          blocked: true,
+          reason: `Blocked: Repeats last assistant question (${Math.round(similarity * 100)}% similarity)`,
+        }
       }
     }
   }

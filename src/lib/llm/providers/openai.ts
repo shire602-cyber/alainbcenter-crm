@@ -87,6 +87,8 @@ export class OpenAIProvider implements LLMProvider {
           top_p: options.topP ?? 1.0,
           frequency_penalty: options.frequencyPenalty ?? 0,
           presence_penalty: options.presencePenalty ?? 0,
+          // STEP 6: Enforce strict JSON output
+          response_format: options.responseFormat || { type: 'json_object' },
         }),
       })
 

@@ -7,8 +7,18 @@
 
 /**
  * Extract service type from text
+ * STEP 4: Now uses service synonym matching for better detection
  */
 export function extractService(text: string): string | undefined {
+  // Try synonym matching first (more comprehensive)
+  const { matchServiceWithSynonyms } = require('./serviceSynonyms')
+  const synonymMatch = matchServiceWithSynonyms(text)
+  
+  if (synonymMatch) {
+    return synonymMatch
+  }
+
+  // Fallback to legacy keyword matching (for backward compatibility)
   const lower = text.toLowerCase()
 
   // Family visa keywords
@@ -126,6 +136,140 @@ export function extractNationality(text: string): string | undefined {
   }
 
   return undefined
+}
+
+/**
+ * Extract explicit dates from text (for expiryDate or other date fields)
+ * STEP 4: Enhanced to extract any explicit date, not just expiry dates
+ * HARD RULE: Only extract EXPLICIT dates. Never infer relative dates like "next month", "in 2 weeks", etc.
+ * 
+ * Accepted formats:
+ * - DD/MM/YYYY or DD-MM-YYYY (e.g., 10/02/2026)
+ * - YYYY-MM-DD (e.g., 2026-02-10)
+ * - DD/MM/YY or DD-MM-YY (convert 00-49 to 20YY, 50-99 to 19YY)
+ * - "10 Feb 2026", "10 February 2026"
+ * - "Feb 10 2026" (optional)
+ * - "19th January 2026", "19 January 2026"
+ * 
+ * Rejected formats:
+ * - "next month", "in 30 days", "in 2 weeks"
+ * - "this month", "soon", "end of month"
+ * - "tomorrow", "today" (unless explicit date also included)
+ * - "Feb 2026" (month-year only) -> NOT allowed
+ * - "2026" alone -> NOT allowed
+ */
+export function extractExplicitDate(text: string): Date | null {
+  const lower = text.toLowerCase()
+  
+  // Explicit date patterns ONLY (no relative dates)
+  const explicitDatePatterns = [
+    // DD/MM/YYYY or DD-MM-YYYY or YYYY-MM-DD
+    /(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{2,4})/,
+    // YYYY-MM-DD (ISO format)
+    /(\d{4})[\/\-](\d{1,2})[\/\-](\d{1,2})/,
+    // DD MMM YYYY (e.g., "10 Feb 2026" or "19th January 2026")
+    /(\d{1,2})(?:st|nd|rd|th)?\s+(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{2,4})/i,
+    // MMM DD, YYYY (e.g., "Feb 10, 2026")
+    /(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)[a-z]*\s+(\d{1,2}),?\s+(\d{2,4})/i,
+  ]
+
+  // Rejected relative date patterns (must NOT match these)
+  const relativeDatePatterns = [
+    /\b(next|this|in)\s+(month|week|year|days?|weeks?|months?|years?)\b/i,
+    /\b(soon|tomorrow|today|end of (month|year))\b/i,
+    /\b(after|before)\s+\w+\b/i,
+  ]
+
+  // Check for relative date mentions (reject if found)
+  const hasRelativeDate = relativeDatePatterns.some(pattern => pattern.test(text))
+  if (hasRelativeDate) {
+    return null
+  }
+
+  // Try to find explicit date
+  for (const pattern of explicitDatePatterns) {
+    const match = text.match(pattern)
+    if (match) {
+      try {
+        let date: Date
+        let year: number
+        let month: number
+        let day: number
+
+        if (match[0].includes('/') || match[0].includes('-')) {
+          // Check if it's YYYY-MM-DD format (ISO)
+          if (match[1].length === 4) {
+            year = parseInt(match[1])
+            month = parseInt(match[2]) - 1
+            day = parseInt(match[3])
+          } else {
+            // DD/MM/YYYY or DD-MM-YYYY
+            day = parseInt(match[1])
+            month = parseInt(match[2]) - 1
+            const yearStr = match[3]
+            
+            // Handle 2-digit years
+            if (yearStr.length === 2) {
+              const yearNum = parseInt(yearStr)
+              year = yearNum <= 49 ? 2000 + yearNum : 1900 + yearNum
+            } else {
+              year = parseInt(yearStr)
+            }
+          }
+          
+          date = new Date(year, month, day)
+        } else {
+          // Text date format
+          const monthNames = ['jan', 'feb', 'mar', 'apr', 'may', 'jun', 'jul', 'aug', 'sep', 'oct', 'nov', 'dec']
+          const matchLower = match[0].toLowerCase()
+          
+          if (/\d{1,2}(?:st|nd|rd|th)?\s+[a-z]+\s+\d{2,4}/.test(matchLower)) {
+            // DD MMM YYYY format
+            day = parseInt(match[1])
+            const monthName = match[2].toLowerCase().substring(0, 3)
+            const monthIndex = monthNames.findIndex(m => m === monthName)
+            if (monthIndex === -1) continue
+            month = monthIndex
+            const yearStr = match[3]
+            year = yearStr.length === 2 
+              ? (parseInt(yearStr) <= 49 ? 2000 + parseInt(yearStr) : 1900 + parseInt(yearStr))
+              : parseInt(yearStr)
+            date = new Date(year, month, day)
+          } else if (/[a-z]+\s+\d{1,2},?\s+\d{2,4}/.test(matchLower)) {
+            // MMM DD, YYYY format
+            const monthName = match[1].toLowerCase().substring(0, 3)
+            const monthIndex = monthNames.findIndex(m => m === monthName)
+            if (monthIndex === -1) continue
+            month = monthIndex
+            day = parseInt(match[2])
+            const yearStr = match[3]
+            year = yearStr.length === 2
+              ? (parseInt(yearStr) <= 49 ? 2000 + parseInt(yearStr) : 1900 + parseInt(yearStr))
+              : parseInt(yearStr)
+            date = new Date(year, month, day)
+          } else {
+            continue
+          }
+        }
+
+        // Validate date
+        if (!isNaN(date.getTime()) && date > new Date()) {
+          // Additional validation: ensure it's a reasonable future date (not more than 20 years)
+          const maxFutureDate = new Date()
+          maxFutureDate.setFullYear(maxFutureDate.getFullYear() + 20)
+          
+          if (date <= maxFutureDate) {
+            return date
+          }
+        }
+      } catch (error) {
+        // Invalid date, skip
+        continue
+      }
+    }
+  }
+
+  return null
 }
 
 /**

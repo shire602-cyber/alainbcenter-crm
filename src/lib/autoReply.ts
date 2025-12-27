@@ -284,9 +284,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     console.log(`📝 [AUTO-REPLY] Creating AutoReplyLog entry...`)
     autoReplyLog = await (prisma as any).autoReplyLog.create({
       data: {
-          leadId,
-          contactId,
-          messageId,
+        leadId,
+        contactId,
+        messageId,
         channel: channel.toLowerCase(),
         messageText: messageText.substring(0, 500), // Truncate for storage
         inboundParsed: JSON.stringify({
@@ -314,18 +314,18 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // This checks if we already processed THIS specific messageId (not other messages)
     // IMPORTANT: Only block if we already replied to THIS exact messageId, not if we replied to a different message
     const existingLog = await (prisma as any).autoReplyLog.findFirst({
-          where: {
+      where: {
         messageId: messageId, // CRITICAL: Only check THIS specific messageId
         leadId: leadId,
-            channel: channelLower,
+        channel: channelLower,
         OR: [
           { decision: 'replied' },
           { replySent: true },
         ],
       },
       orderBy: { createdAt: 'desc' },
-        })
-        
+    })
+    
     if (existingLog) {
       console.log(`⏭️ [DUPLICATE-CHECK] Already processed THIS message ${messageId} (log ${existingLog.id}, decision: ${existingLog.decision})`)
       
@@ -365,7 +365,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     // Step 2: Check if auto-reply should run (with first message context and messageText for pattern matching)
     const shouldReply = await shouldAutoReply(leadId, isFirstMessage, messageText)
-      
+    
     // Update log with autoReplyEnabled status
     if (autoReplyLog) {
       try {
@@ -542,15 +542,21 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         // Send Golden Visa qualifier reply
         try {
           const { sendTextMessage } = await import('./whatsapp')
-          const result = await sendTextMessage(lead.contact.phone, goldenVisaResult.replyText)
+          // STEP 5: Pass contactId and leadId for idempotency check
+          const result = await sendTextMessage(lead.contact.phone, goldenVisaResult.replyText, {
+            contactId: lead.contact.id,
+            leadId: leadId,
+          })
 
-          // Create Message record for outbound reply
+          // BUG FIX #2: Add contactId to message creation (use lead.contact.id which is available)
+          // BUG FIX #3: Use channel.toLowerCase() for consistency with main flow
           await prisma.message.create({
             data: {
               conversationId: conversation.id,
               leadId: leadId,
+              contactId: lead.contact.id, // BUG FIX #2: Add missing contactId
               direction: 'OUTBOUND',
-              channel: channel.toUpperCase(),
+              channel: channel.toLowerCase(), // BUG FIX #3: Use lowercase for consistency
               type: 'text',
               body: goldenVisaResult.replyText,
               providerMessageId: result.messageId,
@@ -680,7 +686,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               data: {
                 retrievalDocsCount: retrievalResult.relevantDocuments.length,
                 retrievalSimilarity: maxSimilarity,
-                  retrievalReason: retrievalResult.reason,
+                retrievalReason: retrievalResult.reason,
                 hasUsefulContext,
               },
             })
@@ -746,10 +752,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         ...lead.messages
           .filter(m => m.id !== messageId)
           .map(m => ({
-        direction: m.direction,
-        body: m.body || '',
-        createdAt: m.createdAt,
-      })),
+            direction: m.direction,
+            body: m.body || '',
+            createdAt: m.createdAt,
+          })),
       ],
       mode: 'QUALIFY' as AIMessageMode, // Default mode
       channel: channel.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT',
@@ -765,7 +771,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     try {
       // Always generate fresh AI reply (not saved/cached)
-    // Pass agent to AI generation for custom prompts and settings
+      // Pass agent to AI generation for custom prompts and settings
       console.log(`🤖 [AI-GEN] Calling generateAIAutoresponse with context:`, {
         leadId: aiContext.lead.id,
         messageCount: aiContext.recentMessages?.length || 0,
@@ -987,11 +993,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                   })),
                 ]
             
+            // BUG FIX #4: Remove duplicate logging - keep only one comprehensive log
             console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
-            console.log(`📋 [STRICT-AI] Last 3 messages:`, fullConversationHistory.slice(-3).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
-            
-            console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
-            console.log(`📋 [STRICT-AI] Sample messages:`, fullConversationHistory.slice(-5).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
+            console.log(`📋 [STRICT-AI] Last 5 messages:`, fullConversationHistory.slice(-5).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
             
             // CRITICAL FIX: Apply strict qualification rules to ALL services, not just Golden Visa
             const { validateQualificationRules } = await import('./ai/strictQualification')
@@ -1083,7 +1087,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         if (errorMsg.includes('not configured') || errorMsg.includes('AI not configured')) {
           console.error(`🚨 [AI-CONFIG] CRITICAL: AI is NOT configured! Set GROQ_API_KEY, OPENAI_API_KEY, or ANTHROPIC_API_KEY in environment variables or configure in admin integrations.`)
           console.error(`🚨 [AI-CONFIG] Using minimal fallback because AI is not available.`)
-        } else {
+      } else {
           console.error(`⚠️ [AI-GEN] AI generation error (not config issue): ${errorMsg}`)
         }
         
@@ -1158,11 +1162,39 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       const isVisaQuestion = userMessage.includes('visa') || userMessage.includes('freelance') || 
                             userMessage.includes('family visa') || userMessage.includes('visit visa')
       
-      // BUG FIX #1: Fallback should be minimal acknowledgment only, NO questions
-      // All fallback messages should simply acknowledge receipt without asking questions
-      fallbackText = detectedLanguage === 'ar'
-        ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك قريباً.`
-        : `Hi ${contactName}, I received your message. I'll get back to you shortly.`
+      // CRITICAL FIX: For first message, use proper greeting instead of generic fallback
+      // BUG FIX #1: Fallback should acknowledge their specific request, not generic message
+      if (isFirstMessage) {
+        // First message - use proper greeting that acknowledges their request
+        const lowerMessage = messageText.toLowerCase()
+        let serviceMentioned = ''
+        if (lowerMessage.includes('freelance visa') || lowerMessage.includes('freelance')) {
+          serviceMentioned = 'freelance visa'
+        } else if (lowerMessage.includes('business setup') || lowerMessage.includes('license')) {
+          serviceMentioned = 'business setup'
+        } else if (lowerMessage.includes('visit visa') || lowerMessage.includes('tourist')) {
+          serviceMentioned = 'visit visa'
+        } else if (lowerMessage.includes('family visa')) {
+          serviceMentioned = 'family visa'
+        } else if (lowerMessage.includes('golden visa')) {
+          serviceMentioned = 'golden visa'
+        }
+        
+        if (serviceMentioned) {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}! يمكنني مساعدتك في ${serviceMentioned}. ما هي جنسيتك؟`
+            : `Hi ${contactName}! I can help you with ${serviceMentioned}. What's your nationality?`
+        } else {
+          fallbackText = detectedLanguage === 'ar'
+            ? `مرحباً ${contactName}! كيف يمكنني مساعدتك اليوم؟`
+            : `Hi ${contactName}! How can I help you today?`
+        }
+      } else {
+        // Not first message - use minimal acknowledgment
+        fallbackText = detectedLanguage === 'ar'
+          ? `مرحباً ${contactName}، تلقيت رسالتك. سأعود إليك قريباً.`
+          : `Hi ${contactName}, I received your message. I'll get back to you shortly.`
+      }
       
       aiResult = {
         text: fallbackText,
@@ -1224,7 +1256,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       return { replied: false, error: 'Failed to generate any reply (AI and fallback both failed)' }
     }
-    
+
     console.log(`✅ [AUTO-REPLY] Reply text generated: ${aiResult.text.length} chars`)
 
     // Step 9: Check for duplicate reply (deduplication)
@@ -1430,14 +1462,18 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         console.log(`📤 [SEND] Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
         console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
         
-        const result = await sendTextMessage(phoneNumber, replyText)
+        // STEP 5: Pass contactId and leadId for idempotency check
+        const result = await sendTextMessage(phoneNumber, replyText, {
+          contactId: contactId,
+          leadId: leadId,
+        })
         console.log(`✅ [SEND] WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
         
         if (!result || !result.messageId) {
           console.error(`❌ [SEND] No message ID returned from WhatsApp API`)
           throw new Error('No message ID returned from WhatsApp API')
         }
-        
+
         // Save outbound message
         let savedMessage: any = null
         if (conversationForOutbound) {
@@ -1512,7 +1548,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             
             await (prisma as any).autoReplyLog.update({
               where: { id: autoReplyLog.id },
-            data: {
+              data: {
                 conversationId: conversation?.id || null,
                 decision: 'replied',
                 decisionReason: 'AI reply sent successfully',
@@ -1520,9 +1556,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 replyText: aiResult.text.substring(0, 500),
                 replyStatus: 'sent',
                 replyError: null,
-            },
-          })
-        } catch (logError: any) {
+              },
+            })
+          } catch (logError: any) {
             console.warn('Failed to update AutoReplyLog with success:', logError.message)
           }
         }

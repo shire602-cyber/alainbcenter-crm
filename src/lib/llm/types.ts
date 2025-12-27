@@ -16,6 +16,8 @@ export interface LLMCompletionOptions {
   topP?: number
   frequencyPenalty?: number
   presencePenalty?: number
+  // STEP 6: JSON mode support
+  responseFormat?: { type: 'json_object' } | { type: 'text' }
 }
 
 export interface LLMCompletionResult {

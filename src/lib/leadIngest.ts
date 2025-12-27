@@ -55,42 +55,24 @@ export async function ingestLead(data: IngestLeadData) {
   // Keep normalized values consistent: use the same normalized source throughout
   const contactSource = data.source // Use normalized source as-is for consistency
 
-  // Find or create contact by phone ONLY
-  // Phone is the primary unique identifier - email can be shared (e.g., family emails)
-  // Using OR with email fallback causes unintended contact merging when different people
-  // share the same email address, corrupting contact data
-  let contact = await prisma.contact.findFirst({
-    where: {
-      phone: data.phone,
-    },
+  // STEP 1 FIX: Use upsertContact for proper normalization and deduplication
+  const { upsertContact } = await import('./contact/upsert')
+  
+  const contactResult = await upsertContact(prisma, {
+    phone: data.phone,
+    fullName: data.fullName,
+    email: data.email || null,
+    nationality: data.nationality || null,
+    source: contactSource,
+  })
+
+  // Fetch full contact record
+  const contact = await prisma.contact.findUnique({
+    where: { id: contactResult.id },
   })
 
   if (!contact) {
-    // No contact with this phone exists - create a new one
-    // Even if email matches another contact, create a new contact since phone is unique
-    contact = await prisma.contact.create({
-      data: {
-        fullName: data.fullName,
-        phone: data.phone,
-        email: data.email || null,
-        nationality: data.nationality || null,
-        source: contactSource,
-      },
-    })
-  } else {
-    // Contact exists - update with new info, but preserve existing email if new one conflicts
-    // Only update email if the new one is different (don't overwrite with null/empty)
-    const newEmail = data.email && data.email.trim() !== '' ? data.email : contact.email
-    
-    contact = await prisma.contact.update({
-      where: { id: contact.id },
-      data: {
-        fullName: data.fullName || contact.fullName,
-        email: newEmail,
-        nationality: data.nationality || contact.nationality,
-        source: contactSource || contact.source,
-      },
-    })
+    throw new Error(`Failed to fetch contact after upsert: ${contactResult.id}`)
   }
 
   // Qualify the lead with AI

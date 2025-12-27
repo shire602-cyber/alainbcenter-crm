@@ -65,12 +65,23 @@ export async function buildConversationContext(
 
   const latestLead = contact.leads[0] || null
 
-  // Get last 10 messages from ChatMessage
-  const chatMessages = await prisma.chatMessage.findMany({
-    where: { contactId },
-    orderBy: { createdAt: 'desc' },
-    take: 10,
+  // STEP 2 FIX: Use Message table instead of ChatMessage
+  // Find conversation for this contact (default to whatsapp)
+  const conversation = await prisma.conversation.findFirst({
+    where: {
+      contactId,
+      channel: 'whatsapp',
+    },
   })
+
+  // Get last 10 messages from Message table
+  const messages = conversation
+    ? await prisma.message.findMany({
+        where: { conversationId: conversation.id },
+        orderBy: { createdAt: 'desc' },
+        take: 10,
+      })
+    : []
 
   // Get last 10 communication logs if lead exists
   const communicationLogs = latestLead
@@ -83,10 +94,10 @@ export async function buildConversationContext(
 
   // Combine and sort messages
   const allMessages = [
-    ...chatMessages.map((msg) => ({
-      direction: msg.direction,
-      message: msg.message,
-      channel: msg.channel,
+    ...messages.map((msg) => ({
+      direction: msg.direction.toLowerCase(),
+      message: msg.body || '',
+      channel: msg.channel.toLowerCase(),
       createdAt: msg.createdAt,
     })),
     ...communicationLogs.map((log) => ({
@@ -220,15 +231,11 @@ export async function buildConversationContextFromLead(
     new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime()
   )
   
-  const chatMessages = await prisma.chatMessage.findMany({
-    where: { contactId: lead.contactId },
-    orderBy: { createdAt: 'asc' }, // Get in chronological order
-    take: 20, // Get more to ensure we have the latest
-  })
+  // STEP 2 FIX: No need to query ChatMessage separately - conversation messages are already included
   const communicationLogs = await prisma.communicationLog.findMany({
     where: { leadId: lead.id },
-    orderBy: { createdAt: 'asc' }, // Get in chronological order
-    take: 20, // Get more to ensure we have the latest
+    orderBy: { createdAt: 'asc' },
+    take: 20,
   })
 
   // Also check for documents
@@ -249,12 +256,6 @@ export async function buildConversationContextFromLead(
       direction: msg.direction === 'INBOUND' || msg.direction === 'IN' ? 'inbound' : 'outbound',
       message: msg.body || '',
       channel: msg.channel || 'whatsapp',
-      createdAt: msg.createdAt,
-    })),
-    ...chatMessages.map((msg) => ({
-      direction: msg.direction,
-      message: msg.message,
-      channel: msg.channel,
       createdAt: msg.createdAt,
     })),
     ...communicationLogs.map((log) => ({

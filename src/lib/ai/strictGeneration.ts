@@ -342,10 +342,12 @@ export async function generateStrictAIReply(
   ]
   
   // Generate with lower temperature for Groq (reduce hallucinations)
+  // STEP 6: Enforce strict JSON output
   const options = {
     temperature: 0.3, // Lower temperature for more deterministic output
     maxTokens: 500,
     topP: 0.9,
+    responseFormat: { type: 'json_object' as const }, // Force JSON output
   }
   
   // Use routing service with task type hint
