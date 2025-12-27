@@ -27,10 +27,10 @@ const DEFAULT_STATE: FSMState = {
 export async function loadFSMState(conversationId: number): Promise<FSMState> {
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { aiStateJson: true },
+    select: { ruleEngineMemory: true },
   })
 
-  if (!conversation?.aiStateJson) {
+  if (!conversation?.ruleEngineMemory) {
     return { ...DEFAULT_STATE }
   }
 
