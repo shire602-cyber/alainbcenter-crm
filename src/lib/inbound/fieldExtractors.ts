@@ -49,15 +49,21 @@ export function extractService(text: string): string | undefined {
     return 'FREELANCE_VISA'
   }
 
-  // Business setup
+  // Business setup - CRITICAL: Check for "business license" FIRST before generic "license"
   if (
-    lower.includes('business setup') ||
     lower.includes('business license') ||
-    lower.includes('company') ||
-    lower.includes('mainland') ||
-    lower.includes('freezone') ||
-    lower.includes('free zone') ||
-    lower.includes('license')
+    lower.includes('business setup') ||
+    lower.includes('trading license') ||
+    lower.includes('company formation') ||
+    lower.includes('company license')
+  ) {
+    return 'MAINLAND_BUSINESS_SETUP' // Default to mainland, can be refined later
+  }
+  
+  // Generic "license" (only if not already matched above)
+  if (
+    lower.includes('license') &&
+    (lower.includes('mainland') || lower.includes('freezone') || lower.includes('free zone'))
   ) {
     return 'MAINLAND_BUSINESS_SETUP' // Default to mainland, can be refined later
   }

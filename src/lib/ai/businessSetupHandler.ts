@@ -433,7 +433,8 @@ export async function handleBusinessSetupQualification(
       // Activity was just provided - acknowledge and move on
       // Use raw_activity_text if available, otherwise use normalized tag
       const displayActivity = extracted.raw_activity_text || extracted.business_activity || extracted.activity_tag || 'business'
-      const activityReply = `Perfect — ${displayActivity} noted.${regulatedNote}`
+      // CRITICAL FIX: Remove "noted" - use natural acknowledgment
+      const activityReply = `Perfect.${regulatedNote}`
       
       // Mark activity question as asked (so we don't ask again)
       state.asked_questions['BS_Q2_ACTIVITY'] = true
@@ -559,11 +560,12 @@ function getNextMissingQuestion(
   const name = state.collected.full_name || ''
   const greeting = name ? `Hi ${name.split(' ')[0]}, ` : ''
   
-  // Q1: Name (only if not known)
+  // Q1: Name (CRITICAL: ALWAYS ask first if not known)
+  // CRITICAL FIX: Name must be asked FIRST before any other questions
   if (!state.collected.full_name && !state.asked_questions['BS_Q1_NAME'] && skipKey !== 'BS_Q1_NAME') {
     return {
       key: 'BS_Q1_NAME',
-      text: `${greeting}May I have your full name?`,
+      text: `May I know your full name, please?`,
     }
   }
   
