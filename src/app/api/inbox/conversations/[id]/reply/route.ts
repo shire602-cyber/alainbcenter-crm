@@ -122,7 +122,7 @@ export async function POST(
         conversationId: conversation.id,
         leadId: conversation.leadId,
         contactId: conversation.contactId,
-        direction: 'outbound', // OUT for outbound
+        direction: 'OUTBOUND', // OUTBOUND for outbound
         channel: 'whatsapp',
         type: 'text',
         body: text.trim(),

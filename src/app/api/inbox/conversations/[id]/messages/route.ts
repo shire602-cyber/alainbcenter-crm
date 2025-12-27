@@ -220,7 +220,7 @@ export async function POST(
         conversationId: conversation.id,
         leadId: conversation.leadId,
         contactId: conversation.contactId,
-        direction: 'outbound', // Direction: OUT for outbound
+        direction: 'OUTBOUND', // Direction: OUTBOUND for outbound
         channel: 'whatsapp',
         type: mediaType || (templateName ? 'template' : 'text'),
         body: messageContent,
