@@ -892,11 +892,29 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 if (businessResult.reply && businessResult.shouldSend) {
                   console.log(`✅ [BUSINESS-SETUP] Handler generated reply: ${businessResult.reply.substring(0, 100)}`)
                   
-                  aiResult = {
-                    text: businessResult.reply,
-                    success: true,
-                    confidence: 0.95, // Deterministic handler
+                  // CRITICAL FIX: Sanitize business setup handler output to remove "noted" patterns
+                  const { sanitizeReply } = await import('./ai/outputSchema')
+                  const sanitized = sanitizeReply(businessResult.reply, fullConversationHistory)
+                  
+                  if (sanitized.blocked) {
+                    console.warn(`⚠️ [BUSINESS-SETUP] Reply blocked by sanitizer: ${sanitized.reason}`)
+                    // Fall through to rule engine for safe reply
+                    console.log(`⏭️ [BUSINESS-SETUP] Falling back to rule engine due to sanitizer block`)
+                  } else {
+                    aiResult = {
+                      text: sanitized.sanitized || businessResult.reply,
+                      success: true,
+                      confidence: 0.95, // Deterministic handler
+                    }
+                    
+                    // Skip rule engine and strict AI
+                    console.log(`✅ [BUSINESS-SETUP] Using sanitized business setup handler result, skipping rule engine`)
+                    break // Exit the try block to skip rule engine
                   }
+                } else {
+                  console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
+                  // Fall through to rule engine
+                }
                   
                   // If needs handover, create task
                   if (businessResult.handoverToHuman) {
