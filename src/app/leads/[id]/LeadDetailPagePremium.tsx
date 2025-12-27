@@ -31,6 +31,7 @@ import { AIScoreCircleAnimated } from '@/components/leads/AIScoreCircleAnimated'
 import { QuickActionsMenu } from '@/components/leads/QuickActionsMenu'
 import { MessageComposerEnhanced } from '@/components/leads/MessageComposerEnhanced'
 import { AutomationInspector } from '@/components/leads/AutomationInspector'
+import { ReplyEngineDebug } from '@/components/leads/ReplyEngineDebug'
 import { RevenueWidget } from '@/components/leads/RevenueWidget'
 import { RenewalRevenueWidget } from '@/components/leads/RenewalRevenueWidget'
 import { RenewalRevenueCard } from '@/components/leads/RenewalRevenueCard'
@@ -1594,6 +1595,11 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
               {/* Automation Inspector */}
               <AutomationInspector leadId={leadId} />
+
+              {/* Reply Engine Debug (Admin Only) */}
+              {currentUser?.role === 'ADMIN' && (
+                <ReplyEngineDebug conversationId={conversationId} leadId={leadId} />
+              )}
   
               {/* AI Assistant Panel */}
             <Card className="rounded-2xl glass-soft shadow-sidebar">
