@@ -18,8 +18,12 @@ import { searchTrainingDocuments } from './vectorStore'
 
 /**
  * Extract provided information from conversation history
+ * CRITICAL: Prefer conversation.knownFields as source of truth, then fallback to message extraction
  */
-function extractProvidedInfo(messages: Array<{ direction: string; body: string }>): {
+async function extractProvidedInfo(
+  conversationId: number,
+  messages: Array<{ direction: string; body: string }>
+): Promise<{
   nationality?: string
   location?: 'inside' | 'outside'
   service?: string
@@ -29,16 +33,74 @@ function extractProvidedInfo(messages: Array<{ direction: string; body: string }
   mainland?: boolean
   sponsor_status?: string
   [key: string]: any
-} {
+}> {
   const provided: any = {}
+  
+  // CRITICAL: Load knownFields from conversation first (source of truth)
+  try {
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { knownFields: true, contact: { select: { nationality: true, fullName: true } }, lead: { select: { serviceTypeEnum: true } } },
+    })
+    
+    if (conversation?.knownFields) {
+      let knownFields: any = {}
+      try {
+        knownFields = typeof conversation.knownFields === 'string' 
+          ? JSON.parse(conversation.knownFields) 
+          : conversation.knownFields
+      } catch {}
+      
+      // Use knownFields as primary source
+      if (knownFields.nationality) {
+        provided.nationality = knownFields.nationality
+        console.log(`✅ [EXTRACT] Using nationality from knownFields: ${knownFields.nationality}`)
+      }
+      if (knownFields.name) {
+        provided.name = knownFields.name
+        console.log(`✅ [EXTRACT] Using name from knownFields: ${knownFields.name}`)
+      }
+      if (knownFields.service) {
+        provided.service = knownFields.service
+        console.log(`✅ [EXTRACT] Using service from knownFields: ${knownFields.service}`)
+      }
+      if (knownFields.expiryDate) {
+        provided.expiryDate = knownFields.expiryDate
+      }
+    }
+    
+    // Fallback to contact/lead if not in knownFields
+    if (!provided.nationality && conversation?.contact?.nationality) {
+      provided.nationality = conversation.contact.nationality
+      console.log(`✅ [EXTRACT] Using nationality from contact: ${conversation.contact.nationality}`)
+    }
+    if (!provided.name && conversation?.contact?.fullName) {
+      const fullName = conversation.contact.fullName
+      if (fullName && !fullName.toLowerCase().includes('unknown') && !fullName.startsWith('Contact +')) {
+        provided.name = fullName
+        console.log(`✅ [EXTRACT] Using name from contact: ${fullName}`)
+      }
+    }
+    if (!provided.service && conversation?.lead?.serviceTypeEnum) {
+      provided.service = conversation.lead.serviceTypeEnum
+      console.log(`✅ [EXTRACT] Using service from lead: ${conversation.lead.serviceTypeEnum}`)
+    }
+  } catch (error: any) {
+    console.warn(`⚠️ [EXTRACT] Failed to load knownFields:`, error.message)
+  }
+  
+  // Fallback: Extract from conversation history if not found in knownFields
   const allText = messages.map(m => m.body || '').join(' ').toLowerCase()
   
-  // Extract nationality
-  const nationalityKeywords = ['nigeria', 'somalia', 'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian', 'somali', 'nigerian', 'bangladesh', 'bangladeshi', 'nepal', 'nepali', 'sri lanka', 'sri lankan', 'vietnam', 'vietnamese']
-  for (const keyword of nationalityKeywords) {
-    if (allText.includes(keyword)) {
-      provided.nationality = keyword
-      break
+  // Extract nationality (only if not already in knownFields)
+  if (!provided.nationality) {
+    const nationalityKeywords = ['nigeria', 'somalia', 'indian', 'pakistani', 'filipino', 'egyptian', 'british', 'american', 'canadian', 'somali', 'nigerian', 'bangladesh', 'bangladeshi', 'nepal', 'nepali', 'sri lanka', 'sri lankan', 'vietnam', 'vietnamese', 'china', 'chinese', 'usa', 'united states']
+    for (const keyword of nationalityKeywords) {
+      if (allText.includes(keyword)) {
+        provided.nationality = keyword
+        console.log(`✅ [EXTRACT] Extracted nationality from messages: ${keyword}`)
+        break
+      }
     }
   }
   
@@ -212,7 +274,7 @@ export async function generateStrictAIReply(
   const lockedService = (conversation as any).lockedService || undefined
   
   // Extract provided information
-  const providedInfo = extractProvidedInfo(conversationHistory)
+  const providedInfo = await extractProvidedInfo(conversation.id, conversationHistory)
   
   // DEBUG: Log what we extracted
   console.log(`📝 [EXTRACT] Extracted info:`, {

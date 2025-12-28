@@ -8,35 +8,15 @@ import {
   TrendingUp, 
   Users, 
   Clock, 
-  AlertCircle, 
-  Calendar, 
-  CheckCircle2, 
-  MessageSquare,
-  Phone,
-  Flame,
-  Snowflake,
   RefreshCw,
-  ArrowRight,
-  Target,
-  DollarSign,
-  Zap,
-  Mail,
 } from 'lucide-react'
 import { format, differenceInDays, parseISO, subDays } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
-import { BentoCard } from '@/components/dashboard/BentoCard'
-import { QuickActions } from '@/components/dashboard/QuickActions'
 import { YourFocusNow } from '@/components/dashboard/YourFocusNow'
 import { UpNextList } from '@/components/dashboard/UpNextList'
 import { MomentumStrip } from '@/components/dashboard/MomentumStrip'
 import { SignalsPanel } from '@/components/dashboard/SignalsPanel'
-import { BlockedByCustomer } from '@/components/dashboard/BlockedByCustomer'
-import { TodaysImpact } from '@/components/dashboard/TodaysImpact'
-import { EndOfDaySummary } from '@/components/dashboard/EndOfDaySummary'
-import { ForecastRevenueWidget } from '@/components/dashboard/ForecastRevenueWidget'
-import { PipelineForecastWidget } from '@/components/dashboard/PipelineForecastWidget'
-import { AtRiskLeadsWidget } from '@/components/dashboard/AtRiskLeadsWidget'
 
 const STAGES = [
   { value: 'NEW', label: 'New', color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' },
@@ -363,176 +343,27 @@ export default async function DashboardPage() {
             />
           </div>
 
-          {/* Main Grid - Bento Box Layout */}
-          <div className="grid gap-2 md:grid-cols-3">
-            {/* FOCUS STACK - Main column */}
+          {/* Main Grid - Phase 1 Structure ONLY */}
+          <div className="grid gap-4 md:grid-cols-3">
+            {/* FOCUS STACK - Main column (2/3 width) */}
             <div className="md:col-span-2 space-y-4">
+              {/* 1. Your Focus Now - EXACTLY 1 item, EXACTLY 1 CTA */}
               <YourFocusNow />
+              
+              {/* 2. Up Next - Max 3 items, no primary CTAs */}
               <UpNextList />
+              
+              {/* 4. Today's Impact - Metrics only, read-only */}
               <MomentumStrip />
             </div>
 
-            {/* SIGNALS PANEL - Right column */}
+            {/* SIGNALS PANEL - Right column (1/3 width) */}
             <div className="md:col-span-1">
+              {/* 3. Signals Panel - Renewals (max 5), Waiting on Customer (max 5), Alerts (max 5) */}
               <SignalsPanel />
             </div>
-
-            {/* Renewals - 1 column */}
-            <BentoCard 
-              title="Renewals"
-              action={
-                <Link href="/renewals" className="text-xs text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
-                  View all →
-                    </Link>
-              }
-            >
-                  {expiringLeadsData.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-6 text-center">
-                  <CheckCircle2 className="h-6 w-6 text-blue-600 mb-1.5" />
-                  <p className="text-xs font-medium text-slate-900 dark:text-slate-100 mb-0.5">No renewals</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">All clear!</p>
-                    </div>
-                  ) : (
-                <div className="space-y-1">
-                  {expiringLeadsData.slice(0, 5).map((lead: any) => {
-                        const expiry = lead.expiryItems?.[0]
-                        if (!expiry) return null
-                        const expiryDateObj = expiry.expiryDate instanceof Date ? expiry.expiryDate : (expiry.expiryDate ? parseISO(expiry.expiryDate.toString()) : null)
-                        const daysRemaining = expiryDateObj ? differenceInDays(expiryDateObj, today) : 999
-                        const isUrgent = daysRemaining <= 7
-                        return (
-                          <Link
-                            key={lead.id}
-                            href={`/leads/${lead.id}`}
-                        className="block p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
-                          >
-                            <div className="flex items-start justify-between gap-2 mb-1">
-                          <p className="text-xs font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors truncate flex-1">
-                              {lead.contact?.fullName || 'Unknown'}
-                              </p>
-                              <Badge 
-                                variant={isUrgent ? 'destructive' : 'outline'} 
-                                className="text-xs flex-shrink-0"
-                              >
-                            {formatDaysRemaining(expiry.expiryDate instanceof Date ? expiry.expiryDate : expiry.expiryDate.toString())}
-                              </Badge>
-                            </div>
-                        <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                            {expiry.type?.replace(/_/g, ' ') || 'Expiry'}
-                            </p>
-                            {lead.estimatedRenewalValue && (
-                          <div className="flex items-center gap-1 mt-1">
-                                <DollarSign className="h-3 w-3 text-green-600" />
-                                <span className="text-xs font-medium text-green-600">
-                                  AED {parseFloat(lead.estimatedRenewalValue).toLocaleString()}
-                                </span>
-                              </div>
-                            )}
-                          </Link>
-                        )
-                      })}
-                    </div>
-                  )}
-            </BentoCard>
-
-            {/* Pipeline - 2 columns */}
-            <BentoCard 
-              title="Pipeline" 
-              colSpan={2}
-              action={
-                <Link href="/leads" className="text-xs text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
-                  View all →
-                </Link>
-              }
-            >
-              <div className="grid grid-cols-4 gap-2">
-                {STAGES.filter(s => s.value !== 'LOST').map((stage) => {
-                  const count = pipelineMap.get(stage.value) || 0
-                  const percentage = totalLeadsCount > 0 ? (count / totalLeadsCount) * 100 : 0
-                  return (
-                    <Link
-                      key={stage.value}
-                      href={`/leads?stage=${stage.value}`}
-                      className="p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
-                    >
-                      <div className="flex items-center justify-between mb-1">
-                        <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{stage.label}</span>
-                        <span className="text-base font-semibold text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors">
-                          {count}
-                        </span>
-                      </div>
-                      <div className="h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden">
-                        <div
-                          className={cn("h-full transition-all duration-300", stage.color)}
-                          style={{ width: `${percentage}%` }}
-                        />
-                      </div>
-                    </Link>
-                  )
-                })}
-              </div>
-            </BentoCard>
-
-            {/* Lead Quality - 1 column */}
-            <BentoCard title="Lead Quality">
-              <div className="space-y-1.5">
-                <div className="flex items-center justify-between p-2 rounded-lg bg-red-50 dark:bg-red-900/10 border border-red-100 dark:border-red-900/20">
-                    <div className="flex items-center gap-2">
-                    <Flame className="h-3.5 w-3.5 text-red-600" />
-                    <span className="text-xs font-medium text-slate-900 dark:text-slate-100">HOT</span>
-                  </div>
-                  <Badge variant="destructive" className="text-xs font-semibold">{hotLeads}</Badge>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-lg bg-orange-50 dark:bg-orange-900/10 border border-orange-100 dark:border-orange-900/20">
-                    <div className="flex items-center gap-2">
-                    <Zap className="h-3.5 w-3.5 text-orange-600" />
-                    <span className="text-xs font-medium text-slate-900 dark:text-slate-100">WARM</span>
-                  </div>
-                  <Badge className="bg-orange-500 text-white text-xs font-semibold">{warmLeads}</Badge>
-                </div>
-                <div className="flex items-center justify-between p-2 rounded-lg bg-slate-100 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                    <div className="flex items-center gap-2">
-                    <Snowflake className="h-3.5 w-3.5 text-slate-500" />
-                    <span className="text-xs font-medium text-slate-900 dark:text-slate-100">COLD</span>
-                    </div>
-                  <Badge variant="secondary" className="text-xs font-semibold">
-                      {Math.max(0, totalLeadsCount - hotLeads - warmLeads)}
-                    </Badge>
-                  </div>
-            </div>
-            </BentoCard>
-          </div>
-
-          {/* Mission Control Row - Blocked & Impact */}
-          <div className="grid gap-2 md:grid-cols-2">
-            <BentoCard 
-              title="Blocked by Customer"
-              action={<Badge variant="outline" className="text-xs">Waiting</Badge>}
-            >
-              <BlockedByCustomer />
-            </BentoCard>
-            
-            <BentoCard 
-              title="Today's Impact"
-              action={<Badge variant="secondary" className="text-xs">Achievements</Badge>}
-            >
-              <TodaysImpact />
-            </BentoCard>
-          </div>
-
-          {/* Forecast Widgets Row */}
-          <div className="grid gap-2 md:grid-cols-3">
-            <ForecastRevenueWidget />
-            <PipelineForecastWidget />
-            <AtRiskLeadsWidget />
-          </div>
-
-          {/* End-of-Day Summary */}
-          <div className="mt-4">
-            <EndOfDaySummary />
           </div>
         </div>
-        <QuickActions />
       </MainLayout>
     )
   } catch (error: any) {
@@ -546,9 +377,12 @@ export default async function DashboardPage() {
     console.error('Dashboard page error:', error)
     return (
       <MainLayout>
-        <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl p-4">
-          <h2 className="text-sm font-semibold text-red-900 dark:text-red-100 mb-1">Error loading dashboard</h2>
-          <p className="text-xs text-red-700 dark:text-red-300">
+        <div className="bg-slate-50 dark:bg-slate-900/20 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+          <div className="flex items-center gap-2 mb-1">
+            <div className="w-2 h-2 rounded-full bg-red-500" />
+            <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100">Error loading dashboard</h2>
+          </div>
+          <p className="text-xs text-slate-600 dark:text-slate-400">
               {error?.message || 'Unknown error occurred'}
             </p>
         </div>

@@ -370,9 +370,9 @@ ${recentMessages}
 Current user message: ${input.inboundText}
 
 Lead information:
-- Service: ${lead.serviceType?.name || lead.serviceTypeEnum || 'Not specified'}
-- Contact: ${lead.contact.fullName || 'Unknown'}
-- Nationality: ${lead.contact.nationality || 'Not specified'}
+- Service: ${lead.serviceType?.name || lead.serviceTypeEnum || updatedKnownFields.service || 'Not specified'}
+- Contact: ${updatedKnownFields.name || lead.contact.fullName || 'Unknown'}
+- Nationality: ${updatedKnownFields.nationality || lead.contact.nationality || 'Not specified'}
 
 Generate a short, helpful reply that:
 1. Answers the user's question or asks ONE clarifying question
