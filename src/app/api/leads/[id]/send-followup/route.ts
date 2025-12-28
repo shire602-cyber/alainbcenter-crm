@@ -1,8 +1,10 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { getCurrentUser } from '@/lib/auth-server'
 import { prisma } from '@/lib/prisma'
-import { sendTextMessage } from '@/lib/whatsapp'
-import { generateAIAutoresponse } from '@/lib/aiMessaging'
+import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
+import { generateAIReply } from '@/lib/ai/orchestrator'
+import { upsertConversation } from '@/lib/conversation/upsert'
+import { getExternalThreadId } from '@/lib/conversation/getExternalThreadId'
 
 /**
  * POST /api/leads/[id]/send-followup
@@ -64,49 +66,82 @@ export async function POST(
       )
     }
 
-    // Generate AI follow-up message
-    const aiResult = await generateAIAutoresponse({
-      lead,
-      contact: lead.contact,
-      recentMessages: lead.messages.map(m => ({
-        direction: m.direction,
-        body: m.body || '',
-        createdAt: m.createdAt,
-      })),
-      mode: 'FOLLOW_UP',
-      channel: 'WHATSAPP',
+    // Find or create conversation
+    const { id: conversationId } = await upsertConversation({
+      contactId: lead.contactId,
+      channel: 'whatsapp',
+      leadId: lead.id,
+      externalThreadId: getExternalThreadId('whatsapp', lead.contact),
     })
-
-    if (!aiResult.success || !aiResult.text) {
-      return NextResponse.json(
-        { error: aiResult.error || 'Failed to generate follow-up message' },
-        { status: 500 }
-      )
-    }
-
-    // Send message
-    const result = await sendTextMessage(lead.contact.phone, aiResult.text)
-
-    if (!result || !result.messageId) {
-      return NextResponse.json(
-        { error: 'Failed to send message' },
-        { status: 500 }
-      )
-    }
-
-    // Create message record
-    const conversation = await prisma.conversation.findFirst({
+    
+    // Get latest inbound message or use dummy
+    const latestMessage = await prisma.message.findFirst({
       where: {
-        contactId: lead.contact.id,
-        leadId: lead.id,
-        channel: 'whatsapp',
+        conversationId,
+        direction: 'INBOUND',
       },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    const inboundText = latestMessage?.body || lead.messages[0]?.body || 'Follow-up'
+    const inboundMessageId = latestMessage?.id || 0
+    
+    // Generate AI follow-up message using orchestrator
+    const orchestratorResult = await generateAIReply({
+      conversationId,
+      leadId: lead.id,
+      contactId: lead.contactId,
+      inboundText,
+      inboundMessageId,
+      channel: 'whatsapp',
+      language: 'en',
     })
 
-    if (conversation) {
+    if (!orchestratorResult.replyText || orchestratorResult.replyText.trim().length === 0) {
+      return NextResponse.json(
+        { error: orchestratorResult.handoverReason || 'Failed to generate follow-up message' },
+        { status: 500 }
+      )
+    }
+    
+    const aiResult = {
+      success: true,
+      text: orchestratorResult.replyText,
+    }
+
+    // Send message with idempotency
+    const result = await sendOutboundWithIdempotency({
+      conversationId: conversationId,
+      contactId: lead.contactId,
+      leadId: lead.id,
+      phone: lead.contact.phone,
+      text: aiResult.text,
+      provider: 'whatsapp',
+      triggerProviderMessageId: latestMessage?.providerMessageId || null,
+      replyType: 'followup',
+      lastQuestionKey: null,
+      flowStep: null,
+    })
+
+    if (result.wasDuplicate) {
+      return NextResponse.json(
+        { error: 'Duplicate message blocked (idempotency)' },
+        { status: 409 }
+      )
+    }
+
+    if (!result.success || !result.messageId) {
+      return NextResponse.json(
+        { error: result.error || 'Failed to send message' },
+        { status: 500 }
+      )
+    }
+
+    // Create message record (if not already created by idempotency system)
+    try {
       await prisma.message.create({
         data: {
-          conversationId: conversation.id,
+          conversationId: conversationId,
           leadId: lead.id,
           contactId: lead.contact.id,
           direction: 'OUTBOUND',
@@ -122,20 +157,26 @@ export async function POST(
           sentAt: new Date(),
         },
       })
-
-      await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: {
-          lastMessageAt: new Date(),
-          lastOutboundAt: new Date(),
-        },
-      })
+    } catch (msgError: any) {
+      // Non-critical - message may already exist
+      if (!msgError.message?.includes('Unique constraint')) {
+        console.warn(`⚠️ [SEND-FOLLOWUP] Failed to create Message record:`, msgError.message)
+      }
     }
+
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        lastMessageAt: new Date(),
+        lastOutboundAt: new Date(),
+      },
+    })
 
     return NextResponse.json({ 
       ok: true, 
       message: 'Follow-up sent successfully',
       messageId: result.messageId,
+      outboundLogId: result.outboundLogId,
     })
   } catch (error: any) {
     console.error('Send follow-up error:', error)

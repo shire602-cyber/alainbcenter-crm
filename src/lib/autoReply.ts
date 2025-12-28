@@ -7,8 +7,10 @@
 
 import { prisma } from './prisma'
 import { sendTextMessage } from './whatsapp'
-import { generateAIAutoresponse, AIMessageMode } from './aiMessaging'
-import type { AIMessageContext } from './aiMessaging'
+// ⚠️ DEPRECATED: This file routes to orchestrator
+// All AI generation now goes through orchestrator
+import { generateAIReply } from './ai/orchestrator'
+import { upsertConversation } from './conversation/upsert'
 import { retrieveAndGuard, markLeadRequiresHuman } from './ai/retrieverChain'
 import { notifyAIUntrainedSubject } from './notifications'
 import { createAgentTask } from './automation/agentFallback'
@@ -539,31 +541,55 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           }
         }
 
-        // Send Golden Visa qualifier reply
+        // Send Golden Visa qualifier reply with idempotency
         try {
-          const { sendTextMessage } = await import('./whatsapp')
-          // STEP 5: Pass contactId and leadId for idempotency check
-          const result = await sendTextMessage(lead.contact.phone, goldenVisaResult.replyText, {
+          const { sendOutboundWithIdempotency } = await import('./outbound/sendWithIdempotency')
+          const result = await sendOutboundWithIdempotency({
+            conversationId: conversation.id,
             contactId: lead.contact.id,
             leadId: leadId,
+            phone: lead.contact.phone,
+            text: goldenVisaResult.replyText,
+            provider: 'whatsapp',
+            triggerProviderMessageId: null, // Golden Visa qualifier
+            replyType: 'answer',
+            lastQuestionKey: null,
+            flowStep: null,
           })
+
+          if (result.wasDuplicate) {
+            console.log(`⚠️ [GOLDEN-VISA] Duplicate outbound blocked by idempotency`)
+            return { replied: false, reason: 'Duplicate message blocked (idempotency)' }
+          }
+
+          if (!result.success) {
+            throw new Error(result.error || 'Failed to send message')
+          }
 
           // BUG FIX #2: Add contactId to message creation (use lead.contact.id which is available)
           // BUG FIX #3: Use channel.toLowerCase() for consistency with main flow
-          await prisma.message.create({
-            data: {
-              conversationId: conversation.id,
-              leadId: leadId,
-              contactId: lead.contact.id, // BUG FIX #2: Add missing contactId
-              direction: 'OUTBOUND',
-              channel: channel.toLowerCase(), // BUG FIX #3: Use lowercase for consistency
-              type: 'text',
-              body: goldenVisaResult.replyText,
-              providerMessageId: result.messageId,
-              status: 'SENT',
-              sentAt: new Date(),
-            },
-          })
+          // Note: Message may already be created by idempotency system
+          try {
+            await prisma.message.create({
+              data: {
+                conversationId: conversation.id,
+                leadId: leadId,
+                contactId: lead.contact.id, // BUG FIX #2: Add missing contactId
+                direction: 'OUTBOUND',
+                channel: channel.toLowerCase(), // BUG FIX #3: Use lowercase for consistency
+                type: 'text',
+                body: goldenVisaResult.replyText,
+                providerMessageId: result.messageId || null,
+                status: result.messageId ? 'SENT' : 'FAILED',
+                sentAt: new Date(),
+              },
+            })
+          } catch (msgError: any) {
+            // Non-critical - message may already exist from idempotency system
+            if (!msgError.message?.includes('Unique constraint')) {
+              console.warn(`⚠️ [GOLDEN-VISA] Failed to create Message record:`, msgError.message)
+            }
+          }
 
           // Update conversation
           await prisma.conversation.update({
@@ -784,309 +810,87 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       const startTime = Date.now()
       
-      // Use strict AI generation with JSON output
+      // ⚠️ CRITICAL: Use orchestrator ONLY - no other AI paths
+      // Orchestrator handles: rule engine, LLM, validation, deduplication
       try {
-        const { generateStrictAIReply } = await import('./ai/strictGeneration')
-        const { prisma } = await import('./prisma')
-        
-        // Get conversation for strict generation
-        const conversation = await prisma.conversation.findUnique({
-          where: {
-            contactId_channel: {
-              contactId: contactId,
-              channel: channel.toLowerCase(),
-            },
-          },
+        // Ensure conversation exists (use canonical upsert)
+        const { id: conversationId } = await upsertConversation({
+          contactId: contactId,
+          channel: channel,
+          leadId: leadId,
         })
         
-        if (conversation) {
-          // TRY RULE ENGINE FIRST (deterministic, no hallucinations)
-          // Flag to skip rule engine if business setup handler succeeded
-          let skipRuleEngine = false
-          
+        // Call orchestrator (single source of truth)
+        console.log(`🎯 [ORCHESTRATOR] Calling orchestrator for conversation ${conversationId}`)
+        const orchestratorResult = await generateAIReply({
+          conversationId,
+          leadId,
+          contactId,
+          inboundText: messageText,
+          inboundMessageId: messageId,
+          channel: channel,
+          language: detectedLanguage as 'en' | 'ar',
+          agentProfileId: agent?.id || lead.aiAgentProfileId || undefined,
+        })
+        
+        const duration = Date.now() - startTime
+        console.log(`⏱️ [ORCHESTRATOR] Generation took ${duration}ms`)
+        console.log(`📊 [ORCHESTRATOR] Reply: ${orchestratorResult.replyText.substring(0, 100)}...`)
+        console.log(`📊 [ORCHESTRATOR] Confidence: ${orchestratorResult.confidence}, Should Escalate: ${orchestratorResult.shouldEscalate}`)
+        
+        // Create tasks if needed
+        for (const task of orchestratorResult.tasksToCreate) {
+          await createAgentTask(lead.id, task.type as any, {
+            messageText: task.title,
+            dueAt: task.dueAt,
+          })
+        }
+        
+        // If should escalate, create task
+        if (orchestratorResult.shouldEscalate) {
+          await createAgentTask(lead.id, 'complex_query', {
+            messageText: orchestratorResult.handoverReason || 'Escalation required',
+          })
+        }
+        
+        // Update log
+        if (autoReplyLog) {
           try {
-            const { executeRuleEngine, loadConversationMemory } = await import('./ai/ruleEngine')
-            
-            // Load existing memory from conversation
-            const existingMemory = await loadConversationMemory(conversation.id)
-            
-            // Get ALL messages from conversation (CRITICAL: Must include current message)
-            const conversationMessages = await prisma.message.findMany({
-              where: {
-                conversationId: conversation.id,
+            await (prisma as any).autoReplyLog.update({
+              where: { id: autoReplyLog.id },
+              data: {
+                replyText: orchestratorResult.replyText.substring(0, 500),
+                decisionReason: `Orchestrator: confidence=${orchestratorResult.confidence}, escalate=${orchestratorResult.shouldEscalate}`,
+                usedFallback: orchestratorResult.replyText.length === 0,
               },
-              orderBy: {
-                createdAt: 'asc', // Chronological order
-              },
-              take: 50, // Get more messages for better context
             })
-            
-            // CRITICAL: Build conversation history in chronological order
-            // Include current inbound message if it's not already in the database
-            const currentMessageInDb = conversationMessages.find(m => m.id === messageId)
-            const fullConversationHistory = currentMessageInDb
-              ? conversationMessages.map(m => ({
-                  direction: m.direction,
-                  body: m.body || '',
-                  createdAt: m.createdAt,
-                }))
-              : [
-                  // Current inbound message first (if not in DB yet)
-                  {
-                    direction: 'INBOUND',
-                    body: messageText,
-                    createdAt: new Date(),
-                  },
-                  // Then all previous messages
-                  ...conversationMessages.map(m => ({
-                    direction: m.direction,
-                    body: m.body || '',
-                    createdAt: m.createdAt,
-                  })),
-                ]
-            
-            console.log(`📋 [RULE-ENGINE] Conversation history: ${fullConversationHistory.length} messages`)
-            console.log(`📋 [RULE-ENGINE] Last 3 messages:`, fullConversationHistory.slice(-3).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
-            
-            // BUG FIX: Don't shadow outer isFirstMessage variable - use the one calculated at line 363
-            // The outer isFirstMessage is based on messageCount <= 1 (inbound messages)
-            // This check is for outbound messages, but we should use the outer variable for consistency
-            // const isFirstMessage = conversationMessages.filter(m => m.direction === 'OUTBOUND').length === 0
-            // Use the outer isFirstMessage variable instead (calculated at line 363)
-            
-            // CHECK FOR BUSINESS SETUP INTENT FIRST
-            const lowerMessage = messageText.toLowerCase()
-            const conversationFlowKey = (conversation as any).flowKey // flowKey may not be in Prisma types yet
-            const isBusinessSetup = 
-              lowerMessage.includes('business setup') ||
-              lowerMessage.includes('company formation') ||
-              lowerMessage.includes('license') ||
-              lowerMessage.includes('freezone') ||
-              lowerMessage.includes('mainland') ||
-              lowerMessage.includes('marketing license') ||
-              lowerMessage.includes('accounting license') ||
-              lowerMessage.includes('trading license') ||
-              existingMemory.service === 'business_setup' ||
-              conversationFlowKey === 'business_setup'
-            
-            // CRITICAL FIX: Check if name is missing FIRST - use rule engine to ask for name
-            // Only route to business setup handler AFTER name is captured
-            // Use existingMemory which was already loaded above
-            const hasName = existingMemory.name || lead.contact?.fullName
-            
-            if (isBusinessSetup && hasName) {
-              console.log(`🏢 [BUSINESS-SETUP] Detected business setup intent, routing to dedicated handler`)
-              
-              try {
-                const { handleBusinessSetupQualification } = await import('./ai/businessSetupHandler')
-                const contactName = lead.contact?.fullName || undefined
-                
-                // Get triggerProviderMessageId from function parameter (passed from webhook)
-                // triggerProviderMessageId is already destructured from options at line 206
-                const inboundMessageId = triggerProviderMessageId || `msg_${messageId}`
-                
-                const businessResult = await handleBusinessSetupQualification(
-                  conversation.id,
-                  inboundMessageId,
-                  messageText,
-                  contactName
-                )
-                
-                if (businessResult.reply && businessResult.shouldSend) {
-                  console.log(`✅ [BUSINESS-SETUP] Handler generated reply: ${businessResult.reply.substring(0, 100)}`)
-                  
-                  // CRITICAL FIX: Sanitize business setup handler output to remove "noted" patterns
-                  const { sanitizeReply } = await import('./ai/outputSchema')
-                  const sanitized = sanitizeReply(businessResult.reply, fullConversationHistory)
-                  
-                  if (sanitized.blocked) {
-                    console.warn(`⚠️ [BUSINESS-SETUP] Reply blocked by sanitizer: ${sanitized.reason}`)
-                    // Fall through to rule engine for safe reply
-                    console.log(`⏭️ [BUSINESS-SETUP] Falling back to rule engine due to sanitizer block`)
-                  } else {
-                    aiResult = {
-                      text: sanitized.sanitized || businessResult.reply,
-                      success: true,
-                      confidence: 0.95, // Deterministic handler
-                    }
-                    
-                    // If needs handover, create task
-                    if (businessResult.handoverToHuman) {
-                      await createAgentTask(lead.id, 'complex_query', {
-                        messageText: `Business Setup - Handover required\n\nLast message: ${messageText}`,
-                      })
-                    }
-                    
-                    // Skip rule engine and strict AI
-                    console.log(`✅ [BUSINESS-SETUP] Using sanitized business setup handler result, skipping rule engine`)
-                    skipRuleEngine = true // Set flag to skip rule engine
-                  }
-                } else {
-                  console.log(`⏭️ [BUSINESS-SETUP] Handler returned no reply, falling back to rule engine`)
-                  // Fall through to rule engine
-                }
-              } catch (businessError: any) {
-                console.error(`❌ [BUSINESS-SETUP] Handler failed, falling back to rule engine:`, businessError.message)
-                // Fall through to rule engine
-              }
-            }
-            
-            // If business setup handler didn't produce a result, use rule engine
-            if (!aiResult && !skipRuleEngine) {
-              console.log(`🎯 [RULE-ENGINE] Executing deterministic rule engine`)
-              console.log(`📋 [RULE-ENGINE] Memory:`, existingMemory)
-              console.log(`📋 [RULE-ENGINE] Is first message:`, isFirstMessage)
-              
-              const ruleResult = await executeRuleEngine({
-                conversationId: conversation.id,
-                leadId: lead.id,
-                contactId: contactId,
-                currentMessage: messageText,
-                conversationHistory: fullConversationHistory,
-                isFirstMessage,
-                memory: existingMemory,
-              })
-              
-              console.log(`✅ [RULE-ENGINE] Generated reply:`, ruleResult.reply.substring(0, 100))
-              console.log(`📊 [RULE-ENGINE] Needs human:`, ruleResult.needsHuman, ruleResult.handoverReason)
-              
-              // Use rule engine result
-              aiResult = {
-                text: ruleResult.reply,
-                success: true,
-                confidence: 0.95, // Rule engine is deterministic
-              }
-              
-              // If needs human, create task
-              if (ruleResult.needsHuman) {
-                await createAgentTask(lead.id, 'complex_query', {
-                  messageText: `Handover: ${ruleResult.handoverReason || 'Complex case'}\n\nLast message: ${messageText}`,
-                })
-              }
-              
-              // Skip strict AI generation, use rule engine result
-              console.log(`✅ [RULE-ENGINE] Using rule engine result, skipping strict AI`)
-            }
-          } catch (ruleError: any) {
-            console.error(`❌ [RULE-ENGINE] Rule engine failed, falling back to strict AI:`, ruleError.message)
-            // Fall through to strict AI generation
+          } catch (logError) {
+            console.warn('Failed to update AutoReplyLog:', logError)
           }
-          
-          // If rule engine didn't produce a result, fall back to strict AI
-          if (!aiResult) {
-            console.log(`🤖 [STRICT-AI] Using strict AI generation with JSON output`)
-            
-            // CRITICAL FIX: Get ALL messages from conversation, not just lead.messages
-            // This ensures we have the complete conversation history including all previous answers
-            const conversationMessages = await prisma.message.findMany({
-              where: {
-                conversationId: conversation.id,
-              },
-              orderBy: {
-                createdAt: 'asc', // Chronological order
-              },
-              take: 50, // Get more messages for better context
-            })
-            
-            // CRITICAL: Build conversation history in chronological order
-            // Include current inbound message if it's not already in the database
-            const currentMessageInDb = conversationMessages.find(m => m.id === messageId)
-            const fullConversationHistory = currentMessageInDb
-              ? conversationMessages.map(m => ({
-                  direction: m.direction,
-                  body: m.body || '',
-                  createdAt: m.createdAt,
-                }))
-              : [
-                  // Current inbound message first (if not in DB yet)
-                  {
-                    direction: 'INBOUND',
-                    body: messageText,
-                    createdAt: new Date(),
-                  },
-                  // Then all previous messages
-                  ...conversationMessages.map(m => ({
-                    direction: m.direction,
-                    body: m.body || '',
-                    createdAt: m.createdAt,
-                  })),
-                ]
-            
-            // BUG FIX #4: Remove duplicate logging - keep only one comprehensive log
-            console.log(`📋 [STRICT-AI] Conversation history: ${fullConversationHistory.length} messages`)
-            console.log(`📋 [STRICT-AI] Last 5 messages:`, fullConversationHistory.slice(-5).map(m => `${m.direction}: ${(m.body || '').substring(0, 50)}`))
-            
-            // CRITICAL FIX: Apply strict qualification rules to ALL services, not just Golden Visa
-            const { validateQualificationRules } = await import('./ai/strictQualification')
-            
-            // Generate AI reply first
-            const strictResult = await generateStrictAIReply({
-              lead,
-              contact: lead.contact,
-              conversation,
-              currentMessage: messageText,
-              conversationHistory: fullConversationHistory, // Use full conversation history, not just aiContext.recentMessages
-              agent,
-              language: detectedLanguage,
-            })
-            
-            // Validate reply against strict rules
-            if (strictResult.reply && conversation) {
-              const validation = await validateQualificationRules(conversation.id, strictResult.reply)
-              if (!validation.isValid && validation.sanitizedReply) {
-                console.warn(`⚠️ [STRICT-AI] Reply violated rules: ${validation.error}, using sanitized version`)
-                strictResult.reply = validation.sanitizedReply
-              }
-            }
-            
-            const duration = Date.now() - startTime
-            console.log(`⏱️ [STRICT-AI] Generation took ${duration}ms`)
-            console.log(`📊 [STRICT-AI] Service: ${strictResult.service}, Needs Human: ${strictResult.needsHuman}, Confidence: ${strictResult.confidence}`)
-            console.log(`📊 [STRICT-AI] Reply preview: ${strictResult.reply.substring(0, 100)}...`)
-            
-            // Log structured output to AutoReplyLog
-            if (autoReplyLog && strictResult.structured) {
-              try {
-                await (prisma as any).autoReplyLog.update({
-                  where: { id: autoReplyLog.id },
-                  data: {
-                    replyText: strictResult.reply.substring(0, 500),
-                    decisionReason: `Strict AI: service=${strictResult.service}, stage=${strictResult.structured.stage}, confidence=${strictResult.confidence}`,
-                    usedFallback: false,
-                  },
-                })
-              } catch (logError) {
-                console.warn('Failed to update AutoReplyLog with strict AI result:', logError)
-              }
-            }
-            
-            // If needs human, create task
-            if (strictResult.needsHuman) {
-              console.log(`👤 [STRICT-AI] Escalating to human (needsHuman=true)`)
-              try {
-                await createAgentTask(lead.id, 'complex_query', {
-                  messageText: strictResult.reply.substring(0, 200),
-                })
-              } catch (taskError) {
-                console.warn('Failed to create agent task:', taskError)
-              }
-            }
-            
-            aiResult = {
-              text: strictResult.reply,
-              success: true,
-              confidence: strictResult.confidence * 100, // Convert to 0-100 scale
-            }
+        }
+        
+        // Return result
+        if (orchestratorResult.replyText && orchestratorResult.replyText.trim().length > 0) {
+          aiResult = {
+            text: orchestratorResult.replyText,
+            success: true,
+            confidence: orchestratorResult.confidence,
           }
         } else {
-          console.warn(`⚠️ [STRICT-AI] No conversation found, falling back to regular AI generation`)
-          // Pass retrieval result to AI generation so it can use training documents
-          aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+          // Empty reply = skip (deduplication or stop)
+          aiResult = {
+            text: '',
+            success: false,
+            error: orchestratorResult.handoverReason || 'Orchestrator returned empty reply',
+          }
         }
-      } catch (strictError: any) {
-        console.error(`❌ [STRICT-AI] Strict generation failed, falling back to regular:`, strictError.message)
-        // Fallback to regular AI generation
-        aiResult = await generateAIAutoresponse(aiContext, agent, retrievalResult)
+      } catch (orchestratorError: any) {
+        console.error(`❌ [ORCHESTRATOR] Error:`, orchestratorError.message)
+        aiResult = {
+          text: '',
+          success: false,
+          error: orchestratorError.message,
+        }
       }
       
       const duration = Date.now() - startTime
@@ -1464,10 +1268,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           console.log(`✅ [OUTBOUND-IDEMPOTENCY] Logged outbound BEFORE send (logId: ${outboundLogId}, triggerId: ${effectiveTriggerId || 'none'})`)
         })
       } catch (error: any) {
-        if (error.message === 'OUTBOUND_ALREADY_LOGGED') {
-          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Already logged in transaction - skipping send`)
-          return { replied: false, reason: 'Outbound already logged (duplicate prevented)' }
-        }
+        // BUG FIX #3: Check error.code instead of error.message for Prisma transaction errors
+        // Prisma throws PrismaClientKnownRequestError with code property, not custom error messages
         // Unique constraint violation = already logged
         if (error.code === 'P2002') {
           console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Unique constraint violation - already logged`)
@@ -1476,57 +1278,67 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         throw error
       }
       
-      // Now send the message (idempotency already guaranteed)
+      // Use centralized idempotency system (replaces manual transaction logic)
       try {
         console.log(`📤 [SEND] Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
         console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
         
-        // STEP 5: Pass contactId and leadId for idempotency check
-        const result = await sendTextMessage(phoneNumber, replyText, {
+        const { sendOutboundWithIdempotency } = await import('./outbound/sendWithIdempotency')
+        const result = await sendOutboundWithIdempotency({
+          conversationId: conversationForOutbound.id,
           contactId: contactId,
           leadId: leadId,
+          phone: phoneNumber,
+          text: replyText,
+          provider: 'whatsapp',
+          triggerProviderMessageId: effectiveTriggerId || null,
+          replyType: 'answer',
+          lastQuestionKey: lastQuestionKey || null,
+          flowStep: flowStep || null,
         })
-        console.log(`✅ [SEND] WhatsApp API response:`, { messageId: result?.messageId, waId: result?.waId })
-        
-        if (!result || !result.messageId) {
-          console.error(`❌ [SEND] No message ID returned from WhatsApp API`)
-          throw new Error('No message ID returned from WhatsApp API')
+
+        if (result.wasDuplicate) {
+          console.log(`⚠️ [SEND] Duplicate outbound blocked by idempotency`)
+          return { replied: false, reason: 'Duplicate outbound message blocked (idempotency)' }
         }
 
-        // Save outbound message
+        if (!result.success || !result.messageId) {
+          throw new Error(result.error || 'Failed to send message')
+        }
+
+        console.log(`✅ [SEND] WhatsApp API response:`, { messageId: result.messageId })
+
+        // Save outbound message (if not already created by idempotency system)
         let savedMessage: any = null
         if (conversationForOutbound) {
-          savedMessage = await prisma.message.create({
-            data: {
-              conversationId: conversationForOutbound.id,
-              leadId: leadId,
-              contactId: contactId,
-              direction: 'OUTBOUND',
-              channel: channel.toLowerCase(),
-              type: 'text',
-              body: replyText,
-              status: 'SENT',
-              providerMessageId: result.messageId,
-              rawPayload: JSON.stringify({
-                automation: true,
-                autoReply: true,
-                aiGenerated: true,
-                confidence: aiResult.confidence,
-              }),
-              sentAt: new Date(),
-            },
-          })
-          
-          // Update outbound log with message ID
-          if (outboundLogId && savedMessage) {
-            await (prisma as any).outboundMessageLog.update({
-              where: { id: outboundLogId },
-              data: { outboundMessageId: savedMessage.id },
+          try {
+            savedMessage = await prisma.message.create({
+              data: {
+                conversationId: conversationForOutbound.id,
+                leadId: leadId,
+                contactId: contactId,
+                direction: 'OUTBOUND',
+                channel: channel.toLowerCase(),
+                type: 'text',
+                body: replyText,
+                status: 'SENT',
+                providerMessageId: result.messageId,
+                rawPayload: JSON.stringify({
+                  automation: true,
+                  autoReply: true,
+                  aiGenerated: true,
+                  confidence: aiResult.confidence,
+                }),
+                sentAt: new Date(),
+              },
             })
-            console.log(`✅ [OUTBOUND-IDEMPOTENCY] Updated log with messageId: ${savedMessage.id}`)
-          } else if (outboundLogId && !savedMessage) {
-            console.warn(`⚠️ [OUTBOUND-IDEMPOTENCY] Cannot update log: savedMessage is null (logId: ${outboundLogId})`)
+          } catch (msgError: any) {
+            // Non-critical - message may already exist from idempotency system
+            if (!msgError.message?.includes('Unique constraint')) {
+              console.warn(`⚠️ [SEND] Failed to create Message record:`, msgError.message)
+            }
           }
+        }
 
           // Update conversation
           await prisma.conversation.update({
@@ -1550,7 +1362,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         })
 
         console.log(`✅ [SEND] AI reply sent successfully to lead ${leadId} via ${channel} (messageId: ${result.messageId})`)
-        console.log(`📊 [OUTBOUND-LOG] triggerProviderMessageId: ${effectiveTriggerId || 'none'}, outboundMessageId: ${savedMessage?.id || 'unknown'}, flowStep: ${flowStep || 'unknown'}, lastQuestionKey: ${lastQuestionKey || 'unknown'}`)
+        console.log(`📊 [OUTBOUND-LOG] triggerProviderMessageId: ${effectiveTriggerId || 'none'}, outboundMessageId: ${savedMessage?.id || 'unknown'}, flowStep: ${flowStep || 'unknown'}, lastQuestionKey: ${lastQuestionKey || 'unknown'}, outboundLogId: ${result.outboundLogId || 'unknown'}`)
         
         // Update structured log with success
         if (autoReplyLog) {

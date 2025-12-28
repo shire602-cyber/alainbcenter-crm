@@ -36,52 +36,55 @@ export async function sendWhatsApp(
   contact: Contact,
   text: string
 ): Promise<{ success: boolean; messageId?: string }> {
-  // Try the new WhatsApp Cloud API library first
+  // Use idempotency system for all WhatsApp sends
   try {
-    const { sendTextMessage } = await import('./whatsapp')
+    // Use canonical upsertConversation first
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
     
-    const result = await sendTextMessage(contact.phone, text)
-
-    // CRITICAL FIX: Use same conversation for inbound/outbound, always link to lead
-    let conversation = await prisma.conversation.findUnique({
-      where: {
-        contactId_channel: {
-          contactId: contact.id,
-          channel: 'whatsapp',
-        },
-      },
+    const { id: conversationId } = await upsertConversation({
+      contactId: contact.id,
+      channel: 'whatsapp',
+      leadId: lead.id,
+      externalThreadId: getExternalThreadId('whatsapp', contact),
+    })
+    
+    const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+    const result = await sendOutboundWithIdempotency({
+      conversationId: conversationId,
+      contactId: contact.id,
+      leadId: lead.id,
+      phone: contact.phone,
+      text: text,
+      provider: 'whatsapp',
+      triggerProviderMessageId: null, // Manual send via messaging.ts
+      replyType: 'answer',
+      lastQuestionKey: null,
+      flowStep: null,
     })
 
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          contactId: contact.id,
-          leadId: lead.id, // CRITICAL: Always link to lead
-          channel: 'whatsapp',
-          lastMessageAt: new Date(),
-        },
-      })
-      console.log(`✅ [MESSAGING] Created conversation ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
-    } else {
-      // CRITICAL FIX: Update leadId if it's null or different
-      if (!conversation.leadId || conversation.leadId !== lead.id) {
-        conversation = await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: {
-            leadId: lead.id, // Link to current lead
-            lastMessageAt: new Date(),
-          },
-        })
-        console.log(`✅ [MESSAGING] Updated conversation ${conversation.id} to link to lead ${lead.id}`)
-      } else {
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: {
-            lastMessageAt: new Date(),
-          },
-        })
+    if (result.wasDuplicate) {
+      console.log(`⚠️ [MESSAGING] Duplicate outbound blocked by idempotency`)
+      return {
+        success: false,
+        messageId: undefined,
       }
     }
+
+    if (!result.success) {
+      throw new Error(result.error || 'Failed to send message')
+    }
+
+    // Get conversation (already created above)
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+    })
+    
+    if (!conversation) {
+      throw new Error(`Failed to fetch conversation ${conversationId} after upsert`)
+    }
+    
+    console.log(`✅ [MESSAGING] Using conversation ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
 
     // Create communication log with message ID
     const logData: any = {
@@ -100,10 +103,11 @@ export async function sendWhatsApp(
     }
 
     // PROBLEM A FIX: Use Message table instead of ChatMessage for unified inbox
+    // Note: Message may already be created by idempotency system, so use try/catch
     await Promise.all([
       prisma.communicationLog.create({
         data: logData,
-      }),
+      }).catch(() => {}), // Non-critical
       prisma.message.create({
         data: {
           conversationId: conversation.id,
@@ -117,6 +121,11 @@ export async function sendWhatsApp(
           status: result.messageId ? 'SENT' : 'PENDING',
           sentAt: new Date(),
         },
+      }).catch((msgError: any) => {
+        // Non-critical - message may already exist from idempotency system
+        if (!msgError.message?.includes('Unique constraint')) {
+          console.warn(`⚠️ [MESSAGING] Failed to create Message record:`, msgError.message)
+        }
       }),
       prisma.lead.update({
         where: { id: lead.id },

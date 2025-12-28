@@ -32,6 +32,7 @@ import { QuickActionsMenu } from '@/components/leads/QuickActionsMenu'
 import { MessageComposerEnhanced } from '@/components/leads/MessageComposerEnhanced'
 import { AutomationInspector } from '@/components/leads/AutomationInspector'
 import { ReplyEngineDebug } from '@/components/leads/ReplyEngineDebug'
+import { ConversationDebugPanel } from '@/components/leads/ConversationDebugPanel'
 import { RevenueWidget } from '@/components/leads/RevenueWidget'
 import { RenewalRevenueWidget } from '@/components/leads/RenewalRevenueWidget'
 import { RenewalRevenueCard } from '@/components/leads/RenewalRevenueCard'
@@ -1302,6 +1303,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
           {/* RIGHT COLUMN: Expiry, Tasks, Docs, AI */}
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
+            {/* Debug Panel (Admin Only) */}
+            {currentUser?.role === 'ADMIN' && (
+              <ConversationDebugPanel leadId={leadId} isAdmin={true} />
+            )}
             {/* Next Best Action - Phase 5 Feature */}
             <NextBestAction leadId={leadId} />
 

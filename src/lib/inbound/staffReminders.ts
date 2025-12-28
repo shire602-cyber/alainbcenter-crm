@@ -14,8 +14,10 @@
  */
 
 import { prisma } from '../prisma'
-import { sendTextMessage } from '../whatsapp'
+import { sendOutboundWithIdempotency } from '../outbound/sendWithIdempotency'
 import { normalizeToE164 } from '../phone'
+import { upsertConversation } from '../conversation/upsert'
+import { getExternalThreadId } from '../conversation/getExternalThreadId'
 
 export interface StaffReminderInput {
   userId: number
@@ -90,13 +92,64 @@ export async function sendStaffReminder(input: StaffReminderInput): Promise<bool
       return false
     }
 
-    // Send WhatsApp message
+    // Send WhatsApp message with idempotency
+    // For staff reminders, we need to create a contact/conversation if they don't exist
+    // Get user info for contact name
+    const user = await prisma.user.findUnique({
+      where: { id: input.userId },
+      select: { name: true, email: true },
+    })
+
+    let staffContact = await prisma.contact.findFirst({
+      where: { phone: normalizedPhone },
+    })
+
+    if (!staffContact) {
+      // Create a minimal contact for staff if needed
+      staffContact = await prisma.contact.create({
+        data: {
+          phone: normalizedPhone,
+          fullName: user?.name || `Staff User ${input.userId}`,
+          source: 'internal',
+        },
+      })
+    }
+
+    // Get or create conversation for staff
+    const { id: conversationId } = await upsertConversation({
+      contactId: staffContact.id,
+      channel: 'whatsapp',
+      leadId: input.leadId || null,
+      externalThreadId: getExternalThreadId('whatsapp', staffContact),
+    })
+
     console.log(`📤 [STAFF-REMINDER] Sending reminder to user ${input.userId} (${normalizedPhone})`)
     console.log(`📤 [STAFF-REMINDER] Message: "${input.text.substring(0, 100)}${input.text.length > 100 ? '...' : ''}"`)
     
     let messageId: string | undefined
     try {
-      const result = await sendTextMessage(normalizedPhone, input.text)
+      const result = await sendOutboundWithIdempotency({
+        conversationId: conversationId,
+        contactId: staffContact.id,
+        leadId: input.leadId || null,
+        phone: normalizedPhone,
+        text: input.text,
+        provider: 'whatsapp',
+        triggerProviderMessageId: null, // Staff reminder
+        replyType: 'answer', // Use 'answer' for staff reminders (valid type)
+        lastQuestionKey: null,
+        flowStep: null,
+      })
+
+      if (result.wasDuplicate) {
+        console.log(`⚠️ [STAFF-REMINDER] Duplicate reminder blocked by idempotency`)
+        return false // Don't send duplicate
+      }
+
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send message')
+      }
+
       messageId = result.messageId
       console.log(`✅ [STAFF-REMINDER] WhatsApp sent successfully! Message ID: ${messageId}`)
     } catch (whatsappError: any) {

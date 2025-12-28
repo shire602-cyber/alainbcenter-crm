@@ -4,6 +4,7 @@ import * as React from 'react'
 import { Sidebar } from './Sidebar'
 import { TopNavClient } from './TopNavClient'
 import { SidebarProvider, useSidebar } from './SidebarContext'
+import { MobileBottomNav } from '@/components/navigation/MobileBottomNav'
 import { cn } from '@/lib/utils'
 
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
@@ -19,11 +20,12 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
       )}>
         <TopNavClient />
         
-        <main className="py-4 px-4 sm:px-6 lg:px-6 bg-background">
+        <main className="py-4 px-4 sm:px-6 lg:px-6 bg-background pb-20 md:pb-4">
           <div className="mx-auto max-w-7xl">
             {children}
           </div>
         </main>
+        <MobileBottomNav />
       </div>
     </div>
   )

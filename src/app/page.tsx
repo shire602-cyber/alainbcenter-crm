@@ -27,6 +27,10 @@ import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { BentoCard } from '@/components/dashboard/BentoCard'
 import { QuickActions } from '@/components/dashboard/QuickActions'
+import { TopPrioritiesToday } from '@/components/dashboard/TopPrioritiesToday'
+import { BlockedByCustomer } from '@/components/dashboard/BlockedByCustomer'
+import { TodaysImpact } from '@/components/dashboard/TodaysImpact'
+import { EndOfDaySummary } from '@/components/dashboard/EndOfDaySummary'
 import { ForecastRevenueWidget } from '@/components/dashboard/ForecastRevenueWidget'
 import { PipelineForecastWidget } from '@/components/dashboard/PipelineForecastWidget'
 import { AtRiskLeadsWidget } from '@/components/dashboard/AtRiskLeadsWidget'
@@ -358,77 +362,13 @@ export default async function DashboardPage() {
 
           {/* Main Grid - Bento Box Layout */}
           <div className="grid gap-2 md:grid-cols-3">
-            {/* My Day - 2 columns */}
+            {/* TOP PRIORITIES TODAY - 2 columns */}
             <BentoCard 
-              title="My Day" 
+              title="Top Priorities Today" 
               colSpan={2}
-              action={<Badge variant="secondary" className="text-xs">{myDayItems.length} items</Badge>}
+              action={<Badge variant="secondary" className="text-xs">Mission Control</Badge>}
             >
-                  {myDayItems.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-8 text-center">
-                  <CheckCircle2 className="h-8 w-8 text-green-600 mb-2" />
-                  <p className="text-xs font-medium text-slate-900 dark:text-slate-100 mb-0.5">Nothing urgent</p>
-                  <p className="text-xs text-slate-500 dark:text-slate-400">Great work!</p>
-                    </div>
-                  ) : (
-                <div className="space-y-1">
-                      {myDayItems.map((item, idx) => (
-                        <Link
-                          key={idx}
-                          href={item.lead?.id ? `/leads/${item.lead.id}` : '#'}
-                      className="flex items-center justify-between p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
-                        >
-                      <div className="flex items-center gap-2 flex-1 min-w-0">
-                            <div className={cn(
-                          "flex-shrink-0 w-8 h-8 rounded-lg flex items-center justify-center",
-                              item.type === 'followup' && "bg-blue-100 dark:bg-blue-900/20",
-                              item.type === 'expiry' && "bg-orange-100 dark:bg-orange-900/20",
-                              item.type === 'task' && "bg-red-100 dark:bg-red-900/20",
-                            )}>
-                          {item.type === 'followup' && <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />}
-                          {item.type === 'expiry' && <AlertCircle className="h-4 w-4 text-orange-600 dark:text-orange-400" />}
-                          {item.type === 'task' && <Clock className="h-4 w-4 text-red-600 dark:text-red-400" />}
-                            </div>
-                            <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-primary transition-colors">
-                                {item.title}
-                              </p>
-                          <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                                {item.subtitle} · {item.action}
-                              </p>
-                            </div>
-                          </div>
-                      <div className="flex items-center gap-2 flex-shrink-0">
-                        <span className="text-xs text-slate-600 dark:text-slate-400 whitespace-nowrap">
-                              {item.date ? formatDate(item.date) : '—'}
-                        </span>
-                            {item.lead?.contact?.phone && (
-                          <div className="flex gap-0.5">
-                                <a
-                                  href={`https://wa.me/${item.lead.contact.phone.replace(/[^0-9]/g, '')}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  onClick={(e) => e.stopPropagation()}
-                              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                  title="WhatsApp"
-                                >
-                              <MessageSquare className="h-3.5 w-3.5 text-green-600" />
-                                  </a>
-                                <a
-                                  href={`tel:${item.lead.contact.phone}`}
-                                  onClick={(e) => e.stopPropagation()}
-                              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                  title="Call"
-                                >
-                              <Phone className="h-3.5 w-3.5 text-blue-600" />
-                                </a>
-                            </div>
-                        )}
-                          </div>
-                        </Link>
-                      ))}
-                    </div>
-                  )}
+              <TopPrioritiesToday />
             </BentoCard>
 
             {/* Renewals - 1 column */}
@@ -557,11 +497,33 @@ export default async function DashboardPage() {
             </BentoCard>
           </div>
 
+          {/* Mission Control Row - Blocked & Impact */}
+          <div className="grid gap-2 md:grid-cols-2">
+            <BentoCard 
+              title="Blocked by Customer"
+              action={<Badge variant="outline" className="text-xs">Waiting</Badge>}
+            >
+              <BlockedByCustomer />
+            </BentoCard>
+            
+            <BentoCard 
+              title="Today's Impact"
+              action={<Badge variant="secondary" className="text-xs">Achievements</Badge>}
+            >
+              <TodaysImpact />
+            </BentoCard>
+          </div>
+
           {/* Forecast Widgets Row */}
           <div className="grid gap-2 md:grid-cols-3">
             <ForecastRevenueWidget />
             <PipelineForecastWidget />
             <AtRiskLeadsWidget />
+          </div>
+
+          {/* End-of-Day Summary */}
+          <div className="mt-4">
+            <EndOfDaySummary />
           </div>
         </div>
         <QuickActions />

@@ -450,13 +450,20 @@ export async function POST(req: NextRequest) {
         const phoneNumberId = value.metadata?.phone_number_id
         const externalId = buildWhatsAppExternalId(phoneNumberId, from)
         
-        console.log(`🔄 [WEBHOOK] Processing message ${messageId} with AUTO-MATCH pipeline`, {
-          channel: 'WHATSAPP',
-          externalId,
+        // Extract waId for externalThreadId
+        const waId = value.contacts?.[0]?.wa_id || message.from
+        
+        // DIAGNOSTIC LOG: webhook inbound entry
+        console.log(`[WEBHOOK] INBOUND-ENTRY`, JSON.stringify({
           providerMessageId: messageId,
           fromPhone: from,
-          bodyLength: messageText?.length || 0,
-        })
+          waId,
+          channel: 'WHATSAPP',
+          channelLower: 'whatsapp',
+          externalThreadId: waId,
+          messageTextLength: messageText?.length || 0,
+          timestamp: timestamp.toISOString(),
+        }))
         
         // Timeout guard: 4 seconds for AI generation
         const processWithTimeout = async () => {
@@ -465,6 +472,7 @@ export async function POST(req: NextRequest) {
           try {
             // Use new AUTO-MATCH pipeline (handles deduplication internally)
             // Pass full webhook entry for waId extraction
+            const waId = value.contacts?.[0]?.wa_id || message.from
             const result = await handleInboundMessageAutoMatch({
               channel: 'WHATSAPP',
               providerMessageId: messageId,
@@ -475,10 +483,10 @@ export async function POST(req: NextRequest) {
               metadata: {
                 externalId: externalId,
                 rawPayload: message,
+                webhookEntry: entry || body.entry?.[0], // Full entry for waId extraction
+                webhookValue: value, // Full value for waId extraction
                 mediaUrl: mediaUrl,
                 mediaMimeType: mediaMimeType,
-                webhookEntry: entry, // Full entry for waId extraction
-                webhookValue: value, // Full value for waId extraction
               },
             })
 
@@ -533,94 +541,105 @@ export async function POST(req: NextRequest) {
               })
               
               try {
-                // Use new Reply Engine (fail-proof, deterministic)
-                const { generateReply } = await import('@/lib/replyEngine')
+                // ⚠️ CRITICAL: Use orchestrator ONLY - single source of truth for AI
+                const { generateAIReply } = await import('@/lib/ai/orchestrator')
                 
                 if (!result.conversation?.id) {
-                  console.error(`❌ [WEBHOOK] Cannot use reply engine: conversation not found`)
+                  console.error(`❌ [WEBHOOK] Cannot use orchestrator: conversation not found`)
                   throw new Error('Conversation not found')
                 }
                 
-                // Get contact name for template variables
-                const contactName = result.contact.fullName || 'there'
-                
                 // Timeout guard: 4 seconds for reply generation
-                const replyEnginePromise = generateReply({
+                const orchestratorPromise = generateAIReply({
                   conversationId: result.conversation.id,
+                  leadId: result.lead.id,
+                  contactId: result.contact.id,
+                  inboundText: result.message.body || '',
                   inboundMessageId: result.message.id,
-                  inboundText: result.message.body,
                   channel: result.message.channel,
-                  useLLM: false, // Start with deterministic only
-                  contactName,
                   language: 'en', // TODO: Detect language
                 })
                 
-                const timeoutPromise = new Promise<{ text: string; replyKey: string; debug: any } | null>((resolve) => {
+                const timeoutPromise = new Promise<{ replyText: string } | null>((resolve) => {
                   setTimeout(() => {
-                    console.warn(`⏱️ [WEBHOOK] Reply engine timeout (4s) - creating task for human follow-up`)
+                    console.warn(`⏱️ [WEBHOOK] Orchestrator timeout (4s) - creating task for human follow-up`)
                     resolve(null)
                   }, 4000)
                 })
                 
-                const replyResult = await Promise.race([replyEnginePromise, timeoutPromise])
+                const orchestratorResult = await Promise.race([orchestratorPromise, timeoutPromise])
                 
-                if (!replyResult) {
+                if (!orchestratorResult) {
                   // Timeout - create task and mark as processed
                   try {
                     const { createAgentTask } = await import('@/lib/automation/agentFallback')
                     await createAgentTask(result.lead.id, 'complex_query', {
-                      messageText: `Reply engine timed out for message: ${result.message.body.substring(0, 100)}`,
+                      messageText: `Orchestrator timed out for message: ${result.message.body?.substring(0, 100)}`,
                     })
-                    console.log(`✅ [WEBHOOK] Created task for reply engine timeout follow-up`)
+                    console.log(`✅ [WEBHOOK] Created task for orchestrator timeout follow-up`)
                   } catch (taskError: any) {
                     console.error(`❌ [WEBHOOK] Failed to create timeout task:`, taskError.message)
                   }
-                  await markInboundProcessed(messageId, false, 'Reply engine timeout (4s)')
-                  return NextResponse.json({ success: true, message: 'Inbound processed, reply engine timeout' })
+                  await markInboundProcessed(messageId, false, 'Orchestrator timeout (4s)')
+                  return NextResponse.json({ success: true, message: 'Inbound processed, orchestrator timeout' })
                 }
                 
-                // Check if reply was skipped (duplicate or stop)
-                if (replyResult.debug.skipped) {
-                  console.log(`⏭️ [WEBHOOK] Reply skipped: ${replyResult.debug.reason}`)
-                  await markInboundProcessed(messageId, false, replyResult.debug.reason || 'Reply skipped')
+                // Check if reply is empty (deduplication or stop)
+                if (!orchestratorResult.replyText || orchestratorResult.replyText.trim().length === 0) {
+                  const reason = ('handoverReason' in orchestratorResult && orchestratorResult.handoverReason) || 'Empty reply'
+                  console.log(`⏭️ [WEBHOOK] Reply skipped: ${reason}`)
+                  await markInboundProcessed(messageId, false, reason)
                   return NextResponse.json({ success: true, message: 'Inbound processed, reply skipped' })
                 }
                 
-                // Send reply via WhatsApp
-                if (replyResult.text && replyResult.text.trim().length > 0) {
+                // Send reply via WhatsApp with hard idempotency
+                if (orchestratorResult.replyText && orchestratorResult.replyText.trim().length > 0) {
                   try {
-                    const { sendTextMessage } = await import('@/lib/whatsapp')
-                    const sendResult = await sendTextMessage(
-                      result.contact.phone,
-                      replyResult.text,
-                      {
-                        contactId: result.contact.id,
-                        leadId: result.lead.id,
-                      }
-                    )
+                    const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+                    const sendResult = await sendOutboundWithIdempotency({
+                      conversationId: result.conversation.id,
+                      contactId: result.contact.id,
+                      leadId: result.lead.id,
+                      phone: result.contact.phone,
+                      text: orchestratorResult.replyText,
+                      provider: 'whatsapp',
+                      triggerProviderMessageId: messageId,
+                      replyType: ('nextStepKey' in orchestratorResult && orchestratorResult.nextStepKey) ? 'question' : 'answer',
+                      lastQuestionKey: ('nextStepKey' in orchestratorResult && orchestratorResult.nextStepKey) || null,
+                      flowStep: null, // Will be set by orchestrator if needed
+                    })
                     
-                    // Create outbound message record
+                    if (sendResult.wasDuplicate) {
+                      console.log(`⚠️ [WEBHOOK] Duplicate outbound blocked by idempotency`)
+                      // Continue - don't treat as error, but still mark as processed
+                      await markInboundProcessed(messageId, true, 'Duplicate outbound blocked')
+                      return NextResponse.json({ success: true, message: 'Duplicate blocked' })
+                    } else if (!sendResult.success) {
+                      throw new Error(sendResult.error || 'Failed to send message')
+                    }
+                    
+                    // Create outbound Message record (for inbox display)
                     // CRITICAL: Use same conversationId and normalized channel
                     const { normalizeChannel } = await import('@/lib/utils/channelNormalize')
-                    await prisma.message.create({
-                      data: {
-                        conversationId: result.conversation.id, // Same conversation as inbound
-                        leadId: result.lead.id,
-                        contactId: result.contact.id,
-                        direction: 'OUTBOUND',
-                        channel: normalizeChannel(result.message.channel), // Normalized lowercase
-                        type: 'text',
-                        body: replyResult.text,
-                        providerMessageId: sendResult.messageId,
-                        status: 'SENT',
-                        sentAt: new Date(),
-                        payload: JSON.stringify({
-                          replyKey: replyResult.replyKey,
-                          templateKey: replyResult.debug.templateKey,
-                          action: replyResult.debug.plan.action,
-                        }),
-                      },
-                    })
+                    try {
+                      await prisma.message.create({
+                        data: {
+                          conversationId: result.conversation.id, // Same conversation as inbound
+                          leadId: result.lead.id,
+                          contactId: result.contact.id,
+                          direction: 'OUTBOUND',
+                          channel: normalizeChannel(result.message.channel), // Normalized lowercase
+                          type: 'text',
+                          body: orchestratorResult.replyText,
+                          providerMessageId: sendResult.messageId,
+                          status: sendResult.success ? 'SENT' : 'FAILED',
+                          sentAt: new Date(),
+                        },
+                      })
+                    } catch (msgError: any) {
+                      // Non-critical - OutboundMessageLog already created
+                      console.warn(`⚠️ [WEBHOOK] Failed to create Message record:`, msgError.message)
+                    }
                     
                     // Update conversation
                     await prisma.conversation.update({
@@ -631,11 +650,10 @@ export async function POST(req: NextRequest) {
                       },
                     })
                     
-                    console.log(`✅ [WEBHOOK] Reply sent via reply engine`, {
-                      replyKey: replyResult.replyKey,
-                      templateKey: replyResult.debug.templateKey,
-                      action: replyResult.debug.plan.action,
+                    console.log(`✅ [WEBHOOK] Reply sent with idempotency`, {
                       messageId: sendResult.messageId,
+                      outboundLogId: sendResult.outboundLogId,
+                      replyType: ('nextStepKey' in orchestratorResult && orchestratorResult.nextStepKey) ? 'question' : 'answer',
                     })
                     
                     // Mark reply task as done

@@ -224,10 +224,33 @@ export async function runNoReplyFollowUpRule(context: RuleContext) {
 
     try {
       // Generate AI reply draft
-      const { generateAiReply } = await import('./aiReply')
-      const aiReply = await generateAiReply(message.lead as any, [
-        { channel: message.channel, messageSnippet: message.message.substring(0, 200) },
-      ])
+      // Use orchestrator instead of deleted aiReply
+      const { generateAIReply } = await import('./ai/orchestrator')
+      const { upsertConversation } = await import('@/lib/conversation/upsert')
+      const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+      
+      const { id: conversationId } = await upsertConversation({
+        contactId: message.contact.id,
+        channel: message.channel,
+        leadId: message.lead.id,
+        externalThreadId: getExternalThreadId(message.channel, message.contact),
+      })
+      
+      const aiReplyResult = await generateAIReply({
+        conversationId,
+        leadId: message.lead.id,
+        contactId: message.contact.id,
+        inboundText: message.message.substring(0, 200),
+        inboundMessageId: 0,
+        channel: message.channel,
+        language: 'en',
+      })
+      
+      const aiReply = {
+        message: aiReplyResult.replyText,
+        nextFollowUp: new Date(),
+        suggestedDocs: [],
+      }
 
       // Create task for agent
       await prisma.task.create({

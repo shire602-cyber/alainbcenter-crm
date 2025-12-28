@@ -67,25 +67,23 @@ export async function POST(
     }
     const dbChannel = channelMap[normalizedChannel]
 
-    // Find or create conversation
-    let conversation = await prisma.conversation.findUnique({
-      where: {
-        contactId_channel: {
-          contactId: lead.contactId,
-          channel: dbChannel,
-        },
-      },
+    // Use canonical upsertConversation
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+    
+    const { id: conversationId } = await upsertConversation({
+      contactId: lead.contactId,
+      channel: dbChannel,
+      leadId: lead.id,
+      externalThreadId: getExternalThreadId(dbChannel, lead.contact),
     })
-
+    
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+    })
+    
     if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          contactId: lead.contactId,
-          leadId: lead.id,
-          channel: dbChannel,
-          status: 'open',
-        },
-      })
+      throw new Error(`Failed to fetch conversation ${conversationId} after upsert`)
     }
 
     // Send message based on channel
@@ -114,30 +112,28 @@ export async function POST(
           if (!accessToken || !phoneNumberId) {
             sendError = 'WhatsApp credentials not configured'
           } else {
-            const toPhone = lead.contact.phone
-            const apiUrl = `https://graph.facebook.com/v20.0/${phoneNumberId}/messages`
-
-            const response = await fetch(apiUrl, {
-              method: 'POST',
-              headers: {
-                'Authorization': `Bearer ${accessToken}`,
-                'Content-Type': 'application/json',
-              },
-              body: JSON.stringify({
-                messaging_product: 'whatsapp',
-                to: toPhone,
-                type: 'text',
-                text: {
-                  body: text.trim(),
-                },
-              }),
+            // Use idempotency system for WhatsApp sends
+            const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+            const result = await sendOutboundWithIdempotency({
+              conversationId: conversation.id,
+              contactId: lead.contactId,
+              leadId: lead.id,
+              phone: lead.contact.phone!,
+              text: text.trim(),
+              provider: 'whatsapp',
+              triggerProviderMessageId: null, // Manual send
+              replyType: 'answer',
+              lastQuestionKey: null,
+              flowStep: null,
             })
 
-            sendResult = await response.json()
-            if (response.ok) {
-              messageId = sendResult.messages?.[0]?.id || null
+            if (result.wasDuplicate) {
+              sendError = 'Duplicate message blocked (idempotency)'
+            } else if (!result.success) {
+              sendError = result.error || 'Failed to send WhatsApp message'
             } else {
-              sendError = sendResult.error?.message || 'Failed to send WhatsApp message'
+              messageId = result.messageId || null
+              sendResult = { messages: [{ id: messageId }] }
             }
           }
         }

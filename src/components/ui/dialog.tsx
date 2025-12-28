@@ -3,78 +3,134 @@
 import * as React from "react"
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { Button } from '@/components/ui/button'
 
-interface DialogProps {
+interface DialogContextValue {
   open: boolean
   onOpenChange: (open: boolean) => void
+}
+
+const DialogContext = React.createContext<DialogContextValue | undefined>(undefined)
+
+interface DialogProps {
+  open?: boolean
+  onOpenChange?: (open: boolean) => void
   children: React.ReactNode
 }
 
-const Dialog = ({ open, onOpenChange, children }: DialogProps) => {
-  if (!open) return null
+export function Dialog({ open: controlledOpen, onOpenChange, children }: DialogProps) {
+  const [internalOpen, setInternalOpen] = React.useState(false)
+  const open = controlledOpen !== undefined ? controlledOpen : internalOpen
+  const handleOpenChange = onOpenChange || setInternalOpen
+
+  return (
+    <DialogContext.Provider value={{ open, onOpenChange: handleOpenChange }}>
+      {children}
+    </DialogContext.Provider>
+  )
+}
+
+interface DialogTriggerProps {
+  asChild?: boolean
+  children: React.ReactNode
+  className?: string
+}
+
+export function DialogTrigger({ asChild, children, className }: DialogTriggerProps) {
+  const context = React.useContext(DialogContext)
+  if (!context) throw new Error('DialogTrigger must be used within Dialog')
+
+  if (asChild && React.isValidElement(children)) {
+    return React.cloneElement(children, {
+      onClick: () => context.onOpenChange(true),
+    } as any)
+  }
+
+  return (
+    <button 
+      onClick={() => context.onOpenChange(true)}
+      className={className}
+    >
+      {children}
+    </button>
+  )
+}
+
+interface DialogContentProps {
+  children: React.ReactNode
+  className?: string
+}
+
+export function DialogContent({ children, className }: DialogContentProps) {
+  const context = React.useContext(DialogContext)
+  if (!context) throw new Error('DialogContent must be used within Dialog')
+
+  if (!context.open) return null
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center">
-      <div
+      {/* Backdrop */}
+      <div 
         className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={() => onOpenChange(false)}
+        onClick={() => context.onOpenChange(false)}
       />
-      <div className="relative z-50 w-full max-w-lg bg-card rounded-xl shadow-2xl border border-border animate-fade-in">
+      {/* Content */}
+      <div className={cn(
+        "relative z-50 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto",
+        className
+      )}>
+        <Button
+          variant="ghost"
+          size="sm"
+          className="absolute top-4 right-4 rounded-lg"
+          onClick={() => context.onOpenChange(false)}
+        >
+          <X className="h-4 w-4" />
+        </Button>
         {children}
       </div>
     </div>
   )
 }
 
-const DialogHeader = ({
-  className,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div
-    className={cn(
-      "flex flex-col space-y-1.5 text-center sm:text-left p-6 pb-4",
-      className
-    )}
-    {...props}
-  />
-)
+interface DialogHeaderProps {
+  children: React.ReactNode
+  className?: string
+}
 
-const DialogTitle = React.forwardRef<
-  HTMLHeadingElement,
-  React.HTMLAttributes<HTMLHeadingElement>
->(({ className, ...props }, ref) => (
-  <h2
-    ref={ref}
-    className={cn(
-      "text-2xl font-semibold leading-none tracking-tight",
-      className
-    )}
-    {...props}
-  />
-))
-DialogTitle.displayName = "DialogTitle"
+export function DialogHeader({ children, className }: DialogHeaderProps) {
+  return (
+    <div className={cn("p-6 pb-4", className)}>
+      {children}
+    </div>
+  )
+}
 
-const DialogDescription = React.forwardRef<
-  HTMLParagraphElement,
-  React.HTMLAttributes<HTMLParagraphElement>
->(({ className, ...props }, ref) => (
-  <p
-    ref={ref}
-    className={cn("text-sm text-muted-foreground", className)}
-    {...props}
-  />
-))
-DialogDescription.displayName = "DialogDescription"
+interface DialogTitleProps {
+  children: React.ReactNode
+  className?: string
+}
 
-const DialogContent = ({
-  className,
-  children,
-  ...props
-}: React.HTMLAttributes<HTMLDivElement>) => (
-  <div className={cn("p-6 pt-0", className)} {...props}>
-    {children}
-  </div>
-)
+export function DialogTitle({ children, className }: DialogTitleProps) {
+  return (
+    <h2 className={cn("text-xl font-semibold text-slate-900 dark:text-slate-100", className)}>
+      {children}
+    </h2>
+  )
+}
+
+interface DialogDescriptionProps {
+  children: React.ReactNode
+  className?: string
+}
+
+export function DialogDescription({ children, className }: DialogDescriptionProps) {
+  return (
+    <p className={cn("text-sm text-slate-600 dark:text-slate-400 mt-1", className)}>
+      {children}
+    </p>
+  )
+}
 
 const DialogClose = ({
   onClick,
@@ -95,5 +151,4 @@ const DialogClose = ({
   </button>
 )
 
-export { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogClose }
-
+export { DialogClose }

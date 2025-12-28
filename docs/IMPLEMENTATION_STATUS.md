@@ -1,321 +1,176 @@
-# Implementation Status - Complete Overview
+# Implementation Status - Single AI Brain + Canonical Conversations
 
-## ✅ All Phases Complete
+## ✅ COMPLETED
 
-### Phase 1: Messaging Engine ✅ 100%
-- ✅ Multi-channel conversation model (WhatsApp, Email, Instagram, Facebook)
-- ✅ Inbound WhatsApp webhook processing with deduplication
-- ✅ Unified outbound sending API (`/api/leads/[id]/messages/send`)
-- ✅ AI draft generation (`/api/leads/[id]/messages/ai-draft`)
-- ✅ Conversation UI with multi-channel tabs
-- ✅ Message status tracking (SENT/DELIVERED/READ)
-- ✅ Token interpolation for templates
+### 1. Single AI Brain (Orchestrator)
+- ✅ Created `src/lib/ai/orchestrator.ts` - ONLY LLM caller
+- ✅ Deleted `src/lib/aiReply.ts`
+- ✅ Refactored `src/lib/aiMessaging.ts` - thin wrapper around orchestrator
+- ✅ Refactored `src/lib/aiMessageGeneration.ts` - routes to orchestrator
+- ✅ Refactored `src/lib/autoReply.ts` - core AI generation replaced with orchestrator
+- ✅ Updated `src/app/api/webhooks/whatsapp/route.ts` - uses orchestrator
 
-### Phase 2: Automation Engine ✅ 100%
-- ✅ Advanced rule engine with 8 trigger types
-- ✅ 9 action types (WhatsApp, Email, Tasks, AI Reply, Requalify, etc.)
-- ✅ Lead-level autopilot toggle
-- ✅ Cooldown & idempotency system
-- ✅ Scheduling endpoint (`/api/cron/run`)
-- ✅ Inbound message automation (real-time)
-- ✅ Rule management APIs (CRUD)
-- ✅ Automation inspector UI component
+### 2. Canonical Conversation Identity
+- ✅ Created `src/lib/conversation/upsert.ts` - single source of truth
+- ✅ Created `src/lib/conversation/getExternalThreadId.ts` - canonical extraction
+- ✅ Updated `src/lib/inbound/autoMatchPipeline.ts` - uses upsertConversation
+- ✅ Added schema index: `@@index([channel, contactId, externalThreadId])`
 
-**Trigger Types:**
-- `EXPIRY_WINDOW` - Expiring items
-- `STAGE_CHANGE` - Pipeline changes
-- `LEAD_CREATED` - New leads
-- `NO_ACTIVITY` - Inactive leads
-- `INBOUND_MESSAGE` - Inbound messages (real-time)
-- `NO_REPLY_SLA` - Unanswered messages
-- `FOLLOWUP_DUE` - Scheduled follow-ups
-- `FOLLOWUP_OVERDUE` - Missed follow-ups
+### 3. Lead Auto-Fill
+- ✅ Service mapping function created: `src/lib/inbound/serviceMapping.ts`
+- ✅ Auto-fill already implemented in `autoMatchPipeline.ts`
+- ✅ Extracts and updates: serviceTypeEnum, serviceTypeId, requestedServiceRaw, nationality, expiry
 
-**Action Types:**
-- `SEND_WHATSAPP` / `SEND_WHATSAPP_TEMPLATE`
-- `SEND_EMAIL` / `SEND_EMAIL_TEMPLATE`
-- `CREATE_TASK`
-- `SET_NEXT_FOLLOWUP`
-- `UPDATE_STAGE`
-- `ASSIGN_TO_USER`
-- `SET_PRIORITY`
-- `SEND_AI_REPLY` (NEW - AI-generated responses)
-- `REQUALIFY_LEAD` (NEW - Auto-update lead scoring)
+### 4. Outbound Deduplication
+- ✅ 10-minute hash deduplication guard in orchestrator
+- ✅ Checks for duplicate outbound messages before sending
 
-### Phase 3: Renewals/Revenue Engine ✅ 100%
-- ✅ AI-powered renewal scoring (`computeRenewalScore`)
-- ✅ Multi-factor probability calculation
-- ✅ Revenue projection (Value × Probability)
-- ✅ Churn risk assessment
-- ✅ Renewal widgets in lead detail page
-- ✅ Integration with automation engine
-- ✅ API endpoint for score updates
+## ⏳ REMAINING WORK
 
-**Scoring Factors:**
-- Expiry proximity (optimal 30-90 days)
-- Recent activity/engagement
-- Service type (business setup = higher value)
-- Existing vs new client
-- Lead stage and quality
-- Assigned agent relationship
-- Renewal status
+### High Priority (Must Complete)
 
-### Phase 4: Documents & Compliance ✅ 100%
-- ✅ Service document requirements model
-- ✅ Compliance intelligence (`getLeadComplianceStatus`)
-- ✅ Compliance scoring (0-100)
-- ✅ Enhanced documents UI with checklist
-- ✅ Missing/expiring/expired document tracking
-- ✅ AI doc reminder button
-- ✅ Document upload/delete APIs
-- ✅ Seed script for requirements
+#### 1. Enforce Canonical Conversation Identity in ALL Outbound Sends
+**Files to Update:**
+- `src/lib/automation/actions.ts` - Use `upsertConversation()` before creating message
+- `src/app/api/inbox/conversations/[id]/reply/route.ts` - Use `upsertConversation()`
+- `src/app/api/leads/[id]/messages/send/route.ts` - Use `upsertConversation()`
+- `src/app/api/leads/[id]/send-message/route.ts` - Use `upsertConversation()`
+- `src/lib/messaging.ts` - Use `upsertConversation()`
+- `src/lib/followups/engine.ts` - Use `upsertConversation()`
+- `src/lib/inbound/staffReminders.ts` - Use `upsertConversation()`
 
-**Status Levels:**
-- `GOOD` - All docs present and valid
-- `WARNING` - Missing docs or expiring soon
-- `CRITICAL` - Expired mandatory docs
+**Pattern to Apply:**
+```typescript
+import { upsertConversation } from '@/lib/conversation/upsert'
+import { getExternalThreadId } from '@/lib/conversation/getExternalThreadId'
 
-## 🔧 Technical Implementation Details
+// Before creating outbound message:
+const { id: conversationId } = await upsertConversation({
+  contactId,
+  channel: 'whatsapp',
+  leadId,
+  externalThreadId: getExternalThreadId('whatsapp', contact, webhookPayload),
+  timestamp: new Date(),
+})
 
-### Database Schema
-- ✅ `Conversation` model with multi-channel support
-- ✅ `Message` model with status tracking
-- ✅ `AutomationRule` model with conditions/actions JSON
-- ✅ `AutomationRunLog` model with idempotency
-- ✅ `ServiceDocumentRequirement` model
-- ✅ `Lead` enhancements (autopilotEnabled, renewalProbability, etc.)
-
-### API Endpoints Created
-```
-Messaging:
-  GET  /api/leads/[id]/messages
-  POST /api/leads/[id]/messages/send
-  POST /api/leads/[id]/messages/ai-draft
-
-Automation:
-  GET    /api/automation/rules
-  POST   /api/automation/rules
-  GET    /api/automation/rules/[id]
-  PATCH  /api/automation/rules/[id]
-  DELETE /api/automation/rules/[id]
-  GET    /api/automation/logs
-  POST   /api/leads/[id]/automation/run
-  POST   /api/cron/run
-
-Renewals:
-  POST /api/leads/[id]/renewal-score
-
-Compliance:
-  GET  /api/leads/[id]/compliance
-  GET  /api/service-document-requirements
-  POST /api/service-document-requirements
+// Then create message with this conversationId
 ```
 
-### Key Libraries Created
-- `src/lib/automation/engine.ts` - Core automation engine
-- `src/lib/automation/actions.ts` - Action executors
-- `src/lib/automation/inbound.ts` - Inbound message handler
-- `src/lib/renewals/scoring.ts` - Renewal probability
-- `src/lib/compliance.ts` - Compliance calculation
-- `src/lib/whatsappInbound.ts` - Lead/contact lookup
-- `src/lib/templateInterpolation.ts` - Token replacement
+#### 2. Implement Fail-Proof Dedupe (DB Transactions + StateVersion)
+**Schema Changes Needed:**
+```prisma
+model Conversation {
+  // ... existing fields ...
+  stateVersion Int @default(0) // Optimistic concurrency control
+  lastAssistantMessageAt DateTime? // Last AI-generated message timestamp
+  lastQuestionKey String? // Last question asked (prevent repeats)
+  lastNextStepKey String? // Last step in conversation flow
+}
+```
 
-## 🚀 Next Steps - Action Plan
+**Implementation:**
+- Add `stateVersion` field to Conversation
+- In orchestrator, use `FOR UPDATE` lock when generating reply
+- Increment `stateVersion` after generating reply
+- Check `stateVersion` before sending
 
-### Immediate (Today)
-1. **Run Prisma Generate** (restart dev server first if needed)
+#### 3. Implement Strict State Machine (Max 5 Questions)
+**Add to Conversation Model:**
+```prisma
+model Conversation {
+  // ... existing fields ...
+  qualificationStage String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
+  questionsAskedCount Int @default(0) // Track total questions asked
+  knownFields String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
+}
+```
+
+**Implementation in Orchestrator:**
+- Load qualification state from conversation
+- Enforce max 5 questions for business setup
+- Track `lastQuestionKey` to prevent repeats
+- Update state after each question
+
+#### 4. Ensure Lead Auto-Fill Visible in UI
+**Update Lead Detail Page:**
+- Verify UI reads `serviceTypeEnum`, `serviceTypeId`, `requestedServiceRaw`
+- Add debug panel (dev-only) showing:
+  - `extractedFields`
+  - `qualificationStage`
+  - `lastQuestionKey`
+  - `questionsAskedCount`
+
+#### 5. Add Comprehensive Tests
+**Test Files to Create:**
+- `src/lib/ai/orchestrator.test.ts` - Test orchestrator logic
+- `src/lib/conversation/upsert.test.ts` - Test conversation deduplication
+- `src/lib/inbound/autoMatchPipeline.integration.test.ts` - Test full pipeline
+- `src/lib/inbound/serviceMapping.test.ts` - Test service mapping
+
+**Test Cases:**
+1. Inbound+outbound → ONE conversation
+2. Webhook idempotency (same providerMessageId twice)
+3. Outbound idempotency (concurrent orchestrator calls)
+4. Lead auto-fill (service, nationality, expiry)
+5. No repeated questions
+6. Business setup max 5 questions
+
+#### 6. Add Reset AI Admin Tool
+**Create:**
+- `src/app/api/admin/ai/reset/route.ts` - API endpoint
+- Button in `/admin/ai-training` page
+- Deletes old training documents and seeds default
+
+## Verification Commands
+
+### Verify Only ONE LLM Caller
    ```bash
-   npx prisma generate
+grep -r "generateCompletion\|chat.completions" src/lib --include="*.ts" | grep -v "orchestrator\|llm/providers\|llm/routing\|llm/index\|orchestrator"
    ```
+**Expected:** No results (orchestrator is the only caller)
 
-2. **Seed Default Data**
+### Verify All Conversations Use Upsert
    ```bash
-   npx ts-node scripts/seed-document-requirements.ts
-   npx ts-node scripts/seed-automation-rules-inbound.ts
-   ```
+grep -r "conversation\.create\|conversation\.upsert" src --include="*.ts" | grep -v "upsertConversation\|findOrCreateConversation"
+```
+**Expected:** Only `upsertConversation()` calls should appear
 
-3. **Test Core Flows**
-   - Send WhatsApp message → Verify automation triggers
-   - Check renewal scoring accuracy
-   - Test compliance status calculation
-   - Verify document upload/checklist
-
-### Short Term (This Week)
-1. **Environment Variables**
+### Verify No Direct AI Calls
    ```bash
-   CRON_SECRET=your-secret-here
-   OPENAI_API_KEY=your-key-here  # Optional but recommended
-   ```
+grep -r "generateAIAutoresponse\|generateAiReply\|handleInboundAutoReply" src --include="*.ts" | grep -v "orchestrator\|aiMessaging\.ts:.*wrapper"
+```
+**Expected:** Only wrapper functions should appear
 
-2. **Set Up Cron Job** (for scheduled automation)
-   - Configure external cron or Vercel Cron
-   - Test daily automation runs
+## Migration Required
 
-3. **Create Test Rules**
-   - Test each trigger type
-   - Verify cooldown periods
-   - Check action execution
+```sql
+-- Add stateVersion and qualification fields
+ALTER TABLE "Conversation" 
+ADD COLUMN IF NOT EXISTS "stateVersion" INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "lastAssistantMessageAt" TIMESTAMP,
+ADD COLUMN IF NOT EXISTS "qualificationStage" TEXT,
+ADD COLUMN IF NOT EXISTS "questionsAskedCount" INTEGER DEFAULT 0,
+ADD COLUMN IF NOT EXISTS "knownFields" TEXT;
+```
 
-### Medium Term (Next 2 Weeks)
-1. **Admin UI Enhancement**
-   - Build rule management page (`/automation`)
-   - Visual rule builder (optional)
-   - Rule testing interface
+Run: `npx prisma migrate dev --name add_conversation_state_fields`
 
-2. **Email Integration**
-   - Complete SMTP sending in `emailClient.ts`
-   - Test email automation actions
+## Next Immediate Steps
 
-3. **Analytics Dashboard**
-   - Automation success rates
-   - Renewal conversion metrics
-   - Compliance statistics
+1. **Update all outbound send functions** to use `upsertConversation()`
+2. **Add stateVersion field** to Conversation model
+3. **Implement strict state machine** in orchestrator
+4. **Add UI debug panel** to Lead detail page
+5. **Write integration tests**
+6. **Create Reset AI admin tool**
 
-### Long Term (Next Month)
-1. **Advanced Features**
-   - Rule templates library
-   - A/B testing for messages
-   - OCR for document extraction
-   - Real-time updates (WebSocket)
+## Estimated Time to Complete
 
-2. **Multi-Channel Expansion**
-   - Instagram send functions
-   - Facebook send functions
-   - Webchat integration
+- Enforce canonical identity: 2-3 hours (update ~10 files)
+- Fail-proof dedupe: 1-2 hours (add stateVersion, implement locking)
+- Strict state machine: 2-3 hours (add fields, implement logic)
+- UI debug panel: 1 hour
+- Tests: 3-4 hours
+- Reset AI tool: 1 hour
 
-## 📊 Testing Checklist
-
-### Automation Testing
-- [ ] Create test automation rule
-- [ ] Trigger manually via API
-- [ ] Verify actions execute correctly
-- [ ] Check cooldown enforcement
-- [ ] Test lead-level toggle
-- [ ] Verify logging in AutomationRunLog
-
-### Inbound Automation Testing
-- [ ] Send WhatsApp message
-- [ ] Verify automation triggers (check logs)
-- [ ] Confirm AI reply is sent
-- [ ] Verify requalification updates lead score
-- [ ] Test keyword matching rules
-- [ ] Test working hours filter
-
-### Renewal Testing
-- [ ] Compute renewal score for test lead
-- [ ] Verify probability calculation
-- [ ] Check revenue projection
-- [ ] Test with different expiry scenarios
-- [ ] Verify AI enhancement works
-
-### Compliance Testing
-- [ ] Upload documents
-- [ ] Check compliance status
-- [ ] Verify checklist updates
-- [ ] Test expiry warnings
-- [ ] Generate AI doc reminder
-- [ ] Test with different service types
-
-## 🎯 Success Metrics
-
-### Key Performance Indicators
-1. **Automation Effectiveness**
-   - % of leads with automation enabled
-   - Automation execution success rate
-   - Average actions per lead per day
-
-2. **Renewal Intelligence**
-   - Renewal probability accuracy
-   - Revenue projection accuracy
-   - Renewal conversion rate improvement
-
-3. **Compliance Health**
-   - Average compliance score
-   - % of leads with GOOD status
-   - Document completion rate
-
-4. **Response Time**
-   - Time to first AI reply
-   - Average response time improvement
-   - SLA compliance rate
-
-## 🐛 Known Issues & Fixes
-
-### Fixed ✅
-1. ✅ Duplicate code in `aiMessaging.ts` - Removed
-2. ✅ Syntax error in `inbound.ts` - Fixed
-3. ✅ Missing imports - Added
-
-### To Monitor ⚠️
-1. ⚠️ Prisma client generation - May need restart
-2. ⚠️ Windows DLL locks - Restart dev server if needed
-3. ⚠️ OpenAI API rate limits - Monitor usage
-4. ⚠️ WhatsApp API rate limits - Monitor sending volume
-
-## 📚 Documentation
-
-### Created Documentation
-- `docs/MESSAGING_IMPLEMENTATION.md` - Messaging engine details
-- `docs/PHASES_2_3_4_IMPLEMENTATION.md` - Automation/Renewals/Compliance
-- `docs/NEXT_STEPS.md` - Action plan and testing guide
-- `docs/AI_AUTORESPOND_IMPLEMENTATION.md` - AI automation details
-
-### API Documentation
-All endpoints are RESTful with JSON responses:
-- Success: `{ ok: true, data: {...} }`
-- Error: `{ ok: false, error: "message" }`
-
-## 🎉 What Makes This Better Than Market
-
-### 1. **Unified Intelligence**
-- Automation, Renewals, and Compliance work together
-- AI powers all three systems
-- Single source of truth for lead data
-
-### 2. **Real-Time Automation**
-- Instant response to inbound messages
-- No polling delays
-- Background processing doesn't block webhooks
-
-### 3. **Smart Defaults**
-- Pre-seeded rules for common scenarios
-- Industry-specific document requirements
-- UAE-focused compliance rules
-
-### 4. **Lead-Level Control**
-- Per-lead autopilot toggle
-- Granular automation control
-- Audit trail for all actions
-
-### 5. **Revenue Intelligence**
-- AI-powered renewal scoring
-- Revenue projection with probability
-- Churn risk assessment
-
-### 6. **Compliance Proactive**
-- Auto-detection of missing docs
-- Expiry warnings
-- AI-generated reminders
-
----
-
-**Status**: ✅ **PRODUCTION READY**
-**Last Updated**: After all phases implementation
-**Next Review**: After initial testing period
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
-
+**Total: ~10-14 hours**

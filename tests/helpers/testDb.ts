@@ -37,24 +37,48 @@ export function getTestPrisma(): PrismaClient {
  * Setup test database (run migrations)
  */
 export async function setupTestDb() {
+  // Default to a test database (same connection as main DB but different database name)
   const testDbUrl = process.env.TEST_DATABASE_URL || 
-    process.env.DATABASE_URL?.replace(/\/[^/]+$/, '/test_db') ||
-    'postgresql://localhost:5432/test_db'
+    (process.env.DATABASE_URL ? process.env.DATABASE_URL.replace(/\/[^/]+$/, '/test_db') : null)
+
+  if (!testDbUrl) {
+    console.warn('⚠️ TEST_DATABASE_URL not set and DATABASE_URL not available')
+    console.warn('   Tests will use main DATABASE_URL - this is not recommended for production')
+    // Don't throw - allow tests to run with main DB (not ideal but better than failing)
+    return
+  }
 
   console.log('📦 Setting up test database...')
+  console.log(`   Using: ${testDbUrl.replace(/:[^:@]+@/, ':****@')}`) // Hide password in logs
   
-  // Set DATABASE_URL for Prisma migrate
+  // Set DATABASE_URL for Prisma commands
+  const originalDbUrl = process.env.DATABASE_URL
   process.env.DATABASE_URL = testDbUrl
 
   try {
-    // Run migrations
+    // Use migrate deploy for PostgreSQL (schema is PostgreSQL-only)
     execSync('npx prisma migrate deploy', {
-      stdio: 'inherit',
+      stdio: 'pipe', // Don't show full output in tests
       env: { ...process.env, DATABASE_URL: testDbUrl },
     })
     console.log('✅ Test database migrations applied')
   } catch (error: any) {
-    console.warn('⚠️ Migration failed (might already be applied):', error.message)
+    // Try db push as fallback (for new test DBs)
+    try {
+      execSync('npx prisma db push --skip-generate --accept-data-loss', {
+        stdio: 'pipe',
+        env: { ...process.env, DATABASE_URL: testDbUrl },
+      })
+      console.log('✅ Test database schema pushed')
+    } catch (pushError: any) {
+      console.error('❌ Test database setup failed:', pushError.message)
+      // Restore original DATABASE_URL
+      if (originalDbUrl) process.env.DATABASE_URL = originalDbUrl
+      throw pushError
+    }
+  } finally {
+    // Restore original DATABASE_URL
+    if (originalDbUrl) process.env.DATABASE_URL = originalDbUrl
   }
 }
 

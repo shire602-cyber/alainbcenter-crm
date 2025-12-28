@@ -132,17 +132,25 @@ export async function POST(req: NextRequest) {
       // 3. Generate AI drafts for follow-ups
       for (const lead of leadsNeedingFollowUp) {
         try {
-          // Get or create conversation
-          let conversation = lead.conversations[0]
+          // Use canonical upsertConversation
+          const { upsertConversation } = await import('@/lib/conversation/upsert')
+          const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+          
+          const { id: conversationId } = await upsertConversation({
+            contactId: lead.contactId,
+            channel: 'whatsapp',
+            leadId: lead.id,
+            externalThreadId: getExternalThreadId('whatsapp', lead.contact),
+          })
+          
+          const conversation = await prisma.conversation.findUnique({
+            where: { id: conversationId },
+            include: { messages: true },
+          })
+          
           if (!conversation) {
-            conversation = await prisma.conversation.create({
-              data: {
-                contactId: lead.contactId,
-                leadId: lead.id,
-                channel: 'whatsapp', // Default channel
-                status: 'open'
-              }
-            })
+            results.errors.push(`Lead ${lead.id}: Failed to fetch conversation after upsert`)
+            continue
           }
           
           // Generate AI draft - call directly since we're on the server

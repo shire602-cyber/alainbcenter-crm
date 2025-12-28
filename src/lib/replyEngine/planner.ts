@@ -12,7 +12,8 @@ import { wasQuestionAsked } from './fsm'
 export function planNextAction(
   state: FSMState,
   inboundText: string,
-  extractedFields: Record<string, any>
+  extractedFields: Record<string, any>,
+  isFirstMessage: boolean = false
 ): PlannerPlan {
   const lowerText = inboundText.toLowerCase()
 
@@ -26,11 +27,47 @@ export function planNextAction(
     }
   }
 
-  // Rule 2: If serviceKey missing, ASK service
+  // Rule 2: If serviceKey missing, ASK service (after greeting)
   if (!state.serviceKey) {
     // Check if extracted fields have service
     const extractedService = extractedFields.serviceKey
     if (extractedService) {
+      // CRITICAL: Check if we already asked for name AND if name is already collected
+      const nameAlreadyAsked = wasQuestionAsked(state, 'full_name')
+      const nameAlreadyCollected = !!state.collected.fullName
+      
+      if (nameAlreadyAsked || nameAlreadyCollected) {
+        // Name already asked or collected, check nationality
+        const nationalityAlreadyAsked = wasQuestionAsked(state, 'nationality')
+        const nationalityAlreadyCollected = !!state.collected.nationality
+        
+        if (nationalityAlreadyAsked || nationalityAlreadyCollected) {
+          // Both name and nationality collected, handover
+          return {
+            action: 'HANDOVER',
+            templateKey: 'handover_call',
+            updates: {
+              serviceKey: extractedService,
+              stage: 'QUOTE_READY',
+              required: getRequiredFieldsForService(extractedService),
+            },
+            reason: `Service detected: ${extractedService}, name and nationality already collected, ready for handover`,
+          }
+        }
+        // Name collected but nationality missing, ask nationality
+        return {
+          action: 'ASK',
+          templateKey: 'ask_nationality',
+          questionKey: 'nationality',
+          updates: {
+            serviceKey: extractedService,
+            stage: 'QUALIFYING',
+            required: getRequiredFieldsForService(extractedService),
+          },
+          reason: `Service detected: ${extractedService}, name already collected, asking nationality (Q2)`,
+        }
+      }
+      // Name not asked or collected, ask name
       return {
         action: 'ASK',
         templateKey: 'ask_full_name',
@@ -40,7 +77,50 @@ export function planNextAction(
           stage: 'QUALIFYING',
           required: getRequiredFieldsForService(extractedService),
         },
-        reason: `Service detected: ${extractedService}, now asking for name`,
+        reason: `Service detected: ${extractedService}, now asking for name (Q1)`,
+      }
+    }
+
+    // CRITICAL: Check if we already asked for service to prevent duplicates
+    if (wasQuestionAsked(state, 'service')) {
+      // Service already asked but not detected, check if we have name
+      const nameAlreadyAsked = wasQuestionAsked(state, 'full_name')
+      const nameAlreadyCollected = !!state.collected.fullName
+      
+      if (nameAlreadyAsked || nameAlreadyCollected) {
+        // Name already asked/collected, ask nationality or handover
+        const nationalityAlreadyAsked = wasQuestionAsked(state, 'nationality')
+        const nationalityAlreadyCollected = !!state.collected.nationality
+        
+        if (nationalityAlreadyAsked || nationalityAlreadyCollected) {
+          return {
+            action: 'HANDOVER',
+            templateKey: 'handover_call',
+            updates: {
+              stage: 'QUOTE_READY',
+            },
+            reason: 'Service already asked, name and nationality collected, ready for handover',
+          }
+        }
+        return {
+          action: 'ASK',
+          templateKey: 'ask_nationality',
+          questionKey: 'nationality',
+          updates: {
+            stage: 'NEW',
+          },
+          reason: 'Service already asked, name collected, asking nationality (Q2)',
+        }
+      }
+      // Service asked but name not collected, ask name
+      return {
+        action: 'ASK',
+        templateKey: 'ask_full_name',
+        questionKey: 'full_name',
+        updates: {
+          stage: 'NEW',
+        },
+        reason: 'Service already asked, asking for name (Q1)',
       }
     }
 
@@ -51,7 +131,7 @@ export function planNextAction(
       updates: {
         stage: 'NEW',
       },
-      reason: 'Service not detected, asking for service',
+      reason: 'Service not detected, asking for service (Q1)',
     }
   }
 
@@ -87,8 +167,10 @@ function planBusinessSetupAction(
     }
   }
 
-  // Question 1: Full name (if not collected)
-  if (!collected.fullName && !wasQuestionAsked(state, 'full_name')) {
+  // PERFECT ORDER - Q1: Full name (always first, question 1/5)
+  // CRITICAL: Double-check we haven't asked this before to prevent duplicates
+  const nameAlreadyAsked = wasQuestionAsked(state, 'full_name')
+  if (!collected.fullName && !nameAlreadyAsked) {
     if (extractedFields.fullName) {
       return {
         action: 'ASK',
@@ -98,7 +180,7 @@ function planBusinessSetupAction(
           collected: { fullName: extractedFields.fullName },
           askedQuestionKeys: ['full_name'],
         },
-        reason: 'Name extracted, moving to activity question',
+        reason: 'Name extracted (Q1), asking business activity (Q2/5)',
       }
     }
     return {
@@ -108,11 +190,25 @@ function planBusinessSetupAction(
       updates: {
         askedQuestionKeys: ['full_name'],
       },
-      reason: 'Asking for full name (question 1/5)',
+      reason: 'Asking for full name (Q1/5)',
+    }
+  }
+  
+  // If name was already asked but not collected, skip to next question
+  if (nameAlreadyAsked && !collected.fullName) {
+    // Name was asked but not provided, move to next question
+    if (!collected.businessActivity && !wasQuestionAsked(state, 'business_activity')) {
+      return {
+        action: 'ASK',
+        templateKey: 'business_setup_activity',
+        questionKey: 'business_activity',
+        updates: {},
+        reason: 'Name already asked (Q1), asking business activity (Q2/5)',
+      }
     }
   }
 
-  // Question 2: Business activity (if not collected)
+  // PERFECT ORDER - Q2: Business activity (question 2/5)
   if (!collected.businessActivity && !wasQuestionAsked(state, 'business_activity')) {
     if (extractedFields.businessActivity) {
       return {
@@ -123,7 +219,7 @@ function planBusinessSetupAction(
           collected: { businessActivity: extractedFields.businessActivity },
           askedQuestionKeys: ['business_activity'],
         },
-        reason: 'Activity extracted, moving to jurisdiction question',
+        reason: 'Activity extracted (Q2), asking jurisdiction (Q3/5)',
       }
     }
     return {
@@ -133,11 +229,11 @@ function planBusinessSetupAction(
       updates: {
         askedQuestionKeys: ['business_activity'],
       },
-      reason: 'Asking for business activity (question 2/5)',
+      reason: 'Asking for business activity (Q2/5)',
     }
   }
 
-  // Question 3: Jurisdiction (if not collected)
+  // PERFECT ORDER - Q3: Jurisdiction (question 3/5)
   if (!collected.jurisdiction && !wasQuestionAsked(state, 'jurisdiction')) {
     if (extractedFields.jurisdiction) {
       return {
@@ -148,7 +244,7 @@ function planBusinessSetupAction(
           collected: { jurisdiction: extractedFields.jurisdiction },
           askedQuestionKeys: ['jurisdiction'],
         },
-        reason: 'Jurisdiction extracted, moving to partners question',
+        reason: 'Jurisdiction extracted (Q3), asking partners (Q4/5)',
       }
     }
     return {
@@ -158,11 +254,11 @@ function planBusinessSetupAction(
       updates: {
         askedQuestionKeys: ['jurisdiction'],
       },
-      reason: 'Asking for jurisdiction (question 3/5)',
+      reason: 'Asking for jurisdiction (Q3/5)',
     }
   }
 
-  // Question 4: Partners count (if not collected)
+  // PERFECT ORDER - Q4: Partners count (question 4/5)
   if (collected.partnersCount === undefined && !wasQuestionAsked(state, 'partners_count')) {
     if (extractedFields.partnersCount !== undefined) {
       return {
@@ -173,7 +269,7 @@ function planBusinessSetupAction(
           collected: { partnersCount: extractedFields.partnersCount },
           askedQuestionKeys: ['partners_count'],
         },
-        reason: 'Partners count extracted, moving to visas question',
+        reason: 'Partners count extracted (Q4), asking visas (Q5/5)',
       }
     }
     return {
@@ -183,22 +279,22 @@ function planBusinessSetupAction(
       updates: {
         askedQuestionKeys: ['partners_count'],
       },
-      reason: 'Asking for partners count (question 4/5)',
+      reason: 'Asking for partners count (Q4/5)',
     }
   }
 
-  // Question 5: Visas count (if not collected)
+  // PERFECT ORDER - Q5: Visas count (question 5/5 - FINAL)
   if (collected.visasCount === undefined && !wasQuestionAsked(state, 'visas_count')) {
     if (extractedFields.visasCount !== undefined) {
       return {
-        action: 'INFO',
+        action: 'HANDOVER',
         templateKey: 'handover_call',
         updates: {
           collected: { visasCount: extractedFields.visasCount },
           askedQuestionKeys: ['visas_count'],
           stage: 'QUOTE_READY',
         },
-        reason: 'All questions answered, ready for quote',
+        reason: 'All 5 questions answered, ready for handover',
       }
     }
     return {
@@ -208,7 +304,7 @@ function planBusinessSetupAction(
       updates: {
         askedQuestionKeys: ['visas_count'],
       },
-      reason: 'Asking for visas count (question 5/5)',
+      reason: 'Asking for visas count (Q5/5 - FINAL)',
     }
   }
 
@@ -246,16 +342,20 @@ function planGenericServiceAction(
 
   // Check required fields in order
   for (const field of required) {
-    if (!collected[field] && !wasQuestionAsked(state, field)) {
+    // CRITICAL: Map field name to questionKey (e.g., 'fullName' -> 'full_name')
+    const questionKey = getQuestionKeyForField(field)
+    const alreadyAsked = wasQuestionAsked(state, questionKey)
+    
+    if (!collected[field] && !alreadyAsked) {
       const templateKey = getTemplateKeyForField(field)
       return {
         action: 'ASK',
         templateKey,
-        questionKey: field,
+        questionKey: questionKey, // Use mapped questionKey
         updates: {
-          askedQuestionKeys: [field],
+          askedQuestionKeys: [questionKey], // Use mapped questionKey
         },
-        reason: `Asking for required field: ${field}`,
+        reason: `Asking for required field: ${field} (Q${state.askedQuestionKeys.length + 1}/5)`,
       }
     }
   }
@@ -286,6 +386,22 @@ function getRequiredFieldsForService(serviceKey: ServiceKey): string[] {
       return ['fullName', 'nationality']
     default:
       return ['fullName', 'nationality']
+  }
+}
+
+/**
+ * Get question key for a field (maps field name to questionKey used in askedQuestionKeys)
+ * CRITICAL: This must match the format used in askedQuestionKeys (e.g., 'full_name' not 'fullName')
+ */
+function getQuestionKeyForField(field: string): string {
+  switch (field) {
+    case 'fullName':
+      return 'full_name' // CRITICAL: Must match what's stored in askedQuestionKeys
+    case 'nationality':
+      return 'nationality'
+    default:
+      // Convert camelCase to snake_case
+      return field.replace(/([A-Z])/g, '_$1').toLowerCase()
   }
 }
 

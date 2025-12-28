@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthOrAgentApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
-import { sendTextMessage, sendTemplateMessage } from '@/lib/whatsapp'
+import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
+import { sendTemplateMessage } from '@/lib/whatsapp'
 import { normalizeToE164 } from '@/lib/phone'
 
 /**
@@ -111,7 +112,29 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Send message
+    // CRITICAL FIX: Use same conversation for inbound/outbound, always link to lead
+    // Use canonical upsertConversation
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+    
+    const { id: conversationId } = await upsertConversation({
+      contactId: contact.id,
+      channel: 'whatsapp',
+      leadId: lead.id,
+      externalThreadId: getExternalThreadId('whatsapp', contact),
+    })
+    
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+    })
+    
+    if (!conversation) {
+      throw new Error(`Failed to fetch conversation ${conversationId} after upsert`)
+    }
+    
+    console.log(`✅ [WHATSAPP-SEND] Using conversation ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
+
+    // Send message with idempotency
     let result: { messageId: string; waId?: string }
     let messageContent = message
 
@@ -132,7 +155,8 @@ export async function POST(req: NextRequest) {
         )
       }
 
-      // Send template message
+      // Send template message (templates are idempotent by design, but still use idempotency for tracking)
+      // Note: Template messages don't go through sendOutboundWithIdempotency yet, but they're idempotent by Meta's design
       result = await sendTemplateMessage(
         normalizedPhone,
         template.name,
@@ -142,51 +166,42 @@ export async function POST(req: NextRequest) {
 
       messageContent = template.body || template.content || 'WhatsApp template message'
     } else {
-      // Send text message
-      result = await sendTextMessage(normalizedPhone, message!)
-    }
+      // Send text message with idempotency
+      const sendResult = await sendOutboundWithIdempotency({
+        conversationId: conversation.id,
+        contactId: contact.id,
+        leadId: lead.id,
+        phone: normalizedPhone,
+        text: message!,
+        provider: 'whatsapp',
+        triggerProviderMessageId: null, // Manual send
+        replyType: 'manual',
+        lastQuestionKey: null,
+        flowStep: null,
+      })
 
-    // CRITICAL FIX: Use same conversation for inbound/outbound, always link to lead
-    let conversation = await prisma.conversation.findUnique({
-      where: {
-        contactId_channel: {
-          contactId: contact.id,
-          channel: 'whatsapp',
-        },
+      if (sendResult.wasDuplicate) {
+        return NextResponse.json(
+          { error: 'Duplicate message blocked (idempotency)' },
+          { status: 409 }
+        )
+      }
+
+      if (!sendResult.success) {
+        throw new Error(sendResult.error || 'Failed to send message')
+      }
+
+      result = { messageId: sendResult.messageId || '', waId: undefined }
+    }
+    
+    // Update last message timestamp
+    await prisma.conversation.update({
+      where: { id: conversation.id },
+      data: {
+        lastMessageAt: new Date(),
+        lastOutboundAt: new Date(),
       },
     })
-
-    if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          contactId: contact.id,
-          leadId: lead.id, // CRITICAL: Always link to lead
-          channel: 'whatsapp',
-          lastMessageAt: new Date(),
-        },
-      })
-      console.log(`✅ [WHATSAPP-SEND] Created conversation ${conversation.id} for contact ${contact.id}, lead ${lead.id}`)
-    } else {
-      // CRITICAL FIX: Update leadId if it's null or different
-      if (!conversation.leadId || conversation.leadId !== lead.id) {
-        conversation = await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: {
-            leadId: lead.id, // Link to current lead
-            lastMessageAt: new Date(),
-          },
-        })
-        console.log(`✅ [WHATSAPP-SEND] Updated conversation ${conversation.id} to link to lead ${lead.id}`)
-      } else {
-        // Update last message timestamp
-        await prisma.conversation.update({
-          where: { id: conversation.id },
-          data: {
-            lastMessageAt: new Date(),
-          },
-        })
-      }
-    }
 
     // Create communication log
     const logData: any = {

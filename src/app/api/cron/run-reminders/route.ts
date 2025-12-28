@@ -138,24 +138,52 @@ export async function GET(req: NextRequest) {
           }
         }
 
-        // Send message
+        // Send message with idempotency
         if (reminder.channel === 'WHATSAPP' && contact.phone) {
-          const result = await sendTextMessage(contact.phone, messageText)
+          // Get or create conversation
+          const { upsertConversation } = await import('@/lib/conversation/upsert')
+          const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
           
-          if (result && result.messageId) {
-            // Create message record
-            const conversation = await prisma.conversation.findFirst({
-              where: {
-                contactId: contact.id,
-                leadId: lead.id,
-                channel: 'whatsapp',
-              },
-            })
+          const { id: conversationId } = await upsertConversation({
+            contactId: contact.id,
+            channel: 'whatsapp',
+            leadId: lead.id,
+            externalThreadId: getExternalThreadId('whatsapp', contact),
+          })
 
-            if (conversation) {
+          const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+          const result = await sendOutboundWithIdempotency({
+            conversationId: conversationId,
+            contactId: contact.id,
+            leadId: lead.id,
+            phone: contact.phone,
+            text: messageText,
+            provider: 'whatsapp',
+            triggerProviderMessageId: null, // Reminder send
+            replyType: 'reminder',
+            lastQuestionKey: null,
+            flowStep: null,
+          })
+
+          if (result.wasDuplicate) {
+            console.log(`⚠️ [REMINDERS] Duplicate outbound blocked by idempotency for reminder ${reminder.id}`)
+            continue // Skip this reminder
+          }
+
+          if (!result.success) {
+            console.error(`❌ [REMINDERS] Failed to send reminder ${reminder.id}:`, result.error)
+            continue // Skip this reminder
+          }
+
+          // Use result from idempotency system
+          const sendResult = { messageId: result.messageId }
+          
+          if (sendResult && sendResult.messageId) {
+            // Create message record (conversation already exists from upsert above)
+            try {
               await prisma.message.create({
                 data: {
-                  conversationId: conversation.id,
+                  conversationId: conversationId,
                   leadId: lead.id,
                   contactId: contact.id,
                   direction: 'OUTBOUND',
@@ -163,7 +191,7 @@ export async function GET(req: NextRequest) {
                   type: 'text',
                   body: messageText,
                   status: 'SENT',
-                  providerMessageId: result.messageId,
+                  providerMessageId: sendResult.messageId,
                   rawPayload: JSON.stringify({
                     reminderId: reminder.id,
                     reminderType: reminder.type,
@@ -174,7 +202,7 @@ export async function GET(req: NextRequest) {
               })
 
               await prisma.conversation.update({
-                where: { id: conversation.id },
+                where: { id: conversationId },
                 data: {
                   lastMessageAt: now,
                   lastOutboundAt: now,

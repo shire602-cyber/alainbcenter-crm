@@ -200,9 +200,28 @@ export async function POST(
         whatsappMessageId = result.messageId
         messageContent = `Template: ${templateName}`
       } else if (text && within24HourWindow) {
-        // Send free-form text message (only within 24-hour window)
-        const result = await sendTextMessage(normalizedPhone, text.trim())
-        whatsappMessageId = result.messageId
+        // Send free-form text message (only within 24-hour window) with idempotency
+        const result = await sendOutboundWithIdempotency({
+          conversationId: conversation.id,
+          contactId: conversation.contactId,
+          leadId: conversation.leadId,
+          phone: normalizedPhone,
+          text: text.trim(),
+          provider: 'whatsapp',
+          triggerProviderMessageId: null, // Manual send
+          replyType: 'answer',
+          lastQuestionKey: null,
+          flowStep: null,
+        })
+
+        if (result.wasDuplicate) {
+          console.log(`⚠️ [INBOX-MESSAGES] Duplicate outbound blocked by idempotency`)
+          throw new Error('Duplicate message blocked (idempotency)')
+        } else if (!result.success) {
+          throw new Error(result.error || 'Failed to send message')
+        }
+
+        whatsappMessageId = result.messageId || undefined
         messageContent = text.trim()
       } else {
         throw new Error('Invalid message type or outside 24-hour window')
