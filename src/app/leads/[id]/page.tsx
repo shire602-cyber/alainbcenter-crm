@@ -13,6 +13,7 @@ import { LeadDNA } from '@/components/leads/LeadDNA'
 import { ConversationWorkspace } from '@/components/leads/ConversationWorkspace'
 import { NextBestActionPanel } from '@/components/leads/NextBestActionPanel'
 import { LeadProgressBar } from '@/components/leads/LeadProgressBar'
+import { FocusModeBanner } from '@/components/dashboard/FocusModeBanner'
 import { ArrowLeft, Info, MessageSquare, Phone, Send, Zap } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -146,10 +147,16 @@ export default function LeadDetailPage({
   const primaryAction = getPrimaryAction()
   const serviceName = lead?.serviceType?.name || lead?.serviceTypeEnum || lead?.requestedServiceRaw || 'Not specified'
 
+  const isFocusMode = typeof window !== 'undefined' && sessionStorage.getItem('focusMode') === 'true'
+
   return (
     <MainLayout>
+      <FocusModeBanner />
       {/* Mobile Layout (<1024px) */}
-      <div className="lg:hidden h-screen flex flex-col">
+      <div className={cn(
+        "lg:hidden h-screen flex flex-col transition-opacity duration-300",
+        isFocusMode && "opacity-100"
+      )}>
         {/* Sticky Header */}
         <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 flex-shrink-0 z-20">
           <div className="flex items-center gap-3 flex-1 min-w-0">
@@ -282,7 +289,10 @@ export default function LeadDetailPage({
       </div>
 
       {/* Desktop Layout (>=1024px) */}
-      <div className="hidden lg:flex h-screen flex-col">
+      <div className={cn(
+        "hidden lg:flex h-screen flex-col transition-opacity duration-300",
+        isFocusMode && "opacity-100"
+      )}>
         {/* Sticky Header */}
         <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 sm:px-6 flex-shrink-0 z-10">
           <div className="flex items-center gap-4">

@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
+import { ReplySuccessBanner } from './ReplySuccessBanner'
 
 interface Message {
   id: number
@@ -36,6 +37,7 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
   const [loading, setLoading] = useState(true)
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
+  const [showSuccessBanner, setShowSuccessBanner] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [smartReplies, setSmartReplies] = useState<string[]>([])
 
@@ -103,6 +105,7 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
       }
       await loadMessages()
       setSmartReplies([])
+      setShowSuccessBanner(true) // Show success banner after sending
       if (onComposerChange) {
         onComposerChange(false)
       }
@@ -111,6 +114,30 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
     } finally {
       setSending(false)
     }
+  }
+
+  async function handleMarkComplete() {
+    // Check if we have a focus item ID
+    const focusItemId = sessionStorage.getItem('focusItemId')
+    if (focusItemId) {
+      // Extract task or conversation ID
+      const parts = focusItemId.split('_')
+      if (parts[0] === 'task' && parts[1]) {
+        try {
+          await fetch(`/api/tasks/${parts[1]}`, {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ status: 'COMPLETED' }),
+          })
+        } catch (error) {
+          console.error('Failed to mark task complete:', error)
+        }
+      }
+    }
+    // Exit focus mode and return to dashboard
+    sessionStorage.removeItem('focusMode')
+    sessionStorage.removeItem('focusItemId')
+    window.location.href = '/'
   }
 
   function scrollToBottom() {
@@ -247,6 +274,16 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Success Banner after sending reply */}
+      {showSuccessBanner && (
+        <div className="px-6 pb-2">
+          <ReplySuccessBanner
+            onMarkComplete={handleMarkComplete}
+            onKeepOpen={() => setShowSuccessBanner(false)}
+          />
+        </div>
+      )}
 
       {/* Smart Reply Suggestions */}
       {smartReplies.length > 0 && (

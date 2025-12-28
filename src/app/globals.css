@@ -9,6 +9,37 @@
 @tailwind components;
 @tailwind utilities;
 
+@layer utilities {
+  /* Premium card styling */
+  .card-premium {
+    @apply border border-slate-200 dark:border-slate-800 rounded-xl bg-white dark:bg-slate-900;
+    transition: all 180ms ease-in-out;
+    @apply hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700;
+  }
+
+  /* Small rounded pill */
+  .chip {
+    @apply inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium;
+    @apply bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300;
+  }
+
+  /* Smooth transitions */
+  .transition-smooth {
+    transition: all 180ms ease-in-out;
+  }
+
+  /* Muted text */
+  .muted-text {
+    @apply text-slate-500 dark:text-slate-400;
+  }
+
+  /* Metric pill */
+  .metric-pill {
+    @apply inline-flex items-center gap-1.5 px-2.5 py-1 rounded-lg text-xs font-medium;
+    @apply bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300;
+  }
+}
+
 @layer base {
   :root {
     --background: 0 0% 100%;
