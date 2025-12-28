@@ -123,7 +123,7 @@ export async function POST(
       } else if (!result.success) {
         throw new Error(result.error || 'Failed to send message')
       } else {
-        whatsappMessageId = result.messageId || undefined
+        whatsappMessageId = result.messageId || null
       }
     } catch (whatsappError: any) {
       console.error('WhatsApp send error:', whatsappError)

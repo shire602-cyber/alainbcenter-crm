@@ -160,18 +160,12 @@ async function getDeduplicatedTasks(userId: number | undefined, today: Date): Pr
  * Get SLA breaches (conversations needing immediate reply)
  */
 async function getSLABreaches(userId: number | undefined, now: Date): Promise<CommandCenterItem[]> {
-  const conversations = await prisma.conversation.findMany({
+  const allConversations = await prisma.conversation.findMany({
     where: {
       status: 'open',
       lastInboundAt: {
         not: null,
         lte: new Date(now.getTime() - 10 * 60 * 1000), // 10 minutes ago
-      },
-      lastOutboundAt: {
-        OR: [
-          null,
-          { lt: prisma.conversation.fields.lastInboundAt },
-        ],
       },
       ...(userId && {
         OR: [
@@ -189,8 +183,14 @@ async function getSLABreaches(userId: number | undefined, now: Date): Promise<Co
       },
     },
     orderBy: { lastInboundAt: 'asc' },
-    take: 10,
   })
+
+  // Filter: lastOutboundAt is null OR lastOutboundAt < lastInboundAt
+  // (Prisma doesn't support field-to-field comparison in filters)
+  const conversations = allConversations.filter(conv => 
+    !conv.lastOutboundAt || 
+    (conv.lastInboundAt && conv.lastOutboundAt < conv.lastInboundAt)
+  ).slice(0, 10)
 
   return conversations.map((conv) => {
     const hoursSinceInbound = conv.lastInboundAt

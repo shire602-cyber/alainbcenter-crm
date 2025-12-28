@@ -18,6 +18,7 @@ import { prisma } from '../prisma'
 import { differenceInDays, addDays, isPast } from 'date-fns'
 import { sendOutboundWithIdempotency } from '../outbound/sendWithIdempotency'
 import { generateAIAutoresponse } from '../aiMessaging'
+import { generateAIReply } from '../ai/orchestrator'
 import { upsertConversation } from '../conversation/upsert'
 import { getExternalThreadId } from '../conversation/getExternalThreadId'
 

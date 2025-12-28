@@ -10,6 +10,7 @@ import { sendTextMessage } from './whatsapp'
 // ⚠️ DEPRECATED: This file routes to orchestrator
 // All AI generation now goes through orchestrator
 import { generateAIReply } from './ai/orchestrator'
+import type { AIMessageMode } from './aiMessaging'
 import { upsertConversation } from './conversation/upsert'
 import { retrieveAndGuard, markLeadRequiresHuman } from './ai/retrieverChain'
 import { notifyAIUntrainedSubject } from './notifications'
@@ -764,7 +765,14 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // Step 8: Generate AI reply (with language detection)
     // CRITICAL: Always generate a reply - use retrieval context if available, otherwise use fallback
     // CRITICAL: Current inbound message must be FIRST in context so AI responds to it
-    const aiContext: AIMessageContext = {
+    const aiContext: {
+      lead: any
+      contact: any
+      recentMessages?: Array<{ direction: string; body: string; createdAt: Date }>
+      mode: 'QUALIFY' | 'FOLLOW_UP' | 'REMINDER' | 'DOCS' | 'SUPPORT'
+      channel: string
+      language?: 'en' | 'ar'
+    } = {
       lead,
       contact: lead.contact,
       recentMessages: [
@@ -842,7 +850,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         for (const task of orchestratorResult.tasksToCreate) {
           await createAgentTask(lead.id, task.type as any, {
             messageText: task.title,
-            dueAt: task.dueAt,
+            // Note: dueAt is not supported by createAgentTask, will use default
           })
         }
         
@@ -1340,7 +1348,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           }
         }
 
-          // Update conversation
+        // Update conversation
+        if (conversationForOutbound) {
           await prisma.conversation.update({
             where: { id: conversationForOutbound.id },
             data: {

@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { sendTextMessage } from '@/lib/whatsapp'
 import { createAgentTask } from '@/lib/automation/agentFallback'
 
 /**
@@ -160,7 +159,7 @@ export async function GET(req: NextRequest) {
             text: messageText,
             provider: 'whatsapp',
             triggerProviderMessageId: null, // Reminder send
-            replyType: 'reminder',
+            replyType: 'reminder', // Use 'reminder' for scheduled reminders
             lastQuestionKey: null,
             flowStep: null,
           })
@@ -208,6 +207,9 @@ export async function GET(req: NextRequest) {
                   lastOutboundAt: now,
                 },
               })
+            } catch (messageError: any) {
+              console.error(`❌ [REMINDERS] Failed to create message record for reminder ${reminder.id}:`, messageError)
+              // Continue anyway - message was sent, just failed to log it
             }
 
             // Mark reminder as sent
