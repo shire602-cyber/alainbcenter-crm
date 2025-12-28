@@ -24,7 +24,7 @@ export interface OutboundSendOptions {
   text: string
   provider: 'whatsapp' | 'email' | 'instagram' | 'facebook'
   triggerProviderMessageId?: string | null
-  replyType?: 'greeting' | 'question' | 'answer' | 'closing'
+  replyType?: 'greeting' | 'question' | 'answer' | 'closing' | 'manual' | 'test' | 'followup' | 'reminder'
   lastQuestionKey?: string | null
   flowStep?: string | null
 }

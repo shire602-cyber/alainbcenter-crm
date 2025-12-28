@@ -201,6 +201,7 @@ export async function POST(
         messageContent = `Template: ${templateName}`
       } else if (text && within24HourWindow) {
         // Send free-form text message (only within 24-hour window) with idempotency
+        const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
         const result = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
           contactId: conversation.contactId,
@@ -221,7 +222,7 @@ export async function POST(
           throw new Error(result.error || 'Failed to send message')
         }
 
-        whatsappMessageId = result.messageId || undefined
+        whatsappMessageId = result.messageId || null
         messageContent = text.trim()
       } else {
         throw new Error('Invalid message type or outside 24-hour window')
