@@ -27,7 +27,7 @@ import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { BentoCard } from '@/components/dashboard/BentoCard'
 import { QuickActions } from '@/components/dashboard/QuickActions'
-import { TopPrioritiesToday } from '@/components/dashboard/TopPrioritiesToday'
+import { CommandCenter } from '@/components/dashboard/CommandCenter'
 import { BlockedByCustomer } from '@/components/dashboard/BlockedByCustomer'
 import { TodaysImpact } from '@/components/dashboard/TodaysImpact'
 import { EndOfDaySummary } from '@/components/dashboard/EndOfDaySummary'
@@ -362,13 +362,13 @@ export default async function DashboardPage() {
 
           {/* Main Grid - Bento Box Layout */}
           <div className="grid gap-2 md:grid-cols-3">
-            {/* TOP PRIORITIES TODAY - 2 columns */}
+            {/* COMMAND CENTER - 2 columns */}
             <BentoCard 
-              title="Top Priorities Today" 
+              title="Command Center" 
               colSpan={2}
               action={<Badge variant="secondary" className="text-xs">Mission Control</Badge>}
             >
-              <TopPrioritiesToday />
+              <CommandCenter />
             </BentoCard>
 
             {/* Renewals - 1 column */}

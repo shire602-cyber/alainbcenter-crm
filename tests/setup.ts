@@ -2,32 +2,40 @@
  * Test Setup
  * 
  * Global test configuration and cleanup
+ * Uses TEST_DATABASE_URL (required)
  */
 
-import { beforeAll, afterAll } from 'vitest'
-import { setupTestDb, closeTestDb } from './helpers/testDb'
+import { beforeAll, afterAll, beforeEach } from 'vitest'
+import { 
+  assertTestDatabaseUrl, 
+  getTestPrisma, 
+  resetTestDatabase, 
+  closeTestDatabase 
+} from '@/lib/test/db'
 
-// Setup test database before all tests
+// Assert TEST_DATABASE_URL is set before any tests run
 beforeAll(async () => {
-  // Default to SQLite if TEST_DATABASE_URL not set
-  if (!process.env.TEST_DATABASE_URL) {
-    process.env.TEST_DATABASE_URL = 'file:./test.db'
-    console.log('📦 Using default SQLite test database: test.db')
-  }
-  
   try {
-    await setupTestDb()
+    assertTestDatabaseUrl()
+    console.log('✅ TEST_DATABASE_URL validated')
   } catch (error: any) {
-    console.error('❌ Test database setup failed:', error.message)
-    // Don't skip tests - fail fast
+    console.error('❌', error.message)
     throw error
+  }
+})
+
+// Reset database before each test suite (clean slate)
+beforeEach(async () => {
+  // Only reset if explicitly requested (to avoid slow tests)
+  if (process.env.TEST_RESET_BEFORE_EACH === 'true') {
+    await resetTestDatabase()
   }
 })
 
 // Cleanup after all tests
 afterAll(async () => {
   try {
-    await closeTestDb()
+    await closeTestDatabase()
   } catch (error: any) {
     // Ignore cleanup errors
   }

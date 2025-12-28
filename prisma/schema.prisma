@@ -733,12 +733,14 @@ model Notification {
   conversationId Int?
   isRead         Boolean       @default(false)
   readAt         DateTime?
+  snoozedUntil   DateTime?     // When to show notification again (for snooze feature)
   createdAt      DateTime      @default(now())
 
   @@index([isRead, createdAt])
   @@index([leadId])
   @@index([conversationId])
   @@index([type, createdAt])
+  @@index([snoozedUntil])
 }
 
 model AutoReplyLog {
