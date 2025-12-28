@@ -27,7 +27,10 @@ import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
 import { BentoCard } from '@/components/dashboard/BentoCard'
 import { QuickActions } from '@/components/dashboard/QuickActions'
-import { CommandCenter } from '@/components/dashboard/CommandCenter'
+import { YourFocusNow } from '@/components/dashboard/YourFocusNow'
+import { UpNextList } from '@/components/dashboard/UpNextList'
+import { MomentumStrip } from '@/components/dashboard/MomentumStrip'
+import { SignalsPanel } from '@/components/dashboard/SignalsPanel'
 import { BlockedByCustomer } from '@/components/dashboard/BlockedByCustomer'
 import { TodaysImpact } from '@/components/dashboard/TodaysImpact'
 import { EndOfDaySummary } from '@/components/dashboard/EndOfDaySummary'
@@ -362,14 +365,17 @@ export default async function DashboardPage() {
 
           {/* Main Grid - Bento Box Layout */}
           <div className="grid gap-2 md:grid-cols-3">
-            {/* COMMAND CENTER - 2 columns */}
-            <BentoCard 
-              title="Command Center" 
-              colSpan={2}
-              action={<Badge variant="secondary" className="text-xs">Mission Control</Badge>}
-            >
-              <CommandCenter />
-            </BentoCard>
+            {/* FOCUS STACK - Main column */}
+            <div className="md:col-span-2 space-y-4">
+              <YourFocusNow />
+              <UpNextList />
+              <MomentumStrip />
+            </div>
+
+            {/* SIGNALS PANEL - Right column */}
+            <div className="md:col-span-1">
+              <SignalsPanel />
+            </div>
 
             {/* Renewals - 1 column */}
             <BentoCard 

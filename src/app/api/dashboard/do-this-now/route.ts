@@ -33,6 +33,9 @@ export async function GET(req: NextRequest) {
       }
       dueAt?: string
       revenuePotential?: number
+      channel?: string
+      latestMessage?: string
+      waitingTime?: string
     }> = []
 
     // 1. Tasks due today or overdue
@@ -89,14 +92,25 @@ export async function GET(req: NextRequest) {
         priority = isOverdue ? 'HIGH' : 'NORMAL'
       }
 
+      // Human-readable reason
+      let humanReason = 'Needs your reply'
+      if (isOverdue) {
+        if (hoursOverdue >= 24) {
+          const days = Math.floor(hoursOverdue / 24)
+          humanReason = days === 1 ? 'Waiting since yesterday' : `Waiting since ${days} days ago`
+        } else {
+          humanReason = `Waiting since ${hoursOverdue} hours ago`
+        }
+      } else {
+        humanReason = 'Needs your reply'
+      }
+
       items.push({
         id: `task_${task.id}`,
         leadId: task.leadId,
         contactName: task.lead.contact.fullName,
         title: task.title,
-        reason: isOverdue
-          ? `Overdue by ${hoursOverdue}h (due ${task.dueAt?.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })})`
-          : `Due ${task.dueAt?.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })}`,
+        reason: humanReason,
         priority,
         action: {
           type: actionType,
@@ -105,6 +119,10 @@ export async function GET(req: NextRequest) {
         },
         dueAt: task.dueAt?.toISOString(),
         revenuePotential: task.lead.expectedRevenueAED || undefined,
+        channel: 'whatsapp', // Default for tasks
+        waitingTime: isOverdue 
+          ? (hoursOverdue >= 24 ? `Since ${Math.floor(hoursOverdue / 24)} days ago` : `Since ${hoursOverdue}h ago`)
+          : 'Due soon',
       })
     }
 
@@ -146,19 +164,42 @@ export async function GET(req: NextRequest) {
       else if (hoursSince > 4) priority = 'NORMAL'
       else priority = 'LOW'
 
+      // Get latest message for preview
+      const latestMessage = await prisma.message.findFirst({
+        where: {
+          conversationId: conv.id,
+          direction: 'INBOUND',
+        },
+        orderBy: { createdAt: 'desc' },
+        select: { body: true },
+      })
+
+      // Human-readable waiting time
+      let humanWaitingTime = ''
+      if (hoursSince >= 24) {
+        const days = Math.floor(hoursSince / 24)
+        humanWaitingTime = days === 1 ? 'Since yesterday' : `Since ${days} days ago`
+      } else {
+        humanWaitingTime = hoursSince === 1 ? 'Since 1 hour ago' : `Since ${hoursSince} hours ago`
+      }
+
       items.push({
         id: `conv_${conv.id}`,
         leadId: conv.leadId || 0,
         contactName: conv.contact.fullName,
         title: `Reply to ${conv.contact.fullName}`,
-        reason: `SLA: ${hoursSince}h since last message`,
+        reason: 'Needs your reply',
         priority,
         action: {
           type: 'reply',
           label: 'Reply Now',
           url: `/leads/${conv.leadId || 0}?action=reply`,
         },
+        dueAt: conv.lastInboundAt?.toISOString(),
         revenuePotential: conv.lead?.expectedRevenueAED || undefined,
+        channel: conv.channel || 'whatsapp',
+        latestMessage: latestMessage?.body?.substring(0, 100) || undefined,
+        waitingTime: humanWaitingTime,
       })
     }
 

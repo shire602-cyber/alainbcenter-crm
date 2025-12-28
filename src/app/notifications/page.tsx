@@ -8,7 +8,7 @@
 
 import { useState, useEffect } from 'react'
 import { MainLayout } from '@/components/layout/MainLayout'
-import { ActionableNotificationItem } from '@/components/notifications/ActionableNotification'
+import { NotificationCard } from '@/components/notifications/NotificationCard'
 import { CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
 
@@ -23,6 +23,7 @@ interface ActionableNotification {
   actionLabel: string
   createdAt: string
   isRead: boolean
+  count?: number
 }
 
 export default function NotificationsPage() {
@@ -48,7 +49,6 @@ export default function NotificationsPage() {
         const actionable = (data.notifications || [])
           .filter((n: any) => {
             const createdAt = new Date(n.createdAt)
-            const now = new Date()
             const isSnoozed = n.snoozedUntil && new Date(n.snoozedUntil) > now
             return (
               ['sla_breach_imminent', 'customer_reply', 'quote_ready', 'deadline_today'].includes(n.type) &&
@@ -64,16 +64,62 @@ export default function NotificationsPage() {
             actionLabel: getActionLabel(n.type),
           }))
         
-        // Deduplicate by type + leadId (keep most recent)
-        const seen = new Map<string, ActionableNotification>()
+        // Deduplicate by type + leadId (keep most recent, track count)
+        const seen = new Map<string, ActionableNotification & { count: number }>()
         for (const notif of actionable) {
           const key = `${notif.type}_${notif.leadId || 0}`
-          if (!seen.has(key) || new Date(notif.createdAt) > new Date(seen.get(key)!.createdAt)) {
-            seen.set(key, notif)
+          if (!seen.has(key)) {
+            seen.set(key, { ...notif, count: 1 })
+          } else {
+            const existing = seen.get(key)!
+            if (new Date(notif.createdAt) > new Date(existing.createdAt)) {
+              seen.set(key, { ...notif, count: existing.count + 1 })
+            } else {
+              existing.count += 1
+            }
           }
         }
         
-        setNotifications(Array.from(seen.values()))
+        // Group by Today/Yesterday
+        const today = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+        const yesterday = new Date(today)
+        yesterday.setDate(yesterday.getDate() - 1)
+        
+        const grouped = {
+          today: [] as (ActionableNotification & { count: number })[],
+          yesterday: [] as (ActionableNotification & { count: number })[],
+        }
+        
+        for (const notif of seen.values()) {
+          const createdAt = new Date(notif.createdAt)
+          if (createdAt >= today) {
+            grouped.today.push(notif)
+          } else if (createdAt >= yesterday) {
+            grouped.yesterday.push(notif)
+          }
+        }
+        
+        // Sort by priority (URGENT first) then by date
+        const priorityOrder: Record<string, number> = {
+          sla_breach_imminent: 3,
+          customer_reply: 2,
+          quote_ready: 1,
+          deadline_today: 0,
+        }
+        
+        grouped.today.sort((a, b) => {
+          const priorityDiff = (priorityOrder[b.type] || 0) - (priorityOrder[a.type] || 0)
+          if (priorityDiff !== 0) return priorityDiff
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        })
+        
+        grouped.yesterday.sort((a, b) => {
+          const priorityDiff = (priorityOrder[b.type] || 0) - (priorityOrder[a.type] || 0)
+          if (priorityDiff !== 0) return priorityDiff
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        })
+        
+        setNotifications([...grouped.today, ...grouped.yesterday])
       }
     } catch (error) {
       console.error('Failed to load notifications:', error)
@@ -207,16 +253,68 @@ export default function NotificationsPage() {
             </p>
           </div>
         ) : (
-          <div className="space-y-4">
-            {notifications.map((notification) => (
-              <ActionableNotificationItem
-                key={notification.id}
-                notification={notification}
-                onDismiss={handleDismiss}
-                onSnooze={handleSnooze}
-                onAction={handleAction}
-              />
-            ))}
+          <div className="space-y-6">
+            {notifications.filter(n => {
+              const createdAt = new Date(n.createdAt)
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              return createdAt >= today
+            }).length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+                  Today
+                </h2>
+                <div className="space-y-3">
+                  {notifications.filter(n => {
+                    const createdAt = new Date(n.createdAt)
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    return createdAt >= today
+                  }).map((notification) => (
+                    <NotificationCard
+                      key={notification.id}
+                      notification={notification}
+                      onDismiss={handleDismiss}
+                      onSnooze={handleSnooze}
+                      onAction={handleAction}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
+            
+            {notifications.filter(n => {
+              const createdAt = new Date(n.createdAt)
+              const today = new Date()
+              today.setHours(0, 0, 0, 0)
+              const yesterday = new Date(today)
+              yesterday.setDate(yesterday.getDate() - 1)
+              return createdAt >= yesterday && createdAt < today
+            }).length > 0 && (
+              <div>
+                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+                  Yesterday
+                </h2>
+                <div className="space-y-3">
+                  {notifications.filter(n => {
+                    const createdAt = new Date(n.createdAt)
+                    const today = new Date()
+                    today.setHours(0, 0, 0, 0)
+                    const yesterday = new Date(today)
+                    yesterday.setDate(yesterday.getDate() - 1)
+                    return createdAt >= yesterday && createdAt < today
+                  }).map((notification) => (
+                    <NotificationCard
+                      key={notification.id}
+                      notification={notification}
+                      onDismiss={handleDismiss}
+                      onSnooze={handleSnooze}
+                      onAction={handleAction}
+                    />
+                  ))}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
