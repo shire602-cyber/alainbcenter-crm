@@ -21,7 +21,7 @@ export interface OutboundSendOptions {
   contactId: number
   leadId: number | null
   phone: string
-  text: string
+  text: string | unknown // Allow unknown to catch JSON objects/strings
   provider: 'whatsapp' | 'email' | 'instagram' | 'facebook'
   triggerProviderMessageId?: string | null
   replyType?: 'greeting' | 'question' | 'answer' | 'closing' | 'manual' | 'test' | 'followup' | 'reminder'
@@ -38,6 +38,33 @@ export interface OutboundSendResult {
 }
 
 /**
+ * Normalize outbound text to ensure it's always plain text (never JSON)
+ * Handles:
+ * - JSON strings like '{"reply":"Hello"}' -> extracts "Hello"
+ * - JSON objects like {reply: "Hello"} -> extracts "Hello"
+ * - Plain strings -> returns as-is
+ * - Other types -> converts to string
+ */
+export function normalizeOutboundText(input: unknown): string {
+  if (typeof input === 'string') {
+    const t = input.trim()
+    if (t.startsWith('{') && t.includes('"reply"')) {
+      try {
+        const obj = JSON.parse(t)
+        if (obj && typeof obj.reply === 'string') return obj.reply.trim()
+      } catch {}
+    }
+    return t
+  }
+  if (input && typeof input === 'object') {
+    const anyObj: any = input
+    if (typeof anyObj.reply === 'string') return anyObj.reply.trim()
+    if (typeof anyObj.text === 'string') return anyObj.text.trim()
+  }
+  return String(input ?? '').trim()
+}
+
+/**
  * Compute outbound dedupe key
  * Format: hash(conversationId + replyType + normalizedQuestionKey + dayBucket OR inboundMessageId + textHash)
  * 
@@ -51,6 +78,8 @@ export interface OutboundSendResult {
  */
 function computeOutboundDedupeKey(options: OutboundSendOptions): string {
   const { conversationId, replyType, lastQuestionKey, triggerProviderMessageId, text } = options
+  // Normalize text before hashing
+  const normalizedText = normalizeOutboundText(text)
   
   // Normalize question key (remove whitespace, lowercase)
   const normalizedQuestionKey = lastQuestionKey 
@@ -58,8 +87,8 @@ function computeOutboundDedupeKey(options: OutboundSendOptions): string {
     : 'none'
   
   // Normalize text for hash (trim, lowercase, remove extra whitespace)
-  const normalizedText = text.trim().toLowerCase().replace(/\s+/g, ' ')
-  const textHash = createHash('sha256').update(normalizedText).digest('hex').substring(0, 16) // First 16 chars for shorter key
+  const textForHash = normalizedText.toLowerCase().replace(/\s+/g, ' ')
+  const textHash = createHash('sha256').update(textForHash).digest('hex').substring(0, 16) // First 16 chars for shorter key
   
   // Use day bucket (YYYY-MM-DD) for day-based deduplication, or inboundMessageId if available
   const dayBucket = new Date().toISOString().split('T')[0] // YYYY-MM-DD
@@ -87,10 +116,13 @@ function computeOutboundDedupeKey(options: OutboundSendOptions): string {
 export async function sendOutboundWithIdempotency(
   options: OutboundSendOptions
 ): Promise<OutboundSendResult> {
-  const { conversationId, contactId, leadId, phone, text, provider, triggerProviderMessageId, replyType, lastQuestionKey, flowStep } = options
+  const { conversationId, contactId, leadId, phone, text: rawText, provider, triggerProviderMessageId, replyType, lastQuestionKey, flowStep } = options
   
-  // Step 1: Compute dedupe key
-  const outboundDedupeKey = computeOutboundDedupeKey(options)
+  // CRITICAL: Normalize text to ensure it's always plain text (never JSON)
+  const text = normalizeOutboundText(rawText)
+  
+  // Step 1: Compute dedupe key (using normalized text)
+  const outboundDedupeKey = computeOutboundDedupeKey({ ...options, text })
   
   // Step 2: Try to insert OutboundMessageLog with status="PENDING"
   // This uses the UNIQUE constraint on outboundDedupeKey to prevent duplicates
@@ -103,7 +135,7 @@ export async function sendOutboundWithIdempotency(
         provider,
         conversationId,
         triggerProviderMessageId: triggerProviderMessageId || null,
-        outboundTextHash: createHash('sha256').update(text.trim().toLowerCase()).digest('hex'),
+        outboundTextHash: createHash('sha256').update(text.toLowerCase()).digest('hex'),
         outboundDedupeKey, // UNIQUE constraint - will fail if duplicate
         status: 'PENDING',
         replyType: replyType || null,
