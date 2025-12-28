@@ -41,13 +41,20 @@ export default function NotificationsPage() {
       const res = await fetch('/api/notifications')
       if (res.ok) {
         const data = await res.json()
-        // Filter to only actionable notifications and deduplicate
+        const now = new Date()
+        const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
+        
+        // Filter to only actionable notifications, within 24h, and deduplicate
         const actionable = (data.notifications || [])
-          .filter((n: any) => 
-            ['sla_breach_imminent', 'customer_reply', 'quote_ready', 'deadline_today'].includes(n.type) &&
-            !n.isRead &&
-            !snoozedIds.has(n.id)
-          )
+          .filter((n: any) => {
+            const createdAt = new Date(n.createdAt)
+            return (
+              ['sla_breach_imminent', 'customer_reply', 'quote_ready', 'deadline_today'].includes(n.type) &&
+              !n.isRead &&
+              !snoozedIds.has(n.id) &&
+              createdAt >= twentyFourHoursAgo // Only show notifications from last 24 hours
+            )
+          })
           .map((n: any) => ({
             ...n,
             actionUrl: n.leadId ? `/leads/${n.leadId}` : '/leads',
