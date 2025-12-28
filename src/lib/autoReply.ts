@@ -43,8 +43,6 @@ import {
   matchesEscalatePatterns,
   type AgentProfile 
 } from './ai/agentProfile'
-import { appendFile } from 'fs/promises'
-import { join } from 'path'
 
 interface AutoReplyOptions {
   leadId: number
@@ -1276,11 +1274,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           console.log(`✅ [OUTBOUND-IDEMPOTENCY] Logged outbound BEFORE send (logId: ${outboundLogId}, triggerId: ${effectiveTriggerId || 'none'})`)
         })
       } catch (error: any) {
-        // BUG FIX #3: Check error.code instead of error.message for Prisma transaction errors
-        // Prisma throws PrismaClientKnownRequestError with code property, not custom error messages
-        // Unique constraint violation = already logged
-        if (error.code === 'P2002') {
-          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Unique constraint violation - already logged`)
+        // BUG FIX #3: Check both error.code (Prisma) and error.message (custom) for duplicate detection
+        // Prisma throws PrismaClientKnownRequestError with code property for unique constraint violations
+        // Custom errors thrown inside transaction have message property
+        if (error.code === 'P2002' || error.message === 'OUTBOUND_ALREADY_LOGGED') {
+          console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Duplicate detected - already logged (code: ${error.code || 'custom'}, message: ${error.message})`)
           return { replied: false, reason: 'Outbound already logged (unique constraint)' }
         }
         throw error

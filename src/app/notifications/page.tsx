@@ -44,14 +44,17 @@ export default function NotificationsPage() {
         const now = new Date()
         const twentyFourHoursAgo = new Date(now.getTime() - 24 * 60 * 60 * 1000)
         
-        // Filter to only actionable notifications, within 24h, and deduplicate
+        // Filter to only actionable notifications, within 24h, not snoozed, and deduplicate
         const actionable = (data.notifications || [])
           .filter((n: any) => {
             const createdAt = new Date(n.createdAt)
+            const now = new Date()
+            const isSnoozed = n.snoozedUntil && new Date(n.snoozedUntil) > now
             return (
               ['sla_breach_imminent', 'customer_reply', 'quote_ready', 'deadline_today'].includes(n.type) &&
               !n.isRead &&
               !snoozedIds.has(n.id) &&
+              !isSnoozed &&
               createdAt >= twentyFourHoursAgo // Only show notifications from last 24 hours
             )
           })
@@ -106,18 +109,25 @@ export default function NotificationsPage() {
   }
 
   async function handleSnooze(id: number, minutes: number) {
-    setSnoozedIds(prev => new Set(prev).add(id))
-    setNotifications(prev => prev.filter(n => n.id !== id))
-    
-    // Auto-unsnooze after specified time
-    setTimeout(() => {
-      setSnoozedIds(prev => {
-        const next = new Set(prev)
-        next.delete(id)
-        return next
+    try {
+      // Persist snooze to database
+      await fetch(`/api/notifications/${id}/snooze`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ minutes }),
       })
-      loadNotifications()
-    }, minutes * 60 * 1000)
+      
+      // Optimistically update UI
+      setSnoozedIds(prev => new Set(prev).add(id))
+      setNotifications(prev => prev.filter(n => n.id !== id))
+      
+      // Reload after snooze period to show notification again
+      setTimeout(() => {
+        loadNotifications()
+      }, minutes * 60 * 1000)
+    } catch (error) {
+      console.error('Failed to snooze notification:', error)
+    }
   }
 
   function handleAction(url: string) {

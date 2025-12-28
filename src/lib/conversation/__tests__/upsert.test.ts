@@ -7,10 +7,10 @@
  */
 
 import { describe, it, expect, beforeEach, afterEach } from 'vitest'
-import { PrismaClient } from '@prisma/client'
+import { getTestPrisma } from '@/lib/test/db'
 import { upsertConversation } from '../upsert'
 
-const prisma = new PrismaClient()
+const prisma = getTestPrisma()
 
 describe('Conversation Upsert Tests', () => {
   let testContactId: number
