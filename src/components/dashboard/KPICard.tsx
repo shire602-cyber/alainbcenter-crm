@@ -56,7 +56,7 @@ export function KPICard({
           <div className={cn(
             "flex items-center gap-0.5 text-xs font-medium px-1.5 py-0.5 rounded",
             trend.value > 0 && "text-green-600 dark:text-green-400 bg-green-50 dark:bg-green-900/20",
-            trend.value < 0 && "text-red-600 dark:text-red-400 bg-red-50 dark:bg-red-900/20",
+            trend.value < 0 && "text-red-600 dark:text-red-400 bg-slate-100 dark:bg-slate-800",
             trend.value === 0 && "text-slate-600 dark:text-slate-400 bg-slate-100 dark:bg-slate-800"
           )}>
             {trend.value > 0 && <TrendingUp className="h-3 w-3" />}

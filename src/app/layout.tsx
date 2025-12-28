@@ -1,6 +1,14 @@
 import { ReactNode } from 'react'
+import { Inter } from 'next/font/google'
 import "./globals.css"
 import { Providers } from "./providers"
+
+const inter = Inter({
+  subsets: ['latin'],
+  weight: ['400', '450', '500', '600', '650'],
+  variable: '--font-inter',
+  display: 'swap',
+})
 
 export default function RootLayout({
   children,
@@ -8,15 +16,12 @@ export default function RootLayout({
   children: ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning style={{ backgroundColor: '#FAFAFA' }}>
+    <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
         <title>Alain Business Center CRM</title>
         <meta name="description" content="Premium CRM for business setup and visa services" />
-        <link rel="preconnect" href="https://fonts.googleapis.com" />
-        <link rel="preconnect" href="https://fonts.gstatic.com" crossOrigin="anonymous" />
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600&display=swap" rel="stylesheet" />
       </head>
-      <body suppressHydrationWarning className="font-sans antialiased text-sm text-foreground bg-background min-h-screen" style={{ backgroundColor: '#FAFAFA', color: '#1B1F24' }}>
+      <body suppressHydrationWarning className="font-sans antialiased text-body text-foreground bg-app min-h-screen">
         <Providers>
           {children}
         </Providers>

@@ -177,10 +177,218 @@ export async function handleInboundMessageAutoMatch(
     // Non-blocking - continue processing
   }
 
-  // Step 6: AUTO-EXTRACT FIELDS (deterministic)
+  /**
+   * Parse multiline structured replies
+   * Handles patterns like:
+   * - 3 lines: name / service / nationality
+   * - 4-5 lines: name / service / nationality / expiry / email
+   */
+  function parseMultilineReply(messageText: string): {
+    name?: string
+    service?: string
+    nationality?: string
+    expiry?: string
+    email?: string
+  } {
+    const lines = messageText.split('\n').map(l => l.trim()).filter(l => l.length > 0)
+    if (lines.length < 2) {
+      return {} // Not multiline
+    }
+
+    const result: any = {}
+    
+    // Heuristics for multiline parsing
+    for (let i = 0; i < lines.length; i++) {
+      const line = lines[i]
+      
+      // Email detection
+      if (line.includes('@') && line.length >= 5 && line.length <= 100) {
+        result.email = line
+        continue
+      }
+      
+      // Expiry detection (contains date-like patterns or keywords)
+      if (
+        (/\d{1,2}[\/\-]\d{1,2}[\/\-]\d{2,4}/.test(line) || 
+         /\d{4}[\/\-]\d{1,2}[\/\-]\d{1,2}/.test(line) ||
+         /expir|valid until|exp|valid/i.test(line)) &&
+        line.length <= 50
+      ) {
+        result.expiry = line
+        continue
+      }
+      
+      // Nationality detection (short token, common country names)
+      const countryKeywords = ['china', 'usa', 'india', 'pakistan', 'bangladesh', 'philippines', 'egypt', 'syria', 'lebanon', 'jordan', 'nigeria', 'somalia', 'kenya', 'ethiopia', 'british', 'american', 'canadian', 'australian']
+      const lineLower = line.toLowerCase()
+      if (line.length >= 2 && line.length <= 56 && countryKeywords.some(k => lineLower.includes(k))) {
+        result.nationality = line
+        continue
+      }
+      
+      // Service detection (contains service keywords)
+      const serviceKeywords = ['freelance', 'family visa', 'business', 'visit visa', 'golden visa', 'employment', 'renewal', 'license', 'setup']
+      if (serviceKeywords.some(k => lineLower.includes(k))) {
+        result.service = line
+        continue
+      }
+      
+      // Name detection (contains letters, reasonable length, not already assigned)
+      if (!result.name && /[a-zA-Z]/.test(line) && line.length >= 2 && line.length <= 80) {
+        result.name = line
+        continue
+      }
+    }
+    
+    // If we have 3+ lines and no explicit assignments, use positional heuristics
+    if (lines.length >= 3 && Object.keys(result).length < 3) {
+      // Common pattern: name / service / nationality
+      if (!result.name && lines[0].length >= 2 && lines[0].length <= 80 && /[a-zA-Z]/.test(lines[0])) {
+        result.name = lines[0]
+      }
+      if (!result.service && lines[1].length >= 2 && lines[1].length <= 100) {
+        result.service = lines[1]
+      }
+      if (!result.nationality && lines[2].length >= 2 && lines[2].length <= 56) {
+        result.nationality = lines[2]
+      }
+    }
+    
+    return result
+  }
+
+  // Step 6: QUALIFICATION ANSWER CAPTURE - Check if this is a direct answer to a question
+  // This handles short replies like "USA" when asked "What is your nationality?"
+  let qualificationAnswer: { field: string; value: string } | null = null
+  let multilineFields: { name?: string; service?: string; nationality?: string; expiry?: string; email?: string } = {}
+  
+  try {
+    const flowState = await import('../conversation/flowState')
+    const state = await flowState.loadFlowState(conversation.id)
+    const lastQuestionKey = state.lastQuestionKey || conversation.lastQuestionKey
+    
+    console.log(`🔍 [QUALIFICATION-CAPTURE] Checking qualification answer`, {
+      conversationId: conversation.id,
+      lastQuestionKey,
+      messageLength: input.text?.trim().length || 0,
+      hasMultiline: input.text?.includes('\n') || false,
+    })
+    
+    if (input.text && input.text.trim().length > 0) {
+      const messageText = input.text.trim()
+      
+      // Try multiline parsing first
+      if (messageText.includes('\n')) {
+        multilineFields = parseMultilineReply(messageText)
+        console.log(`📋 [QUALIFICATION-CAPTURE] Multiline parse result:`, multilineFields)
+      }
+      
+      // If we have a lastQuestionKey, check for direct answer
+      if (lastQuestionKey) {
+        const questionKeyLower = lastQuestionKey.toLowerCase()
+        
+        // NATIONALITY question
+        if (questionKeyLower.includes('nationality') || questionKeyLower === 'ask_nationality' || questionKeyLower === 'nationality') {
+          // Use multiline nationality if available, otherwise use full message
+          const nationalityValue = multilineFields.nationality || messageText
+          // Basic validation: 2-56 chars (increased from 50 to match requirement)
+          if (nationalityValue.length >= 2 && nationalityValue.length <= 56) {
+            qualificationAnswer = { field: 'nationality', value: nationalityValue }
+            console.log(`✅ [QUALIFICATION-CAPTURE] Detected nationality answer: "${nationalityValue}" (from question: ${lastQuestionKey})`)
+          }
+        }
+        // FULL_NAME question
+        else if (questionKeyLower.includes('name') || questionKeyLower === 'ask_name' || questionKeyLower === 'name') {
+          // Use multiline name if available, otherwise use full message
+          const nameValue = multilineFields.name || messageText
+          // Basic validation: 2-80 chars, contains letters
+          if (nameValue.length >= 2 && nameValue.length <= 80 && /[a-zA-Z]/.test(nameValue)) {
+            qualificationAnswer = { field: 'fullName', value: nameValue }
+            console.log(`✅ [QUALIFICATION-CAPTURE] Detected name answer: "${nameValue}" (from question: ${lastQuestionKey})`)
+          }
+        }
+        // SERVICE question
+        else if (questionKeyLower.includes('service') || questionKeyLower === 'ask_service' || questionKeyLower === 'service') {
+          // Use multiline service if available, otherwise use full message
+          const serviceValue = multilineFields.service || messageText
+          // Basic validation: 2-100 chars
+          if (serviceValue.length >= 2 && serviceValue.length <= 100) {
+            qualificationAnswer = { field: 'service', value: serviceValue }
+            console.log(`✅ [QUALIFICATION-CAPTURE] Detected service answer: "${serviceValue}" (from question: ${lastQuestionKey})`)
+          }
+        }
+      }
+    }
+  } catch (qualError: any) {
+    console.warn(`⚠️ [QUALIFICATION-CAPTURE] Failed to check qualification answer:`, qualError.message)
+    // Non-blocking - continue with normal extraction
+  }
+
+  // Step 7: AUTO-EXTRACT FIELDS (deterministic)
   let extractedFields: any = {}
   try {
     extractedFields = await extractFields(input.text, contact, lead)
+    
+    // CRITICAL: If qualification answer was captured, merge it into extractedFields
+    // This ensures short replies like "USA" are saved even if extraction heuristics fail
+    if (qualificationAnswer) {
+      if (qualificationAnswer.field === 'nationality') {
+        extractedFields.nationality = qualificationAnswer.value
+        console.log(`✅ [QUALIFICATION-CAPTURE] Merged nationality from qualification answer: ${qualificationAnswer.value}`)
+      } else if (qualificationAnswer.field === 'fullName') {
+        extractedFields.identity = extractedFields.identity || {}
+        extractedFields.identity.name = qualificationAnswer.value
+        console.log(`✅ [QUALIFICATION-CAPTURE] Merged name from qualification answer: ${qualificationAnswer.value}`)
+      } else if (qualificationAnswer.field === 'service') {
+        // Try to extract service from the answer text
+        const serviceFromAnswer = extractService(qualificationAnswer.value)
+        if (serviceFromAnswer) {
+          extractedFields.service = serviceFromAnswer
+          console.log(`✅ [QUALIFICATION-CAPTURE] Merged service from qualification answer: ${serviceFromAnswer}`)
+        } else {
+          // Store raw service text if extraction fails
+          extractedFields.serviceRaw = qualificationAnswer.value
+          console.log(`✅ [QUALIFICATION-CAPTURE] Stored raw service text from qualification answer: ${qualificationAnswer.value}`)
+        }
+      }
+    }
+    
+    // CRITICAL: Merge multiline fields (even if no lastQuestionKey match)
+    // This handles structured replies like "Abdurahman\nBusiness\nChina"
+    if (Object.keys(multilineFields).length > 0) {
+      if (multilineFields.nationality && !extractedFields.nationality) {
+        extractedFields.nationality = multilineFields.nationality
+        console.log(`✅ [QUALIFICATION-CAPTURE] Merged nationality from multiline: ${multilineFields.nationality}`)
+      }
+      if (multilineFields.name && !extractedFields.identity?.name) {
+        extractedFields.identity = extractedFields.identity || {}
+        extractedFields.identity.name = multilineFields.name
+        console.log(`✅ [QUALIFICATION-CAPTURE] Merged name from multiline: ${multilineFields.name}`)
+      }
+      if (multilineFields.service && !extractedFields.service) {
+        const serviceFromMultiline = extractService(multilineFields.service)
+        if (serviceFromMultiline) {
+          extractedFields.service = serviceFromMultiline
+          console.log(`✅ [QUALIFICATION-CAPTURE] Merged service from multiline: ${serviceFromMultiline}`)
+        } else {
+          extractedFields.serviceRaw = multilineFields.service
+          console.log(`✅ [QUALIFICATION-CAPTURE] Stored raw service from multiline: ${multilineFields.service}`)
+        }
+      }
+      if (multilineFields.email && !extractedFields.identity?.email) {
+        extractedFields.identity = extractedFields.identity || {}
+        extractedFields.identity.email = multilineFields.email
+        console.log(`✅ [QUALIFICATION-CAPTURE] Merged email from multiline: ${multilineFields.email}`)
+      }
+      if (multilineFields.expiry) {
+        // Try to extract expiry date from multiline expiry text
+        const expiryFromMultiline = extractExpiry(multilineFields.expiry)
+        if (expiryFromMultiline && expiryFromMultiline.length > 0) {
+          extractedFields.expiries = expiryFromMultiline
+          console.log(`✅ [QUALIFICATION-CAPTURE] Merged expiry from multiline: ${expiryFromMultiline[0].date}`)
+        }
+      }
+    }
     
     // CRITICAL: Persist extracted fields to conversation for audit
     if (Object.keys(extractedFields).length > 0 && conversation) {
@@ -194,6 +402,12 @@ export async function handleInboundMessageAutoMatch(
           ...existingKnownFields,
           ...extractedFields,
           extractedAt: new Date().toISOString(),
+        }
+        
+        // Also store qualification answer metadata
+        if (qualificationAnswer) {
+          updatedKnownFields[`qualification_${qualificationAnswer.field}`] = qualificationAnswer.value
+          updatedKnownFields.qualificationAnswerAt = new Date().toISOString()
         }
         
         await prisma.conversation.update({
@@ -225,12 +439,32 @@ export async function handleInboundMessageAutoMatch(
       select: { nationality: true },
     })
     
-    if (!fullContact?.nationality) {
+    // Update if missing or if this is a qualification answer (always update for qualification answers)
+    if (!fullContact?.nationality || qualificationAnswer?.field === 'nationality') {
       await prisma.contact.update({
         where: { id: contact.id },
         data: { nationality: extractedFields.nationality },
       })
-      console.log(`✅ [AUTO-MATCH] Updated contact nationality: ${extractedFields.nationality}`)
+      console.log(`✅ [AUTO-MATCH] Updated contact nationality: ${extractedFields.nationality}${qualificationAnswer?.field === 'nationality' ? ' (from qualification answer)' : ''}`)
+    }
+  }
+  
+  // Update Contact with extracted name if needed (from qualification answer)
+  if (qualificationAnswer?.field === 'fullName' && extractedFields.identity?.name) {
+    const fullContact = await prisma.contact.findUnique({
+      where: { id: contact.id },
+      select: { fullName: true },
+    })
+    
+    // Update if missing or if name is generic/unknown
+    if (!fullContact?.fullName || 
+        fullContact.fullName === 'Unknown' || 
+        fullContact.fullName.startsWith('Contact +')) {
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: { fullName: extractedFields.identity.name },
+      })
+      console.log(`✅ [AUTO-MATCH] Updated contact name from qualification answer: ${extractedFields.identity.name}`)
     }
   }
 
@@ -404,7 +638,8 @@ export async function handleInboundMessageAutoMatch(
         data: updateData,
       })
       
-      console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || lead.serviceTypeEnum || 'none'}, serviceTypeId=${updateData.serviceTypeId || lead.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || lead.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || lead.businessActivityRaw || 'none'}`)
+      console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || lead.serviceTypeEnum || 'none'}, serviceTypeId=${updateData.serviceTypeId || lead.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || lead.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || lead.businessActivityRaw || 'none'}, nationality=${extractedFields.nationality || 'none'}`)
+      console.log(`📊 [AUTO-MATCH] updateData keys applied:`, Object.keys(updateData))
     } catch (updateError: any) {
       console.error(`❌ [AUTO-MATCH] Failed to update lead ${lead.id}:`, {
         error: updateError.message,
@@ -416,6 +651,60 @@ export async function handleInboundMessageAutoMatch(
     }
   } else {
     console.log(`⚠️ [AUTO-MATCH] No fields extracted - skipping lead update to prevent wiping existing data`)
+  }
+
+  // CRITICAL: Advance flow state after successfully capturing qualification answer
+  // This prevents the bot from asking the same question again
+  if (qualificationAnswer) {
+    try {
+      const flowState = await import('../conversation/flowState')
+      const { updateFlowState } = flowState
+      
+      // Clear lastQuestionKey to advance the flow
+      // The next bot reply will ask the NEXT missing field, not the same one
+      // CRITICAL: Use null to explicitly clear (not undefined, which Prisma ignores)
+      await prisma.conversation.update({
+        where: { id: conversation.id },
+        data: {
+          lastQuestionKey: null,
+          lastQuestionAt: null,
+        },
+      })
+      console.log(`✅ [QUALIFICATION-CAPTURE] Cleared lastQuestionKey in conversation table`)
+      
+      // Also update conversation state machine (if using state machine)
+      try {
+        const { updateConversationState, loadConversationState } = await import('../ai/stateMachine')
+        const currentState = await loadConversationState(conversation.id)
+        
+        // Update knownFields in state machine
+        const updatedKnownFields = {
+          ...currentState.knownFields,
+        }
+        
+        if (qualificationAnswer.field === 'nationality') {
+          updatedKnownFields.nationality = qualificationAnswer.value
+        } else if (qualificationAnswer.field === 'fullName') {
+          updatedKnownFields.name = qualificationAnswer.value
+        } else if (qualificationAnswer.field === 'service') {
+          updatedKnownFields.service = qualificationAnswer.value
+        }
+        
+        await updateConversationState(conversation.id, {
+          knownFields: updatedKnownFields,
+        }, currentState.stateVersion)
+        
+        console.log(`✅ [QUALIFICATION-CAPTURE] Advanced flow state - cleared lastQuestionKey, updated knownFields`)
+      } catch (stateMachineError: any) {
+        console.warn(`⚠️ [QUALIFICATION-CAPTURE] Failed to update state machine:`, stateMachineError.message)
+        // Non-blocking - flow state update above should be sufficient
+      }
+      
+      console.log(`✅ [QUALIFICATION-CAPTURE] Flow advanced - lastQuestionKey cleared, next reply will ask next missing field`)
+    } catch (flowError: any) {
+      console.warn(`⚠️ [QUALIFICATION-CAPTURE] Failed to advance flow state:`, flowError.message)
+      // Non-blocking - continue pipeline
+    }
   }
 
   // Step 6.5: Recompute deal forecast (non-blocking)

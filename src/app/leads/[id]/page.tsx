@@ -185,7 +185,7 @@ export default function LeadDetailPage({
                 size="sm"
                 className={cn(
                   "rounded-lg text-xs font-semibold",
-                  primaryAction.urgency === 'urgent' && "bg-red-600 hover:bg-red-700",
+                  primaryAction.urgency === 'urgent' && "bg-blue-600 hover:bg-blue-700 border-2 border-red-500",
                   primaryAction.urgency === 'high' && "bg-orange-600 hover:bg-orange-700",
                   "bg-blue-600 hover:bg-blue-700"
                 )}
