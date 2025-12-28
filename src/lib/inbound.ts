@@ -124,10 +124,13 @@ export async function handleInboundMessage(
       
       let existingMessage: any = null
       
-      // BUG FIX: If externalMessageId was provided, use it for lookup (consistent identifier)
+      // BUG FIX #4: If externalMessageId was provided, use it for lookup (consistent identifier)
+      // Schema changed to @@unique([channel, providerMessageId]), so must include channel filter
+      // CRITICAL: Database stores channels in lowercase, so use toLowerCase() not toUpperCase()
       if (input.externalMessageId) {
         existingMessage = await prisma.message.findFirst({
           where: {
+            channel: input.channel.toLowerCase(), // BUG FIX: Use lowercase to match database storage format (was toUpperCase())
             providerMessageId: input.externalMessageId,
           },
           include: {

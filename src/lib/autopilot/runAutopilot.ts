@@ -1,8 +1,14 @@
 // AUTOPILOT v1: Rule-based automation engine
 // Sends WhatsApp messages + creates tasks with idempotency
+// ⚠️ LEGACY: This module is deprecated. Use sendOutboundWithIdempotency() instead.
 
 import { prisma } from '../prisma'
 import { sendWhatsAppMessage } from '../whatsappSender'
+
+// PRODUCTION GUARD: Disable legacy autopilot in production
+if (process.env.NODE_ENV === 'production') {
+  console.warn(`⚠️ [AUTOPILOT] Legacy autopilot module is disabled in production.`)
+}
 
 export type AutopilotOptions = {
   dryRun?: boolean
@@ -245,6 +251,12 @@ async function runFollowupDueRule(
       continue
     }
 
+    // PRODUCTION GUARD: Disable legacy autopilot in production
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(`⚠️ [AUTOPILOT] Legacy autopilot disabled in production. Use sendOutboundWithIdempotency() instead.`)
+      continue // Skip this lead
+    }
+    
     // Send WhatsApp - use template if available, otherwise fallback to free-form
     const sendResult = templateName
       ? await sendWhatsAppMessage(lead.contact.phone, message, {
@@ -456,6 +468,12 @@ async function runExpiry90Rule(
       continue
     }
 
+    // PRODUCTION GUARD: Disable legacy autopilot in production
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(`⚠️ [AUTOPILOT] Legacy autopilot disabled in production. Use sendOutboundWithIdempotency() instead.`)
+      continue // Skip this lead
+    }
+    
     // Send WhatsApp - use template if available, otherwise fallback to free-form
     const sendResult = templateName
       ? await sendWhatsAppMessage(lead.contact.phone, message, {
@@ -663,6 +681,12 @@ async function runOverdueRule(
       continue
     }
 
+    // PRODUCTION GUARD: Disable legacy autopilot in production
+    if (process.env.NODE_ENV === 'production') {
+      console.warn(`⚠️ [AUTOPILOT] Legacy autopilot disabled in production. Use sendOutboundWithIdempotency() instead.`)
+      continue // Skip this lead
+    }
+    
     // Send WhatsApp - use template if available, otherwise fallback to free-form
     const sendResult = templateName
       ? await sendWhatsAppMessage(lead.contact.phone, message, {

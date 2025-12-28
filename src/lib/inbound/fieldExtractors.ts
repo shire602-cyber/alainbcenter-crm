@@ -9,9 +9,10 @@
  * Extract service type from text
  * STEP 4: Now uses service synonym matching for better detection
  */
+import { matchServiceWithSynonyms } from './serviceSynonyms'
+
 export function extractService(text: string): string | undefined {
   // Try synonym matching first (more comprehensive)
-  const { matchServiceWithSynonyms } = require('./serviceSynonyms')
   const synonymMatch = matchServiceWithSynonyms(text)
   
   if (synonymMatch) {

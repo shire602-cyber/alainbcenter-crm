@@ -128,6 +128,33 @@ export async function recordQuestionAsked(
   questionKey: string,
   flowStep?: string
 ): Promise<void> {
+  // Load current state to check if this question was asked recently
+  const current = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { lastQuestionKey: true, lastQuestionAt: true, questionsAskedCount: true },
+  })
+  
+  // CRITICAL: Only increment questionsAskedCount if lastQuestionKey actually changed
+  // This prevents counting the same question multiple times
+  const questionKeyChanged = current?.lastQuestionKey !== questionKey
+  
+  // Check if this question was asked in the last 30 seconds (same turn)
+  const justAsked = !questionKeyChanged && 
+    current?.lastQuestionAt && 
+    (Date.now() - current.lastQuestionAt.getTime()) < 30000
+  
+  // If question key changed and not just asked, increment the count
+  if (questionKeyChanged && !justAsked) {
+    const newCount = (current?.questionsAskedCount || 0) + 1
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { questionsAskedCount: newCount },
+    })
+    console.log(`✅ [FLOW-STATE] Incremented questionsAskedCount: ${newCount} (question key changed: ${current?.lastQuestionKey} -> ${questionKey})`)
+  } else if (!questionKeyChanged) {
+    console.log(`⚠️ [FLOW-STATE] Question key unchanged (${questionKey}) - not incrementing count`)
+  }
+  
   await updateFlowState(conversationId, {
     lastQuestionKey: questionKey,
     flowStep: flowStep || `WAIT_${questionKey}`,

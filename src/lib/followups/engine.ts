@@ -16,8 +16,10 @@
 
 import { prisma } from '../prisma'
 import { differenceInDays, addDays, isPast } from 'date-fns'
-import { sendTextMessage } from '../whatsapp'
+import { sendOutboundWithIdempotency } from '../outbound/sendWithIdempotency'
 import { generateAIAutoresponse } from '../aiMessaging'
+import { upsertConversation } from '../conversation/upsert'
+import { getExternalThreadId } from '../conversation/getExternalThreadId'
 
 const FOLLOWUP_SCHEDULE = [2, 5, 12, 22] // Days after last contact
 
@@ -132,40 +134,82 @@ export async function processFollowupsDue(options?: { dryRun?: boolean }): Promi
           continue
         }
 
-        // Generate AI follow-up message
-        const aiContext = {
-          lead: lead as any,
-          contact: lead.contact,
-          recentMessages: conversation.messages.slice(0, 5),
-          mode: 'FOLLOW_UP' as const,
-          channel: 'WHATSAPP' as const,
+        // Generate AI follow-up message using orchestrator
+        const latestMessage = conversation.messages.find(m => m.direction === 'INBOUND') || conversation.messages[0]
+        const inboundText = latestMessage?.body || 'Follow-up'
+        const inboundMessageId = latestMessage?.id || 0
+        
+        const orchestratorResult = await generateAIReply({
+          conversationId: conversation.id,
+          leadId: lead.id,
+          contactId: lead.contactId,
+          inboundText,
+          inboundMessageId,
+          channel: 'whatsapp',
+          language: 'en',
+        })
+        
+        const aiResult = {
+          success: !!orchestratorResult.replyText && orchestratorResult.replyText.trim().length > 0,
+          text: orchestratorResult.replyText || '',
         }
 
-        const aiResult = await generateAIAutoresponse(aiContext)
-
         if (aiResult.success && aiResult.text) {
-          // Send follow-up
-          const result = await sendTextMessage(
-            lead.contact.phone,
-            aiResult.text
-          )
+          // Ensure conversation exists (use canonical upsert)
+          const { id: finalConversationId } = await upsertConversation({
+            contactId: lead.contactId,
+            channel: 'whatsapp',
+            leadId: lead.id,
+            externalThreadId: getExternalThreadId('whatsapp', lead.contact),
+          })
           
-          // Create message record for tracking
+          // Send follow-up with idempotency
+          const result = await sendOutboundWithIdempotency({
+            conversationId: finalConversationId,
+            contactId: lead.contactId,
+            leadId: lead.id,
+            phone: lead.contact.phone,
+            text: aiResult.text,
+            provider: 'whatsapp',
+            triggerProviderMessageId: null, // Follow-up send
+            replyType: 'followup',
+            lastQuestionKey: null,
+            flowStep: null,
+          })
+          
+          if (result.wasDuplicate) {
+            console.log(`⚠️ [FOLLOWUPS] Duplicate outbound blocked by idempotency`)
+            continue // Skip this lead
+          }
+
+          if (!result.success) {
+            console.error(`❌ [FOLLOWUPS] Failed to send:`, result.error)
+            continue // Skip this lead
+          }
+          
+          // Create message record for tracking (if not already created by idempotency system)
           if (result.messageId) {
-            await prisma.message.create({
-              data: {
-                conversationId: conversation.id,
-                leadId: lead.id,
-                contactId: lead.contactId,
-                direction: 'OUTBOUND',
-                channel: 'whatsapp',
-                type: 'text',
-                body: aiResult.text,
-                providerMessageId: result.messageId,
-                status: 'SENT',
-                sentAt: new Date(),
-              },
-            })
+            try {
+              await prisma.message.create({
+                data: {
+                  conversationId: finalConversationId,
+                  leadId: lead.id,
+                  contactId: lead.contactId,
+                  direction: 'OUTBOUND',
+                  channel: 'whatsapp',
+                  type: 'text',
+                  body: aiResult.text,
+                  providerMessageId: result.messageId,
+                  status: 'SENT',
+                  sentAt: new Date(),
+                },
+              })
+            } catch (msgError: any) {
+              // Non-critical - message may already exist
+              if (!msgError.message?.includes('Unique constraint')) {
+                console.warn(`⚠️ [FOLLOWUPS] Failed to create Message record:`, msgError.message)
+              }
+            }
           }
 
           // Update lead

@@ -38,6 +38,13 @@ export async function generateReply(
     language = 'en',
   } = options
 
+  console.log(`[REPLY-ENGINE] generateReply called`, {
+    conversationId,
+    inboundMessageId,
+    inboundText: inboundText.substring(0, 50),
+    contactName,
+  })
+
   try {
     // Step 0: Check database-level idempotency FIRST (prevents race conditions)
     // Check if we already generated a reply for this inbound message
@@ -77,7 +84,24 @@ export async function generateReply(
     }
 
     // Step 1: Load conversation + FSM state
+    console.log(`[REPLY-ENGINE] Loading FSM state for conversation ${conversationId}`)
     const state = await loadFSMState(conversationId)
+    console.log(`[REPLY-ENGINE] FSM state loaded`, {
+      serviceKey: state.serviceKey,
+      stage: state.stage,
+      collected: state.collected,
+      askedQuestionKeys: state.askedQuestionKeys,
+      greetingSent: state.collected?.greetingSent,
+    })
+
+    // Step 1.5: Check if this is the first message (no outbound messages yet)
+    const outboundCount = await prisma.message.count({
+      where: {
+        conversationId,
+        direction: 'OUTBOUND',
+      },
+    })
+    const isFirstMessage = outboundCount === 0
 
     // Step 2: Check if we should stop
     if (shouldStop(state)) {
@@ -98,6 +122,107 @@ export async function generateReply(
           reason: state.stop.reason || 'Stop enabled',
         },
       }
+    }
+
+    // Step 2.5: ALWAYS send greeting FIRST if not already sent
+    // CRITICAL: Send greeting if greeting hasn't been sent yet
+    // Check both the state and if it's the first message
+    const greetingSent = state.collected?.greetingSent === true
+    const shouldSendGreeting = !greetingSent
+    
+    console.log(`[REPLY-ENGINE] Greeting check:`, {
+      isFirstMessage,
+      outboundCount,
+      greetingSent,
+      shouldSendGreeting,
+      stateCollected: state.collected,
+      stateCollectedKeys: state.collected ? Object.keys(state.collected) : [],
+    })
+    
+    if (shouldSendGreeting) {
+      console.log(`[REPLY-ENGINE] ✅ SENDING GREETING FIRST (isFirstMessage: ${isFirstMessage}, greetingSent: ${greetingSent}, outboundCount: ${outboundCount})`)
+      const greetingTemplate = getTemplate('greeting_first')
+      if (greetingTemplate) {
+        const greetingText = renderTemplate('greeting_first', {
+          name: contactName || 'there',
+          language,
+        })
+        const greetingReplyKey = computeReplyKey(
+          conversationId,
+          inboundMessageId,
+          'INFO',
+          'greeting_first',
+          ''
+        )
+        // CRITICAL: Mark greeting as sent BEFORE returning
+        const updatedCollected = { ...(state.collected || {}), greetingSent: true }
+        await updateFSMState(conversationId, {
+          collected: updatedCollected,
+        })
+        await createReplyEngineLog({
+          conversationId,
+          inboundMessageId,
+          plan: {
+            action: 'INFO',
+            templateKey: 'greeting_first',
+            questionKey: null,
+            updates: {},
+            reason: 'First message - sending greeting',
+          },
+          extractedFields: {},
+          templateKey: 'greeting_first',
+          replyKey: greetingReplyKey,
+          finalText: greetingText,
+        })
+        return {
+          text: greetingText,
+          replyKey: greetingReplyKey,
+          debug: {
+            plan: {
+              action: 'INFO',
+              templateKey: 'greeting_first',
+              updates: { collected: { greetingSent: true } },
+              reason: 'First message - sending greeting',
+            },
+            extractedFields: {},
+            templateKey: 'greeting_first',
+            skipped: false,
+          },
+        }
+      } else {
+        console.error(`[REPLY-ENGINE] CRITICAL ERROR: Greeting template 'greeting_first' not found!`)
+        // Fallback: Use a simple greeting text if template not found
+        const fallbackGreeting = `Hi ${contactName || 'there'}! How can I help you today?`
+        const greetingReplyKey = computeReplyKey(
+          conversationId,
+          inboundMessageId,
+          'INFO',
+          'greeting_first',
+          ''
+        )
+        const updatedCollected = { ...(state.collected || {}), greetingSent: true }
+        await updateFSMState(conversationId, {
+          collected: updatedCollected,
+        })
+        return {
+          text: fallbackGreeting,
+          replyKey: greetingReplyKey,
+          debug: {
+            plan: {
+              action: 'INFO',
+              templateKey: 'greeting_first',
+              updates: { collected: { greetingSent: true } },
+              reason: 'First message - sending greeting (fallback)',
+            },
+            extractedFields: {},
+            templateKey: 'greeting_first',
+            skipped: false,
+          },
+        }
+      }
+    } else {
+      // Greeting already sent, log for debugging
+      console.log(`[REPLY-ENGINE] Greeting already sent, skipping (greetingSent: ${greetingSent})`)
     }
 
     // Step 3: Run extractor -> updatedState
@@ -122,8 +247,8 @@ export async function generateReply(
       lastInboundMessageId: inboundMessageId.toString(),
     }
 
-    // Step 4: Run planner -> plan
-    const plan = planNextAction(updatedState, inboundText, extracted)
+    // Step 4: Run planner -> plan (pass isFirstMessage flag)
+    const plan = planNextAction(updatedState, inboundText, extracted, isFirstMessage)
 
     // Step 5: Render template -> rawText
     const template = getTemplate(plan.templateKey)
@@ -172,14 +297,34 @@ export async function generateReply(
     }
 
     // Step 9: Persist state updates
+    // CRITICAL: Prevent duplicate question keys - check BEFORE adding
+    // Also check if planner's updates.askedQuestionKeys might have duplicates
+    const questionKeyAlreadyAsked = plan.questionKey && updatedState.askedQuestionKeys.includes(plan.questionKey)
+    
+    // Also check if plan.updates.askedQuestionKeys has duplicates
+    const planAskedKeys = plan.updates.askedQuestionKeys || []
+    const planHasDuplicates = planAskedKeys.some(key => updatedState.askedQuestionKeys.includes(key))
+    
+    // If question was already asked, skip adding it again AND log warning
+    if (questionKeyAlreadyAsked) {
+      console.warn(`⚠️ [REPLY-ENGINE] DUPLICATE QUESTION DETECTED: ${plan.questionKey} already in askedQuestionKeys!`)
+    }
+    
+    const questionKeysToAdd = plan.questionKey && !questionKeyAlreadyAsked
+      ? [plan.questionKey]
+      : []
+    
+    // Merge plan.updates.askedQuestionKeys but filter out duplicates
+    const planAskedKeysFiltered = planAskedKeys.filter(key => !updatedState.askedQuestionKeys.includes(key))
+    const allNewKeys = [...questionKeysToAdd, ...planAskedKeysFiltered]
+    
     const finalState = {
       ...updatedState,
       ...plan.updates,
       lastOutboundReplyKey: replyKey,
-      askedQuestionKeys: [
-        ...updatedState.askedQuestionKeys,
-        ...(plan.questionKey ? [plan.questionKey] : []),
-      ],
+      askedQuestionKeys: allNewKeys.length > 0
+        ? [...updatedState.askedQuestionKeys, ...allNewKeys]
+        : updatedState.askedQuestionKeys,
     }
 
     await updateFSMState(conversationId, finalState)

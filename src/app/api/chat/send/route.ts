@@ -34,32 +34,23 @@ export async function POST(req: NextRequest) {
     const lead = contact.leads[0] || null
 
     // STEP 2 FIX: Use Message table instead of ChatMessage
-    // Find or create conversation (deterministic routing)
-    let conversation = await prisma.conversation.findUnique({
-      where: {
-        contactId_channel: {
-          contactId: contact.id,
-          channel: channel.toLowerCase(),
-        },
-      },
+    // Use canonical upsertConversation
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+    
+    const { id: conversationId } = await upsertConversation({
+      contactId: contact.id,
+      channel: channel.toLowerCase(),
+      leadId: lead?.id || null,
+      externalThreadId: getExternalThreadId(channel.toLowerCase(), contact),
     })
-
+    
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+    })
+    
     if (!conversation) {
-      conversation = await prisma.conversation.create({
-        data: {
-          contactId: contact.id,
-          leadId: lead?.id || null,
-          channel: channel.toLowerCase(),
-          status: 'open',
-          lastMessageAt: new Date(),
-        },
-      })
-    } else if (lead && (!conversation.leadId || conversation.leadId !== lead.id)) {
-      // Update leadId if different
-      conversation = await prisma.conversation.update({
-        where: { id: conversation.id },
-        data: { leadId: lead.id },
-      })
+      throw new Error(`Failed to fetch conversation ${conversationId} after upsert`)
     }
 
     // Create Message record (replaces ChatMessage)

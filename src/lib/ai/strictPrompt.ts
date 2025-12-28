@@ -5,8 +5,6 @@
  * JSON output with proper service locking and qualification flow.
  */
 
-import { appendFile } from 'fs/promises'
-import { join } from 'path'
 
 const COMPANY_IDENTITY = 'Al Ain Business Center – UAE business setup & visa services'
 
@@ -200,11 +198,6 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
   })
   
   // Add provided information
-  // #region agent log
-  const logEntry7 = {location:'strictPrompt.ts:buildStrictUserPrompt:beforeProvidedInfo',message:'Before building provided info section',data:{providedInfoKeys:Object.keys(providedInfo),providedInfo:providedInfo,hasMainland:!!providedInfo.mainland,hasFreezone:!!providedInfo.freezone,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'}};
-  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry7)}).catch(()=>{});
-  appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry7)+'\n').catch(()=>{});
-  // #endregion
   if (Object.keys(providedInfo).length > 0) {
     prompt += `\nINFORMATION ALREADY PROVIDED (DO NOT ASK AGAIN):\n`
     if (providedInfo.name) {
@@ -223,12 +216,6 @@ export function buildStrictUserPrompt(context: StrictPromptContext): string {
     if (providedInfo.sponsor_status) {
       prompt += `- Sponsor Visa Type: ${providedInfo.sponsor_status.toUpperCase()} (CRITICAL: Customer already answered "${providedInfo.sponsor_status}" - DO NOT ask "What type of UAE visa do you currently hold?" again!)\n`
     }
-    // #region agent log
-    const providedInfoSection = prompt.split('INFORMATION ALREADY PROVIDED')[1]?.split('\n\n')[0] || '';
-    const logEntry8 = {location:'strictPrompt.ts:buildStrictUserPrompt:afterProvidedInfo',message:'After building provided info section',data:{providedInfoSectionLength:providedInfoSection.length,providedInfoSectionSample:providedInfoSection.substring(0,300),hasMainlandInPrompt:providedInfoSection.includes('MAINLAND'),hasFreezoneInPrompt:providedInfoSection.includes('FREEZONE'),timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'C'}};
-    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify(logEntry8)}).catch(()=>{});
-    appendFile(join(process.cwd(),'.cursor','debug.log'),JSON.stringify(logEntry8)+'\n').catch(()=>{});
-    // #endregion
     prompt += `\n🚨 CRITICAL RULES - READ CAREFULLY:\n`
     prompt += `1. Do NOT ask for information already listed above - it's already provided!\n`
     prompt += `2. If "Full Name" is listed above, DO NOT ask "what's your name?" or "can you tell me your name?" - the name is already known!\n`

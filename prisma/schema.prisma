@@ -339,6 +339,12 @@ model Conversation {
   collectedData    String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
   lastAutoReplyKey String? // PROBLEM D FIX: Hash of (ruleEngineVersion + leadId/contactId + lastInboundExternalId + nextQuestionKey) for dedupe
   aiStateJson      String? // JSON: Reply Engine FSM state (serviceKey, stage, collected, askedQuestionKeys, etc.)
+  // Fail-proof dedupe and state machine fields
+  stateVersion     Int       @default(0) // Optimistic concurrency control
+  lastAssistantMessageAt DateTime? // Last AI-generated message timestamp
+  qualificationStage String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
+  questionsAskedCount Int    @default(0) // Track total questions asked (max 5 for business setup)
+  knownFields      String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
   createdAt        DateTime  @default(now())
   updatedAt        DateTime  @updatedAt
 
@@ -359,6 +365,7 @@ model Conversation {
   @@index([contactId])
   @@index([assignedUserId, lastMessageAt])
   @@index([externalId])
+  @@index([channel, contactId, externalThreadId]) // For upsert logic with externalThreadId
 }
 
 model Message {
@@ -807,15 +814,25 @@ model OutboundMessageLog {
   conversationId           Int
   triggerProviderMessageId String? // The inbound message ID that triggered this outbound
   outboundTextHash         String // SHA256 hash of outbound message text for deduplication
+  outboundDedupeKey        String?      @unique // Hard idempotency key: hash(conversationId + replyType + normalizedQuestionKey + dayBucket OR inboundMessageId)
+  status                   String       @default("PENDING") // PENDING | SENT | FAILED
+  error                    String? // Error message if status is FAILED
   outboundMessageId        Int? // Reference to Message.id if created
+  providerMessageId        String? // WhatsApp/email provider message ID
   flowStep                 String? // Conversation flow step when sent
   lastQuestionKey          String? // Last question key when sent
+  replyType                String? // 'greeting' | 'question' | 'answer' | 'closing'
+  dayBucket                String? // YYYY-MM-DD for day-based deduplication
   createdAt                DateTime     @default(now())
+  sentAt                   DateTime? // When message was actually sent
+  failedAt                 DateTime? // When send failed
 
   @@unique([provider, triggerProviderMessageId]) // One outbound per inbound message
   @@index([conversationId, createdAt])
   @@index([triggerProviderMessageId])
   @@index([flowStep, createdAt])
+  @@index([status, createdAt])
+  @@index([outboundDedupeKey])
 }
 
 model ReplyEngineLog {

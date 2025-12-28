@@ -1,7 +1,9 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
-import { generateAiReply } from '@/lib/aiReply'
+import { generateAIReply } from '@/lib/ai/orchestrator'
+import { upsertConversation } from '@/lib/conversation/upsert'
+import { getExternalThreadId } from '@/lib/conversation/getExternalThreadId'
 
 export async function GET(
   req: NextRequest,
@@ -34,12 +36,41 @@ export async function GET(
       return NextResponse.json({ error: 'Lead not found' }, { status: 404 })
     }
 
-    const result = await generateAiReply(lead as any, lead.communicationLogs)
+    // Find or create conversation
+    const { id: conversationId } = await upsertConversation({
+      contactId: lead.contactId,
+      channel: 'whatsapp',
+      leadId: lead.id,
+      externalThreadId: getExternalThreadId('whatsapp', lead.contact),
+    })
+    
+    // Get latest inbound message or create dummy
+    const latestMessage = await prisma.message.findFirst({
+      where: {
+        conversationId,
+        direction: 'INBOUND',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+    
+    const inboundText = latestMessage?.body || lead.communicationLogs[0]?.messageSnippet || 'Follow-up'
+    const inboundMessageId = latestMessage?.id || 0
+    
+    // Call orchestrator
+    const result = await generateAIReply({
+      conversationId,
+      leadId: lead.id,
+      contactId: lead.contactId,
+      inboundText,
+      inboundMessageId,
+      channel: 'whatsapp',
+      language: 'en',
+    })
 
     return NextResponse.json({
-      reply: result.message, // Client expects 'reply' field
-      nextFollowUp: result.nextFollowUp.toISOString(),
-      suggestedDocs: result.suggestedDocs,
+      reply: result.replyText, // Client expects 'reply' field
+      nextFollowUp: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(), // 2 days
+      suggestedDocs: [], // TODO: Extract from orchestrator result
     })
   } catch (error: any) {
     console.error('AI reply generation error:', error)

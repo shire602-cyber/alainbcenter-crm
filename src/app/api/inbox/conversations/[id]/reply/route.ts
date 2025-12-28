@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuthApi } from '@/lib/authApi'
-import { sendTextMessage } from '@/lib/whatsapp'
+import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
 
 /**
  * POST /api/inbox/conversations/[id]/reply
@@ -98,17 +98,33 @@ export async function POST(
       )
     }
 
-    // Send WhatsApp message
+    // Send WhatsApp message with idempotency
     let whatsappMessageId: string | null = null
     let sendError: any = null
     const sentAt = new Date()
     
     try {
-      const result = await sendTextMessage(
-        conversation.contact.phone,
-        text.trim()
-      )
-      whatsappMessageId = result.messageId
+      const result = await sendOutboundWithIdempotency({
+        conversationId: conversation.id,
+        contactId: conversation.contactId,
+        leadId: conversation.leadId,
+        phone: conversation.contact.phone,
+        text: text.trim(),
+        provider: 'whatsapp',
+        triggerProviderMessageId: null, // Manual send
+        replyType: 'answer',
+        lastQuestionKey: null,
+        flowStep: null,
+      })
+
+      if (result.wasDuplicate) {
+        console.log(`⚠️ [INBOX-REPLY] Duplicate outbound blocked by idempotency`)
+        sendError = 'Duplicate message blocked (idempotency)'
+      } else if (!result.success) {
+        throw new Error(result.error || 'Failed to send message')
+      } else {
+        whatsappMessageId = result.messageId || undefined
+      }
     } catch (whatsappError: any) {
       console.error('WhatsApp send error:', whatsappError)
       sendError = whatsappError

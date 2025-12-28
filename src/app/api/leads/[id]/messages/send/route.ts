@@ -7,7 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
-import { sendWhatsAppMessage } from '@/lib/whatsappClient'
+import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
 import { sendEmailMessage } from '@/lib/emailClient'
 import { findOrCreateConversation, buildWhatsAppExternalId } from '@/lib/whatsappInbound'
 
@@ -130,11 +130,32 @@ export async function POST(
 
     try {
       if (normalizedChannel === 'WHATSAPP') {
-        sendResult = await sendWhatsAppMessage(lead.contact.phone!, messageBody.trim())
-        
-        if (sendResult.success && sendResult.messageId) {
-          providerMessageId = sendResult.messageId
+        const result = await sendOutboundWithIdempotency({
+          conversationId: conversation.id,
+          contactId: lead.contactId,
+          leadId: lead.id,
+          phone: lead.contact.phone!,
+          text: messageBody.trim(),
+          provider: 'whatsapp',
+          triggerProviderMessageId: null, // Manual send
+          replyType: 'answer',
+          lastQuestionKey: null,
+          flowStep: null,
+        })
+
+        if (result.wasDuplicate) {
+          sendResult = {
+            success: false,
+            error: 'Duplicate message blocked (idempotency)',
+          }
+          finalStatus = 'FAILED'
+        } else if (result.success && result.messageId) {
+          providerMessageId = result.messageId
           finalStatus = 'SENT'
+          sendResult = {
+            success: true,
+            messageId: result.messageId,
+          }
           
           // Update conversation externalId if not set and we got a message ID
           if (!conversation.externalId && lead.contact.phone) {
@@ -163,6 +184,10 @@ export async function POST(
           }
         } else {
           finalStatus = 'FAILED'
+          sendResult = {
+            success: false,
+            error: result.error || 'Failed to send message',
+          }
         }
       } else if (normalizedChannel === 'EMAIL') {
         // Extract subject from body if it contains a subject line

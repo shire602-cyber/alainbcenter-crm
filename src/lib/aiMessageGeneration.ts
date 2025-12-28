@@ -1,5 +1,13 @@
-// AI message generation for automation
-// Uses OpenAI if available, falls back to templates
+/**
+ * AI Message Generation - WRAPPER AROUND ORCHESTRATOR
+ * 
+ * ⚠️ DEPRECATED: This file routes to orchestrator.
+ * All new code should call orchestrator directly.
+ */
+
+import { generateAIReply } from './ai/orchestrator'
+import { prisma } from './prisma'
+import { upsertConversation } from './conversation/upsert'
 
 type Lead = {
   id: number
@@ -16,146 +24,124 @@ type Lead = {
 }
 
 /**
- * Generate an expiry reminder message using AI (NO TEMPLATES)
+ * Generate an expiry reminder message using orchestrator
  */
 export async function generateExpiryReminderMessage(
   lead: Lead,
   daysBefore: number
 ): Promise<string> {
-  // CRITICAL: Always use AI generation - no templates
+  console.warn(`[DEPRECATED] generateExpiryReminderMessage called - routing to orchestrator`)
+  
   try {
-    const { generateAIAutoresponse } = await import('./aiMessaging')
-    const { buildConversationContextFromLead } = await import('./ai/context')
-    const { prisma } = await import('./prisma')
-    
-    // Load full lead with relations
+    // Load full lead
     const fullLead = await prisma.lead.findUnique({
       where: { id: lead.id },
       include: {
         contact: true,
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 5,
-        },
       },
     })
     
-    if (!fullLead) {
-      throw new Error('Lead not found')
+    if (!fullLead || !fullLead.contact) {
+      throw new Error('Lead or contact not found')
     }
     
-    // Build conversation context
-    const contextSummary = await buildConversationContextFromLead(lead.id, 'whatsapp')
-    const conversationContext = contextSummary.structured
+    // Find or create conversation
+    const { id: conversationId } = await upsertConversation({
+      contactId: fullLead.contact.id,
+      channel: 'whatsapp',
+      leadId: fullLead.id,
+    })
     
-    // Create AI context for renewal reminder
-    const aiContext = {
-      lead: fullLead as any,
-      contact: fullLead.contact,
-      recentMessages: fullLead.messages.map(m => ({
-        direction: m.direction as 'INBOUND' | 'OUTBOUND',
-        body: m.body || '',
-        createdAt: m.createdAt,
-      })),
-      mode: 'RENEWAL' as const,
-      channel: 'WHATSAPP' as const,
-      language: 'en' as const,
-    }
+    // Create a dummy inbound message for context
+    const dummyMessage = await prisma.message.create({
+      data: {
+        conversationId,
+        leadId: fullLead.id,
+        contactId: fullLead.contact.id,
+        direction: 'INBOUND',
+        channel: 'whatsapp',
+        type: 'text',
+        body: `Reminder: My ${lead.leadType || 'service'} expires in ${daysBefore} days`,
+        status: 'RECEIVED',
+      },
+    })
     
-    // Generate AI reply
-    const aiResult = await generateAIAutoresponse(aiContext)
+    // Call orchestrator
+    const result = await generateAIReply({
+      conversationId,
+      leadId: fullLead.id,
+      contactId: fullLead.contact.id,
+      inboundText: dummyMessage.body || '',
+      inboundMessageId: dummyMessage.id,
+      channel: 'whatsapp',
+      language: 'en',
+    })
     
-    if (aiResult.success && aiResult.text) {
-      return aiResult.text
-    } else {
-      // Minimal fallback only if AI completely fails
-      const { getGreeting } = require('./message-utils')
-      const greeting = getGreeting(fullLead.contact, 'casual')
-      return `${greeting}! 👋\n\nThis is Alain Business Center. Your ${lead.leadType || 'service'} expires in ${daysBefore} days. Please contact us to renew.`
-    }
+    // Delete dummy message
+    await prisma.message.delete({ where: { id: dummyMessage.id } }).catch(() => {})
+    
+    return result.replyText || `Your ${lead.leadType || 'service'} expires in ${daysBefore} days. Please contact us to renew.`
   } catch (error: any) {
-    console.error(`❌ AI generation error for expiry reminder:`, error.message)
-    // Minimal fallback only if AI completely fails
-    const { getGreeting } = require('./message-utils')
-    const greeting = getGreeting(lead.contact, 'casual')
-    return `${greeting}! 👋\n\nThis is Alain Business Center. Your ${lead.leadType || 'service'} expires in ${daysBefore} days. Please contact us to renew.`
+    console.error(`[AI-MESSAGE-GEN] Error:`, error)
+    return `Your ${lead.leadType || 'service'} expires in ${daysBefore} days. Please contact us to renew.`
   }
 }
 
 /**
- * Generate a follow-up message using AI (NO TEMPLATES)
+ * Generate follow-up message using orchestrator
  */
 export async function generateFollowUpMessage(
   lead: Lead,
   lastMessages: Array<{ channel: string; messageSnippet: string | null }>
 ): Promise<string> {
-  // CRITICAL: Always use AI generation - no templates
+  console.warn(`[DEPRECATED] generateFollowUpMessage called - routing to orchestrator`)
+  
   try {
-    const { generateAIAutoresponse } = await import('./aiMessaging')
-    const { buildConversationContextFromLead } = await import('./ai/context')
-    const { prisma } = await import('./prisma')
-    
-    // Load full lead with relations
+    // Load full lead
     const fullLead = await prisma.lead.findUnique({
       where: { id: lead.id },
       include: {
         contact: true,
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 10,
-        },
       },
     })
     
-    if (!fullLead) {
-      throw new Error('Lead not found')
+    if (!fullLead || !fullLead.contact) {
+      throw new Error('Lead or contact not found')
     }
     
-    // Build conversation context
-    const contextSummary = await buildConversationContextFromLead(lead.id, 'whatsapp')
-    const conversationContext = contextSummary.structured
+    // Find or create conversation
+    const { id: conversationId } = await upsertConversation({
+      contactId: fullLead.contact.id,
+      channel: 'whatsapp',
+      leadId: fullLead.id,
+    })
     
-    // Create AI context for follow-up
-    const aiContext = {
-      lead: fullLead as any,
-      contact: fullLead.contact,
-      recentMessages: [
-        ...fullLead.messages.map(m => ({
-          direction: m.direction as 'INBOUND' | 'OUTBOUND',
-          body: m.body || '',
-          createdAt: m.createdAt,
-        })),
-        ...lastMessages.map(m => ({
-          direction: 'INBOUND' as const,
-          body: m.messageSnippet || '',
-          createdAt: new Date(),
-        })),
-      ],
-      mode: 'FOLLOW_UP' as const,
-      channel: 'WHATSAPP' as const,
-      language: 'en' as const,
-    }
+    // Get latest inbound message or create dummy
+    const latestInbound = await prisma.message.findFirst({
+      where: {
+        conversationId,
+        direction: 'INBOUND',
+      },
+      orderBy: { createdAt: 'desc' },
+    })
     
-    // Generate AI reply
-    const aiResult = await generateAIAutoresponse(aiContext)
+    const inboundText = latestInbound?.body || lastMessages[0]?.messageSnippet || 'Follow-up'
+    const inboundMessageId = latestInbound?.id || 0
     
-    if (aiResult.success && aiResult.text) {
-      return aiResult.text
-    } else {
-      // Minimal fallback only if AI completely fails
-      const { getGreetingName } = require('./message-utils')
-      const contactName = getGreetingName(fullLead.contact) || 'there'
-      return `Hello ${contactName}! 👋\n\nJust checking in about your ${lead.leadType || 'service'} enquiry. How can we help you move forward?`
-    }
+    // Call orchestrator
+    const result = await generateAIReply({
+      conversationId,
+      leadId: fullLead.id,
+      contactId: fullLead.contact.id,
+      inboundText,
+      inboundMessageId,
+      channel: 'whatsapp',
+      language: 'en',
+    })
+    
+    return result.replyText || 'Thanks for your interest. How can we help you today?'
   } catch (error: any) {
-    console.error(`❌ AI generation error for follow-up:`, error.message)
-    // Minimal fallback only if AI completely fails
-    const { getGreetingName } = require('./message-utils')
-    const contactName = getGreetingName(lead.contact) || 'there'
-    return `Hello ${contactName}! 👋\n\nJust checking in about your ${lead.leadType || 'service'} enquiry. How can we help you move forward?`
+    console.error(`[AI-MESSAGE-GEN] Error:`, error)
+    return 'Thanks for your interest. How can we help you today?'
   }
 }
-
-// Template functions removed - ALL messages now use AI generation
-// See generateExpiryReminderMessage and generateFollowUpMessage above
-

@@ -83,6 +83,14 @@ export async function POST(req: NextRequest) {
     }
 
     // Send test message
+    // PRODUCTION GUARD: Disable direct sends in production
+    if (process.env.NODE_ENV === 'production') {
+      return NextResponse.json(
+        { error: 'Direct WhatsApp send disabled in production. Use sendOutboundWithIdempotency() via proper endpoints.' },
+        { status: 403 }
+      )
+    }
+    
     const result = await sendTextMessage(normalizedPhone, message)
 
     return NextResponse.json({

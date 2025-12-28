@@ -161,6 +161,18 @@ export async function POST(req: NextRequest) {
       }
     }
 
+    // CRITICAL FIX: Check if this is first message (bypass retriever for first messages)
+    let isFirstMessage = false
+    if (resolvedConversationId) {
+      const outboundCount = await prisma.message.count({
+        where: {
+          conversationId: resolvedConversationId,
+          direction: 'OUTBOUND',
+        },
+      })
+      isFirstMessage = outboundCount === 0
+    }
+
     // RETRIEVER-FIRST CHAIN: Check if AI can respond to this query
     // Get the user's query from recent messages
     // Check for both 'INBOUND' and 'inbound' for backward compatibility with existing data
@@ -184,31 +196,39 @@ export async function POST(req: NextRequest) {
       userQuery = contextSummary.structured.lead?.notes || contextSummary.text || ''
     }
 
-    // Use retriever-first chain to check if we can respond
-    const { retrieveAndGuard, markLeadRequiresHuman } = await import('@/lib/ai/retrieverChain')
-    const retrievalResult = await retrieveAndGuard(userQuery, {
-      similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
-      topK: 5,
-    })
+    // CRITICAL: First message bypasses retriever check - always allow draft generation
+    let retrievalResult: any = null
+    if (!isFirstMessage) {
+      // Use retriever-first chain to check if we can respond (only for non-first messages)
+      const { retrieveAndGuard, markLeadRequiresHuman } = await import('@/lib/ai/retrieverChain')
+      retrievalResult = await retrieveAndGuard(userQuery, {
+        similarityThreshold: parseFloat(process.env.AI_SIMILARITY_THRESHOLD || '0.7'),
+        topK: 5,
+      })
 
-    // If AI cannot respond, mark lead and return polite message
-    if (!retrievalResult.canRespond) {
-      if (resolvedLeadId) {
-        await markLeadRequiresHuman(resolvedLeadId, retrievalResult.reason, userQuery)
+      // If AI cannot respond, mark lead and return polite message
+      if (!retrievalResult.canRespond) {
+        if (resolvedLeadId) {
+          await markLeadRequiresHuman(resolvedLeadId, retrievalResult.reason, userQuery)
+        }
+
+        return NextResponse.json({
+          error: retrievalResult.reason,
+          requiresTraining: true,
+          requiresHuman: true,
+          suggestedResponse: retrievalResult.suggestedResponse || "I'm only trained to assist with specific business topics. Let me get a human agent for you.",
+        }, { status: 400 })
       }
-
-      return NextResponse.json({
-        error: retrievalResult.reason,
-        requiresTraining: true,
-        requiresHuman: true,
-        suggestedResponse: retrievalResult.suggestedResponse || "I'm only trained to assist with specific business topics. Let me get a human agent for you.",
-      }, { status: 400 })
+    } else {
+      console.log(`[DRAFT-REPLY] First message detected - bypassing retriever check`)
     }
 
-    // Build training context from retrieved documents
-    const relevantTraining = retrievalResult.relevantDocuments
-      .map(doc => `${doc.title} (${doc.type}, similarity: ${doc.similarity.toFixed(2)}):\n${doc.content}`)
-      .join('\n\n---\n\n')
+    // Build training context from retrieved documents (if available)
+    const relevantTraining = retrievalResult?.relevantDocuments
+      ? retrievalResult.relevantDocuments
+          .map((doc: any) => `${doc.title} (${doc.type}, similarity: ${doc.similarity.toFixed(2)}):\n${doc.content}`)
+          .join('\n\n---\n\n')
+      : ''
 
     // ALWAYS use AI-generated replies (no templates)
     const { generateDraftReply, generateModeSpecificDraft } = await import('@/lib/ai/generate')

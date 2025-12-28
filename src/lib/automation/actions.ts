@@ -10,9 +10,10 @@ import { sendEmailMessage } from '../emailClient'
 import { interpolateTemplate } from '../templateInterpolation'
 import { AutomationContext } from './engine'
 import { generateAIAutoresponse, AIMessageMode } from '../aiMessaging'
-import type { AIMessageContext } from '../aiMessaging'
+import type { AIMessageContext } from '../aiMessaging.types'
 import { sendTextMessage } from '../whatsapp'
 import { requalifyLeadFromConversation } from '../aiQualification'
+import { sendOutboundWithIdempotency } from '../outbound/sendWithIdempotency'
 
 export interface ActionResult {
   success: boolean
@@ -129,29 +130,37 @@ async function executeSendWhatsApp(
   // Interpolate template variables
   message = interpolateTemplate(message, context)
 
-  // Send via WhatsApp
-  const result = await sendWhatsAppMessage(contact.phone, message)
+  // Send via WhatsApp with idempotency
+  // Use canonical upsertConversation first
+  const { upsertConversation } = await import('@/lib/conversation/upsert')
+  const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+  
+  const { id: conversationId } = await upsertConversation({
+    contactId: contact.id,
+    channel: 'whatsapp',
+    leadId: lead.id,
+    externalThreadId: getExternalThreadId('whatsapp', contact),
+  })
+  
+  const conversation = { id: conversationId }
 
-  if (result.success) {
-    // Create message record
-    try {
-      let conversation = await prisma.conversation.findFirst({
-        where: {
-          contactId: contact.id,
-          channel: 'whatsapp',
-        },
-      })
+  const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+  const result = await sendOutboundWithIdempotency({
+    conversationId: conversation.id,
+    contactId: contact.id,
+    leadId: lead.id,
+    phone: contact.phone,
+    text: message,
+    provider: 'whatsapp',
+    triggerProviderMessageId: null, // Automation send
+    replyType: 'answer',
+    lastQuestionKey: null,
+    flowStep: null,
+  })
 
-      if (!conversation) {
-        conversation = await prisma.conversation.create({
-          data: {
-            contactId: contact.id,
-            leadId: lead.id,
-            channel: 'whatsapp',
-            status: 'open',
-          },
-        })
-      }
+  if (result.success && !result.wasDuplicate) {
+      // Create message record
+      try {
 
       await prisma.message.create({
         data: {
@@ -162,7 +171,7 @@ async function executeSendWhatsApp(
           channel: 'whatsapp',
           type: 'text',
           body: message,
-          status: result.messageId ? 'SENT' : 'PENDING',
+          status: result.messageId ? 'SENT' : 'FAILED',
           providerMessageId: result.messageId || null,
           sentAt: new Date(),
         },
@@ -593,11 +602,23 @@ async function executeSendAIReply(
         }
       }
 
-      // Send via WhatsApp Cloud API (within 24-hour window)
+      // Send via WhatsApp with idempotency (within 24-hour window)
       console.log(`📤 Sending WhatsApp message to ${contact.phone} (${aiResult.text.substring(0, 50)}...)`)
-      let result: { messageId: string; waId?: string }
+      const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+      let result: { success: boolean; messageId?: string; wasDuplicate?: boolean; error?: string }
       try {
-        result = await sendTextMessage(contact.phone, aiResult.text)
+        result = await sendOutboundWithIdempotency({
+          conversationId: conversation.id,
+          contactId: contact.id,
+          leadId: lead.id,
+          phone: contact.phone,
+          text: aiResult.text,
+          provider: 'whatsapp',
+          triggerProviderMessageId: null, // Automation send
+          replyType: 'answer',
+          lastQuestionKey: null,
+          flowStep: null,
+        })
       } catch (error: any) {
         console.error('❌ WhatsApp send failed:', error)
         return {
@@ -606,11 +627,19 @@ async function executeSendAIReply(
         }
       }
 
-      if (!result || !result.messageId) {
-        console.error('❌ WhatsApp send failed: No message ID returned', result)
+      if (result.wasDuplicate) {
+        console.log(`⚠️ [AUTOMATION] Duplicate outbound blocked by idempotency`)
         return {
           success: false,
-          error: 'Failed to send WhatsApp message - no message ID returned',
+          error: 'Duplicate message blocked (idempotency)',
+        }
+      }
+
+      if (!result.success || !result.messageId) {
+        console.error('❌ WhatsApp send failed:', result.error || 'No message ID returned')
+        return {
+          success: false,
+          error: result.error || 'Failed to send WhatsApp message - no message ID returned',
         }
       }
 
@@ -685,9 +714,11 @@ async function executeSendAIReply(
 
     try {
       // Generate subject based on mode
-      const subjectMap: Record<AIMessageMode, string> = {
+      const subjectMap: Partial<Record<AIMessageMode, string>> & Record<string, string> = {
         FOLLOW_UP: 'Follow-up from Alain Business Center',
         QUALIFY: 'Thank you for your interest',
+        REMINDER: 'Reminder from Alain Business Center',
+        SUPPORT: 'Message from Alain Business Center',
         RENEWAL: 'Renewal reminder from Alain Business Center',
         PRICING: 'Pricing information',
         DOCS: 'Document Request - Alain Business Center',

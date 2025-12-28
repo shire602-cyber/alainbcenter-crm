@@ -1,35 +1,37 @@
 'use client'
 
-import { useEffect, useState } from 'react'
-import { MainLayout } from '@/components/layout/MainLayout'
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
-import { Button } from '@/components/ui/button'
-import { Badge } from '@/components/ui/badge'
-import { Bell, CheckCircle2, AlertCircle, MessageSquare, User, Sparkles, X } from 'lucide-react'
-import { format, isToday, isYesterday } from 'date-fns'
-import Link from 'next/link'
-import { cn } from '@/lib/utils'
+/**
+ * NOTIFICATIONS PAGE
+ * Actionable notifications only
+ * Deduplicated, snoozable, auto-expiring
+ */
 
-type Notification = {
+import { useState, useEffect } from 'react'
+import { MainLayout } from '@/components/layout/MainLayout'
+import { ActionableNotificationItem } from '@/components/notifications/ActionableNotification'
+import { CheckCircle2 } from 'lucide-react'
+import { Button } from '@/components/ui/button'
+
+interface ActionableNotification {
   id: number
-  type: string
+  type: 'sla_breach_imminent' | 'customer_reply' | 'quote_ready' | 'deadline_today'
   title: string
   message: string
-  leadId: number | null
-  conversationId: number | null
-  isRead: boolean
-  readAt: string | null
+  leadId?: number
+  conversationId?: number
+  actionUrl: string
+  actionLabel: string
   createdAt: string
+  isRead: boolean
 }
 
 export default function NotificationsPage() {
-  const [notifications, setNotifications] = useState<Notification[]>([])
+  const [notifications, setNotifications] = useState<ActionableNotification[]>([])
   const [loading, setLoading] = useState(true)
-  const [unreadCount, setUnreadCount] = useState(0)
+  const [snoozedIds, setSnoozedIds] = useState<Set<number>>(new Set())
 
   useEffect(() => {
     loadNotifications()
-    // Poll for new notifications every 30 seconds
     const interval = setInterval(loadNotifications, 30000)
     return () => clearInterval(interval)
   }, [])
@@ -39,8 +41,29 @@ export default function NotificationsPage() {
       const res = await fetch('/api/notifications')
       if (res.ok) {
         const data = await res.json()
-        setNotifications(data.notifications || [])
-        setUnreadCount(data.unreadCount || 0)
+        // Filter to only actionable notifications and deduplicate
+        const actionable = (data.notifications || [])
+          .filter((n: any) => 
+            ['sla_breach_imminent', 'customer_reply', 'quote_ready', 'deadline_today'].includes(n.type) &&
+            !n.isRead &&
+            !snoozedIds.has(n.id)
+          )
+          .map((n: any) => ({
+            ...n,
+            actionUrl: n.leadId ? `/leads/${n.leadId}` : '/leads',
+            actionLabel: getActionLabel(n.type),
+          }))
+        
+        // Deduplicate by type + leadId (keep most recent)
+        const seen = new Map<string, ActionableNotification>()
+        for (const notif of actionable) {
+          const key = `${notif.type}_${notif.leadId || 0}`
+          if (!seen.has(key) || new Date(notif.createdAt) > new Date(seen.get(key)!.createdAt)) {
+            seen.set(key, notif)
+          }
+        }
+        
+        setNotifications(Array.from(seen.values()))
       }
     } catch (error) {
       console.error('Failed to load notifications:', error)
@@ -49,221 +72,137 @@ export default function NotificationsPage() {
     }
   }
 
-  async function markAsRead(notificationId: number) {
+  function getActionLabel(type: string): string {
+    switch (type) {
+      case 'sla_breach_imminent':
+        return 'Reply Now'
+      case 'customer_reply':
+        return 'View Conversation'
+      case 'quote_ready':
+        return 'Send Quote'
+      case 'deadline_today':
+        return 'View Lead'
+      default:
+        return 'View'
+    }
+  }
+
+  async function handleDismiss(id: number) {
     try {
-      const res = await fetch(`/api/notifications/${notificationId}/read`, {
+      await fetch(`/api/notifications/${id}/read`, {
         method: 'POST',
       })
-      if (res.ok) {
-        loadNotifications()
-      }
+      setNotifications(prev => prev.filter(n => n.id !== id))
     } catch (error) {
-      console.error('Failed to mark notification as read:', error)
+      console.error('Failed to dismiss notification:', error)
     }
+  }
+
+  async function handleSnooze(id: number, minutes: number) {
+    setSnoozedIds(prev => new Set(prev).add(id))
+    setNotifications(prev => prev.filter(n => n.id !== id))
+    
+    // Auto-unsnooze after specified time
+    setTimeout(() => {
+      setSnoozedIds(prev => {
+        const next = new Set(prev)
+        next.delete(id)
+        return next
+      })
+      loadNotifications()
+    }, minutes * 60 * 1000)
+  }
+
+  function handleAction(url: string) {
+    window.location.href = url
   }
 
   async function markAllAsRead() {
     try {
-      const res = await fetch('/api/notifications/read-all', {
+      await fetch('/api/notifications/read-all', {
         method: 'POST',
       })
-      if (res.ok) {
-        loadNotifications()
-      }
+      setNotifications([])
     } catch (error) {
       console.error('Failed to mark all as read:', error)
     }
   }
 
-  function getNotificationIcon(type: string) {
-    switch (type) {
-      case 'ai_untrained':
-        return <Sparkles className="h-4 w-4" />
-      case 'unreplied_message':
-        return <MessageSquare className="h-4 w-4" />
-      case 'task_assigned':
-        return <User className="h-4 w-4" />
-      default:
-        return <AlertCircle className="h-4 w-4" />
-    }
-  }
+  // Auto-expire old notifications (older than 24 hours)
+  useEffect(() => {
+    const now = new Date()
+    setNotifications(prev => 
+      prev.filter(n => {
+        const age = now.getTime() - new Date(n.createdAt).getTime()
+        return age < 24 * 60 * 60 * 1000 // 24 hours
+      })
+    )
+  }, [])
 
-  function getNotificationColor(type: string) {
-    switch (type) {
-      case 'ai_untrained':
-        return 'bg-purple-100 dark:bg-purple-900/20 text-purple-700 dark:text-purple-300'
-      case 'unreplied_message':
-        return 'bg-red-100 dark:bg-red-900/20 text-red-700 dark:text-red-300'
-      case 'task_assigned':
-        return 'bg-blue-100 dark:bg-blue-900/20 text-blue-700 dark:text-blue-300'
-      default:
-        return 'bg-gray-100 dark:bg-gray-900/20 text-gray-700 dark:text-gray-300'
-    }
+  if (loading) {
+    return (
+      <MainLayout>
+        <div className="p-6">
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <div key={i} className="h-24 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+            ))}
+          </div>
+        </div>
+      </MainLayout>
+    )
   }
-
-  function formatNotificationTime(date: string) {
-    const notificationDate = new Date(date)
-    if (isToday(notificationDate)) {
-      return format(notificationDate, 'HH:mm')
-    } else if (isYesterday(notificationDate)) {
-      return 'Yesterday'
-    } else {
-      return format(notificationDate, 'MMM d')
-    }
-  }
-
-  const unreadNotifications = notifications.filter(n => !n.isRead)
-  const readNotifications = notifications.filter(n => n.isRead)
 
   return (
     <MainLayout>
-      <div className="space-y-4">
-        <div className="flex items-center justify-between">
+      <div className="p-6 max-w-4xl mx-auto">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight">Notifications</h1>
-            <p className="text-sm text-muted-foreground">
-              {unreadCount > 0 ? `${unreadCount} unread notification${unreadCount !== 1 ? 's' : ''}` : 'All caught up!'}
+            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+              Notifications
+            </h1>
+            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+              {notifications.length} actionable {notifications.length === 1 ? 'item' : 'items'}
             </p>
           </div>
-          {unreadCount > 0 && (
-            <Button onClick={markAllAsRead} variant="outline" size="sm">
-              <CheckCircle2 className="h-4 w-4 mr-2" />
+          {notifications.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={markAllAsRead}
+              className="rounded-xl"
+            >
               Mark all as read
             </Button>
           )}
         </div>
 
-        {loading ? (
-          <div className="space-y-3">
-            {[1, 2, 3].map(i => (
-              <Card key={i} className="animate-pulse">
-                <CardContent className="p-4">
-                  <div className="h-4 bg-muted rounded w-3/4 mb-2" />
-                  <div className="h-3 bg-muted rounded w-1/2" />
-                </CardContent>
-              </Card>
-            ))}
+        {notifications.length === 0 ? (
+          <div className="p-12 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+            </div>
+            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
+              All caught up!
+            </p>
+            <p className="text-xs text-slate-500 dark:text-slate-400">
+              No actionable notifications
+            </p>
           </div>
-        ) : notifications.length === 0 ? (
-          <Card>
-            <CardContent className="flex flex-col items-center justify-center py-12">
-              <Bell className="h-12 w-12 text-muted-foreground mb-4" />
-              <p className="text-muted-foreground">No notifications yet</p>
-            </CardContent>
-          </Card>
         ) : (
           <div className="space-y-4">
-            {unreadNotifications.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-muted-foreground mb-2">Unread</h2>
-                <div className="space-y-2">
-                  {unreadNotifications.map(notification => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      onMarkAsRead={() => markAsRead(notification.id)}
-                      getIcon={getNotificationIcon}
-                      getColor={getNotificationColor}
-                      formatTime={formatNotificationTime}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {readNotifications.length > 0 && (
-              <div>
-                <h2 className="text-sm font-semibold text-muted-foreground mb-2">Read</h2>
-                <div className="space-y-2">
-                  {readNotifications.map(notification => (
-                    <NotificationCard
-                      key={notification.id}
-                      notification={notification}
-                      onMarkAsRead={() => markAsRead(notification.id)}
-                      getIcon={getNotificationIcon}
-                      getColor={getNotificationColor}
-                      formatTime={formatNotificationTime}
-                    />
-                  ))}
-                </div>
-              </div>
-            )}
+            {notifications.map((notification) => (
+              <ActionableNotificationItem
+                key={notification.id}
+                notification={notification}
+                onDismiss={handleDismiss}
+                onSnooze={handleSnooze}
+                onAction={handleAction}
+              />
+            ))}
           </div>
         )}
       </div>
     </MainLayout>
   )
 }
-
-function NotificationCard({
-  notification,
-  onMarkAsRead,
-  getIcon,
-  getColor,
-  formatTime,
-}: {
-  notification: Notification
-  onMarkAsRead: () => void
-  getIcon: (type: string) => JSX.Element
-  getColor: (type: string) => string
-  formatTime: (date: string) => string
-}) {
-  return (
-    <Card className={cn(
-      "transition-all hover:shadow-md",
-      !notification.isRead && "border-l-4 border-l-primary"
-    )}>
-      <CardContent className="p-4">
-        <div className="flex items-start gap-3">
-          <div className={cn(
-            "flex items-center justify-center w-8 h-8 rounded-full flex-shrink-0",
-            getColor(notification.type)
-          )}>
-            {getIcon(notification.type)}
-          </div>
-          <div className="flex-1 min-w-0">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex-1">
-                <h3 className="text-sm font-semibold mb-1">{notification.title}</h3>
-                <p className="text-sm text-muted-foreground mb-2">{notification.message}</p>
-                <div className="flex items-center gap-2 flex-wrap">
-                  {notification.leadId && (
-                    <Link href={`/leads/${notification.leadId}`}>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs">
-                        View Lead
-                      </Button>
-                    </Link>
-                  )}
-                  {notification.conversationId && (
-                    <Link href={`/inbox?conversation=${notification.conversationId}`}>
-                      <Button variant="ghost" size="sm" className="h-6 text-xs">
-                        View Conversation
-                      </Button>
-                    </Link>
-                  )}
-                </div>
-              </div>
-              <div className="flex items-center gap-2 flex-shrink-0">
-                <span className="text-xs text-muted-foreground">
-                  {formatTime(notification.createdAt)}
-                </span>
-                {!notification.isRead && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="h-6 w-6 p-0"
-                    onClick={onMarkAsRead}
-                    title="Mark as read"
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                )}
-              </div>
-            </div>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-  )
-}
-

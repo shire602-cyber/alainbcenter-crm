@@ -19,6 +19,8 @@ import { createAutoTasks } from './autoTasks'
 import { handleInboundAutoReply } from '../autoReply'
 import { upsertContact } from '../contact/upsert'
 import { normalizeChannel } from '../utils/channelNormalize'
+import { upsertConversation } from '../conversation/upsert'
+import { getExternalThreadId } from '../conversation/getExternalThreadId'
 
 export interface AutoMatchInput {
   channel: 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
@@ -47,6 +49,7 @@ export interface AutoMatchResult {
   }
   tasksCreated: number
   autoReplied: boolean
+  wasDuplicate?: boolean
 }
 
 /**
@@ -99,12 +102,49 @@ export async function handleInboundMessageAutoMatch(
   })
 
   // Step 4: FIND/CREATE Conversation (linked to lead)
-  const conversation = await findOrCreateConversation({
+  // Extract externalThreadId using canonical function
+  const externalThreadId = getExternalThreadId(
+    input.channel,
+    contact,
+    input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata
+  )
+  
+  // DIAGNOSTIC LOG: before conversation upsert
+  console.log(`[AUTO-MATCH] BEFORE-CONV-UPSERT`, JSON.stringify({
+    contactId: contactResult.id,
+    channel: input.channel,
+    channelLower: input.channel.toLowerCase(),
+    externalThreadId,
+    leadId: lead.id,
+    providerMessageId: input.providerMessageId,
+  }))
+  
+  const conversationResult = await upsertConversation({
     contactId: contactResult.id,
     channel: input.channel,
     leadId: lead.id, // CRITICAL: Link conversation to lead
     timestamp: input.timestamp, // Use actual message timestamp
+    externalThreadId, // Canonical external thread ID
   })
+  
+  // Fetch full conversation record
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationResult.id },
+  })
+  
+  if (!conversation) {
+    throw new Error(`Failed to fetch conversation ${conversationResult.id} after upsert`)
+  }
+  
+  // DIAGNOSTIC LOG: after conversation upsert
+  console.log(`[AUTO-MATCH] AFTER-CONV-UPSERT`, JSON.stringify({
+    conversationId: conversation.id,
+    contactId: contactResult.id,
+    channel: input.channel.toLowerCase(),
+    externalThreadId,
+    leadId: lead.id,
+    providerMessageId: input.providerMessageId,
+  }))
 
   // Step 5: CREATE CommunicationLog
   const message = await createCommunicationLog({
@@ -141,6 +181,32 @@ export async function handleInboundMessageAutoMatch(
   let extractedFields: any = {}
   try {
     extractedFields = await extractFields(input.text, contact, lead)
+    
+    // CRITICAL: Persist extracted fields to conversation for audit
+    if (Object.keys(extractedFields).length > 0 && conversation) {
+      try {
+        const existingKnownFields = conversation.knownFields 
+          ? (typeof conversation.knownFields === 'string' 
+              ? JSON.parse(conversation.knownFields) 
+              : conversation.knownFields)
+          : {}
+        const updatedKnownFields = {
+          ...existingKnownFields,
+          ...extractedFields,
+          extractedAt: new Date().toISOString(),
+        }
+        
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            knownFields: JSON.stringify(updatedKnownFields),
+          },
+        })
+        console.log(`✅ [AUTO-MATCH] Persisted extracted fields to conversation.knownFields`)
+      } catch (persistError: any) {
+        console.warn(`⚠️ [AUTO-MATCH] Failed to persist to conversation.knownFields:`, persistError.message)
+      }
+    }
   } catch (extractError: any) {
     console.error(`❌ [AUTO-MATCH] Field extraction failed:`, extractError.message)
     // Continue with empty extractedFields - don't block pipeline
@@ -306,6 +372,8 @@ export async function handleInboundMessageAutoMatch(
         console.log(`✅ [AUTO-MATCH] Matched serviceTypeId: ${serviceType.id} (${serviceType.name})`)
       } else {
         console.log(`⚠️ [AUTO-MATCH] No ServiceType match found for: ${extractedFields.service}`)
+        // CRITICAL: serviceTypeEnum is already set above, so lead will show the enum value
+        // UI will display serviceTypeEnum label if serviceTypeId is null
       }
     } catch (error: any) {
       console.warn(`⚠️ [AUTO-MATCH] Failed to match ServiceType:`, error.message)
@@ -327,22 +395,27 @@ export async function handleInboundMessageAutoMatch(
     console.log(`✅ [AUTO-MATCH] Setting expiryDate IMMEDIATELY: ${extractedFields.expiries[0].date.toISOString()}`)
   }
   
-  // CRITICAL FIX: Wrap lead update in try/catch to prevent pipeline crash
-  try {
-    await prisma.lead.update({
-      where: { id: lead.id },
-      data: updateData,
-    })
-    
-    console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || 'none'}, serviceTypeId=${updateData.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || 'none'}`)
-  } catch (updateError: any) {
-    console.error(`❌ [AUTO-MATCH] Failed to update lead ${lead.id}:`, {
-      error: updateError.message,
-      updateData: Object.keys(updateData),
-      stack: updateError.stack,
-    })
-    // Don't throw - continue pipeline even if lead update fails
-    // This prevents blocking message processing
+  // CRITICAL FIX: Only update lead if we have actual data to update
+  // Prevent wiping existing fields when extraction fails
+  if (Object.keys(updateData).length > 0) {
+    try {
+      await prisma.lead.update({
+        where: { id: lead.id },
+        data: updateData,
+      })
+      
+      console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || lead.serviceTypeEnum || 'none'}, serviceTypeId=${updateData.serviceTypeId || lead.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || lead.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || lead.businessActivityRaw || 'none'}`)
+    } catch (updateError: any) {
+      console.error(`❌ [AUTO-MATCH] Failed to update lead ${lead.id}:`, {
+        error: updateError.message,
+        updateData: Object.keys(updateData),
+        stack: updateError.stack,
+      })
+      // Don't throw - continue pipeline even if lead update fails
+      // This prevents blocking message processing
+    }
+  } else {
+    console.log(`⚠️ [AUTO-MATCH] No fields extracted - skipping lead update to prevent wiping existing data`)
   }
 
   // Step 6.5: Recompute deal forecast (non-blocking)
@@ -398,6 +471,7 @@ export async function handleInboundMessageAutoMatch(
     extractedFields,
     tasksCreated,
     autoReplied,
+    wasDuplicate: false,
   }
 }
 
@@ -441,42 +515,28 @@ async function findOrCreateConversation(input: {
   channel: string
   leadId: number
   timestamp?: Date
+  externalThreadId?: string | null
 }): Promise<any> {
-  const channelLower = normalizeChannel(input.channel) // STEP 3: Use normalized channel
-  // BUG FIX: Use actual message timestamp instead of webhook processing time
-  const messageTimestamp = input.timestamp || new Date()
-  
-  // STEP 3: Use upsert to enforce uniqueness - prevents duplicates at DB level
-  // The @@unique([contactId, channel]) constraint ensures only one conversation per contact+channel
-  // CRITICAL: Always use normalized lowercase channel
-  const conversation = await prisma.conversation.upsert({
-    where: {
-      contactId_channel: {
-        contactId: input.contactId,
-        channel: channelLower, // Always lowercase
-      },
-    },
-    update: {
-      // Always update leadId to current lead (ensures conversation is linked)
-      leadId: input.leadId,
-      lastInboundAt: messageTimestamp, // Use actual message timestamp
-      lastMessageAt: messageTimestamp, // Use actual message timestamp
-      // Update status to open if it was closed
-      status: 'open',
-      // Ensure channel is normalized (in case it wasn't before)
-      channel: channelLower,
-    },
-    create: {
-      contactId: input.contactId,
-      leadId: input.leadId, // CRITICAL: Always link to lead
-      channel: channelLower, // Always lowercase
-      status: 'open',
-      lastInboundAt: messageTimestamp, // Use actual message timestamp
-      lastMessageAt: messageTimestamp, // Use actual message timestamp
-    },
+  // Use centralized upsertConversation function
+  const { id } = await upsertConversation({
+    contactId: input.contactId,
+    channel: input.channel,
+    leadId: input.leadId,
+    externalThreadId: input.externalThreadId,
+    timestamp: input.timestamp,
+    status: 'open',
   })
   
-  console.log(`✅ [AUTO-MATCH] Ensured conversation ${conversation.id} for contact ${input.contactId}, channel ${channelLower}, lead ${input.leadId}`)
+  // Fetch full conversation record
+  const conversation = await prisma.conversation.findUnique({
+    where: { id },
+  })
+  
+  if (!conversation) {
+    throw new Error(`Failed to fetch conversation ${id} after upsert`)
+  }
+  
+  console.log(`✅ [AUTO-MATCH] Ensured conversation ${conversation.id} for contact ${input.contactId}, channel ${normalizeChannel(input.channel)}, lead ${input.leadId}`)
   return conversation
 }
 

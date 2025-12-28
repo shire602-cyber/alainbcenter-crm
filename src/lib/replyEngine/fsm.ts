@@ -30,16 +30,29 @@ export async function loadFSMState(conversationId: number): Promise<FSMState> {
     select: { ruleEngineMemory: true },
   })
 
+  console.log(`[FSM] Loading state for conversation ${conversationId}`, {
+    hasConversation: !!conversation,
+    hasRuleEngineMemory: !!conversation?.ruleEngineMemory,
+    ruleEngineMemoryLength: conversation?.ruleEngineMemory?.length || 0,
+  })
+
   if (!conversation?.ruleEngineMemory) {
+    console.log(`[FSM] No ruleEngineMemory found, returning default state`)
     return { ...DEFAULT_STATE }
   }
 
   try {
     const parsed = JSON.parse(conversation.ruleEngineMemory)
-    return {
+    const state = {
       ...DEFAULT_STATE,
       ...parsed,
     }
+    console.log(`[FSM] State loaded successfully`, {
+      serviceKey: state.serviceKey,
+      greetingSent: state.collected?.greetingSent,
+      collectedKeys: state.collected ? Object.keys(state.collected) : [],
+    })
+    return state
   } catch (error) {
     console.error(`[FSM] Failed to parse state for conversation ${conversationId}:`, error)
     return { ...DEFAULT_STATE }
@@ -54,12 +67,19 @@ export async function saveFSMState(
   state: FSMState
 ): Promise<void> {
   try {
+    const stateJson = JSON.stringify(state)
+    console.log(`[FSM] Saving state for conversation ${conversationId}`, {
+      greetingSent: state.collected?.greetingSent,
+      collectedKeys: state.collected ? Object.keys(state.collected) : [],
+      stateJsonLength: stateJson.length,
+    })
     await prisma.conversation.update({
       where: { id: conversationId },
       data: {
-        ruleEngineMemory: JSON.stringify(state),
+        ruleEngineMemory: stateJson,
       },
     })
+    console.log(`[FSM] State saved successfully for conversation ${conversationId}`)
   } catch (error) {
     console.error(`[FSM] Failed to save state for conversation ${conversationId}:`, error)
     throw error
