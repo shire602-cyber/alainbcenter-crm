@@ -196,7 +196,7 @@ async function getSLABreaches(userId: number | undefined, now: Date): Promise<Co
     const hoursSinceInbound = conv.lastInboundAt
       ? differenceInHours(now, conv.lastInboundAt)
       : 0
-    const priority = hoursSinceInbound > 24 ? 'URGENT' : hoursSinceInbound > 4 ? 'HIGH' : 'NORMAL'
+    const priority: 'URGENT' | 'HIGH' | 'NORMAL' | 'LOW' = hoursSinceInbound > 24 ? 'URGENT' : hoursSinceInbound > 4 ? 'HIGH' : 'NORMAL'
 
     return {
       id: `sla_${conv.id}`,
@@ -280,7 +280,7 @@ async function getQuotesReady(userId: number | undefined, today: Date): Promise<
  * Get items waiting on customer response
  */
 async function getWaitingOnCustomer(userId: number | undefined, now: Date): Promise<CommandCenterItem[]> {
-  const leads = await prisma.lead.findMany({
+  const allLeads = await prisma.lead.findMany({
     where: {
       stage: {
         in: ['QUOTE_SENT', 'NEGOTIATION'],
@@ -288,12 +288,6 @@ async function getWaitingOnCustomer(userId: number | undefined, now: Date): Prom
       lastOutboundAt: {
         not: null,
         lte: new Date(now.getTime() - 24 * 60 * 60 * 1000), // Outbound sent > 24h ago
-      },
-      lastInboundAt: {
-        OR: [
-          null,
-          { lt: prisma.lead.fields.lastOutboundAt },
-        ],
       },
       ...(userId && {
         OR: [
@@ -309,6 +303,13 @@ async function getWaitingOnCustomer(userId: number | undefined, now: Date): Prom
     orderBy: { lastOutboundAt: 'desc' },
     take: 20,
   })
+
+  // Filter: lastInboundAt is null OR lastInboundAt < lastOutboundAt
+  // (Prisma doesn't support field-to-field comparison in filters)
+  const leads = allLeads.filter(lead => 
+    !lead.lastInboundAt || 
+    (lead.lastOutboundAt && lead.lastInboundAt < lead.lastOutboundAt)
+  )
 
   return leads.map((lead) => {
     const daysSinceOutbound = lead.lastOutboundAt
