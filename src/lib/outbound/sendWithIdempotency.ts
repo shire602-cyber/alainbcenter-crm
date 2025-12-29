@@ -122,6 +122,43 @@ export async function sendOutboundWithIdempotency(
   // CRITICAL: Normalize text to ensure it's always plain text (never JSON)
   let text = normalizeOutboundText(rawText)
   
+  // Step 0.5: DUPLICATE QUESTION SEND BLOCKER
+  // If this is a question (replyType='question' and lastQuestionKey exists),
+  // check if we already sent this question recently (within last 60 minutes)
+  if (replyType === 'question' && lastQuestionKey) {
+    const sixtyMinutesAgo = new Date(Date.now() - 60 * 60 * 1000)
+    
+    const recentQuestion = await prisma.outboundMessageLog.findFirst({
+      where: {
+        conversationId,
+        replyType: 'question',
+        lastQuestionKey: lastQuestionKey,
+        status: 'SENT',
+        sentAt: {
+          gte: sixtyMinutesAgo,
+        },
+      },
+      orderBy: {
+        sentAt: 'desc',
+      },
+      take: 1,
+    })
+    
+    if (recentQuestion) {
+      console.log(`[OUTBOUND-IDEMPOTENCY] Duplicate question blocked: ${lastQuestionKey} was sent ${Math.round((Date.now() - recentQuestion.sentAt!.getTime()) / 1000 / 60)} minutes ago`)
+      return {
+        success: false,
+        wasDuplicate: true,
+        error: `Duplicate question blocked: ${lastQuestionKey} was sent recently`,
+      }
+    }
+  }
+  
+  // Step 0.6: SANITIZE FORBIDDEN TERMS
+  // Replace "Freelance Permit" and "Freelance Visa" with "Freelance (self-sponsored)"
+  text = text.replace(/Freelance Permit/gi, 'Freelance (self-sponsored)')
+  text = text.replace(/Freelance Visa/gi, 'Freelance (self-sponsored)')
+  
   // Step 0: Detect first outbound message (before applying greeting)
   // This is safer than counting messages during retries
   let isFirstOutboundMessage = false

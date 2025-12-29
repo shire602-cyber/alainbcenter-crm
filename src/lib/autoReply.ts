@@ -225,11 +225,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     // BUG FIX #2: Also check by messageId to catch duplicates from inbound.ts calls
     // Check if we recently sent a reply for this same messageId (within last 30 seconds)
-    // BUG FIX: Remove leadId from query - conversation is unique by (contactId, channel) only
-    const conversation = await prisma.conversation.findFirst({
+    // BUG FIX: Use findUnique with composite key - conversation is unique by (contactId, channel)
+    const conversation = await prisma.conversation.findUnique({
       where: {
-        contactId: contactId,
-        channel: channel.toLowerCase(),
+        contactId_channel: {
+          contactId: contactId,
+          channel: channel.toLowerCase(),
+        },
       },
     })
     
@@ -482,11 +484,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     })
     
     // Get conversation for logging
-    // BUG FIX: Remove leadId from query - conversation is unique by (contactId, channel) only
-    const conversation = await prisma.conversation.findFirst({
+    // BUG FIX: Use findUnique with composite key - conversation is unique by (contactId, channel)
+    const conversation = await prisma.conversation.findUnique({
       where: {
-        contactId: contactId,
-        channel: channel.toLowerCase(),
+        contactId_channel: {
+          contactId: contactId,
+          channel: channel.toLowerCase(),
+        },
       },
       select: { id: true },
     })
@@ -1290,6 +1294,19 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
         
         const { sendOutboundWithIdempotency } = await import('./outbound/sendWithIdempotency')
+        // Determine replyType based on nextStepKey
+        // If nextStepKey indicates a question (ASK_*, ask_*), use replyType='question'
+        const isQuestion = orchestratorResult.nextStepKey && 
+          (orchestratorResult.nextStepKey.startsWith('ASK_') || 
+           orchestratorResult.nextStepKey.startsWith('ask_') ||
+           orchestratorResult.nextStepKey.includes('_Q') ||
+           orchestratorResult.nextStepKey === 'ASK_SERVICE' ||
+           orchestratorResult.nextStepKey === 'ASK_NAME' ||
+           orchestratorResult.nextStepKey === 'ASK_NATIONALITY')
+        
+        const effectiveReplyType = isQuestion ? 'question' : 'answer'
+        const effectiveQuestionKey = isQuestion ? orchestratorResult.nextStepKey : (lastQuestionKey || null)
+        
         const result = await sendOutboundWithIdempotency({
           conversationId: conversationForOutbound.id,
           contactId: contactId,
@@ -1298,8 +1315,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           text: replyText,
           provider: 'whatsapp',
           triggerProviderMessageId: effectiveTriggerId || null,
-          replyType: 'answer',
-          lastQuestionKey: lastQuestionKey || null,
+          replyType: effectiveReplyType,
+          lastQuestionKey: effectiveQuestionKey,
           flowStep: flowStep || null,
         })
 
@@ -1375,11 +1392,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         if (autoReplyLog) {
           try {
             // Get conversation ID for log
-            // BUG FIX: Remove leadId from query - conversation is unique by (contactId, channel) only
-            const conversation = await prisma.conversation.findFirst({
+            // BUG FIX: Use findUnique with composite key - conversation is unique by (contactId, channel)
+            const conversation = await prisma.conversation.findUnique({
               where: {
-                contactId: contactId,
-                channel: channel.toLowerCase(),
+                contactId_channel: {
+                  contactId: contactId,
+                  channel: channel.toLowerCase(),
+                },
               },
               select: { id: true },
             })
