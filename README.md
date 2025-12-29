@@ -803,7 +803,8 @@ For issues or questions, check:
 
 Make sure all required environment variables are set:
 - `DATABASE_URL`
-- `CRON_SECRET`
+- `CRON_SECRET` - Secret for cron job authentication
+- `JOB_RUNNER_TOKEN` - Token for job runner authentication (required for WhatsApp job queue)
 - `WHATSAPP_ACCESS_TOKEN` (required for WhatsApp)
 - `WHATSAPP_PHONE_NUMBER_ID` (required for WhatsApp)
 - `WHATSAPP_VERIFY_TOKEN` (required for WhatsApp webhooks)
@@ -811,6 +812,7 @@ Make sure all required environment variables are set:
 - `META_VERIFY_TOKEN` (if using Meta Lead Ads)
 - `META_APP_SECRET` (if using Meta Lead Ads)
 - `META_PAGE_ACCESS_TOKEN` (if using Meta Lead Ads)
+- `DISABLE_DASHBOARD_SIGNALS` (optional) - Set to `true` to temporarily disable dashboard signals panels during deployment
 
 ### Setup Daily Cron Job
 
@@ -824,6 +826,40 @@ Or use a service like:
 - Vercel Cron Jobs
 - AWS EventBridge
 - Google Cloud Scheduler
+
+### Setup WhatsApp Job Queue Runner (Required for WhatsApp)
+
+The WhatsApp webhook uses a job queue pattern for reliable async processing. You must set up a cron job to process queued outbound messages:
+
+**Option 1: Vercel Cron (Recommended)**
+Add to `vercel.json`:
+```json
+{
+  "crons": [{
+    "path": "/api/cron/run-outbound-jobs",
+    "schedule": "*/30 * * * * *"
+  }]
+}
+```
+
+**Option 2: External Cron Service**
+```
+*/30 * * * * * curl -X GET "https://your-domain.com/api/cron/run-outbound-jobs" -H "Authorization: Bearer YOUR_CRON_SECRET"
+```
+
+**Verify Job Runner:**
+```bash
+curl "https://your-domain.com/api/jobs/run-outbound?token=YOUR_JOB_RUNNER_TOKEN&max=10"
+```
+
+Should return: `{"ok": true, "processed": 0, "failed": 0, ...}`
+
+### Feature Flags
+
+**DISABLE_DASHBOARD_SIGNALS**
+- Set to `true` to temporarily disable dashboard signals panels (YourFocusNow, SignalsPanel)
+- Useful during deployment if dashboard components have build errors
+- When enabled, shows placeholder cards: "Dashboard upgrade in progress"
 
 ---
 

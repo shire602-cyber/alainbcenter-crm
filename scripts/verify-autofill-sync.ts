@@ -106,9 +106,23 @@ async function main() {
       throw new Error('Conversation threading failed - new conversation created!')
     }
 
+    console.log(`  - serviceTypeEnum preserved: ${assert3.serviceTypeEnumPreserved ? '✅' : '❌'}`)
+    console.log(`  - requestedServiceRaw preserved: ${assert3.requestedServiceRawPreserved ? '✅' : '❌'}`)
+    console.log(`  - nationality preserved: ${assert3.nationalityPreserved ? '✅' : '❌'}`)
+    console.log(`  - expiryDate preserved: ${assert3.expiryDatePreserved ? '✅' : '❌'}`)
+    console.log(`  - Same conversation thread: ${assert3.sameConversation ? '✅' : '❌'}`)
+
+    if (!assert3.serviceTypeEnumPreserved || !assert3.requestedServiceRawPreserved || !assert3.nationalityPreserved) {
+      throw new Error('Message 3 assertions failed - fields were wiped by unrelated text!')
+    }
+
+    if (!assert3.serviceTypeEnumPreserved || !assert3.requestedServiceRawPreserved || !assert3.nationalityPreserved) {
+      throw new Error('Message 3 assertions failed - fields were wiped by unrelated text!')
+    }
+
     // Step 4: Check tasks
     const tasks = await prisma.task.findMany({
-      where: { leadId: result2.lead.id },
+      where: { leadId: result3.lead.id },
       orderBy: { createdAt: 'desc' },
     })
     console.log(`\n✅ Tasks created: ${tasks.length}`)
@@ -117,15 +131,15 @@ async function main() {
     })
 
     console.log('\n🎉 All assertions passed! Auto-fill sync is working correctly.')
-    console.log(`\nTest lead ID: ${result2.lead.id}`)
+    console.log(`\nTest lead ID: ${result3.lead.id}`)
     console.log(`Test contact ID: ${contact.id}`)
-    console.log(`Test conversation ID: ${result2.conversation.id}`)
+    console.log(`Test conversation ID: ${result3.conversation.id}`)
 
     // Cleanup (optional - comment out to keep test data)
-    // await prisma.task.deleteMany({ where: { leadId: result2.lead.id } })
-    // await prisma.message.deleteMany({ where: { conversationId: result2.conversation.id } })
-    // await prisma.conversation.delete({ where: { id: result2.conversation.id } })
-    // await prisma.lead.delete({ where: { id: result2.lead.id } })
+    // await prisma.task.deleteMany({ where: { leadId: result3.lead.id } })
+    // await prisma.message.deleteMany({ where: { conversationId: result3.conversation.id } })
+    // await prisma.conversation.delete({ where: { id: result3.conversation.id } })
+    // await prisma.lead.delete({ where: { id: result3.lead.id } })
     // await prisma.contact.delete({ where: { id: contact.id } })
     // console.log('\n🧹 Test data cleaned up')
 

@@ -47,8 +47,9 @@ export async function enqueueOutboundJob(
       console.log(`⚠️ [JOB-ENQUEUE] Duplicate job blocked for inboundProviderMessageId: ${input.inboundProviderMessageId} (requestId: ${requestId})`)
       
       // Return existing job ID
+      // Convert null to undefined for Prisma where clause
       const existingJob = await prisma.outboundJob.findUnique({
-        where: { inboundProviderMessageId: input.inboundProviderMessageId },
+        where: { inboundProviderMessageId: input.inboundProviderMessageId ?? undefined },
         select: { id: true },
       })
       

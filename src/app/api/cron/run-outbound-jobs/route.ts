@@ -5,6 +5,9 @@
  * Can be called by Vercel Cron or external cron service.
  */
 
+// Ensure Node.js runtime for Prisma compatibility
+export const runtime = 'nodejs'
+
 import { NextRequest, NextResponse } from 'next/server'
 
 const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret-change-in-production'

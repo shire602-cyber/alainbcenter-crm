@@ -24,6 +24,7 @@ import { Badge } from '@/components/ui/badge'
 import { ReplySuccessBanner } from './ReplySuccessBanner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
+import { useSmartPolling } from '@/hooks/useSmartPolling'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -185,24 +186,6 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
 
   // Memoize grouped messages to avoid recalculation
   const messageGroups = useMemo(() => groupMessages(messages), [messages])
-
-  useEffect(() => {
-    // Show skeleton immediately (within 100ms)
-    const timer = setTimeout(() => {
-      loadMessages()
-    }, 50)
-    return () => clearTimeout(timer)
-  }, [leadId, channel])
-
-  useEffect(() => {
-    // Poll for new messages every 5 seconds
-    const interval = setInterval(loadMessages, 5000)
-    return () => clearInterval(interval)
-  }, [leadId, channel])
-
-  useEffect(() => {
-    scrollToBottom()
-  }, [messages])
 
   const loadMessages = useCallback(async () => {
     try {

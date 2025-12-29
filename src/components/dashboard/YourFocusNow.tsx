@@ -9,7 +9,7 @@
  * Metadata row: channel icon, waiting time, SLA risk dot
  */
 
-import { useState, memo } from 'react'
+import { useState, memo, useCallback } from 'react'
 import { MessageSquare, Clock, DollarSign, AlertCircle, Phone, Mail, CheckCircle2, RefreshCw } from 'lucide-react'
 import { formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -61,7 +61,7 @@ export const YourFocusNow = memo(function YourFocusNow() {
   const router = useRouter()
   const { showToast } = useToast()
 
-  async function loadFocusItem() {
+  const loadFocusItem = useCallback(async () => {
     try {
       const res = await fetch('/api/dashboard/do-this-now')
       if (res.ok) {
@@ -74,7 +74,15 @@ export const YourFocusNow = memo(function YourFocusNow() {
     } finally {
       setLoading(false)
     }
-  }
+  }, [])
+
+  const { isPolling, manualRefresh } = useSmartPolling({
+    fetcher: loadFocusItem,
+    intervalMs: 60000, // 60s polling for dashboard
+    enabled: true,
+    pauseWhenHidden: true,
+    onErrorBackoff: true,
+  })
 
   function handleOpenAndReply() {
     if (!item) return
@@ -149,6 +157,12 @@ export const YourFocusNow = memo(function YourFocusNow() {
               {item.serviceType && (
                 <Badge className="chip">{item.serviceType}</Badge>
               )}
+              {isSlaBreached && (
+                <div className="flex items-center gap-1.5">
+                  <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                  <span className="text-meta text-red-600 dark:text-red-400">SLA breached</span>
+                </div>
+              )}
             </div>
             <Button
               variant="ghost"
@@ -159,13 +173,6 @@ export const YourFocusNow = memo(function YourFocusNow() {
             >
               <RefreshCw className={cn("h-4 w-4", isPolling && "animate-spin")} />
             </Button>
-          </div>
-            {isSlaBreached && (
-              <div className="flex items-center gap-1.5">
-                <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                <span className="text-meta text-red-600 dark:text-red-400">SLA breached</span>
-              </div>
-            )}
           </div>
           
           <h3 className="text-heading text-slate-900 dark:text-slate-100 mb-2">
