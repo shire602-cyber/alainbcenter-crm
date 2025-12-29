@@ -1,0 +1,246 @@
+/**
+ * JOB RUNNER: Process Outbound Jobs
+ * 
+ * Picks queued jobs with FOR UPDATE SKIP LOCKED to avoid duplicates.
+ * Marks job 'running', runs orchestrator, sends outbound, marks 'done'.
+ * Retries with exponential backoff on transient errors.
+ */
+
+import { NextRequest, NextResponse } from 'next/server'
+import { prisma } from '@/lib/prisma'
+import { generateAIReply } from '@/lib/ai/orchestrator'
+import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
+
+// Protect with token (set in env: JOB_RUNNER_TOKEN)
+const JOB_RUNNER_TOKEN = process.env.JOB_RUNNER_TOKEN || 'dev-token-change-in-production'
+
+/**
+ * GET /api/jobs/run-outbound?token=...
+ * Process queued outbound jobs
+ */
+export async function GET(req: NextRequest) {
+  try {
+    // Verify token
+    const token = req.nextUrl.searchParams.get('token')
+    if (token !== JOB_RUNNER_TOKEN) {
+      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    }
+    
+    const maxJobs = parseInt(req.nextUrl.searchParams.get('max') || '10')
+    const processed: number[] = []
+    const failed: number[] = []
+    
+    // Pick queued jobs with FOR UPDATE SKIP LOCKED (PostgreSQL)
+    // This ensures only one worker processes each job
+    const jobs = await prisma.$queryRaw<Array<{
+      id: number
+      conversationId: number
+      inboundMessageId: number
+      inboundProviderMessageId: string | null
+      requestId: string | null
+      attempts: number
+      maxAttempts: number
+    }>>`
+      SELECT id, "conversationId", "inboundMessageId", "inboundProviderMessageId", "requestId", attempts, "maxAttempts"
+      FROM "OutboundJob"
+      WHERE status = 'queued'
+        AND "runAt" <= NOW()
+      ORDER BY "runAt" ASC
+      LIMIT ${maxJobs}
+      FOR UPDATE SKIP LOCKED
+    `
+    
+    if (jobs.length === 0) {
+      return NextResponse.json({ 
+        ok: true, 
+        message: 'No jobs to process',
+        processed: 0,
+      })
+    }
+    
+    console.log(`📦 [JOB-RUNNER] Processing ${jobs.length} job(s)`)
+    
+    for (const job of jobs) {
+      const requestId = job.requestId || `job_${job.id}_${Date.now()}`
+      
+      try {
+        // Mark job as running
+        await prisma.outboundJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'running',
+            startedAt: new Date(),
+            attempts: { increment: 1 },
+          },
+        })
+        
+        console.log(`🔄 [JOB-RUNNER] Processing job ${job.id} (requestId: ${requestId})`)
+        
+        // Load conversation and message
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: job.conversationId },
+          include: {
+            contact: true,
+            lead: {
+              include: {
+                serviceType: true,
+              },
+            },
+          },
+        })
+        
+        if (!conversation) {
+          throw new Error(`Conversation ${job.conversationId} not found`)
+        }
+        
+        const message = job.inboundMessageId 
+          ? await prisma.message.findUnique({
+              where: { id: job.inboundMessageId },
+            })
+          : null
+        
+        if (!message || message.direction !== 'INBOUND') {
+          throw new Error(`Inbound message ${job.inboundMessageId} not found or not inbound`)
+        }
+        
+        if (!conversation.lead || !conversation.contact) {
+          throw new Error(`Conversation ${job.conversationId} missing lead or contact`)
+        }
+        
+        // Check if conversation is assigned to a user (skip auto-reply if assigned)
+        if (conversation.assignedUserId !== null && conversation.assignedUserId !== undefined) {
+          console.log(`⏭️ [JOB-RUNNER] Skipping job ${job.id} - conversation assigned to user ${conversation.assignedUserId}`)
+          await prisma.outboundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'done',
+              completedAt: new Date(),
+            },
+          })
+          processed.push(job.id)
+          continue
+        }
+        
+        // Run orchestrator
+        console.log(`🎯 [JOB-RUNNER] Running orchestrator for job ${job.id} (requestId: ${requestId})`)
+        const orchestratorResult = await generateAIReply({
+          conversationId: conversation.id,
+          leadId: conversation.lead.id,
+          contactId: conversation.contact.id,
+          inboundText: message.body || '',
+          inboundMessageId: message.id,
+          channel: message.channel,
+          language: 'en',
+        })
+        
+        // Check if reply is empty (deduplication or stop)
+        if (!orchestratorResult.replyText || orchestratorResult.replyText.trim().length === 0) {
+          const reason = ('handoverReason' in orchestratorResult && orchestratorResult.handoverReason) || 'Empty reply'
+          console.log(`⏭️ [JOB-RUNNER] Reply skipped for job ${job.id}: ${reason}`)
+          await prisma.outboundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'done',
+              completedAt: new Date(),
+            },
+          })
+          processed.push(job.id)
+          continue
+        }
+        
+        // Send outbound with idempotency
+        // sendWithIdempotency computes outboundDedupeKey internally using:
+        // hash(conversationId + replyType + normalizedQuestionKey + dayBucket OR inboundMessageId + textHash)
+        const questionKey = ('nextStepKey' in orchestratorResult && orchestratorResult.nextStepKey) || null
+        const inboundProviderMessageId = job.inboundProviderMessageId || message.providerMessageId || null
+        
+        // Log outbound key components for debugging (actual key is hashed in sendWithIdempotency)
+        const outboundKeyComponents = `${conversation.id}:${inboundProviderMessageId || 'unknown'}:${questionKey || 'reply'}`
+        console.log(`📤 [JOB-RUNNER] Sending outbound for job ${job.id} (keyComponents: ${outboundKeyComponents}, requestId: ${requestId})`)
+        
+        const sendResult = await sendOutboundWithIdempotency({
+          conversationId: conversation.id,
+          contactId: conversation.contact.id,
+          leadId: conversation.lead.id,
+          phone: conversation.contact.phone,
+          text: orchestratorResult.replyText,
+          provider: 'whatsapp',
+          triggerProviderMessageId: inboundProviderMessageId,
+          replyType: questionKey ? 'question' : 'answer',
+          lastQuestionKey: questionKey,
+          flowStep: null,
+        })
+        
+        if (sendResult.wasDuplicate) {
+          console.log(`⚠️ [JOB-RUNNER] Duplicate outbound blocked for job ${job.id} (keyComponents: ${outboundKeyComponents}, requestId: ${requestId})`)
+        } else if (!sendResult.success) {
+          throw new Error(`Failed to send outbound: ${sendResult.error}`)
+        }
+        
+        console.log(`✅ [JOB-RUNNER] Outbound sent successfully for job ${job.id} (requestId: ${requestId})`)
+        
+        // Mark job as done
+        await prisma.outboundJob.update({
+          where: { id: job.id },
+          data: {
+            status: 'done',
+            completedAt: new Date(),
+          },
+        })
+        
+        console.log(`✅ [JOB-RUNNER] Job ${job.id} completed successfully (requestId: ${requestId})`)
+        processed.push(job.id)
+        
+      } catch (error: any) {
+        console.error(`❌ [JOB-RUNNER] Job ${job.id} failed:`, error.message)
+        
+        // Check if we should retry
+        const shouldRetry = job.attempts < job.maxAttempts
+        
+        if (shouldRetry) {
+          // Exponential backoff: 2^attempts seconds
+          const backoffSeconds = Math.pow(2, job.attempts)
+          const runAt = new Date(Date.now() + backoffSeconds * 1000)
+          
+          await prisma.outboundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'queued',
+              runAt,
+              error: error.message?.substring(0, 500) || 'Unknown error',
+            },
+          })
+          
+          console.log(`🔄 [JOB-RUNNER] Job ${job.id} will retry in ${backoffSeconds}s (attempt ${job.attempts + 1}/${job.maxAttempts})`)
+        } else {
+          // Max attempts reached - mark as failed
+          await prisma.outboundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'failed',
+              error: error.message?.substring(0, 500) || 'Unknown error',
+              completedAt: new Date(),
+            },
+          })
+          
+          console.log(`❌ [JOB-RUNNER] Job ${job.id} failed after ${job.attempts} attempts`)
+          failed.push(job.id)
+        }
+      }
+    }
+    
+    return NextResponse.json({
+      ok: true,
+      processed: processed.length,
+      failed: failed.length,
+      jobIds: { processed, failed },
+    })
+  } catch (error: any) {
+    console.error('❌ [JOB-RUNNER] Error:', error)
+    return NextResponse.json(
+      { error: error.message || 'Internal server error' },
+      { status: 500 }
+    )
+  }
+}
+

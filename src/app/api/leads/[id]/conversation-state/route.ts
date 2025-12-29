@@ -48,10 +48,30 @@ export async function GET(
       ...state.knownFields,
     }
 
+    // Get lead to check field provenance (for debug)
+    const lead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: {
+        serviceTypeEnum: true,
+        requestedServiceRaw: true,
+        serviceTypeId: true,
+        contact: {
+          select: { nationality: true },
+        },
+      },
+    })
+
     return NextResponse.json({
       knownFields: mergedKnownFields,
       qualificationStage: state.qualificationStage,
       questionsAskedCount: state.questionsAskedCount,
+      // Debug payload (no schema change)
+      leadFieldProvenance: {
+        serviceTypeEnum: lead?.serviceTypeEnum,
+        requestedServiceRaw: lead?.requestedServiceRaw ? 'set' : null,
+        serviceTypeId: lead?.serviceTypeId,
+        nationality: lead?.contact?.nationality,
+      },
     })
   } catch (error: any) {
     console.error('Failed to load conversation state:', error)

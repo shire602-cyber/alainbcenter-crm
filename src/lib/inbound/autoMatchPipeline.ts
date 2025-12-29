@@ -103,6 +103,7 @@ export async function handleInboundMessageAutoMatch(
   })
 
   // Step 4: FIND/CREATE Conversation (linked to lead)
+  // SYNC ORDER: Conversation must exist before we can update knownFields
   // Extract externalThreadId using canonical function
   const externalThreadId = getExternalThreadId(
     input.channel,
@@ -712,6 +713,8 @@ export async function handleInboundMessageAutoMatch(
   }
 
   // Step 7: AUTO-CREATE TASKS/ALERTS
+  // SYNC ORDER: Tasks created AFTER lead/conversation updates
+  // This ensures tasks reference the correct lead state
   const tasksCreated = await createAutoTasks({
     leadId: lead.id,
     conversationId: conversation.id,
@@ -721,6 +724,13 @@ export async function handleInboundMessageAutoMatch(
     expiryHint: extractedFields.expiryHint,
     providerMessageId: input.providerMessageId,
   })
+  
+  // SYNC GUARANTEE: All updates complete in single pipeline run
+  // - Conversation knownFields updated (Step 6)
+  // - Lead fields updated (Step 6)
+  // - Contact fields updated (Step 6)
+  // - Tasks created (Step 7)
+  // - Notifications will be created by separate background job if needed
 
   // Step 8: AUTO-REPLY (optional)
   // Note: Auto-reply is handled by the webhook handler after this pipeline completes
