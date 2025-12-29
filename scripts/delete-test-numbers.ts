@@ -1,274 +1,233 @@
 /**
- * Script to delete all data for test phone numbers
+ * Delete all data relating to test phone numbers
  * 
- * Deletes:
- * - Contacts
- * - Conversations
- * - Messages
- * - Leads
- * - Tasks
- * - Notifications
- * - Communication logs
- * - Outbound message logs
- * - Message status events
- * - AI drafts
- * - AI action logs
- * 
- * Phone numbers to delete:
+ * Numbers to delete:
  * - +971507042270
  * - +971556515839
- * - +260777711059
  */
 
-import { PrismaClient } from '@prisma/client'
-
-const prisma = new PrismaClient()
+import { prisma } from '../src/lib/prisma'
+import { normalizeToE164 } from '../src/lib/phone'
 
 const TEST_NUMBERS = [
   '+971507042270',
   '+971556515839',
-  '+260777711059',
 ]
 
-// Normalize phone numbers to try different formats
-function normalizePhoneVariants(phone: string): string[] {
-  const variants = new Set<string>()
-  
-  // Original
-  variants.add(phone)
-  
-  // Without +
-  if (phone.startsWith('+')) {
-    variants.add(phone.substring(1))
-  } else {
-    variants.add('+' + phone)
-  }
-  
-  // Remove leading zeros
-  const withoutPlus = phone.replace(/^\+/, '')
-  if (withoutPlus.startsWith('0')) {
-    variants.add('+' + withoutPlus.substring(1))
-    variants.add(withoutPlus.substring(1))
-  }
-  
-  return Array.from(variants)
-}
+async function deleteTestNumberData() {
+  console.log('🗑️  Starting deletion of test number data...\n')
 
-async function deleteTestNumbers() {
-  console.log('🗑️ Starting deletion of test phone numbers...')
-  console.log('Test numbers:', TEST_NUMBERS.join(', '))
-  
-  try {
-    // Collect all phone number variants
-    const allPhoneVariants = new Set<string>()
-    TEST_NUMBERS.forEach(phone => {
-      normalizePhoneVariants(phone).forEach(variant => allPhoneVariants.add(variant))
-    })
+  for (const phone of TEST_NUMBERS) {
+    console.log(`\n📱 Processing: ${phone}`)
     
-    const phoneList = Array.from(allPhoneVariants)
-    console.log(`📱 Searching for contacts with phone variants:`, phoneList)
-    
-    // Find all contacts matching these phone numbers
+    // Normalize phone number
+    const normalized = normalizeToE164(phone)
+    console.log(`   Normalized: ${normalized}`)
+
+    // Find all contacts with this phone number (check both phone and phoneNormalized)
     const contacts = await prisma.contact.findMany({
       where: {
-        OR: phoneList.map(phone => ({
-          phone: {
-            contains: phone.replace(/^\+/, ''), // Search for phone without + as well
-          },
-        })),
+        OR: [
+          { phone: phone },
+          { phone: normalized },
+          { phoneNormalized: phone },
+          { phoneNormalized: normalized },
+        ],
       },
-      include: {
-        conversations: {
-          select: { id: true },
-        },
-        leads: {
-          select: { id: true },
-        },
+      select: {
+        id: true,
+        phone: true,
+        phoneNormalized: true,
+        fullName: true,
       },
     })
-    
-    console.log(`📋 Found ${contacts.length} contacts to delete`)
-    
+
+    console.log(`   Found ${contacts.length} contact(s)`)
+
     if (contacts.length === 0) {
-      console.log('✅ No contacts found with these phone numbers')
-      return
+      console.log(`   ⚠️  No contacts found for ${phone}`)
+      continue
     }
-    
-    // Collect all conversation IDs and lead IDs
-    const conversationIds: number[] = []
-    const leadIds: number[] = []
-    const contactIds: number[] = []
-    
-    contacts.forEach(contact => {
-      contactIds.push(contact.id)
-      contact.conversations.forEach(conv => conversationIds.push(conv.id))
-      contact.leads.forEach(lead => leadIds.push(lead.id))
-    })
-    
-    console.log(`📊 Summary:`)
-    console.log(`  - Contacts: ${contactIds.length}`)
-    console.log(`  - Conversations: ${conversationIds.length}`)
-    console.log(`  - Leads: ${leadIds.length}`)
-    
-    // Delete in smaller transactions to avoid timeout
-    // Get message IDs first
-    let messageIds: number[] = []
-    if (conversationIds.length > 0) {
-      const messages = await prisma.message.findMany({
-        where: { conversationId: { in: conversationIds } },
+
+    for (const contact of contacts) {
+      console.log(`\n   🗑️  Deleting contact: ${contact.fullName || 'Unknown'} (ID: ${contact.id})`)
+
+      // Get all leads for this contact
+      const leads = await prisma.lead.findMany({
+        where: { contactId: contact.id },
         select: { id: true },
       })
-      messageIds = messages.map(m => m.id)
-    }
-    
-    // 1. Delete message status events
-    if (conversationIds.length > 0 || messageIds.length > 0) {
-      const deletedStatusEvents = await prisma.messageStatusEvent.deleteMany({
-        where: {
-          OR: [
-            { conversationId: { in: conversationIds } },
-            ...(messageIds.length > 0 ? [{ messageId: { in: messageIds } }] : []),
-          ],
-        },
+      console.log(`      Found ${leads.length} lead(s)`)
+
+      // Get all conversations for this contact
+      const conversations = await prisma.conversation.findMany({
+        where: { contactId: contact.id },
+        select: { id: true },
       })
-      console.log(`  ✅ Deleted ${deletedStatusEvents.count} message status events`)
-    }
-    
-    // 2. Delete outbound message logs
-    if (conversationIds.length > 0) {
-      const deletedOutboundLogs = await (prisma as any).outboundMessageLog.deleteMany({
-        where: { conversationId: { in: conversationIds } },
+      console.log(`      Found ${conversations.length} conversation(s)`)
+
+      // Delete in order to respect foreign key constraints
+
+      // 1. Delete messages for all conversations
+      for (const conv of conversations) {
+        const messageCount = await prisma.message.deleteMany({
+          where: { conversationId: conv.id },
+        })
+        console.log(`      Deleted ${messageCount.count} message(s) from conversation ${conv.id}`)
+
+        // Delete communication logs
+        const logCount = await prisma.communicationLog.deleteMany({
+          where: { conversationId: conv.id },
+        })
+        console.log(`      Deleted ${logCount.count} communication log(s) from conversation ${conv.id}`)
+
+        // Delete outbound message logs
+        const outboundCount = await prisma.outboundMessageLog.deleteMany({
+          where: { conversationId: conv.id },
+        })
+        console.log(`      Deleted ${outboundCount.count} outbound message log(s) from conversation ${conv.id}`)
+      }
+
+      // 2. Delete conversations
+      const convCount = await prisma.conversation.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedOutboundLogs.count} outbound message logs`)
-    }
-    
-    // 3. Delete messages
-    if (conversationIds.length > 0) {
-      const deletedMessages = await prisma.message.deleteMany({
-        where: { conversationId: { in: conversationIds } },
+      console.log(`      Deleted ${convCount.count} conversation(s)`)
+
+      // 3. Delete leads and related data
+      for (const lead of leads) {
+        // Delete auto reply logs (must be before lead deletion)
+        const autoReplyCount = await prisma.autoReplyLog.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${autoReplyCount.count} auto reply log(s) for lead ${lead.id}`)
+
+        // Delete tasks
+        const taskCount = await prisma.task.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${taskCount.count} task(s) for lead ${lead.id}`)
+
+        // Delete documents
+        const docCount = await prisma.document.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${docCount.count} document(s) for lead ${lead.id}`)
+
+        // Delete reminders
+        const reminderCount = await prisma.reminder.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${reminderCount.count} reminder(s) for lead ${lead.id}`)
+
+        // Delete automation run logs
+        const automationCount = await prisma.automationRunLog.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${automationCount.count} automation run log(s) for lead ${lead.id}`)
+
+        // Delete AI drafts
+        const draftCount = await prisma.aIDraft.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${draftCount.count} AI draft(s) for lead ${lead.id}`)
+
+        // Delete AI action logs
+        const aiActionCount = await prisma.aIActionLog.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${aiActionCount.count} AI action log(s) for lead ${lead.id}`)
+
+        // Delete notifications
+        const notificationCount = await prisma.notification.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${notificationCount.count} notification(s) for lead ${lead.id}`)
+
+        // Delete expiry items linked to this lead
+        const expiryCount = await prisma.expiryItem.updateMany({
+          where: { leadId: lead.id },
+          data: { leadId: null }, // Set to null instead of deleting (expiry items may be linked to contact)
+        })
+        console.log(`      Unlinked ${expiryCount.count} expiry item(s) from lead ${lead.id}`)
+
+        // Delete messages linked to lead
+        const leadMessageCount = await prisma.message.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${leadMessageCount.count} message(s) linked to lead ${lead.id}`)
+
+        // Delete communication logs linked to lead
+        const leadLogCount = await prisma.communicationLog.deleteMany({
+          where: { leadId: lead.id },
+        })
+        console.log(`      Deleted ${leadLogCount.count} communication log(s) linked to lead ${lead.id}`)
+      }
+
+      // Delete leads
+      const leadCount = await prisma.lead.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedMessages.count} messages`)
-    }
-    
-    // 4. Delete communication logs
-    if (conversationIds.length > 0) {
-      const deletedCommLogs = await prisma.communicationLog.deleteMany({
-        where: { conversationId: { in: conversationIds } },
+      console.log(`      Deleted ${leadCount.count} lead(s)`)
+
+      // 4. Delete expiry items for this contact
+      const expiryCount = await prisma.expiryItem.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedCommLogs.count} communication logs`)
-    }
-    
-    // 5. Delete AI drafts
-    if (conversationIds.length > 0) {
-      const deletedDrafts = await prisma.aIDraft.deleteMany({
-        where: { conversationId: { in: conversationIds } },
+      console.log(`      Deleted ${expiryCount.count} expiry item(s)`)
+
+      // 5. Delete chat messages
+      const chatMessageCount = await prisma.chatMessage.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedDrafts.count} AI drafts`)
-    }
-    
-    // 6. Delete AI action logs
-    if (conversationIds.length > 0) {
-      const deletedActionLogs = await prisma.aIActionLog.deleteMany({
-        where: { conversationId: { in: conversationIds } },
+      console.log(`      Deleted ${chatMessageCount.count} chat message(s)`)
+
+      // 6. Delete automation run logs
+      const automationCount = await prisma.automationRunLog.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedActionLogs.count} AI action logs`)
-    }
-    
-    // 7. Delete tasks (by conversation and by lead)
-    if (conversationIds.length > 0 || leadIds.length > 0) {
-      const deletedTasks = await prisma.task.deleteMany({
-        where: {
-          OR: [
-            { conversationId: { in: conversationIds } },
-            { leadId: { in: leadIds } },
-          ],
-        },
+      console.log(`      Deleted ${automationCount.count} automation run log(s)`)
+
+      // 7. Delete AI action logs (by contactId)
+      const aiActionCount = await prisma.aIActionLog.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedTasks.count} tasks`)
-    }
-    
-    // 8. Delete notifications (by conversation and by lead)
-    if (conversationIds.length > 0 || leadIds.length > 0) {
-      const deletedNotifications = await prisma.notification.deleteMany({
-        where: {
-          OR: [
-            { conversationId: { in: conversationIds } },
-            { leadId: { in: leadIds } },
-          ],
-        },
+      console.log(`      Deleted ${aiActionCount.count} AI action log(s) by contactId`)
+
+      // 8. Delete AI drafts (by contactId)
+      const draftCount = await prisma.aIDraft.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedNotifications.count} notifications`)
-    }
-    
-    // 9. Delete expiry items
-    if (leadIds.length > 0) {
-      const deletedExpiries = await prisma.expiryItem.deleteMany({
-        where: { leadId: { in: leadIds } },
+      console.log(`      Deleted ${draftCount.count} AI draft(s) by contactId`)
+
+      // 9. Delete auto reply logs (by contactId - already deleted by leadId above, but check anyway)
+      const autoReplyCount = await prisma.autoReplyLog.deleteMany({
+        where: { contactId: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedExpiries.count} expiry items`)
-    }
-    
-    // 10. Delete documents
-    if (leadIds.length > 0) {
-      const deletedDocs = await prisma.document.deleteMany({
-        where: { leadId: { in: leadIds } },
+      console.log(`      Deleted ${autoReplyCount.count} auto reply log(s) by contactId`)
+
+      // 10. Finally, delete the contact
+      await prisma.contact.delete({
+        where: { id: contact.id },
       })
-      console.log(`  ✅ Deleted ${deletedDocs.count} documents`)
+      console.log(`      ✅ Deleted contact ${contact.id}`)
     }
-    
-    // 11. Delete auto reply logs
-    if (contactIds.length > 0 || leadIds.length > 0) {
-      const deletedAutoReplyLogs = await (prisma as any).autoReplyLog.deleteMany({
-        where: {
-          OR: [
-            { contactId: { in: contactIds } },
-            { leadId: { in: leadIds } },
-          ],
-        },
-      })
-      console.log(`  ✅ Deleted ${deletedAutoReplyLogs.count} auto reply logs`)
-    }
-    
-    // 12. Delete conversations
-    if (conversationIds.length > 0) {
-      const deletedConversations = await prisma.conversation.deleteMany({
-        where: { id: { in: conversationIds } },
-      })
-      console.log(`  ✅ Deleted ${deletedConversations.count} conversations`)
-    }
-    
-    // 13. Delete leads
-    if (leadIds.length > 0) {
-      const deletedLeads = await prisma.lead.deleteMany({
-        where: { id: { in: leadIds } },
-      })
-      console.log(`  ✅ Deleted ${deletedLeads.count} leads`)
-    }
-    
-    // 14. Delete contacts (last, as everything references them)
-    if (contactIds.length > 0) {
-      const deletedContacts = await prisma.contact.deleteMany({
-        where: { id: { in: contactIds } },
-      })
-      console.log(`  ✅ Deleted ${deletedContacts.count} contacts`)
-    }
-    
-    console.log('✅ Successfully deleted all data for test phone numbers')
-  } catch (error: any) {
-    console.error('❌ Error deleting test numbers:', error)
-    throw error
-  } finally {
-    await prisma.$disconnect()
   }
+
+  console.log('\n✅ Deletion complete!')
 }
 
-// Run the script
-deleteTestNumbers()
-  .then(() => {
-    console.log('✅ Script completed successfully')
-    process.exit(0)
-  })
-  .catch((error) => {
-    console.error('❌ Script failed:', error)
-    process.exit(1)
-  })
+// Run if called directly
+if (require.main === module) {
+  deleteTestNumberData()
+    .then(() => {
+      console.log('\n🎉 All test number data deleted successfully!')
+      process.exit(0)
+    })
+    .catch((error) => {
+      console.error('❌ Error deleting test number data:', error)
+      process.exit(1)
+    })
+}
+
+export { deleteTestNumberData }

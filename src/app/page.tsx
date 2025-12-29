@@ -305,16 +305,16 @@ export default async function DashboardPage() {
     return (
       <MainLayout>
         <div className="space-y-2">
-          {/* Compact Header */}
-          <div className="flex items-center justify-between mb-2">
+          {/* Header */}
+          <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-xl font-semibold tracking-tight">Dashboard</h1>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">Welcome back, {user?.name || 'User'}</p>
+              <h1 className="text-title text-slate-900 dark:text-slate-100">Dashboard</h1>
+              <p className="text-meta muted-text mt-1">Welcome back, {user?.name || 'User'}</p>
             </div>
           </div>
 
-          {/* KPI Cards - 8px grid spacing */}
-          <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
+          {/* KPI Cards */}
+          <div className="grid gap-4 grid-cols-2 md:grid-cols-4 mb-6">
             <KPICard
               title="Total Leads"
               value={totalLeadsCount}

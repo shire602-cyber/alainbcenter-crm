@@ -95,6 +95,7 @@ export async function updateFlowState(
 
 /**
  * Check if question was already asked (within last 3 minutes)
+ * Also checks last 3 outbound messages for questionKey repetition
  */
 export async function wasQuestionAsked(
   conversationId: number,
@@ -109,6 +110,60 @@ export async function wasQuestionAsked(
       const minutesSince = (Date.now() - state.lastQuestionAt.getTime()) / (1000 * 60)
       if (minutesSince < minMinutesSince) {
         console.log(`⚠️ [FLOW-STATE] Question ${questionKey} asked ${minutesSince.toFixed(1)} minutes ago - skipping`)
+        return true
+      }
+    }
+    
+    // Check last 3 outbound messages for questionKey repetition
+    const { prisma } = await import('../prisma')
+    const lastOutboundMessages = await prisma.message.findMany({
+      where: {
+        conversationId,
+        direction: 'OUTBOUND',
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: {
+        body: true,
+        createdAt: true,
+      },
+    })
+    
+    // Also check OutboundMessageLog for lastQuestionKey
+    const lastOutboundLogs = await prisma.outboundMessageLog.findMany({
+      where: {
+        conversationId,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 3,
+      select: {
+        lastQuestionKey: true,
+        createdAt: true,
+      },
+    })
+    
+    // Check if questionKey matches any of the last 3 outbound's lastQuestionKey
+    for (const log of lastOutboundLogs) {
+      if (log.lastQuestionKey === questionKey) {
+        console.log(`⚠️ [FLOW-STATE] Question ${questionKey} was asked in last 3 outbound messages - skipping`)
+        return true
+      }
+    }
+    
+    // Also check message body for semantic similarity
+    const questionKeyLower = questionKey.toLowerCase()
+    for (const msg of lastOutboundMessages) {
+      const body = (msg.body || '').toLowerCase()
+      if (questionKeyLower.includes('name') && (body.includes('name') || body.includes('what is your name'))) {
+        console.log(`⚠️ [FLOW-STATE] Name question was asked in last 3 outbound - skipping`)
+        return true
+      }
+      if (questionKeyLower.includes('nationality') && (body.includes('nationality') || body.includes('what is your nationality'))) {
+        console.log(`⚠️ [FLOW-STATE] Nationality question was asked in last 3 outbound - skipping`)
+        return true
+      }
+      if (questionKeyLower.includes('service') && (body.includes('service') || body.includes('which service'))) {
+        console.log(`⚠️ [FLOW-STATE] Service question was asked in last 3 outbound - skipping`)
         return true
       }
     }

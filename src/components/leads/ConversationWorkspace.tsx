@@ -1,12 +1,26 @@
 'use client'
 
 /**
- * CONVERSATION WORKSPACE
- * Modern conversation view with larger bubbles, date separators, inline system chips
- * Primary focus area for lead communication
+ * CONVERSATION WORKSPACE - WHATSAPP-QUALITY OVERHAUL
+ * 
+ * UX RATIONALE:
+ * - Grouped messages reduce visual noise (consecutive messages from same sender)
+ * - Airy spacing (py-6, gap-4) reduces eye fatigue for 15+ minute sessions
+ * - Skeleton loaders show within 100ms (perceived speed > actual speed)
+ * - Micro-feedback (toast on send, status icons) builds confidence
+ * - Smart reply chips feel modern and helpful (not intrusive)
+ * 
+ * Changes:
+ * - Message grouping: consecutive same-sender messages share avatar
+ * - Increased spacing: py-6 for messages area, gap-4 between groups
+ * - Premium bubbles: rounded-[18px], proper padding, subtle shadows
+ * - Date separators: "Today / Yesterday / Mon 12 Dec" with breathing room
+ * - Skeleton loader: shows immediately, prevents layout shift
+ * - Send feedback: toast notification + inline status
+ * - Composer: premium input with focus ring, disabled state, hover/press
  */
 
-import { useState, useEffect, useRef } from 'react'
+import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
 import { MessageSquare, Send, Sparkles, CheckCircle2, Clock, AlertCircle } from 'lucide-react'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -14,6 +28,8 @@ import { Button } from '@/components/ui/button'
 import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 import { ReplySuccessBanner } from './ReplySuccessBanner'
+import { Skeleton } from '@/components/ui/skeleton'
+import { useToast } from '@/components/ui/toast'
 
 interface Message {
   id: number
@@ -32,18 +48,155 @@ interface ConversationWorkspaceProps {
   onComposerChange?: (open: boolean) => void
 }
 
-export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, composerOpen, onComposerChange }: ConversationWorkspaceProps) {
+interface MessageGroup {
+  direction: 'INBOUND' | 'OUTBOUND'
+  messages: Message[]
+  date: string
+}
+
+// Group consecutive messages from same sender
+function groupMessages(messages: Message[]): MessageGroup[] {
+  if (messages.length === 0) return []
+  
+  const groups: MessageGroup[] = []
+  let currentGroup: MessageGroup | null = null
+  
+  for (const message of messages) {
+    const messageDate = format(parseISO(message.createdAt), 'yyyy-MM-dd')
+    
+    // Check if we need a new group (different sender or different day)
+    if (!currentGroup || 
+        currentGroup.direction !== message.direction ||
+        currentGroup.date !== messageDate) {
+      currentGroup = {
+        direction: message.direction,
+        messages: [message],
+        date: messageDate,
+      }
+      groups.push(currentGroup)
+    } else {
+      // Same sender, same day - add to current group
+      currentGroup.messages.push(message)
+    }
+  }
+  
+  return groups
+}
+
+const MessageBubble = memo(function MessageBubble({ 
+  message, 
+  isOutbound,
+  showAvatar,
+  isLastInGroup 
+}: { 
+  message: Message
+  isOutbound: boolean
+  showAvatar: boolean
+  isLastInGroup: boolean
+}) {
+  return (
+    <div className={cn(
+      "flex gap-3",
+      isOutbound ? "justify-end" : "justify-start",
+      !isLastInGroup && "mb-1"
+    )}>
+      {/* Avatar (only for first message in group or inbound) */}
+      {!isOutbound && showAvatar && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
+          <MessageSquare className="h-4 w-4 text-slate-500" />
+        </div>
+      )}
+      {!isOutbound && !showAvatar && (
+        <div className="flex-shrink-0 w-8" /> // Spacer
+      )}
+      
+      {/* Bubble */}
+      <div className={cn(
+        "max-w-[75%] rounded-[18px] px-4 py-2.5 shadow-sm",
+        "transition-all duration-200 hover:shadow-md",
+        isOutbound
+          ? "bg-primary text-primary-foreground"
+          : "bg-card border border-slate-200/60 dark:border-slate-800/60"
+      )}>
+        <p className={cn(
+          "text-body leading-relaxed whitespace-pre-wrap break-words",
+          isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"
+        )}>
+          {message.body}
+        </p>
+        <div className={cn(
+          "flex items-center gap-1.5 mt-1.5 text-meta",
+          isOutbound ? "text-primary-foreground/70" : "muted-text"
+        )}>
+          <span>{format(parseISO(message.createdAt), 'h:mm a')}</span>
+          {isOutbound && message.status && (
+            <div className="flex items-center">
+              {message.status === 'READ' && <CheckCircle2 className="h-3.5 w-3.5 text-blue-400" />}
+              {message.status === 'DELIVERED' && <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />}
+              {message.status === 'SENT' && <Clock className="h-3.5 w-3.5 text-slate-400" />}
+              {message.status === 'FAILED' && <AlertCircle className="h-3.5 w-3.5 text-red-500" />}
+            </div>
+          )}
+        </div>
+      </div>
+
+      {/* Outbound avatar (only for first message in group) */}
+      {isOutbound && showAvatar && (
+        <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
+          <MessageSquare className="h-4 w-4 text-primary" />
+        </div>
+      )}
+      {isOutbound && !showAvatar && (
+        <div className="flex-shrink-0 w-8" /> // Spacer
+      )}
+    </div>
+  )
+})
+
+function DateSeparator({ date }: { date: string }) {
+  const messageDate = parseISO(date)
+  let label = ''
+  if (isToday(messageDate)) {
+    label = 'Today'
+  } else if (isYesterday(messageDate)) {
+    label = 'Yesterday'
+  } else {
+    label = format(messageDate, 'EEE MMM d')
+  }
+
+  return (
+    <div className="flex items-center justify-center my-6">
+      <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-800/60">
+        <span className="text-meta muted-text">{label}</span>
+      </div>
+    </div>
+  )
+}
+
+export const ConversationWorkspace = memo(function ConversationWorkspace({ 
+  leadId, 
+  channel = 'whatsapp', 
+  onSend, 
+  composerOpen, 
+  onComposerChange 
+}: ConversationWorkspaceProps) {
   const [messages, setMessages] = useState<Message[]>([])
   const [loading, setLoading] = useState(true)
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
   const [showSuccessBanner, setShowSuccessBanner] = useState(false)
+  const [justSent, setJustSent] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const [smartReplies, setSmartReplies] = useState<string[]>([])
+  const { showToast } = useToast()
+
+  // Memoize grouped messages to avoid recalculation
+  const messageGroups = useMemo(() => groupMessages(messages), [messages])
 
   useEffect(() => {
+    // Show skeleton immediately (within 100ms)
+    setLoading(true)
     loadMessages()
-    // Poll for new messages every 5 seconds
     const interval = setInterval(loadMessages, 5000)
     return () => clearInterval(interval)
   }, [leadId, channel])
@@ -52,7 +205,7 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
     scrollToBottom()
   }, [messages])
 
-  async function loadMessages() {
+  const loadMessages = useCallback(async () => {
     try {
       const res = await fetch(`/api/leads/${leadId}/messages?channel=${channel}`)
       if (res.ok) {
@@ -64,16 +217,15 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
     } finally {
       setLoading(false)
     }
-  }
+  }, [leadId, channel])
 
-  async function loadSmartReplies() {
+  const loadSmartReplies = useCallback(async () => {
     try {
       const res = await fetch(`/api/leads/${leadId}/ai/next-action`, {
         method: 'POST',
       })
       if (res.ok) {
         const data = await res.json()
-        // Extract suggested replies from AI response
         if (data.suggestions) {
           setSmartReplies(data.suggestions.slice(0, 3))
         }
@@ -81,14 +233,15 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
     } catch (error) {
       // Silent fail
     }
-  }
+  }, [leadId])
 
-  async function handleSend() {
+  const handleSend = useCallback(async () => {
     if (!messageText.trim() || sending) return
 
     const text = messageText.trim()
     setMessageText('')
     setSending(true)
+    setJustSent(true)
 
     try {
       if (onSend) {
@@ -103,24 +256,30 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
           }),
         })
       }
+      
+      // Micro-feedback: toast notification
+      showToast('Message sent', 'success')
+      
       await loadMessages()
       setSmartReplies([])
-      setShowSuccessBanner(true) // Show success banner after sending
+      setShowSuccessBanner(true)
       if (onComposerChange) {
         onComposerChange(false)
       }
+      
+      // Reset just sent state after animation
+      setTimeout(() => setJustSent(false), 300)
     } catch (error) {
       console.error('Failed to send message:', error)
+      showToast('Failed to send message', 'error')
     } finally {
       setSending(false)
     }
-  }
+  }, [messageText, sending, onSend, leadId, channel, loadMessages, onComposerChange, showToast])
 
-  async function handleMarkComplete() {
-    // Check if we have a focus item ID
+  const handleMarkComplete = useCallback(async () => {
     const focusItemId = sessionStorage.getItem('focusItemId')
     if (focusItemId) {
-      // Extract task or conversation ID
       const parts = focusItemId.split('_')
       if (parts[0] === 'task' && parts[1]) {
         try {
@@ -134,135 +293,86 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
         }
       }
     }
-    // Exit focus mode and return to dashboard
     sessionStorage.removeItem('focusMode')
     sessionStorage.removeItem('focusItemId')
     window.location.href = '/'
-  }
+  }, [])
 
-  function scrollToBottom() {
+  const scrollToBottom = useCallback(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
-  }
+  }, [])
 
-  function formatMessageDate(date: string): string {
-    const messageDate = parseISO(date)
-    if (isToday(messageDate)) return 'Today'
-    if (isYesterday(messageDate)) return 'Yesterday'
-    return format(messageDate, 'MMMM d, yyyy')
-  }
-
-  function getDateSeparator(date: string, prevDate?: string): string | null {
-    if (!prevDate) return formatMessageDate(date)
-    const current = parseISO(date)
-    const previous = parseISO(prevDate)
-    if (format(current, 'yyyy-MM-dd') !== format(previous, 'yyyy-MM-dd')) {
-      return formatMessageDate(date)
-    }
-    return null
-  }
-
-  function getStatusIcon(status?: string) {
-    switch (status) {
-      case 'READ':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-blue-500" />
-      case 'DELIVERED':
-        return <CheckCircle2 className="h-3.5 w-3.5 text-slate-400" />
-      case 'SENT':
-        return <Clock className="h-3.5 w-3.5 text-slate-400" />
-      case 'FAILED':
-        return <AlertCircle className="h-3.5 w-3.5 text-red-500" />
-      default:
-        return null
-    }
-  }
-
-  // Load smart replies when component mounts or message changes
   useEffect(() => {
     if (messages.length > 0 && messages[messages.length - 1].direction === 'INBOUND') {
       loadSmartReplies()
     }
-  }, [messages.length])
+  }, [messages.length, loadSmartReplies])
 
+  // Skeleton loader (shows within 100ms)
   if (loading) {
     return (
-      <div className="flex-1 flex items-center justify-center">
-        <div className="text-sm text-slate-500">Loading conversation...</div>
+      <div className="flex-1 flex flex-col bg-app p-6">
+        <div className="space-y-4">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className={cn(
+              "flex gap-3",
+              i % 2 === 0 ? "justify-end" : "justify-start"
+            )}>
+              {i % 2 !== 0 && (
+                <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+              )}
+              <Skeleton className={cn(
+                "h-16 rounded-[18px]",
+                i % 2 === 0 ? "w-48 ml-auto" : "w-56"
+              )} />
+              {i % 2 === 0 && (
+                <Skeleton className="h-8 w-8 rounded-full flex-shrink-0" />
+              )}
+            </div>
+          ))}
+        </div>
       </div>
     )
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-slate-50 dark:bg-slate-950">
-      {/* Messages Area */}
-      <div className="flex-1 overflow-y-auto p-6 space-y-4">
+    <div className="flex-1 flex flex-col h-full bg-app">
+      {/* Messages Area - Airy spacing */}
+      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4">
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <MessageSquare className="h-12 w-12 text-slate-300 dark:text-slate-700 mb-4" />
-            <p className="text-sm text-slate-500 dark:text-slate-400">No messages yet</p>
-            <p className="text-xs text-slate-400 dark:text-slate-500 mt-1">Start the conversation</p>
+            <p className="text-body muted-text">No messages yet</p>
+            <p className="text-meta muted-text mt-1">Start the conversation</p>
           </div>
         ) : (
-          messages.map((message, idx) => {
-            const dateSeparator = getDateSeparator(message.createdAt, messages[idx - 1]?.createdAt)
-            const isOutbound = message.direction === 'OUTBOUND'
+          messageGroups.map((group, groupIdx) => {
+            const prevGroup = groupIdx > 0 ? messageGroups[groupIdx - 1] : null
+            const showDateSeparator = !prevGroup || prevGroup.date !== group.date
 
             return (
-              <div key={message.id}>
-                {dateSeparator && (
-                  <div className="flex items-center justify-center my-6">
-                    <div className="px-3 py-1 rounded-full bg-slate-200 dark:bg-slate-800 text-xs text-slate-600 dark:text-slate-400">
-                      {dateSeparator}
-                    </div>
-                  </div>
-                )}
+              <div key={`${group.direction}-${group.date}-${groupIdx}`}>
+                {showDateSeparator && <DateSeparator date={group.date} />}
                 
-                <div className={cn(
-                  "flex gap-3",
-                  isOutbound ? "justify-end" : "justify-start"
-                )}>
-                  {!isOutbound && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center">
-                      <MessageSquare className="h-4 w-4 text-slate-500" />
-                    </div>
-                  )}
-                  
-                  <div className={cn(
-                    "max-w-[75%] rounded-2xl px-4 py-3 shadow-sm",
-                    isOutbound
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800"
-                  )}>
-                    <p className={cn(
-                      "text-sm leading-relaxed",
-                      isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"
-                    )}>
-                      {message.body}
-                    </p>
-                    
-                    <div className={cn(
-                      "flex items-center gap-2 mt-2 text-xs",
-                      isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-400"
-                    )}>
-                      <span>{format(parseISO(message.createdAt), 'h:mm a')}</span>
-                      {isOutbound && message.status && (
-                        <div className="flex items-center gap-1">
-                          {getStatusIcon(message.status)}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-
-                  {isOutbound && (
-                    <div className="flex-shrink-0 w-8 h-8 rounded-full bg-primary/10 flex items-center justify-center">
-                      <MessageSquare className="h-4 w-4 text-primary" />
-                    </div>
-                  )}
+                {/* Message Group */}
+                <div className="space-y-1">
+                  {group.messages.map((message, msgIdx) => (
+                    <MessageBubble
+                      key={message.id}
+                      message={message}
+                      isOutbound={group.direction === 'OUTBOUND'}
+                      showAvatar={msgIdx === 0} // Show avatar only for first message in group
+                      isLastInGroup={msgIdx === group.messages.length - 1}
+                    />
+                  ))}
                 </div>
 
-                {/* Inline System Chip for AI Detection */}
-                {!isOutbound && idx === messages.length - 1 && (
-                  <div className="flex items-center gap-2 mt-2 ml-11">
-                    <Badge variant="outline" className="text-xs bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                {/* System Chip for AI Detection (only on last inbound message) */}
+                {group.direction === 'INBOUND' && 
+                 groupIdx === messageGroups.length - 1 && 
+                 group.messages[group.messages.length - 1] === messages[messages.length - 1] && (
+                  <div className="flex items-center gap-2 mt-2 mb-2 ml-11">
+                    <Badge className="chip bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
                       <Sparkles className="h-3 w-3 mr-1" />
                       Understanding your message...
                     </Badge>
@@ -275,7 +385,7 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
         <div ref={messagesEndRef} />
       </div>
 
-      {/* Success Banner after sending reply */}
+      {/* Success Banner */}
       {showSuccessBanner && (
         <div className="px-6 pb-2">
           <ReplySuccessBanner
@@ -285,11 +395,11 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
         </div>
       )}
 
-      {/* Smart Reply Suggestions */}
+      {/* Smart Reply Suggestions - Premium Chips */}
       {smartReplies.length > 0 && (
-        <div className="px-6 pb-2">
+        <div className="px-6 pb-3">
           <div className="flex items-center gap-2 overflow-x-auto">
-            <span className="text-xs text-slate-500 dark:text-slate-400 flex-shrink-0">Smart replies:</span>
+            <span className="text-meta muted-text flex-shrink-0">Quick replies:</span>
             {smartReplies.map((reply, idx) => (
               <button
                 key={idx}
@@ -299,7 +409,13 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
                     onComposerChange(true)
                   }
                 }}
-                className="flex-shrink-0 px-3 py-1.5 text-xs rounded-full bg-slate-100 dark:bg-slate-800 hover:bg-slate-200 dark:hover:bg-slate-700 text-slate-700 dark:text-slate-300 transition-colors"
+                className={cn(
+                  "flex-shrink-0 px-3 py-1.5 text-meta rounded-full",
+                  "bg-slate-100 dark:bg-slate-800",
+                  "hover:bg-slate-200 dark:hover:bg-slate-700",
+                  "text-slate-700 dark:text-slate-300",
+                  "transition-all duration-200 hover:scale-105 active:scale-95"
+                )}
               >
                 {reply}
               </button>
@@ -308,39 +424,56 @@ export function ConversationWorkspace({ leadId, channel = 'whatsapp', onSend, co
         </div>
       )}
 
-      {/* Message Composer */}
+      {/* Message Composer - Premium Input */}
       {(composerOpen === undefined || composerOpen) && (
-      <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
-        <div className="flex items-end gap-3">
-          <Textarea
-            value={messageText}
-            onChange={(e) => setMessageText(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && !e.shiftKey) {
-                e.preventDefault()
-                handleSend()
-              }
-            }}
-            placeholder="Type your message..."
-            className="min-h-[60px] max-h-[120px] resize-none rounded-xl border-slate-200 dark:border-slate-800 focus:ring-2 focus:ring-primary/20"
-            rows={2}
-          />
-          <Button
-            onClick={handleSend}
-            disabled={!messageText.trim() || sending}
-            size="lg"
-            className="rounded-xl h-[60px] px-6"
-          >
-            {sending ? (
-              <Clock className="h-5 w-5 animate-spin" />
-            ) : (
-              <Send className="h-5 w-5" />
-            )}
-          </Button>
+        <div className={cn(
+          "divider-soft bg-card p-4",
+          "transition-opacity duration-200",
+          sending && "opacity-60"
+        )}>
+          <div className="flex items-end gap-3">
+            <Textarea
+              value={messageText}
+              onChange={(e) => setMessageText(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && !e.shiftKey) {
+                  e.preventDefault()
+                  handleSend()
+                }
+              }}
+              placeholder="Type your message..."
+              disabled={sending}
+              className={cn(
+                "flex-1 min-h-[60px] max-h-[120px] resize-none rounded-[14px]",
+                "border-slate-200/60 dark:border-slate-800/60",
+                "focus-ring text-body",
+                "transition-all duration-200",
+                "disabled:opacity-50 disabled:cursor-not-allowed"
+              )}
+              rows={2}
+            />
+            <Button
+              onClick={handleSend}
+              disabled={!messageText.trim() || sending}
+              size="lg"
+              className={cn(
+                "rounded-[14px] h-[60px] px-6 bg-primary hover:bg-primary/90",
+                "transition-all duration-200 hover:shadow-md",
+                "active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed",
+                justSent && "bg-green-600 hover:bg-green-700"
+              )}
+            >
+              {sending ? (
+                <Clock className="h-5 w-5 animate-spin" />
+              ) : justSent ? (
+                <CheckCircle2 className="h-5 w-5" />
+              ) : (
+                <Send className="h-5 w-5" />
+              )}
+            </Button>
+          </div>
         </div>
-      </div>
       )}
     </div>
   )
-}
-
+})

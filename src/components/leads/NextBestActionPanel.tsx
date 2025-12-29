@@ -13,7 +13,6 @@ import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { CommandCenterAction } from './CommandCenterAction'
 import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 interface NextBestActionPanelProps {
@@ -135,14 +134,55 @@ export function NextBestActionPanel({ leadId, lead, tasks = [], onActionPending 
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="space-y-6 p-4 sm:p-6">
-        {/* Dominant Primary Action */}
+      <div className="space-y-6">
+        {/* Recommended Action Card */}
         {primaryAction && (
-          <CommandCenterAction
-            action={primaryAction}
-            urgencyIndicators={urgencyIndicators}
-            onAction={handleAction}
-          />
+          <Card className="card-premium p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                  Recommended Action
+                </h3>
+                <p className="text-body muted-text mb-4">
+                  {primaryAction.reason}
+                </p>
+                <Button
+                  onClick={handleAction}
+                  className={cn(
+                    "w-full h-11 rounded-[14px] font-semibold",
+                    "bg-primary hover:bg-primary/90 text-primary-foreground",
+                    "transition-all duration-200 hover:shadow-md active:scale-95"
+                  )}
+                >
+                  {primaryAction.label}
+                </Button>
+                {urgencyIndicators && (
+                  <div className="mt-4 pt-4 divider-soft">
+                    <div className="flex items-center gap-4 text-meta muted-text">
+                      {urgencyIndicators.timeWaiting && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>{urgencyIndicators.timeWaiting}</span>
+                        </div>
+                      )}
+                      {urgencyIndicators.slaRisk !== 'none' && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            urgencyIndicators.slaRisk === 'high' ? "bg-red-500" : "bg-amber-500"
+                          )} />
+                          <span>SLA {urgencyIndicators.slaRisk === 'high' ? 'breach' : 'warning'}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Card>
         )}
 
         {/* Collapsed Secondary Info */}

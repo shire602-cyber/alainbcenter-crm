@@ -1,18 +1,18 @@
 'use client'
 
 /**
- * UP NEXT LIST
+ * UP NEXT LIST - PREMIUM TASK ITEMS
  * 
- * Compact list of 3 additional priority items.
- * Clicking promotes item to "Your Focus Now" (client-side state).
+ * Modern task items with channel icon, preview snippet, waiting badge.
+ * Hover reveals "Open" action (not primary CTA).
  */
 
-import { useState, useEffect } from 'react'
-import { ArrowUp, Clock } from 'lucide-react'
+import { useState, useEffect, memo } from 'react'
+import { Clock, MessageSquare, Phone, Mail, ChevronRight } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
-import { Button } from '@/components/ui/button'
+import { useRouter } from 'next/navigation'
 
 interface UpNextItem {
   id: string
@@ -22,16 +22,78 @@ interface UpNextItem {
   reason: string
   priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT'
   waitingTime?: string
+  channel?: string
+  latestMessage?: string
 }
 
-interface UpNextListProps {
-  onPromote?: (item: UpNextItem) => void
+function ChannelIcon({ channel }: { channel?: string }) {
+  const ch = channel?.toLowerCase() || 'whatsapp'
+  if (ch.includes('whatsapp') || ch.includes('wa')) {
+    return <MessageSquare className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+  }
+  if (ch.includes('phone') || ch.includes('call')) {
+    return <Phone className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+  }
+  if (ch.includes('email') || ch.includes('mail')) {
+    return <Mail className="h-3.5 w-3.5 text-slate-500" />
+  }
+  return <MessageSquare className="h-3.5 w-3.5 text-slate-500" />
 }
 
-export function UpNextList({ onPromote }: UpNextListProps) {
+const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }) {
+  const router = useRouter()
+  const [hovered, setHovered] = useState(false)
+  const preview = item.latestMessage || item.reason
+  const previewText = preview.length > 60 ? preview.substring(0, 60) + '...' : preview
+  const waitingTime = item.waitingTime?.match(/(\d+[hd])/)?.[0] || '—'
+
+  return (
+    <div
+      className={cn(
+        "group flex items-center gap-3 p-3 rounded-[12px]",
+        "bg-card-muted border border-slate-200/60 dark:border-slate-800/60",
+        "hover:bg-card hover:border-slate-300 dark:hover:border-slate-700",
+        "hover:shadow-sm transition-all duration-200 cursor-pointer"
+      )}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={() => router.push(`/leads/${item.leadId}`)}
+    >
+      <ChannelIcon channel={item.channel} />
+      
+      <div className="flex-1 min-w-0">
+        <div className="flex items-center gap-2 mb-1">
+          <p className="text-body font-medium text-slate-900 dark:text-slate-100 truncate">
+            {item.contactName || 'Unknown'}
+          </p>
+          {item.serviceType && (
+            <Badge className="chip text-[11px]">{item.serviceType}</Badge>
+          )}
+        </div>
+        <p className="text-meta text-slate-600 dark:text-slate-400 line-clamp-1">
+          {previewText}
+        </p>
+      </div>
+
+      <div className="flex items-center gap-2 flex-shrink-0">
+        <Badge variant="outline" className="pill text-[11px]">
+          <Clock className="h-3 w-3 mr-1" />
+          {waitingTime}
+        </Badge>
+        <ChevronRight 
+          className={cn(
+            "h-4 w-4 text-slate-400 transition-opacity duration-200",
+            hovered ? "opacity-100" : "opacity-0"
+          )} 
+        />
+      </div>
+    </div>
+  )
+})
+
+export const UpNextList = memo(function UpNextList() {
   const [items, setItems] = useState<UpNextItem[]>([])
   const [loading, setLoading] = useState(true)
-  const [hoveredId, setHoveredId] = useState<string | null>(null)
 
   useEffect(() => {
     loadItems()
@@ -44,9 +106,7 @@ export function UpNextList({ onPromote }: UpNextListProps) {
       const res = await fetch('/api/dashboard/do-this-now')
       if (res.ok) {
         const data = await res.json()
-        const allItems = data.items || []
-        // Skip first item (it's in YourFocusNow), take next 3
-        setItems(allItems.slice(1, 4))
+        setItems((data.items || []).slice(1, 4))
       }
     } catch (error) {
       console.error('Failed to load up next items:', error)
@@ -55,18 +115,12 @@ export function UpNextList({ onPromote }: UpNextListProps) {
     }
   }
 
-  function handlePromote(item: UpNextItem) {
-    if (onPromote) {
-      onPromote(item)
-    }
-  }
-
   if (loading) {
     return (
-      <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800">
+      <Card className="card-premium p-4">
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-12 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+            <div key={i} className="h-16 bg-slate-200 dark:bg-slate-800 rounded-[12px] animate-pulse" />
           ))}
         </div>
       </Card>
@@ -78,62 +132,15 @@ export function UpNextList({ onPromote }: UpNextListProps) {
   }
 
   return (
-    <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-      <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+    <Card className="card-premium p-4">
+      <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-3">
         Up Next
       </h4>
       <div className="space-y-2">
-        {items.map((item) => {
-          const waitingTime = item.waitingTime || item.reason.match(/(\d+[hm])/)?.[0] || '—'
-          
-          return (
-            <div
-              key={item.id}
-              className={cn(
-                "flex items-center justify-between p-3 rounded-lg border transition-smooth cursor-pointer",
-                "border-slate-200 dark:border-slate-800",
-                "hover:bg-slate-50 dark:hover:bg-slate-800/50",
-                "hover:border-slate-300 dark:hover:border-slate-700",
-                hoveredId === item.id && "bg-slate-50 dark:bg-slate-800/50"
-              )}
-              onMouseEnter={() => setHoveredId(item.id)}
-              onMouseLeave={() => setHoveredId(null)}
-              onClick={() => handlePromote(item)}
-            >
-              <div className="flex-1 min-w-0">
-                <div className="flex items-center gap-2 mb-1">
-                  <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
-                    {item.contactName || 'Unknown'}
-                  </p>
-                  {item.serviceType && (
-                    <Badge variant="outline" className="text-xs">
-                      {item.serviceType}
-                    </Badge>
-                  )}
-                </div>
-                <div className="flex items-center gap-2 text-xs text-slate-500 dark:text-slate-400">
-                  <Clock className="h-3 w-3" />
-                  <span>{waitingTime}</span>
-                </div>
-              </div>
-              {hoveredId === item.id && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-7 w-7 transition-smooth"
-                  onClick={(e) => {
-                    e.stopPropagation()
-                    handlePromote(item)
-                  }}
-                >
-                  <ArrowUp className="h-3.5 w-3.5" />
-                </Button>
-              )}
-            </div>
-          )
-        })}
+        {items.map((item) => (
+          <UpNextItemRow key={item.id} item={item} />
+        ))}
       </div>
     </Card>
   )
-}
-
+})

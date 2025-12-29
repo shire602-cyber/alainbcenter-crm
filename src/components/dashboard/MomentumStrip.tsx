@@ -1,14 +1,14 @@
 'use client'
 
 /**
- * MOMENTUM STRIP
+ * MOMENTUM STRIP - TODAY'S IMPACT
  * 
- * Lightweight metrics row showing positive progress.
- * Calm, positive tone with animations and micro copy.
+ * Premium metric pills with subtle celebration
+ * Empty state: "All caught up" (positive, not empty)
  */
 
-import { useState, useEffect, useRef } from 'react'
-import { CheckCircle2, MessageSquare, FileText, TrendingUp } from 'lucide-react'
+import { useState, useEffect, memo } from 'react'
+import { CheckCircle2, MessageSquare, FileText, TrendingUp, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 
@@ -19,49 +19,37 @@ interface MomentumMetrics {
   revenueClosed?: number
 }
 
-function AnimatedNumber({ value, previousValue }: { value: number; previousValue: number }) {
-  const [displayValue, setDisplayValue] = useState(previousValue)
-  const [animating, setAnimating] = useState(false)
-
-  useEffect(() => {
-    if (value !== previousValue) {
-      setAnimating(true)
-      const start = previousValue
-      const end = value
-      const duration = 300
-      const startTime = Date.now()
-
-      const animate = () => {
-        const now = Date.now()
-        const elapsed = now - startTime
-        const progress = Math.min(elapsed / duration, 1)
-        const current = Math.floor(start + (end - start) * progress)
-        setDisplayValue(current)
-
-        if (progress < 1) {
-          requestAnimationFrame(animate)
-        } else {
-          setAnimating(false)
-        }
-      }
-
-      requestAnimationFrame(animate)
-    }
-  }, [value, previousValue])
+function MetricPill({ 
+  icon, 
+  value, 
+  label, 
+  color = 'blue' 
+}: { 
+  icon: React.ReactNode
+  value: number
+  label: string
+  color?: 'blue' | 'green' | 'purple'
+}) {
+  const colorClasses = {
+    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400',
+    green: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400',
+    purple: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400',
+  }
 
   return (
-    <span className={cn(
-      "transition-all duration-300",
-      animating && "scale-110 font-semibold"
+    <div className={cn(
+      "pill flex items-center gap-2",
+      colorClasses[color]
     )}>
-      {displayValue}
-    </span>
+      {icon}
+      <span className="font-semibold">{value}</span>
+      <span className="text-[11px] opacity-80">{label}</span>
+    </div>
   )
 }
 
-export function MomentumStrip() {
+export const MomentumStrip = memo(function MomentumStrip() {
   const [metrics, setMetrics] = useState<MomentumMetrics>({})
-  const [previousMetrics, setPreviousMetrics] = useState<MomentumMetrics>({})
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -75,9 +63,7 @@ export function MomentumStrip() {
       const res = await fetch('/api/dashboard/wins-today')
       if (res.ok) {
         const data = await res.json()
-        const newMetrics = data.metrics || {}
-        setPreviousMetrics(metrics)
-        setMetrics(newMetrics)
+        setMetrics(data.metrics || {})
       }
     } catch (error) {
       console.error('Failed to load momentum metrics:', error)
@@ -86,96 +72,76 @@ export function MomentumStrip() {
     }
   }
 
-  function getMomentumCopy(): string {
-    const total = (metrics.tasksCompleted || 0) + (metrics.messagesSent || 0) + (metrics.quotesSent || 0)
-    if (total === 0) return ''
-    if (total >= 10) return "You're on top of things"
-    if (total >= 5) return "Good progress today"
-    return "Building momentum"
-  }
-
   if (loading) {
     return (
-      <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-        <div className="flex items-center gap-6">
+      <Card className="card-premium p-4">
+        <div className="flex items-center gap-3">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-8 w-20 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+            <div key={i} className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
           ))}
         </div>
       </Card>
     )
   }
 
-  const hasMetrics = (metrics.tasksCompleted || 0) > 0 || 
-                     (metrics.messagesSent || 0) > 0 || 
-                     (metrics.quotesSent || 0) > 0
+  const tasks = metrics.tasksCompleted || 0
+  const messages = metrics.messagesSent || 0
+  const quotes = metrics.quotesSent || 0
+  const revenue = metrics.revenueClosed || 0
+  const hasMetrics = tasks > 0 || messages > 0 || quotes > 0 || revenue > 0
 
   if (!hasMetrics) {
-    return null
+    return (
+      <Card className="card-premium p-6 text-center">
+        <div className="flex flex-col items-center gap-2">
+          <Sparkles className="h-5 w-5 text-slate-400" />
+          <p className="text-body font-medium text-slate-700 dark:text-slate-300">
+            All caught up
+          </p>
+          <p className="text-meta muted-text">
+            Your impact today will appear here
+          </p>
+        </div>
+      </Card>
+    )
   }
 
-  const momentumCopy = getMomentumCopy()
-
   return (
-    <Card className={cn(
-      "p-4 rounded-xl border border-slate-200 dark:border-slate-800",
-      "bg-gradient-to-r from-green-50 to-emerald-50 dark:from-green-900/10 dark:to-emerald-900/5",
-      "animate-in fade-in slide-in-from-bottom-2 duration-200"
-    )}>
-      <div className="flex items-center gap-6 flex-wrap">
-        {(metrics.tasksCompleted || 0) > 0 && (
-          <div className="flex items-center gap-2">
-            <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              <AnimatedNumber 
-                value={metrics.tasksCompleted || 0} 
-                previousValue={previousMetrics.tasksCompleted || 0} 
-              />{' '}
-              task{(metrics.tasksCompleted || 0) !== 1 ? 's' : ''} completed
-            </span>
-          </div>
+    <Card className="card-premium p-4">
+      <div className="flex items-center gap-3 flex-wrap">
+        {tasks > 0 && (
+          <MetricPill
+            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
+            value={tasks}
+            label="tasks"
+            color="green"
+          />
         )}
-        {(metrics.messagesSent || 0) > 0 && (
-          <div className="flex items-center gap-2">
-            <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              <AnimatedNumber 
-                value={metrics.messagesSent || 0} 
-                previousValue={previousMetrics.messagesSent || 0} 
-              />{' '}
-              message{(metrics.messagesSent || 0) !== 1 ? 's' : ''} sent
-            </span>
-          </div>
+        {messages > 0 && (
+          <MetricPill
+            icon={<MessageSquare className="h-3.5 w-3.5" />}
+            value={messages}
+            label="messages"
+            color="blue"
+          />
         )}
-        {(metrics.quotesSent || 0) > 0 && (
-          <div className="flex items-center gap-2">
-            <FileText className="h-4 w-4 text-purple-600 dark:text-purple-400" />
-            <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
-              <AnimatedNumber 
-                value={metrics.quotesSent || 0} 
-                previousValue={previousMetrics.quotesSent || 0} 
-              />{' '}
-              quote{(metrics.quotesSent || 0) !== 1 ? 's' : ''} sent
-            </span>
-          </div>
+        {quotes > 0 && (
+          <MetricPill
+            icon={<FileText className="h-3.5 w-3.5" />}
+            value={quotes}
+            label="quotes"
+            color="purple"
+          />
         )}
-        {(metrics.revenueClosed || 0) > 0 && (
-          <div className="flex items-center gap-2">
-            <TrendingUp className="h-4 w-4 text-green-600 dark:text-green-400" />
-            <span className="text-sm font-medium text-green-700 dark:text-green-300">
-              AED {(metrics.revenueClosed || 0).toLocaleString()} closed
-            </span>
-          </div>
-        )}
-        {momentumCopy && (
-          <div className="ml-auto">
-            <span className="text-xs font-medium text-slate-600 dark:text-slate-400 italic">
-              {momentumCopy}
-            </span>
-          </div>
+        {revenue > 0 && (
+          <MetricPill
+            icon={<TrendingUp className="h-3.5 w-3.5" />}
+            value={revenue}
+            label="AED"
+            color="green"
+          />
         )}
       </div>
     </Card>
   )
-}
-
+})

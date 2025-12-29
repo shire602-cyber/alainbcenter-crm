@@ -1,17 +1,17 @@
 'use client'
 
 /**
- * NOTIFICATION CARD
+ * NOTIFICATION CARD - PREMIUM ACTIONABLE
  * 
- * Reusable notification card component with:
- * - Single primary CTA button
- * - Snooze menu (30m, 24h)
- * - Visual confirmation for snoozed state
- * - Deduplication count badge
+ * Beautiful, actionable notification card with:
+ * - Clear title + 1 sentence context
+ * - ONE primary CTA button
+ * - Snooze dropdown (3 options)
+ * - Dedupe badge count "(x3)"
  */
 
-import { useState } from 'react'
-import { MessageSquare, FileText, AlertCircle, Clock, MoreVertical, CheckCircle2 } from 'lucide-react'
+import { useState, memo } from 'react'
+import { MessageSquare, FileText, AlertCircle, Clock, ChevronDown, X } from 'lucide-react'
 import { formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
@@ -37,14 +37,14 @@ interface NotificationCardProps {
     actionLabel: string
     createdAt: string
     isRead: boolean
-    count?: number // For deduplication
+    count?: number
   }
   onDismiss: (id: number) => void
   onSnooze: (id: number, minutes: number) => void
   onAction: (url: string) => void
 }
 
-export function NotificationCard({
+export const NotificationCard = memo(function NotificationCard({
   notification,
   onDismiss,
   onSnooze,
@@ -56,25 +56,16 @@ export function NotificationCard({
   function getIcon() {
     switch (notification.type) {
       case 'sla_breach_imminent':
+        return <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
       case 'customer_reply':
-        return <MessageSquare className="h-4 w-4" />
+        return <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
       case 'quote_ready':
-        return <FileText className="h-4 w-4" />
+        return <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
       case 'deadline_today':
-        return <AlertCircle className="h-4 w-4" />
+        return <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
       default:
-        return <AlertCircle className="h-4 w-4" />
+        return <AlertCircle className="h-4 w-4 text-slate-500" />
     }
-  }
-
-  function getPrimaryAction() {
-    if (notification.type === 'sla_breach_imminent' || notification.type === 'customer_reply') {
-      return 'Reply'
-    }
-    if (notification.type === 'quote_ready') {
-      return 'Create Quote'
-    }
-    return 'Open Lead'
   }
 
   function handleSnooze(minutes: number) {
@@ -89,8 +80,8 @@ export function NotificationCard({
 
   if (snoozed) {
     return (
-      <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 opacity-60">
-        <div className="flex items-center gap-2 text-sm text-slate-500 dark:text-slate-400">
+      <Card className="card-premium p-4 opacity-60">
+        <div className="flex items-center gap-2 text-meta muted-text">
           <Clock className="h-4 w-4" />
           <span>Snoozed</span>
         </div>
@@ -98,81 +89,101 @@ export function NotificationCard({
     )
   }
 
+  const isUrgent = notification.type === 'sla_breach_imminent'
+
   return (
-    <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 hover:shadow-md transition-smooth">
-      <div className="flex items-start gap-3">
+    <Card className={cn(
+      "card-premium p-5",
+      "hover:-translate-y-0.5 transition-all duration-200"
+    )}>
+      <div className="flex items-start gap-4">
+        {/* Icon */}
         <div className={cn(
-          "flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center",
-          notification.type === 'sla_breach_imminent' 
-            ? "bg-red-100 dark:bg-red-900/20"
-            : notification.type === 'customer_reply'
-            ? "bg-blue-100 dark:bg-blue-900/20"
+          "flex-shrink-0 w-10 h-10 rounded-[12px] flex items-center justify-center",
+          isUrgent 
+            ? "bg-red-50 dark:bg-red-900/20"
             : "bg-slate-100 dark:bg-slate-800"
         )}>
-          <div className={cn(
-            notification.type === 'sla_breach_imminent' 
-              ? "text-red-600 dark:text-red-400"
-              : notification.type === 'customer_reply'
-              ? "text-blue-600 dark:text-blue-400"
-              : "text-slate-600 dark:text-slate-400"
-          )}>
-            {getIcon()}
-          </div>
+          {getIcon()}
         </div>
 
+        {/* Content */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-2">
+          <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex-1 min-w-0">
-              <div className="flex items-center gap-2 mb-1">
-                <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <div className="flex items-center gap-2 mb-1.5">
+                <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
                   {notification.title}
                 </h4>
                 {notification.count && notification.count > 1 && (
-                  <Badge variant="secondary" className="text-xs">
-                    {notification.count}
+                  <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                    (x{notification.count})
                   </Badge>
                 )}
+                {isUrgent && (
+                  <div className="flex items-center gap-1">
+                    <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+                    <span className="text-meta text-red-600 dark:text-red-400">Urgent</span>
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 line-clamp-2">
+              <p className="text-body muted-text line-clamp-2">
                 {notification.message}
               </p>
             </div>
 
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
-                <Button variant="ghost" size="icon" className="h-7 w-7">
-                  <MoreVertical className="h-3.5 w-3.5" />
-                </Button>
-              </DropdownMenuTrigger>
-              <DropdownMenuContent align="end">
-                <DropdownMenuItem onClick={() => handleSnooze(30)}>
-                  Snooze 30m
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => handleSnooze(1440)}>
-                  Snooze 24h
-                </DropdownMenuItem>
-                <DropdownMenuItem onClick={() => onDismiss(notification.id)}>
-                  Mark as read
-                </DropdownMenuItem>
-              </DropdownMenuContent>
-            </DropdownMenu>
+            <button
+              onClick={() => onDismiss(notification.id)}
+              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              title="Dismiss"
+            >
+              <X className="h-4 w-4 text-slate-400" />
+            </button>
           </div>
 
-          <div className="flex items-center justify-between mt-3">
-            <span className="text-xs text-slate-500 dark:text-slate-400">
+          {/* Actions */}
+          <div className="flex items-center justify-between mt-4">
+            <span className="text-meta muted-text">
               {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
             </span>
-            <Button
-              onClick={handleAction}
-              size="sm"
-              className="h-8 text-xs font-semibold"
-            >
-              {getPrimaryAction()}
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleAction}
+                size="sm"
+                className={cn(
+                  "h-9 px-4 rounded-[12px] font-semibold",
+                  "bg-primary hover:bg-primary/90 text-primary-foreground",
+                  "transition-all duration-200 hover:shadow-md active:scale-95"
+                )}
+              >
+                {notification.actionLabel}
+              </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button 
+                    variant="outline" 
+                    size="icon" 
+                    className="h-9 w-9 rounded-[12px] border-slate-200/60 dark:border-slate-800/60"
+                  >
+                    <ChevronDown className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end" className="rounded-[12px]">
+                  <DropdownMenuItem onClick={() => handleSnooze(30)}>
+                    Snooze 30m
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => handleSnooze(1440)}>
+                    Snooze 24h
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => onDismiss(notification.id)}>
+                    Mark as read
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            </div>
           </div>
         </div>
       </div>
     </Card>
   )
-}
-
+})
