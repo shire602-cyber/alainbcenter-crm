@@ -21,6 +21,7 @@ import { upsertContact } from '../contact/upsert'
 import { normalizeChannel } from '../utils/channelNormalize'
 import { upsertConversation } from '../conversation/upsert'
 import { getExternalThreadId } from '../conversation/getExternalThreadId'
+import { mergeJsonSafe, buildLeadUpdateFromExtracted, buildConversationUpdateFromExtracted } from './mergeCollectedData'
 
 export interface AutoMatchInput {
   channel: 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
@@ -390,7 +391,7 @@ export async function handleInboundMessageAutoMatch(
       }
     }
     
-    // CRITICAL: Persist extracted fields to conversation for audit
+    // CRITICAL: Persist extracted fields to conversation using safe merge
     if (Object.keys(extractedFields).length > 0 && conversation) {
       try {
         const existingKnownFields = conversation.knownFields 
@@ -398,25 +399,23 @@ export async function handleInboundMessageAutoMatch(
               ? JSON.parse(conversation.knownFields) 
               : conversation.knownFields)
           : {}
-        const updatedKnownFields = {
-          ...existingKnownFields,
-          ...extractedFields,
-          extractedAt: new Date().toISOString(),
-        }
         
-        // Also store qualification answer metadata
+        // Use safe merge utility to prevent wiping existing data
+        const conversationUpdate = buildConversationUpdateFromExtracted(existingKnownFields, extractedFields)
+        
+        // Add qualification answer metadata if present
         if (qualificationAnswer) {
-          updatedKnownFields[`qualification_${qualificationAnswer.field}`] = qualificationAnswer.value
-          updatedKnownFields.qualificationAnswerAt = new Date().toISOString()
+          const merged = JSON.parse(conversationUpdate.knownFields as string)
+          merged[`qualification_${qualificationAnswer.field}`] = qualificationAnswer.value
+          merged.qualificationAnswerAt = new Date().toISOString()
+          conversationUpdate.knownFields = JSON.stringify(merged)
         }
         
         await prisma.conversation.update({
           where: { id: conversation.id },
-          data: {
-            knownFields: JSON.stringify(updatedKnownFields),
-          },
+          data: conversationUpdate,
         })
-        console.log(`✅ [AUTO-MATCH] Persisted extracted fields to conversation.knownFields`)
+        console.log(`✅ [AUTO-MATCH] Persisted extracted fields to conversation.knownFields (safe merge)`)
       } catch (persistError: any) {
         console.warn(`⚠️ [AUTO-MATCH] Failed to persist to conversation.knownFields:`, persistError.message)
       }
@@ -427,9 +426,10 @@ export async function handleInboundMessageAutoMatch(
     extractedFields = {}
   }
 
-  // CRITICAL FIX: Initialize updateData IMMEDIATELY after extraction
-  // This ensures updateData exists before any assignments
-  const updateData: any = {}
+  // CRITICAL FIX: Build lead update using safe merge utility
+  // This ensures we never wipe existing fields
+  const leadUpdate = buildLeadUpdateFromExtracted(extractedFields)
+  const updateData: any = { ...leadUpdate }
 
   // Update Contact with extracted nationality if needed
   if (extractedFields.nationality) {
@@ -468,21 +468,20 @@ export async function handleInboundMessageAutoMatch(
     }
   }
 
-  // BUG FIX #1: Merge serviceTypeEnum update into single database operation
+  // CRITICAL FIX: Use safe merge utility to prevent data wiping
   // Update dataJson (append, don't overwrite)
   const existingData = lead.dataJson ? JSON.parse(lead.dataJson) : {}
-  const updatedData = {
-    ...existingData,
-    service: extractedFields.service || existingData.service, // Preserve existing if new is null
-    nationality: extractedFields.nationality || existingData.nationality,
-    expiries: extractedFields.expiries || existingData.expiries || [],
-    counts: {
-      ...(existingData.counts || {}),
-      ...(extractedFields.counts || {}), // Merge counts (partners, visas)
-    },
-    identity: extractedFields.identity || existingData.identity || {},
+  const incomingData = {
+    service: extractedFields.service,
+    nationality: extractedFields.nationality,
+    expiries: extractedFields.expiries,
+    counts: extractedFields.counts,
+    identity: extractedFields.identity,
+    businessActivityRaw: extractedFields.businessActivityRaw,
     extractedAt: new Date().toISOString(),
   }
+  // Use safe merge to preserve existing values
+  const updatedData = mergeJsonSafe(existingData, incomingData)
   
   // CRITICAL FIX: Store business setup specific data from rule engine memory
   // This ensures partners, visas, timeline, license_type, business_activity are saved
@@ -548,14 +547,16 @@ export async function handleInboundMessageAutoMatch(
   // This ensures lead fields are auto-filled as soon as user mentions service/activity
   // Note: updateData was already initialized above after extraction
   
-  // Set dataJson from updatedData
-  updateData.dataJson = JSON.stringify(updatedData)
+  // Set dataJson from safely merged updatedData
+  // Only update if we have new data to merge
+  if (Object.keys(updatedData).length > 0 || Object.keys(existingData).length > 0) {
+    updateData.dataJson = JSON.stringify(updatedData)
+  }
   
-  // PROBLEM B: Store raw service text (requestedServiceRaw) - ALWAYS set if service mentioned
-  // Extract raw service mention from message text
+  // CRITICAL: Only add fields to updateData if they have real values (prevent wiping)
+  // Service matching and raw text extraction
   if (input.text && input.text.trim().length > 0) {
     // Try to find service keywords in the message
-    // CRITICAL: Include "business license" variations for better detection
     const serviceKeywords = ['freelance', 'family visa', 'golden visa', 'business setup', 'business license', 'trading license', 'company license', 'pro', 'accounting', 'renewal', 'visit visa', 'employment visa', 'investor visa']
     const lowerText = input.text.toLowerCase()
     for (const keyword of serviceKeywords) {
@@ -565,26 +566,22 @@ export async function handleInboundMessageAutoMatch(
         const start = Math.max(0, keywordIndex - 20)
         const end = Math.min(lowerText.length, keywordIndex + keyword.length + 30)
         const rawService = input.text.substring(start, end).trim()
-        updateData.requestedServiceRaw = rawService
-        console.log(`✅ [AUTO-MATCH] Setting requestedServiceRaw: ${rawService}`)
+        // Only set if lead doesn't already have a value (preserve existing)
+        if (!lead.requestedServiceRaw || lead.requestedServiceRaw.trim() === '') {
+          updateData.requestedServiceRaw = rawService
+          console.log(`✅ [AUTO-MATCH] Setting requestedServiceRaw: ${rawService}`)
+        }
         break
       }
     }
   }
   
-  // PROBLEM B: Match service to ServiceType and set serviceTypeId/serviceTypeEnum
-  // CRITICAL: Always set at least one of: serviceTypeEnum, serviceTypeId, or requestedServiceRaw
-  // If extractService found a service, use it; otherwise, requestedServiceRaw was set above if keyword found
-  if (extractedFields.service) {
-    updateData.serviceTypeEnum = extractedFields.service
-    
-    // Try to find matching ServiceType by name (case-insensitive) or code
+  // Match service to ServiceType and set serviceTypeId (only if serviceTypeEnum is set)
+  if (updateData.serviceTypeEnum) {
     try {
-      // PROBLEM B FIX: Use safer case-insensitive matching (works for both SQLite and PostgreSQL)
-      const serviceLower = extractedFields.service.toLowerCase()
-      const serviceSpaces = extractedFields.service.replace(/_/g, ' ').toLowerCase()
+      const serviceLower = updateData.serviceTypeEnum.toLowerCase()
+      const serviceSpaces = updateData.serviceTypeEnum.replace(/_/g, ' ').toLowerCase()
       
-      // Get all active service types and match in memory (safer for cross-DB compatibility)
       const allServiceTypes = await prisma.serviceType.findMany({
         where: { isActive: true },
       })
@@ -605,49 +602,44 @@ export async function handleInboundMessageAutoMatch(
         updateData.serviceTypeId = serviceType.id
         console.log(`✅ [AUTO-MATCH] Matched serviceTypeId: ${serviceType.id} (${serviceType.name})`)
       } else {
-        console.log(`⚠️ [AUTO-MATCH] No ServiceType match found for: ${extractedFields.service}`)
-        // CRITICAL: serviceTypeEnum is already set above, so lead will show the enum value
-        // UI will display serviceTypeEnum label if serviceTypeId is null
+        console.log(`⚠️ [AUTO-MATCH] No ServiceType match found for: ${updateData.serviceTypeEnum}`)
       }
     } catch (error: any) {
       console.warn(`⚠️ [AUTO-MATCH] Failed to match ServiceType:`, error.message)
     }
-    
-    console.log(`✅ [AUTO-MATCH] Setting serviceTypeEnum IMMEDIATELY: ${extractedFields.service}`)
-  }
-  
-  // Store businessActivityRaw immediately if detected (for business_setup)
-  if (extractedFields.businessActivityRaw) {
-    updateData.businessActivityRaw = extractedFields.businessActivityRaw
-    console.log(`✅ [AUTO-MATCH] Setting businessActivityRaw IMMEDIATELY: ${extractedFields.businessActivityRaw}`)
-  }
-  
-  // Update expiryDate if explicit date extracted
-  if (extractedFields.expiries && extractedFields.expiries.length > 0) {
-    // Use first expiry date
-    updateData.expiryDate = extractedFields.expiries[0].date
-    console.log(`✅ [AUTO-MATCH] Setting expiryDate IMMEDIATELY: ${extractedFields.expiries[0].date.toISOString()}`)
   }
   
   // CRITICAL FIX: Only update lead if we have actual data to update
-  // Prevent wiping existing fields when extraction fails
-  if (Object.keys(updateData).length > 0) {
+  // Remove any undefined/null values to prevent wiping
+  const cleanUpdateData: any = {}
+  for (const key in updateData) {
+    if (updateData[key] !== undefined && updateData[key] !== null) {
+      cleanUpdateData[key] = updateData[key]
+    }
+  }
+  
+  if (Object.keys(cleanUpdateData).length > 0) {
     try {
       await prisma.lead.update({
         where: { id: lead.id },
-        data: updateData,
+        data: cleanUpdateData,
       })
       
-      console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} IMMEDIATELY: serviceTypeEnum=${extractedFields.service || lead.serviceTypeEnum || 'none'}, serviceTypeId=${updateData.serviceTypeId || lead.serviceTypeId || 'none'}, requestedServiceRaw=${updateData.requestedServiceRaw || lead.requestedServiceRaw || 'none'}, businessActivityRaw=${extractedFields.businessActivityRaw || lead.businessActivityRaw || 'none'}, nationality=${extractedFields.nationality || 'none'}`)
-      console.log(`📊 [AUTO-MATCH] updateData keys applied:`, Object.keys(updateData))
+      console.log(`✅ [AUTO-MATCH] Updated lead ${lead.id} (safe merge):`, {
+        serviceTypeEnum: cleanUpdateData.serviceTypeEnum || lead.serviceTypeEnum || 'none',
+        serviceTypeId: cleanUpdateData.serviceTypeId || lead.serviceTypeId || 'none',
+        requestedServiceRaw: cleanUpdateData.requestedServiceRaw || lead.requestedServiceRaw || 'none',
+        businessActivityRaw: cleanUpdateData.businessActivityRaw || lead.businessActivityRaw || 'none',
+        hasDataJson: !!cleanUpdateData.dataJson,
+        keys: Object.keys(cleanUpdateData),
+      })
     } catch (updateError: any) {
       console.error(`❌ [AUTO-MATCH] Failed to update lead ${lead.id}:`, {
         error: updateError.message,
-        updateData: Object.keys(updateData),
+        updateData: Object.keys(cleanUpdateData),
         stack: updateError.stack,
       })
       // Don't throw - continue pipeline even if lead update fails
-      // This prevents blocking message processing
     }
   } else {
     console.log(`⚠️ [AUTO-MATCH] No fields extracted - skipping lead update to prevent wiping existing data`)

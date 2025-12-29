@@ -374,7 +374,7 @@ and let me know the best time for our consultant to call you.`
         const name = conversationState.knownFields.name || lead.contact.fullName || ''
         nextCoreQuestion = {
           questionKey: 'ASK_SERVICE',
-          question: `Thanks${name ? `, ${name}` : ''}. Which service are you looking for today? (Family Visa / Visit Visa / Freelance Visa / Freelance Permit / Business Setup / Golden Visa / PRO Services)`,
+          question: `Thanks${name ? `, ${name}` : ''}. How can I help you today?`,
         }
       } else if (!conversationState.knownFields.nationality) {
         nextCoreQuestion = {

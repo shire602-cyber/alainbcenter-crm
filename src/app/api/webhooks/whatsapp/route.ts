@@ -287,6 +287,21 @@ export async function POST(req: NextRequest) {
     const changes = entry?.changes?.[0]
     const value = changes?.value
 
+    // A) HARD-IGNORE STATUS-ONLY WEBHOOK EVENTS
+    // If payload has no messages OR messages.length===0 => return 200 immediately
+    // Do NOT call orchestrator, do NOT create tasks, do NOT send outbound for statuses-only events
+    const hasMessages = value?.messages && Array.isArray(value.messages) && value.messages.length > 0
+    const hasStatuses = value?.statuses && Array.isArray(value.statuses) && value.statuses.length > 0
+    
+    if (!hasMessages && hasStatuses) {
+      // Status-only webhook - process statuses and return immediately
+      console.log(`📊 [WEBHOOK] Status-only webhook (${value.statuses.length} statuses, 0 messages) - processing statuses only`)
+    } else if (!hasMessages) {
+      // No messages and no statuses - invalid webhook
+      console.log(`⚠️ [WEBHOOK] Webhook has no messages and no statuses - returning 200`)
+      return NextResponse.json({ success: true, message: 'No messages or statuses to process' })
+    }
+
     // Handle status updates (delivery receipts) - update both CommunicationLog and Message models
     if (value?.statuses) {
       for (const status of value.statuses) {
@@ -549,7 +564,9 @@ export async function POST(req: NextRequest) {
                   throw new Error('Conversation not found')
                 }
                 
-                // Timeout guard: 4 seconds for reply generation
+                // B) PREVENT "NO REPLY" FROM ORCHESTRATOR TIMEOUT
+                // Option 2 (quick fix): Increase timeout to 12s and ensure send occurs before timeout
+                // If timeout path triggers, DO NOT send anything (only create a task)
                 const orchestratorPromise = generateAIReply({
                   conversationId: result.conversation.id,
                   leadId: result.lead.id,
@@ -562,25 +579,26 @@ export async function POST(req: NextRequest) {
                 
                 const timeoutPromise = new Promise<{ replyText: string } | null>((resolve) => {
                   setTimeout(() => {
-                    console.warn(`⏱️ [WEBHOOK] Orchestrator timeout (4s) - creating task for human follow-up`)
+                    console.warn(`⏱️ [WEBHOOK] Orchestrator timeout (12s) - creating task for human follow-up`)
                     resolve(null)
-                  }, 4000)
+                  }, 12000) // Increased from 4s to 12s
                 })
                 
                 const orchestratorResult = await Promise.race([orchestratorPromise, timeoutPromise])
                 
                 if (!orchestratorResult) {
                   // Timeout - create task and mark as processed
+                  // CRITICAL: DO NOT send anything on timeout - only create task
                   try {
                     const { createAgentTask } = await import('@/lib/automation/agentFallback')
                     await createAgentTask(result.lead.id, 'complex_query', {
                       messageText: `Orchestrator timed out for message: ${result.message.body?.substring(0, 100)}`,
                     })
-                    console.log(`✅ [WEBHOOK] Created task for orchestrator timeout follow-up`)
+                    console.log(`✅ [WEBHOOK] Created task for orchestrator timeout follow-up (no reply sent)`)
                   } catch (taskError: any) {
                     console.error(`❌ [WEBHOOK] Failed to create timeout task:`, taskError.message)
                   }
-                  await markInboundProcessed(messageId, false, 'Orchestrator timeout (4s)')
+                  await markInboundProcessed(messageId, false, 'Orchestrator timeout (12s)')
                   return NextResponse.json({ success: true, message: 'Inbound processed, orchestrator timeout' })
                 }
                 
