@@ -10,7 +10,7 @@
     },
     {
       "path": "/api/cron/run-outbound-jobs",
-      "schedule": "*/30 * * * * *"
+      "schedule": "* * * * *"
     }
   ],
   "buildCommand": "npm run build",
