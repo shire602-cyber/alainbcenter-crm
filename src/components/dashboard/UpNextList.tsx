@@ -7,12 +7,14 @@
  * Hover reveals "Open" action (not primary CTA).
  */
 
-import { useState, useEffect, memo } from 'react'
-import { Clock, MessageSquare, Phone, Mail, ChevronRight } from 'lucide-react'
+import { useState, memo } from 'react'
+import { Clock, MessageSquare, Phone, Mail, ChevronRight, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
+import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
+import { useSmartPolling } from '@/hooks/useSmartPolling'
 
 interface UpNextItem {
   id: string
@@ -95,12 +97,6 @@ export const UpNextList = memo(function UpNextList() {
   const [items, setItems] = useState<UpNextItem[]>([])
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadItems()
-    const interval = setInterval(loadItems, 60000)
-    return () => clearInterval(interval)
-  }, [])
-
   async function loadItems() {
     try {
       const res = await fetch('/api/dashboard/do-this-now')
@@ -114,6 +110,14 @@ export const UpNextList = memo(function UpNextList() {
       setLoading(false)
     }
   }
+
+  const { isPolling, manualRefresh } = useSmartPolling({
+    fetcher: loadItems,
+    intervalMs: 60000, // 60s polling for dashboard
+    enabled: true,
+    pauseWhenHidden: true,
+    onErrorBackoff: true,
+  })
 
   if (loading) {
     return (
@@ -133,9 +137,20 @@ export const UpNextList = memo(function UpNextList() {
 
   return (
     <Card className="card-premium p-4">
-      <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-3">
-        Up Next
-      </h4>
+      <div className="flex items-center justify-between mb-3">
+        <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+          Up Next
+        </h4>
+        <Button
+          variant="ghost"
+          size="icon"
+          className="h-8 w-8 rounded-[10px]"
+          onClick={manualRefresh}
+          disabled={isPolling}
+        >
+          <RefreshCw className={cn("h-4 w-4", isPolling && "animate-spin")} />
+        </Button>
+      </div>
       <div className="space-y-2">
         {items.map((item) => (
           <UpNextItemRow key={item.id} item={item} />

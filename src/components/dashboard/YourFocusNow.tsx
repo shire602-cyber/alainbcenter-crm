@@ -9,8 +9,8 @@
  * Metadata row: channel icon, waiting time, SLA risk dot
  */
 
-import { useState, useEffect, memo } from 'react'
-import { MessageSquare, Clock, DollarSign, AlertCircle, Phone, Mail, CheckCircle2 } from 'lucide-react'
+import { useState, memo } from 'react'
+import { MessageSquare, Clock, DollarSign, AlertCircle, Phone, Mail, CheckCircle2, RefreshCw } from 'lucide-react'
 import { formatDistanceToNow, isToday, isYesterday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -18,6 +18,7 @@ import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
+import { useSmartPolling } from '@/hooks/useSmartPolling'
 
 interface FocusItem {
   id: string
@@ -59,12 +60,6 @@ export const YourFocusNow = memo(function YourFocusNow() {
   const [completed, setCompleted] = useState(false)
   const router = useRouter()
   const { showToast } = useToast()
-
-  useEffect(() => {
-    loadFocusItem()
-    const interval = setInterval(loadFocusItem, 60000)
-    return () => clearInterval(interval)
-  }, [])
 
   async function loadFocusItem() {
     try {
@@ -149,10 +144,22 @@ export const YourFocusNow = memo(function YourFocusNow() {
       <div className="flex items-start gap-6">
         {/* LEFT: Title + Preview */}
         <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 mb-3">
-            {item.serviceType && (
-              <Badge className="chip">{item.serviceType}</Badge>
-            )}
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              {item.serviceType && (
+                <Badge className="chip">{item.serviceType}</Badge>
+              )}
+            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 rounded-[10px]"
+              onClick={manualRefresh}
+              disabled={isPolling}
+            >
+              <RefreshCw className={cn("h-4 w-4", isPolling && "animate-spin")} />
+            </Button>
+          </div>
             {isSlaBreached && (
               <div className="flex items-center gap-1.5">
                 <div className="w-1.5 h-1.5 rounded-full bg-red-500" />

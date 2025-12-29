@@ -20,6 +20,7 @@ import { Badge } from '@/components/ui/badge'
 import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
+import { useSmartPolling } from '@/hooks/useSmartPolling'
 
 export default function LeadDetailPage({ 
   params
@@ -48,16 +49,20 @@ export default function LeadDetailPage({
       await loadLead(id)
     }
     init()
-    
-    // Poll for updates every 15 seconds (instant sync)
-    const interval = setInterval(() => {
+  }, [params, router])
+
+  // Smart polling for lead page (15s interval)
+  useSmartPolling({
+    fetcher: () => {
       if (leadId) {
-        loadLead(leadId)
+        return loadLead(leadId)
       }
-    }, 15000)
-    
-    return () => clearInterval(interval)
-  }, [params, router, leadId])
+    },
+    intervalMs: 15000, // 15s polling for lead detail
+    enabled: !!leadId,
+    pauseWhenHidden: true,
+    onErrorBackoff: true,
+  })
 
   async function loadLead(id: number) {
     try {

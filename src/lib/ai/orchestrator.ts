@@ -350,33 +350,39 @@ and let me know the best time for our consultant to call you.`
     }
     
     // Step 1.7: STAGE 1 QUALIFICATION GATE
-    // Stage 1 = core qualification only: name, service, nationality
-    // Before core qualification is complete, ask ONLY missing among {name, service, nationality}
-    // Fixed priority: 1) name, 2) service, 3) nationality
-    // NEVER ask any other questions until Stage 1 is complete
+    // 2) FIX CONVERSATION UX ORDER
+    // Priority order: 1) service, 2) name, 3) nationality
+    // First question should be ONLY: "How can I help you today?" (service)
+    // After user answers with service intent: Ask for name, then nationality
+    // Remove any remaining path that asks name before service, unless the user already clearly stated service in their first message.
     
     const hasCoreQualificationCheck = 
       conversationState.knownFields.name && 
       conversationState.knownFields.service && 
       conversationState.knownFields.nationality
     
-    // If Stage 1 not complete, enforce strict gate
+    // If Stage 1 not complete, enforce strict gate with NEW priority order
     if (!hasCoreQualificationCheck) {
-      // Determine which core field to ask for (priority order)
+      // Determine which core field to ask for (NEW priority order: service first)
       let nextCoreQuestion: { questionKey: string; question: string } | null = null
       
-      if (!conversationState.knownFields.name) {
+      // 1) SERVICE FIRST (unless user already stated service in first message)
+      if (!conversationState.knownFields.service) {
+        // First question: "How can I help you today?" (no service list, no examples)
+        nextCoreQuestion = {
+          questionKey: 'ASK_SERVICE',
+          question: 'How can I help you today?',
+        }
+      } 
+      // 2) NAME SECOND (only after service is known)
+      else if (!conversationState.knownFields.name) {
         nextCoreQuestion = {
           questionKey: 'ASK_NAME',
           question: 'May I know your full name, please?',
         }
-      } else if (!conversationState.knownFields.service) {
-        const name = conversationState.knownFields.name || lead.contact.fullName || ''
-        nextCoreQuestion = {
-          questionKey: 'ASK_SERVICE',
-          question: `Thanks${name ? `, ${name}` : ''}. How can I help you today?`,
-        }
-      } else if (!conversationState.knownFields.nationality) {
+      } 
+      // 3) NATIONALITY THIRD (only after service and name are known)
+      else if (!conversationState.knownFields.nationality) {
         nextCoreQuestion = {
           questionKey: 'ASK_NATIONALITY',
           question: 'What is your nationality?',
