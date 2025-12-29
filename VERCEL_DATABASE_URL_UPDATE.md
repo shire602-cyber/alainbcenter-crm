@@ -4,8 +4,9 @@
 
 From your Neon dashboard, you have:
 ```
-postgresql://neondb_owner:****@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require
+postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require&channel_binding=require
 ```
+**⚠️ SECURITY:** Never commit real credentials. Get the actual connection string from Neon Dashboard → Connection Details.
 
 **✅ This is already using the pooler endpoint** (`-pooler` in the hostname), which is perfect!
 
@@ -38,8 +39,9 @@ For better performance, add these parameters to the connection string:
 
 **Full example:**
 ```
-postgresql://neondb_owner:YOUR_PASSWORD@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&connection_limit=20&pool_timeout=20
+postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require&channel_binding=require&connection_limit=20&pool_timeout=20
 ```
+**⚠️ Replace USERNAME, PASSWORD, HOST, REGION, DATABASE with actual values from Neon Dashboard.**
 
 ### 4. Apply to All Environments
 

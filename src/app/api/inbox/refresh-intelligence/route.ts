@@ -17,6 +17,7 @@ export async function POST(req: NextRequest) {
       where: {
         channel: 'whatsapp',
         status: 'open',
+        deletedAt: null, // Exclude soft-deleted conversations
       },
       select: { id: true },
     })

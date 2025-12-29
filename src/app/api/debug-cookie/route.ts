@@ -1,8 +1,16 @@
 // Debug endpoint to check what cookies are present
+// D) LOCK DOWN: Only available in development
 import { NextRequest, NextResponse } from 'next/server'
 import { decodeSessionToken } from '@/lib/auth-session'
 
 export async function GET(req: NextRequest) {
+  // Lock down in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'This endpoint is only available in development' },
+      { status: 403 }
+    )
+  }
   const cookie = req.cookies.get('alaincrm_session')
   const allCookies = req.cookies.getAll()
   

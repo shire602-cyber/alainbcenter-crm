@@ -12,7 +12,10 @@ export async function GET(req: NextRequest) {
     const channelParam = req.nextUrl.searchParams.get('channel') || 'whatsapp'
 
     // Build where clause - if channel is 'all', don't filter by channel
-    const whereClause: any = {}
+    // Exclude soft-deleted conversations
+    const whereClause: any = {
+      deletedAt: null, // Only show non-deleted conversations
+    }
     if (channelParam && channelParam !== 'all') {
       whereClause.channel = channelParam
     }

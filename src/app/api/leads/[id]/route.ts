@@ -20,6 +20,11 @@ export async function GET(
     const resolvedParams = await params
     const leadId = parseInt(resolvedParams.id)
     
+    // Check for fallback parameters (conversationId or contactId)
+    const searchParams = req.nextUrl.searchParams
+    const conversationId = searchParams.get('conversationId')
+    const contactId = searchParams.get('contactId')
+    
     if (isNaN(leadId)) {
       return NextResponse.json(
         { error: 'Invalid lead ID' },
@@ -30,7 +35,7 @@ export async function GET(
     console.log(`[API] Fetching lead ${leadId}`)
 
     // Fetch lead with all includes - wrap in try-catch for each relation to handle missing data gracefully
-    const lead = await prisma.lead.findUnique({
+    let lead = await prisma.lead.findUnique({
       where: { id: leadId },
       include: {
         contact: true,
@@ -92,10 +97,267 @@ export async function GET(
       },
     })
 
+    // Fallback resolution if lead not found
     if (!lead) {
-      console.log(`[API] Lead ${leadId} not found in database`)
+      console.log(`[API] Lead ${leadId} not found, attempting fallback resolution...`)
+      
+      // Try to find lead by conversationId if provided
+      if (conversationId) {
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: parseInt(conversationId) },
+          select: { leadId: true, contactId: true },
+        })
+        
+        if (conversation?.leadId) {
+          console.log(`[API] Found lead ${conversation.leadId} via conversation ${conversationId}`)
+          lead = await prisma.lead.findUnique({
+            where: { id: conversation.leadId },
+            include: {
+              contact: true,
+              assignedUser: {
+                select: { id: true, name: true, email: true }
+              },
+              serviceType: true,
+              expiryItems: {
+                orderBy: { expiryDate: 'asc' },
+                include: {
+                  assignedUser: {
+                    select: { id: true, name: true, email: true }
+                  }
+                }
+              },
+              documents: {
+                orderBy: { createdAt: 'desc' },
+                include: {
+                  uploadedByUser: {
+                    select: { id: true, name: true, email: true }
+                  }
+                }
+              },
+              tasks: {
+                orderBy: [
+                  { status: 'asc' },
+                  { dueAt: 'asc' }
+                ],
+                include: {
+                  assignedUser: {
+                    select: { id: true, name: true, email: true }
+                  },
+                  createdByUser: {
+                    select: { id: true, name: true, email: true }
+                  }
+                }
+              },
+              conversations: {
+                orderBy: { createdAt: 'desc' },
+                include: {
+                  messages: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                  }
+                }
+              },
+              communicationLogs: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              },
+              messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+              },
+              notifications: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              }
+            },
+          })
+          
+          if (lead) {
+            // Return redirect hint
+            return NextResponse.json({
+              ...lead,
+              _redirect: `/leads/${lead.id}`,
+              _fallbackReason: 'Found via conversationId',
+              tasksGrouped: {
+                open: (lead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
+                done: (lead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
+                snoozed: (lead as any).tasks?.filter((t: any) => t.status === 'SNOOZED') || [],
+              }
+            })
+          }
+        }
+        
+        // Try to find latest lead by contactId from conversation
+        if (conversation?.contactId) {
+          const latestLead = await prisma.lead.findFirst({
+            where: { contactId: conversation.contactId },
+            orderBy: { createdAt: 'desc' },
+            include: {
+              contact: true,
+              assignedUser: {
+                select: { id: true, name: true, email: true }
+              },
+              serviceType: true,
+              expiryItems: {
+                orderBy: { expiryDate: 'asc' },
+                include: {
+                  assignedUser: {
+                    select: { id: true, name: true, email: true }
+                  }
+                }
+              },
+              documents: {
+                orderBy: { createdAt: 'desc' },
+                include: {
+                  uploadedByUser: {
+                    select: { id: true, name: true, email: true }
+                  }
+                }
+              },
+              tasks: {
+                orderBy: [
+                  { status: 'asc' },
+                  { dueAt: 'asc' }
+                ],
+                include: {
+                  assignedUser: {
+                    select: { id: true, name: true, email: true }
+                  },
+                  createdByUser: {
+                    select: { id: true, name: true, email: true }
+                  }
+                }
+              },
+              conversations: {
+                orderBy: { createdAt: 'desc' },
+                include: {
+                  messages: {
+                    orderBy: { createdAt: 'desc' },
+                    take: 1,
+                  }
+                }
+              },
+              communicationLogs: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              },
+              messages: {
+                orderBy: { createdAt: 'desc' },
+                take: 20,
+              },
+              notifications: {
+                orderBy: { createdAt: 'desc' },
+                take: 10,
+              }
+            },
+          })
+          
+          if (latestLead) {
+            console.log(`[API] Found latest lead ${latestLead.id} via contactId ${conversation.contactId}`)
+            return NextResponse.json({
+              ...latestLead,
+              _redirect: `/leads/${latestLead.id}`,
+              _fallbackReason: 'Found latest lead via contactId',
+              tasksGrouped: {
+                open: (latestLead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
+                done: (latestLead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
+                snoozed: (latestLead as any).tasks?.filter((t: any) => t.status === 'SNOOZED') || [],
+              }
+            })
+          }
+        }
+      }
+      
+      // Try to find latest lead by contactId if provided directly
+      if (contactId) {
+        const latestLead = await prisma.lead.findFirst({
+          where: { contactId: parseInt(contactId) },
+          orderBy: { createdAt: 'desc' },
+          include: {
+            contact: true,
+            assignedUser: {
+              select: { id: true, name: true, email: true }
+            },
+            serviceType: true,
+            expiryItems: {
+              orderBy: { expiryDate: 'asc' },
+              include: {
+                assignedUser: {
+                  select: { id: true, name: true, email: true }
+                }
+              }
+            },
+            documents: {
+              orderBy: { createdAt: 'desc' },
+              include: {
+                uploadedByUser: {
+                  select: { id: true, name: true, email: true }
+                }
+              }
+            },
+            tasks: {
+              orderBy: [
+                { status: 'asc' },
+                { dueAt: 'asc' }
+              ],
+              include: {
+                assignedUser: {
+                  select: { id: true, name: true, email: true }
+                },
+                createdByUser: {
+                  select: { id: true, name: true, email: true }
+                }
+              }
+            },
+            conversations: {
+              orderBy: { createdAt: 'desc' },
+              include: {
+                messages: {
+                  orderBy: { createdAt: 'desc' },
+                  take: 1,
+                }
+              }
+            },
+            communicationLogs: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            },
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 20,
+            },
+            notifications: {
+              orderBy: { createdAt: 'desc' },
+              take: 10,
+            }
+          },
+        })
+        
+        if (latestLead) {
+          console.log(`[API] Found latest lead ${latestLead.id} via contactId ${contactId}`)
+          return NextResponse.json({
+            ...latestLead,
+            _redirect: `/leads/${latestLead.id}`,
+            _fallbackReason: 'Found latest lead via contactId',
+            tasksGrouped: {
+              open: (latestLead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
+              done: (latestLead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
+              snoozed: (latestLead as any).tasks?.filter((t: any) => t.status === 'SNOOZED') || [],
+            }
+          })
+        }
+      }
+      
+      // No fallback found
+      console.log(`[API] Lead ${leadId} not found in database, no fallback available`)
       return NextResponse.json(
-        { error: 'Lead not found', leadId },
+        { 
+          error: 'Lead not found', 
+          leadId,
+          _fallbackAttempted: true,
+          _conversationId: conversationId || null,
+          _contactId: contactId || null,
+        },
         { status: 404 }
       )
     }

@@ -1,8 +1,8 @@
 /**
  * DELETE /api/admin/conversations/[id]/delete
  * 
- * Admin-only endpoint to delete a conversation and all its messages
- * Used for testing purposes
+ * Admin-only endpoint to soft-delete a conversation
+ * Sets deletedAt timestamp instead of hard deleting to prevent FK constraint violations
  */
 
 import { NextRequest, NextResponse } from 'next/server'
@@ -26,7 +26,7 @@ export async function DELETE(
       )
     }
 
-    // Check if conversation exists
+    // Check if conversation exists and is not already deleted
     const conversation = await prisma.conversation.findUnique({
       where: { id: conversationId },
       include: {
@@ -43,98 +43,33 @@ export async function DELETE(
       )
     }
 
-    // Delete all related data in transaction
-    // IMPORTANT: Delete in correct order to respect foreign key constraints
-    await prisma.$transaction(async (tx) => {
-      // First, get all message IDs for this conversation (needed for MessageStatusEvent deletion)
-      const messages = await tx.message.findMany({
-        where: { conversationId: conversationId },
-        select: { id: true },
-      })
-      const messageIds = messages.map(m => m.id)
+    if (conversation.deletedAt) {
+      return NextResponse.json(
+        { ok: false, error: 'Conversation is already archived' },
+        { status: 400 }
+      )
+    }
 
-      // Delete message status events FIRST (they reference messages via messageId)
-      if (messageIds.length > 0) {
-        await tx.messageStatusEvent.deleteMany({
-          where: { 
-            OR: [
-              { conversationId: conversationId },
-              { messageId: { in: messageIds } }
-            ]
-          },
-        })
-      } else {
-        // Also delete by conversationId if no messages found
-        await tx.messageStatusEvent.deleteMany({
-          where: { conversationId: conversationId },
-        })
-      }
-
-      // Now delete messages (MessageStatusEvents are already deleted)
-      await tx.message.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete communication logs
-      await tx.communicationLog.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete AI drafts
-      await tx.aIDraft.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete AI action logs
-      await tx.aIActionLog.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete tasks associated with conversation
-      await tx.task.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete notifications
-      await tx.notification.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete outbound message logs (they reference conversation via conversationId)
-      await (tx as any).outboundMessageLog.deleteMany({
-        where: { conversationId: conversationId },
-      })
-
-      // Delete chat messages (if ChatMessage model exists)
-      // Note: ChatMessage doesn't have conversationId, so we delete by contactId
-      if (conversation.contactId) {
-        try {
-          await tx.chatMessage.deleteMany({
-            where: { contactId: conversation.contactId },
-          })
-        } catch (e: any) {
-          // ChatMessage might not exist - ignore silently
-          console.warn('Could not delete ChatMessage (may not exist):', e.message)
-        }
-      }
-
-      // Finally, delete the conversation
-      await tx.conversation.delete({
-        where: { id: conversationId },
-      })
+    // Soft delete: set deletedAt timestamp and status
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: {
+        deletedAt: new Date(),
+        status: 'deleted',
+      },
     })
 
-    console.log(`🗑️ Admin ${user.email} deleted conversation ${conversationId} and ${conversation.messages.length} messages`)
+    console.log(`🗑️ Admin ${user.email} archived conversation ${conversationId} (soft delete)`)
 
     return NextResponse.json({
       ok: true,
-      message: `Deleted conversation and ${conversation.messages.length} messages`,
+      message: `Conversation archived successfully`,
       deletedMessages: conversation.messages.length,
     })
   } catch (error: any) {
-    console.error('Error deleting conversation:', error)
+    console.error('Error archiving conversation:', error)
     return NextResponse.json(
-      { ok: false, error: error.message || 'Failed to delete conversation' },
+      { ok: false, error: error.message || 'Failed to archive conversation' },
       { status: 500 }
     )
   }

@@ -10,8 +10,13 @@ Copy these environment variables to Vercel Dashboard → Project Settings → En
 
 ### Database Connection
 ```
-DATABASE_URL=postgresql://neondb_owner:npg_o3Pqr4FnOmsT@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require
+DATABASE_URL=postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require
+DIRECT_URL=postgresql://USERNAME:PASSWORD@HOST.REGION.aws.neon.tech/DATABASE?sslmode=require
 ```
+**⚠️ SECURITY:** 
+- Get actual connection strings from Neon Dashboard → Connection Details
+- Never commit real credentials to Git
+- Use Vercel Environment Variables only
 
 ### Application Settings
 ```

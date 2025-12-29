@@ -797,6 +797,45 @@ For issues or questions, check:
 
 ---
 
+## 🔒 Security
+
+### ⚠️ CRITICAL: Never Commit Secrets
+
+**This repository is public. Never commit:**
+- Database connection strings with passwords
+- API keys or tokens
+- Authentication secrets
+- Any credentials or sensitive data
+
+### Environment Variables
+
+All secrets must be stored in environment variables:
+- **Local development:** Use `.env.local` (already in `.gitignore`)
+- **Production:** Use Vercel Environment Variables
+- **See `.env.example`** for required variables (no real values)
+
+### If Secrets Were Exposed
+
+If you discover exposed secrets in Git history:
+1. **Immediately rotate/regenerate** all exposed credentials:
+   - Database passwords (Neon Dashboard → Reset Password)
+   - API keys (regenerate in provider dashboard)
+   - Authentication secrets (generate new AUTH_SECRET)
+2. **Update Vercel Environment Variables** with new values
+3. **Redeploy** the application
+4. **Remove secrets from Git history** (if needed, use `git filter-branch` or BFG Repo-Cleaner)
+
+### Required Environment Variables
+
+See `.env.example` for the complete list. Required for production:
+- `DATABASE_URL` - PostgreSQL connection string (pooler endpoint)
+- `DIRECT_URL` - PostgreSQL direct connection (for migrations)
+- `AUTH_SECRET` - Authentication secret (generate secure random string)
+- `CRON_SECRET` - Secret for cron job authentication
+- `JOB_RUNNER_TOKEN` - Token for job runner authentication
+
+---
+
 ## 🚀 Production Deployment
 
 ### Environment Variables

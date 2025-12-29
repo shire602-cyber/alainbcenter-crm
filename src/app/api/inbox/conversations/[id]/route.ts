@@ -104,6 +104,9 @@ export async function GET(
       )
     }
 
+    // Check if conversation is archived (soft-deleted)
+    const isArchived = conversation.deletedAt !== null
+
     // Format messages for frontend
     const formattedMessages = conversation.messages.map((msg) => ({
       id: msg.id,
@@ -197,6 +200,8 @@ export async function GET(
         lastMessageAt: conversation.lastMessageAt.toISOString(),
         unreadCount: conversation.unreadCount,
         createdAt: conversation.createdAt.toISOString(),
+        deletedAt: conversation.deletedAt?.toISOString() || null,
+        isArchived,
         messages: formattedMessages,
         lastMessage: lastMessage
           ? {

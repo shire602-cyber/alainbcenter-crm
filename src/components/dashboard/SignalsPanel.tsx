@@ -15,7 +15,7 @@
  * - Premium micro-interactions = feels alive, not dead UI
  */
 
-import { useState, memo } from 'react'
+import { useState, memo, useEffect } from 'react'
 import { Calendar, Hourglass, AlertTriangle, ChevronRight, RefreshCw } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
@@ -57,13 +57,24 @@ function SignalModule({
   onRefresh?: () => void
   isRefreshing?: boolean
 }) {
+  const [pulse, setPulse] = useState(false)
+
+  // Animate pulse on state change (not looping)
+  useEffect(() => {
+    if (items.length > 0) {
+      setPulse(true)
+      const timer = setTimeout(() => setPulse(false), 600)
+      return () => clearTimeout(timer)
+    }
+  }, [items.length])
+
   if (items.length === 0) {
     return (
-      <Card className="card-premium p-4">
+      <Card className="card-premium inset-card">
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Icon className="h-4 w-4 text-slate-400" />
-            <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+            <h4 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
               {title}
             </h4>
           </div>
@@ -71,7 +82,7 @@ function SignalModule({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-[10px]"
+              className="h-8 w-8 rounded-lg btn-pressable"
               onClick={onRefresh}
               disabled={isRefreshing}
             >
@@ -89,14 +100,17 @@ function SignalModule({
   }
 
   return (
-    <Card className="card-premium p-4">
+    <Card className={cn(
+      "card-premium inset-card",
+      pulse && "ring-2 ring-blue-500/20 ring-offset-2"
+    )}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
           <Icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+          <h4 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
             {title}
           </h4>
-          <Badge className="chip">
+          <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
             {count}
           </Badge>
         </div>
@@ -105,7 +119,7 @@ function SignalModule({
             <Button
               variant="ghost"
               size="icon"
-              className="h-8 w-8 rounded-[10px]"
+              className="h-8 w-8 rounded-lg btn-pressable"
               onClick={onRefresh}
               disabled={isRefreshing}
             >

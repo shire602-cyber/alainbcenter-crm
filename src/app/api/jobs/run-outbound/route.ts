@@ -161,11 +161,80 @@ export async function GET(req: NextRequest) {
         const outboundKeyComponents = `${conversation.id}:${inboundProviderMessageId || 'unknown'}:${questionKey || 'reply'}`
         console.log(`📤 [JOB-RUNNER] Sending outbound for job ${job.id} (keyComponents: ${outboundKeyComponents}, requestId: ${requestId})`)
         
+        // Use phoneNormalized if available, otherwise fallback to phone
+        // This ensures E.164 format for WhatsApp sending
+        let phoneForOutbound = conversation.contact.phoneNormalized || conversation.contact.phone
+        
+        // Validate phone format - must be E.164 (starts with +) or digits-only international
+        if (!phoneForOutbound) {
+          throw new Error(`No phone number available for outbound. Contact ID: ${conversation.contact.id}`)
+        }
+        
+        // If phone doesn't start with +, try to normalize it
+        if (!phoneForOutbound.startsWith('+')) {
+          try {
+            const { normalizeInboundPhone } = await import('@/lib/phone-inbound')
+            phoneForOutbound = normalizeInboundPhone(phoneForOutbound)
+            console.log(`✅ [JOB-RUNNER] Normalized phone for outbound: ${conversation.contact.phone} → ${phoneForOutbound}`)
+            
+            // Update contact with normalized phone for future use
+            await prisma.contact.update({
+              where: { id: conversation.contact.id },
+              data: { phoneNormalized: phoneForOutbound },
+            })
+          } catch (normalizeError: any) {
+            // Log structured error and mark job as failed
+            console.error(`❌ [JOB-RUNNER] Failed to normalize phone for outbound`, {
+              conversationId: conversation.id,
+              inboundProviderMessageId: job.inboundProviderMessageId,
+              rawFrom: conversation.contact.phone,
+              normalizedPhoneAttempt: phoneForOutbound,
+              error: normalizeError.message,
+              jobId: job.id,
+            })
+            
+            // Mark job as failed with reason
+            await prisma.outboundJob.update({
+              where: { id: job.id },
+              data: {
+                status: 'failed',
+                error: `INVALID_PHONE: ${normalizeError.message}`,
+                completedAt: new Date(),
+              },
+            })
+            
+            // Create task for human follow-up (optional)
+            try {
+              await prisma.task.create({
+                data: {
+                  leadId: conversation.lead.id,
+                  conversationId: conversation.id,
+                  title: `Invalid phone number - manual follow-up needed`,
+                  type: 'OTHER',
+                  status: 'OPEN',
+                  dueAt: new Date(),
+                },
+              })
+              console.log(`✅ [JOB-RUNNER] Created follow-up task for invalid phone (job ${job.id})`)
+            } catch (taskError: any) {
+              console.warn(`⚠️ [JOB-RUNNER] Failed to create follow-up task:`, taskError.message)
+            }
+            
+            failed.push(job.id)
+            continue // Skip to next job
+          }
+        }
+        
+        // Final validation: must be E.164 format
+        if (!phoneForOutbound.startsWith('+') || !/^\+[1-9]\d{1,14}$/.test(phoneForOutbound)) {
+          throw new Error(`Invalid phone number format for outbound: ${phoneForOutbound}. Must be E.164 format (e.g., +260777711059). Contact ID: ${conversation.contact.id}`)
+        }
+        
         const sendResult = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
           contactId: conversation.contact.id,
           leadId: conversation.lead.id,
-          phone: conversation.contact.phone,
+          phone: phoneForOutbound,
           text: orchestratorResult.replyText,
           provider: 'whatsapp',
           triggerProviderMessageId: inboundProviderMessageId,

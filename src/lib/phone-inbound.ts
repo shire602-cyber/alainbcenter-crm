@@ -1,41 +1,81 @@
 /**
  * Phone number normalization for inbound WhatsApp messages
  * Meta sends phone numbers without + prefix, we need to normalize them
+ * 
+ * FIX: Handle digits-only international numbers (e.g., "260777711059" → "+260777711059")
+ * Uses libphonenumber-js for robust validation after prefixing with +
  */
+
+import { parsePhoneNumber, isValidPhoneNumber } from 'libphonenumber-js'
 
 /**
  * Normalize phone number from inbound WhatsApp webhook
- * Meta sends phone as "971501234567" (no + prefix)
- * Converts to E.164: "+971501234567"
+ * Meta sends phone as digits-only (e.g., "260777711059" or "971501234567")
+ * Converts to E.164: "+260777711059" or "+971501234567"
+ * 
+ * Requirements:
+ * - If digits-only, prefix with +
+ * - Validate with libphonenumber-js
+ * - Throw error if invalid (caller should handle gracefully)
  */
 export function normalizeInboundPhone(phone: string): string {
   if (!phone || typeof phone !== 'string') {
     throw new Error('Phone number is required and must be a string')
   }
 
-  let cleaned = phone.replace(/[^\d]/g, '')
+  // Trim whitespace
+  const trimmed = phone.trim()
 
-  cleaned = cleaned.replace(/^0+/, '')
-
-  if (cleaned.length >= 10 && cleaned.length <= 15) {
-    return '+' + cleaned
+  if (!trimmed) {
+    throw new Error('Phone number is empty after trimming')
   }
 
-  if (cleaned.length === 9 && cleaned.startsWith('5')) {
-    return '+971' + cleaned
+  // Remove all non-digit characters except +
+  let cleaned = trimmed.replace(/[^\d+]/g, '')
+
+  // If it already starts with +, validate as-is
+  if (cleaned.startsWith('+')) {
+    try {
+      const phoneNumber = parsePhoneNumber(cleaned)
+      if (phoneNumber.isValid()) {
+        return phoneNumber.number // Returns E.164 format
+      }
+      throw new Error(`Invalid phone number format: ${phone}`)
+    } catch (error: any) {
+      throw new Error(`Failed to normalize phone number "${phone}": ${error.message}`)
+    }
   }
 
-  if (cleaned.length === 10 && cleaned.startsWith('05')) {
-    return '+971' + cleaned.substring(1)
+  // If digits-only, prefix with + and validate
+  // This handles international numbers like "260777711059" (Zambia) or "971501234567" (UAE)
+  if (/^\d+$/.test(cleaned)) {
+    const withPlus = '+' + cleaned
+    
+    try {
+      // Try to parse without default country (let libphonenumber detect country code)
+      const phoneNumber = parsePhoneNumber(withPlus)
+      if (phoneNumber.isValid()) {
+        return phoneNumber.number // Returns E.164 format
+      }
+      throw new Error(`Invalid phone number format: ${phone}`)
+    } catch (error: any) {
+      throw new Error(`Failed to normalize phone number "${phone}": ${error.message}`)
+    }
   }
 
-  if (cleaned.length >= 8 && cleaned.length <= 10) {
-    return '+971' + cleaned
+  // If it contains non-digit characters (but not +), try to parse as-is
+  try {
+    const phoneNumber = parsePhoneNumber(cleaned)
+    if (phoneNumber.isValid()) {
+      return phoneNumber.number
+    }
+  } catch {
+    // Continue to final error
   }
 
   throw new Error(
     `Unable to normalize inbound phone number "${phone}". ` +
-    `Expected format: E.164 without + prefix (e.g., 971501234567)`
+    `Expected format: digits-only international number (e.g., 260777711059) or E.164 (e.g., +260777711059)`
   )
 }
 

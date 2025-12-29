@@ -35,6 +35,7 @@ export default function LeadDetailPage({
   const [infoSheetOpen, setInfoSheetOpen] = useState(false)
   const [actionSheetOpen, setActionSheetOpen] = useState(false)
   const [composerOpen, setComposerOpen] = useState(true)
+  const [fallbackInfo, setFallbackInfo] = useState<{ conversationId?: string | null; contactId?: string | null } | null>(null)
   const router = useRouter()
 
   useEffect(() => {
@@ -66,10 +67,35 @@ export default function LeadDetailPage({
 
   async function loadLead(id: number) {
     try {
-      const res = await fetch(`/api/leads/${id}`)
+      // Get conversationId or contactId from URL search params for fallback
+      const searchParams = new URLSearchParams(window.location.search)
+      const conversationId = searchParams.get('conversationId')
+      const contactId = searchParams.get('contactId')
+      
+      let url = `/api/leads/${id}`
+      if (conversationId) url += `?conversationId=${conversationId}`
+      else if (contactId) url += `?contactId=${contactId}`
+      
+      const res = await fetch(url)
       if (res.ok) {
         const data = await res.json()
-        setLead(data.lead)
+        
+        // Check if API returned a redirect hint (fallback resolution)
+        if (data._redirect && data._redirect !== `/leads/${id}`) {
+          console.log(`[Lead Page] Redirecting to ${data._redirect} (${data._fallbackReason})`)
+          router.replace(data._redirect)
+          return
+        }
+        
+        setLead(data)
+      } else if (res.status === 404) {
+        const errorData = await res.json()
+        setLead(null)
+        // Store fallback info for empty state
+        setFallbackInfo({
+          conversationId: errorData._conversationId,
+          contactId: errorData._contactId,
+        })
       }
     } catch (error) {
       console.error('Failed to load lead:', error)
@@ -144,15 +170,53 @@ export default function LeadDetailPage({
     )
   }
 
-  if (!lead) {
+  if (!lead && !loading) {
     return (
       <MainLayout>
-        <div className="flex items-center justify-center h-screen">
-          <div className="text-center">
-            <p className="text-slate-500">Lead not found</p>
-            <Button onClick={() => router.push('/leads')} className="mt-4">
-              Back to Leads
-            </Button>
+        <div className="flex items-center justify-center h-screen bg-app">
+          <div className="text-center max-w-md mx-auto p-6">
+            <div className="mb-6">
+              <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+                <Info className="h-8 w-8 text-slate-400" />
+              </div>
+              <h2 className="text-h1 font-semibold text-slate-900 dark:text-slate-100 mb-2">
+                Lead Not Found
+              </h2>
+              <p className="text-body muted-text">
+                The lead you're looking for doesn't exist or may have been removed.
+              </p>
+            </div>
+            
+            <div className="space-y-3">
+              <Button 
+                onClick={() => router.push('/leads')} 
+                className="w-full"
+                variant="default"
+              >
+                Back to Leads
+              </Button>
+              
+              {fallbackInfo?.conversationId && (
+                <Button 
+                  onClick={() => router.push(`/inbox?conversationId=${fallbackInfo.conversationId}`)} 
+                  className="w-full"
+                  variant="outline"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  Open Inbox Conversation
+                </Button>
+              )}
+              
+              {fallbackInfo?.contactId && (
+                <Button 
+                  onClick={() => router.push(`/leads/new?contactId=${fallbackInfo.contactId}`)} 
+                  className="w-full"
+                  variant="outline"
+                >
+                  Create New Lead
+                </Button>
+              )}
+            </div>
           </div>
         </div>
       </MainLayout>
@@ -349,12 +413,10 @@ export default function LeadDetailPage({
         )}>
           {/* Left: Lead DNA */}
           <div className={cn(
-            "w-80 border-r border-slate-200/60 dark:border-slate-800/60 bg-card flex-shrink-0 overflow-y-auto transition-opacity",
+            "w-80 border-r border-subtle bg-card flex-shrink-0 overflow-y-auto transition-opacity",
             actionPending && "opacity-50"
           )}>
-            <div className="p-6">
-              <LeadDNA lead={lead} />
-            </div>
+            <LeadDNA lead={lead} />
           </div>
 
           {/* Center: Conversation */}
@@ -371,24 +433,22 @@ export default function LeadDetailPage({
 
           {/* Right: Next Best Action */}
           <div className={cn(
-            "w-96 border-l border-slate-200/60 dark:border-slate-800/60 bg-card flex-shrink-0 overflow-y-auto",
+            "w-96 border-l border-subtle bg-card flex-shrink-0 overflow-y-auto",
             actionPending && "ring-2 ring-primary/20 ring-offset-2"
           )}>
-            <div className="p-6">
-              <NextBestActionPanel
-                leadId={leadId}
-                lead={lead}
-                tasks={lead.tasks || []}
-                onActionPending={setActionPending}
-                onComposerFocus={() => {
-                  const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-                  if (composer) {
-                    composer.focus()
-                    composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  }
-                }}
-              />
-            </div>
+            <NextBestActionPanel
+              leadId={leadId}
+              lead={lead}
+              tasks={lead.tasks || []}
+              onActionPending={setActionPending}
+              onComposerFocus={() => {
+                const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+                if (composer) {
+                  composer.focus()
+                  composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                }
+              }}
+            />
           </div>
         </div>
       </div>

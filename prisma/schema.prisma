@@ -345,6 +345,7 @@ model Conversation {
   qualificationStage     String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
   questionsAskedCount    Int       @default(0) // Track total questions asked (max 5 for business setup)
   knownFields            String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
+  deletedAt              DateTime? // Soft delete timestamp
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
 
@@ -361,12 +362,18 @@ model Conversation {
   replyEngineLogs      ReplyEngineLog[]
   outboundJobs         OutboundJob[]
 
+  // C) CONVERSATION UNIQUENESS: One conversation per (contactId, channel, externalThreadId)
+  // PostgreSQL handles NULL in unique constraints: multiple NULLs are allowed
+  // So: (contactId=1, channel='whatsapp', externalThreadId=NULL) can exist multiple times
+  // But: (contactId=1, channel='whatsapp', externalThreadId='thread123') must be unique
+  // For null externalThreadId, we use a fallback key in upsertConversation()
   @@unique([contactId, channel])
   @@index([channel, lastMessageAt])
   @@index([contactId])
   @@index([assignedUserId, lastMessageAt])
   @@index([externalId])
   @@index([channel, contactId, externalThreadId]) // For upsert logic with externalThreadId
+  // Note: Partial unique index for externalThreadId will be added via migration
 }
 
 model Message {

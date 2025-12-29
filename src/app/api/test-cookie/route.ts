@@ -1,7 +1,15 @@
 // Simple test endpoint to verify browser accepts cookies
+// D) LOCK DOWN: Only available in development
 import { NextRequest, NextResponse } from 'next/server'
 
 export async function GET(req: NextRequest) {
+  // Lock down in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'This endpoint is only available in development' },
+      { status: 403 }
+    )
+  }
   const response = NextResponse.json({ 
     message: 'Cookie test',
     existingCookies: req.cookies.getAll().map(c => c.name)

@@ -8,11 +8,12 @@
  */
 
 import { useState, useEffect, memo, useCallback } from 'react'
-import { FocusHeroCard } from './FocusHeroCard'
+import { FocusHeroCard, FocusHeroCardSkeleton } from './FocusHeroCard'
 import { UpNextList } from './UpNextList'
 import { SignalsPanel } from './SignalsPanel'
 import { MomentumStrip } from './MomentumStrip'
 import { CompletedTodayCard } from './CompletedTodayCard'
+import { JoyStrip } from './JoyStrip'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
 import type { CommandCenterData } from '@/lib/dashboard/commandCenterTypes'
 import type { SignalsData } from '@/lib/dashboard/signals'
@@ -50,7 +51,7 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
   if (loading) {
     return (
       <div className="space-y-4">
-        <div className="h-48 bg-slate-200 dark:bg-slate-800 rounded-[14px] animate-pulse" />
+        <FocusHeroCardSkeleton />
         <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-[14px] animate-pulse" />
         <div className="grid md:grid-cols-2 gap-4">
           <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded-[14px] animate-pulse" />
@@ -85,6 +86,7 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
         </div>
         <div className="space-y-4">
           <MomentumStrip momentum={data.momentum} />
+          <JoyStrip />
           <CompletedTodayCard
             tasksDone={data.completedToday.tasksDone}
             messagesSent={data.completedToday.messagesSent}
