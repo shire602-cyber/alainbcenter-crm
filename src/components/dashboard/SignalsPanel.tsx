@@ -112,15 +112,16 @@ function SignalModule({
               <RefreshCw className={cn("h-4 w-4", isRefreshing && "animate-spin")} />
             </Button>
           )}
-        {total > count && (
-          <Link
-            href={`/leads?filter=${iconType}`}
-            className="text-meta text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
-          >
-            View all ({total})
-            <ChevronRight className="h-3 w-3" />
-          </Link>
-        )}
+          {total > count && (
+            <Link
+              href={`/leads?filter=${iconType}`}
+              className="text-meta text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+            >
+              View all ({total})
+              <ChevronRight className="h-3 w-3" />
+            </Link>
+          )}
+        </div>
       </div>
       <div className="space-y-1.5">
         {items.map((item) => (

@@ -27,6 +27,7 @@ import { Input } from '@/components/ui/input'
 import { Card } from '@/components/ui/card'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
+import { getServiceDisplayLabel } from '@/lib/services/labels'
 
 interface LeadDNAProps {
   lead: {
@@ -386,8 +387,19 @@ function SponsorSearch({ lead, onUpdate }: { lead: LeadDNAProps['lead']; onUpdat
 
 export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
   const contact = lead.contact
-  const serviceName = lead.serviceType?.name || lead.serviceTypeEnum || lead.requestedServiceRaw || 'Not specified'
-  const channels = lead.conversations?.map(c => c.channel) || []
+  
+  // Use service label map for consistent display (even if serviceTypeId is null)
+  const serviceName = useMemo(() => {
+    return getServiceDisplayLabel(
+      lead.serviceTypeEnum,
+      lead.serviceType?.name,
+      lead.requestedServiceRaw
+    )
+  }, [lead.serviceTypeEnum, lead.serviceType?.name, lead.requestedServiceRaw])
+  
+  const channels = useMemo(() => {
+    return lead.conversations?.map(c => c.channel) || []
+  }, [lead.conversations])
 
   return (
     <div className="h-full overflow-y-auto">

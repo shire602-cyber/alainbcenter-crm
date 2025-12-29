@@ -6,6 +6,9 @@
  * Retries with exponential backoff on transient errors.
  */
 
+// Ensure Node.js runtime for Prisma compatibility
+export const runtime = 'nodejs'
+
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { generateAIReply } from '@/lib/ai/orchestrator'

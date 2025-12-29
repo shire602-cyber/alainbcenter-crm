@@ -13,10 +13,9 @@ import {
 import { format, differenceInDays, parseISO, subDays } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
-import { YourFocusNow } from '@/components/dashboard/YourFocusNow'
 import { UpNextList } from '@/components/dashboard/UpNextList'
 import { MomentumStrip } from '@/components/dashboard/MomentumStrip'
-import { SignalsPanel } from '@/components/dashboard/SignalsPanel'
+import { DashboardPanels, DashboardSignalsPanel } from '@/components/dashboard/DashboardPanels'
 
 const STAGES = [
   { value: 'NEW', label: 'New', color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' },
@@ -348,7 +347,7 @@ export default async function DashboardPage() {
             {/* FOCUS STACK - Main column (2/3 width) */}
             <div className="md:col-span-2 space-y-4">
               {/* 1. Your Focus Now - EXACTLY 1 item, EXACTLY 1 CTA */}
-              <YourFocusNow />
+              <DashboardPanels />
               
               {/* 2. Up Next - Max 3 items, no primary CTAs */}
               <UpNextList />
@@ -360,7 +359,7 @@ export default async function DashboardPage() {
             {/* SIGNALS PANEL - Right column (1/3 width) */}
             <div className="md:col-span-1">
               {/* 3. Signals Panel - Renewals (max 5), Waiting on Customer (max 5), Alerts (max 5) */}
-              <SignalsPanel />
+              <DashboardSignalsPanel />
             </div>
           </div>
         </div>

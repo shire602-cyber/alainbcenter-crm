@@ -3,67 +3,94 @@
 /**
  * MOMENTUM STRIP - TODAY'S IMPACT
  * 
- * Premium metric pills with subtle celebration
- * Empty state: "All caught up" (positive, not empty)
+ * Premium metric pills that feel like a live cockpit but calm.
+ * Each pill is pressable and navigates to filtered views.
+ * 
+ * UX RATIONALE:
+ * - 4 pills max = scannable, not overwhelming
+ * - Pressable = actionable, not just display
+ * - Hover lift = feels alive
+ * - Empty state = positive, not scary
  */
 
 import { useState, useEffect, memo } from 'react'
-import { CheckCircle2, MessageSquare, FileText, TrendingUp, Sparkles } from 'lucide-react'
+import { MessageSquare, FileText, Calendar, TrendingUp, Sparkles } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
+import { useRouter } from 'next/navigation'
+import { useSmartPolling } from '@/hooks/useSmartPolling'
 
 interface MomentumMetrics {
-  tasksCompleted?: number
-  messagesSent?: number
-  quotesSent?: number
-  revenueClosed?: number
+  repliesToday: number
+  quotesToday: number
+  renewals7d: number
+  revenuePotentialToday: number | null
 }
 
 function MetricPill({ 
   icon, 
   value, 
   label, 
+  href,
   color = 'blue' 
 }: { 
   icon: React.ReactNode
-  value: number
+  value: number | string
   label: string
-  color?: 'blue' | 'green' | 'purple'
+  href?: string
+  color?: 'blue' | 'green' | 'purple' | 'amber'
 }) {
+  const router = useRouter()
+  const [hovered, setHovered] = useState(false)
+
   const colorClasses = {
-    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400',
-    green: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400',
-    purple: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400',
+    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60',
+    green: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border-green-200/60 dark:border-green-800/60',
+    purple: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 border-purple-200/60 dark:border-purple-800/60',
+    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
+  }
+
+  const handleClick = () => {
+    if (href) {
+      router.push(href)
+    }
   }
 
   return (
-    <div className={cn(
-      "pill flex items-center gap-2",
-      colorClasses[color]
-    )}>
+    <div
+      className={cn(
+        "pill flex items-center gap-2 px-3 py-2 border transition-all duration-200",
+        colorClasses[color],
+        href && "cursor-pointer",
+        hovered && href && "-translate-y-0.5 shadow-md",
+        href && "active:scale-95"
+      )}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onClick={handleClick}
+    >
       {icon}
-      <span className="font-semibold">{value}</span>
-      <span className="text-[11px] opacity-80">{label}</span>
+      <span className="font-semibold text-body">{value}</span>
+      <span className="text-meta opacity-80">{label}</span>
     </div>
   )
 }
 
 export const MomentumStrip = memo(function MomentumStrip() {
-  const [metrics, setMetrics] = useState<MomentumMetrics>({})
+  const [metrics, setMetrics] = useState<MomentumMetrics>({
+    repliesToday: 0,
+    quotesToday: 0,
+    renewals7d: 0,
+    revenuePotentialToday: null,
+  })
   const [loading, setLoading] = useState(true)
 
-  useEffect(() => {
-    loadMetrics()
-    const interval = setInterval(loadMetrics, 60000)
-    return () => clearInterval(interval)
-  }, [])
-
-  async function loadMetrics() {
+  const loadMetrics = async () => {
     try {
-      const res = await fetch('/api/dashboard/wins-today')
+      const res = await fetch('/api/dashboard/momentum')
       if (res.ok) {
         const data = await res.json()
-        setMetrics(data.metrics || {})
+        setMetrics(data)
       }
     } catch (error) {
       console.error('Failed to load momentum metrics:', error)
@@ -72,23 +99,34 @@ export const MomentumStrip = memo(function MomentumStrip() {
     }
   }
 
+  const { isPolling } = useSmartPolling({
+    fetcher: loadMetrics,
+    intervalMs: 60000, // 60s polling
+    enabled: true,
+    pauseWhenHidden: true,
+    onErrorBackoff: true,
+  })
+
+  useEffect(() => {
+    loadMetrics()
+  }, [])
+
   if (loading) {
     return (
       <Card className="card-premium p-4">
-        <div className="flex items-center gap-3">
-          {[1, 2, 3].map((i) => (
-            <div key={i} className="h-8 w-24 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+        <div className="flex items-center gap-3 flex-wrap">
+          {[1, 2, 3, 4].map((i) => (
+            <div key={i} className="h-10 w-28 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
           ))}
         </div>
       </Card>
     )
   }
 
-  const tasks = metrics.tasksCompleted || 0
-  const messages = metrics.messagesSent || 0
-  const quotes = metrics.quotesSent || 0
-  const revenue = metrics.revenueClosed || 0
-  const hasMetrics = tasks > 0 || messages > 0 || quotes > 0 || revenue > 0
+  const hasMetrics = metrics.repliesToday > 0 || 
+                     metrics.quotesToday > 0 || 
+                     metrics.renewals7d > 0 || 
+                     (metrics.revenuePotentialToday !== null && metrics.revenuePotentialToday > 0)
 
   if (!hasMetrics) {
     return (
@@ -96,7 +134,7 @@ export const MomentumStrip = memo(function MomentumStrip() {
         <div className="flex flex-col items-center gap-2">
           <Sparkles className="h-5 w-5 text-slate-400" />
           <p className="text-body font-medium text-slate-700 dark:text-slate-300">
-            All caught up
+            Getting started…
           </p>
           <p className="text-meta muted-text">
             Your impact today will appear here
@@ -109,35 +147,47 @@ export const MomentumStrip = memo(function MomentumStrip() {
   return (
     <Card className="card-premium p-4">
       <div className="flex items-center gap-3 flex-wrap">
-        {tasks > 0 && (
-          <MetricPill
-            icon={<CheckCircle2 className="h-3.5 w-3.5" />}
-            value={tasks}
-            label="tasks"
-            color="green"
-          />
-        )}
-        {messages > 0 && (
+        {metrics.repliesToday > 0 && (
           <MetricPill
             icon={<MessageSquare className="h-3.5 w-3.5" />}
-            value={messages}
-            label="messages"
+            value={metrics.repliesToday}
+            label="replies"
+            href="/inbox"
             color="blue"
           />
         )}
-        {quotes > 0 && (
+        {metrics.quotesToday > 0 && (
           <MetricPill
             icon={<FileText className="h-3.5 w-3.5" />}
-            value={quotes}
+            value={metrics.quotesToday}
             label="quotes"
+            href="/leads?filter=quotes"
             color="purple"
           />
         )}
-        {revenue > 0 && (
+        {metrics.renewals7d > 0 && (
+          <MetricPill
+            icon={<Calendar className="h-3.5 w-3.5" />}
+            value={metrics.renewals7d}
+            label="renewals"
+            href="/leads?filter=renewals"
+            color="amber"
+          />
+        )}
+        {metrics.revenuePotentialToday !== null && metrics.revenuePotentialToday > 0 && (
           <MetricPill
             icon={<TrendingUp className="h-3.5 w-3.5" />}
-            value={revenue}
+            value={`${(metrics.revenuePotentialToday / 1000).toFixed(0)}k`}
             label="AED"
+            href="/leads?filter=qualified"
+            color="green"
+          />
+        )}
+        {metrics.revenuePotentialToday === null && (
+          <MetricPill
+            icon={<TrendingUp className="h-3.5 w-3.5" />}
+            value="—"
+            label="revenue"
             color="green"
           />
         )}
