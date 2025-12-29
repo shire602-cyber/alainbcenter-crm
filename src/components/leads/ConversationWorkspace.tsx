@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
-import { MessageSquare, Send, Sparkles, CheckCircle2, Clock, AlertCircle, ChevronDown } from 'lucide-react'
+import { MessageSquare, Send, Sparkles, CheckCircle2, Clock, AlertCircle, ChevronDown, ArrowDown } from 'lucide-react'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -106,11 +106,12 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
       )}
       
       <div className={cn(
-        "max-w-[75%] rounded-[18px] px-4 py-2.5 shadow-sm",
+        "max-w-[75%] rounded-2xl px-4 py-3 shadow-soft",
         "transition-all duration-200",
+        "leading-relaxed",
         isOutbound
           ? "bg-primary text-primary-foreground"
-          : "bg-card border border-slate-200/60 dark:border-slate-800/60"
+          : "bg-card border border-subtle"
       )}>
         <p className={cn(
           "text-body leading-relaxed whitespace-pre-wrap break-words",
@@ -159,9 +160,9 @@ function DateSeparator({ date }: { date: string }) {
 
   return (
     <div className="flex items-center justify-center my-6">
-      <div className="px-3 py-1 rounded-full bg-slate-100 dark:bg-slate-800 border border-slate-200/60 dark:border-slate-800/60">
-        <span className="text-meta muted-text">{label}</span>
-      </div>
+      <Badge className="pill bg-slate-100 dark:bg-slate-800 border border-subtle px-3 py-1">
+        <span className="text-meta muted-text font-medium">{label}</span>
+      </Badge>
     </div>
   )
 }
@@ -179,7 +180,9 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
   const [sending, setSending] = useState(false)
   const [showSuccessBanner, setShowSuccessBanner] = useState(false)
   const [sentSuccess, setSentSuccess] = useState(false)
+  const [showScrollButton, setShowScrollButton] = useState(false)
   const messagesEndRef = useRef<HTMLDivElement>(null)
+  const messagesContainerRef = useRef<HTMLDivElement>(null)
   const [smartReplies, setSmartReplies] = useState<string[]>([])
   const [showSmartReplies, setShowSmartReplies] = useState(false)
   const { showToast } = useToast()
@@ -322,6 +325,21 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
     scrollToBottom()
   }, [messages, scrollToBottom])
 
+  // Check if user scrolled up (show scroll button)
+  useEffect(() => {
+    const container = messagesContainerRef.current
+    if (!container) return
+
+    const handleScroll = () => {
+      const { scrollTop, scrollHeight, clientHeight } = container
+      const isNearBottom = scrollHeight - scrollTop - clientHeight < 100
+      setShowScrollButton(!isNearBottom)
+    }
+
+    container.addEventListener('scroll', handleScroll)
+    return () => container.removeEventListener('scroll', handleScroll)
+  }, [])
+
   // Skeleton loader (shows within 100ms)
   if (loading) {
     return (
@@ -350,9 +368,12 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
   }
 
   return (
-    <div className="flex-1 flex flex-col h-full bg-app">
+    <div className="flex-1 flex flex-col h-full bg-app relative">
       {/* Messages Area - Airy spacing */}
-      <div className="flex-1 overflow-y-auto px-6 py-6 space-y-2">
+      <div 
+        ref={messagesContainerRef}
+        className="flex-1 overflow-y-auto px-6 py-6 space-y-2"
+      >
         {messages.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <MessageSquare className="h-12 w-12 text-slate-300 dark:text-slate-700 mb-4" />
@@ -402,6 +423,23 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
         )}
         <div ref={messagesEndRef} />
       </div>
+
+      {/* Scroll to Bottom Button */}
+      {showScrollButton && (
+        <div className="absolute bottom-24 right-6 z-10">
+          <Button
+            onClick={scrollToBottom}
+            size="icon"
+            className={cn(
+              "h-10 w-10 rounded-full bg-primary hover:bg-primary/90 text-primary-foreground",
+              "shadow-premium-lg hover:shadow-premium-lg hover:-translate-y-0.5",
+              "transition-all duration-200 btn-pressable"
+            )}
+          >
+            <ArrowDown className="h-4 w-4" />
+          </Button>
+        </div>
+      )}
 
       {/* Success Banner */}
       {showSuccessBanner && (

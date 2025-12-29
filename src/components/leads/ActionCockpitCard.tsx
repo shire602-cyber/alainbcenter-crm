@@ -45,19 +45,19 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
   return (
     <Card 
       className={cn(
-        "card-premium p-6",
-        "hover:-translate-y-0.5 transition-all duration-200",
+        "card-premium inset-hero",
+        "card-pressable",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-start gap-3 mb-4">
-        <div className="flex-shrink-0 w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-          <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+      <div className="flex items-start gap-4 mb-4">
+        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+          <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
         </div>
         <div className="flex-1 min-w-0">
-          <div className="flex items-start justify-between gap-2 mb-1">
-            <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+          <div className="flex items-start justify-between gap-2 mb-2">
+            <h3 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
               {action.title}
             </h3>
             {(onSnooze || onMarkHandled || onAssign) && (
@@ -66,12 +66,12 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
                   <Button 
                     variant="ghost" 
                     size="icon" 
-                    className="h-8 w-8 rounded-[10px]"
+                    className="h-8 w-8 rounded-lg btn-pressable"
                   >
                     <MoreVertical className="h-4 w-4" />
                   </Button>
                 </DropdownMenuTrigger>
-                <DropdownMenuContent align="end" className="rounded-[12px]">
+                <DropdownMenuContent align="end" className="radius-xl">
                   {onSnooze && (
                     <DropdownMenuItem onClick={onSnooze}>
                       Snooze 30m
@@ -93,7 +93,7 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
           </div>
           
           {/* Why line */}
-          <p className="text-body muted-text mb-4">
+          <p className="text-body muted-text mb-4 leading-relaxed">
             {action.why}
           </p>
 
@@ -118,56 +118,55 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
             </div>
           )}
 
+          {/* Impact Pills (before CTA) */}
+          {(action.impact.urgency > 0 || action.impact.revenue > 0 || action.impact.risk > 0) && (
+            <div className="mb-4 flex items-center gap-2 flex-wrap">
+              {action.impact.urgency > 0 && (
+                <Badge className={cn(
+                  "pill px-3 py-1.5",
+                  urgencyColor === 'red' && "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border-red-200/60 dark:border-red-800/60",
+                  urgencyColor === 'amber' && "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60",
+                  urgencyColor === 'blue' && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60"
+                )}>
+                  <Clock className="h-3.5 w-3.5 mr-1.5" />
+                  <span className="text-meta font-medium">Urgency</span>
+                </Badge>
+              )}
+              {action.impact.revenue > 0 && (
+                <Badge className={cn(
+                  "pill px-3 py-1.5",
+                  revenueColor === 'green' && "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border-green-200/60 dark:border-green-800/60",
+                  revenueColor === 'blue' && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60"
+                )}>
+                  <DollarSign className="h-3.5 w-3.5 mr-1.5" />
+                  <span className="text-meta font-medium">Revenue</span>
+                </Badge>
+              )}
+              {action.impact.risk > 0 && (
+                <Badge className={cn(
+                  "pill px-3 py-1.5",
+                  riskColor === 'red' && "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border-red-200/60 dark:border-red-800/60",
+                  riskColor === 'amber' && "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60"
+                )}>
+                  <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
+                  <span className="text-meta font-medium">Risk</span>
+                </Badge>
+              )}
+            </div>
+          )}
+
           {/* Primary CTA */}
           <Button
             onClick={onPrimaryAction}
             className={cn(
-              "w-full h-11 rounded-[14px] font-semibold",
+              "w-full h-12 radius-xl font-semibold",
               "bg-primary hover:bg-primary/90 text-primary-foreground",
-              "transition-all duration-200 hover:shadow-md active:scale-95"
+              "shadow-soft hover:shadow-premium",
+              "transition-all duration-200 hover:-translate-y-0.5 btn-pressable"
             )}
           >
             {action.ctaLabel}
           </Button>
-
-          {/* Impact Pills */}
-          {(action.impact.urgency > 0 || action.impact.revenue > 0 || action.impact.risk > 0) && (
-            <div className="mt-4 pt-4 divider-soft">
-              <div className="flex items-center gap-3 text-meta">
-                {action.impact.urgency > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <Clock className={cn(
-                      "h-3.5 w-3.5",
-                      urgencyColor === 'red' && "text-red-500",
-                      urgencyColor === 'amber' && "text-amber-500",
-                      urgencyColor === 'blue' && "text-blue-500"
-                    )} />
-                    <span className="muted-text">Urgency</span>
-                  </div>
-                )}
-                {action.impact.revenue > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <DollarSign className={cn(
-                      "h-3.5 w-3.5",
-                      revenueColor === 'green' && "text-green-500",
-                      revenueColor === 'blue' && "text-blue-500"
-                    )} />
-                    <span className="muted-text">Revenue</span>
-                  </div>
-                )}
-                {action.impact.risk > 0 && (
-                  <div className="flex items-center gap-1.5">
-                    <AlertTriangle className={cn(
-                      "h-3.5 w-3.5",
-                      riskColor === 'red' && "text-red-500",
-                      riskColor === 'amber' && "text-amber-500"
-                    )} />
-                    <span className="muted-text">Risk</span>
-                  </div>
-                )}
-              </div>
-            </div>
-          )}
         </div>
       </div>
     </Card>

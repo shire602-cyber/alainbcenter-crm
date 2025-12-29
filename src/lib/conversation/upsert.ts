@@ -48,46 +48,55 @@ export async function upsertConversation(
     timestamp: timestamp.toISOString(),
   }))
   
-  // Determine uniqueness key
-  // If externalThreadId is provided, use it; otherwise use (contactId, channel)
-  if (input.externalThreadId) {
-    // Try to find by externalThreadId first
-    const existing = await prisma.conversation.findFirst({
-      where: {
-        contactId: input.contactId,
-        channel: channelLower,
-        externalThreadId: input.externalThreadId,
+  // C) CONVERSATION UNIQUENESS: Handle externalThreadId properly
+  // If externalThreadId is provided, find by (contactId, channel, externalThreadId)
+  // If not provided, derive a canonical value or use fallback
+  let effectiveThreadId = input.externalThreadId
+  
+  // If externalThreadId is missing, derive from contact/channel (stable fallback)
+  if (!effectiveThreadId) {
+    // Use stable fallback: contactId:channel (ensures one conversation per contact/channel when thread ID unknown)
+    effectiveThreadId = `${input.contactId}:${channelLower}`
+  }
+  
+  // Try to find existing conversation by (contactId, channel, externalThreadId)
+  const existing = await prisma.conversation.findFirst({
+    where: {
+      contactId: input.contactId,
+      channel: channelLower,
+      externalThreadId: effectiveThreadId,
+    },
+  })
+  
+  if (existing) {
+    // Update existing conversation
+    const updated = await prisma.conversation.update({
+      where: { id: existing.id },
+      data: {
+        leadId: input.leadId ?? existing.leadId,
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        status: input.status || existing.status || 'open',
+        channel: channelLower, // Ensure normalized
+        externalThreadId: effectiveThreadId, // Ensure thread ID is set
       },
     })
     
-    if (existing) {
-      // Update existing
-      const updated = await prisma.conversation.update({
-        where: { id: existing.id },
-        data: {
-          leadId: input.leadId ?? existing.leadId,
-          lastMessageAt: timestamp,
-          lastInboundAt: timestamp,
-          status: input.status || existing.status || 'open',
-          channel: channelLower, // Ensure normalized
-        },
-      })
-      
-      // DIAGNOSTIC LOG: updated existing conversation
-      console.log(`[UPSERT-CONV] UPDATED`, JSON.stringify({
-        conversationId: updated.id,
-        contactId: input.contactId,
-        channel: channelLower,
-        externalThreadId: input.externalThreadId,
-        leadId: updated.leadId,
-        action: 'updated_existing',
-      }))
-      
-      return { id: updated.id }
-    }
+    // DIAGNOSTIC LOG: updated existing conversation
+    console.log(`[UPSERT-CONV] UPDATED`, JSON.stringify({
+      conversationId: updated.id,
+      contactId: input.contactId,
+      channel: channelLower,
+      externalThreadId: effectiveThreadId,
+      leadId: updated.leadId,
+      action: 'updated_existing',
+    }))
+    
+    return { id: updated.id }
   }
   
-  // Fall back to (contactId, channel) uniqueness (existing constraint)
+  // Create new conversation - use (contactId, channel) as base uniqueness
+  // But store effectiveThreadId for future lookups
   const conversation = await prisma.conversation.upsert({
     where: {
       contactId_channel: {
@@ -97,7 +106,7 @@ export async function upsertConversation(
     },
     update: {
       leadId: input.leadId ?? undefined,
-      externalThreadId: input.externalThreadId ?? undefined,
+      externalThreadId: effectiveThreadId, // Use effective thread ID (may be fallback)
       externalId: input.externalId ?? undefined,
       lastMessageAt: timestamp,
       lastInboundAt: timestamp,
@@ -108,7 +117,7 @@ export async function upsertConversation(
       contactId: input.contactId,
       leadId: input.leadId ?? null,
       channel: channelLower,
-      externalThreadId: input.externalThreadId ?? null,
+      externalThreadId: effectiveThreadId, // Use effective thread ID (may be fallback)
       externalId: input.externalId ?? null,
       status: input.status || 'open',
       lastMessageAt: timestamp,

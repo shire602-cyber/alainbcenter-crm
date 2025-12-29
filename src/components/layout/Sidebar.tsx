@@ -95,14 +95,30 @@ export function Sidebar() {
       {isOpen && (
         <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col transition-all duration-300">
           <div className="flex grow flex-col gap-y-2 overflow-y-auto border-r border-border bg-card pb-4 px-4">
-            <div className="flex h-16 shrink-0 items-center justify-between">
-            <div className="flex items-center gap-2 flex-1">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-primary">
-                <FileText className="h-5 w-5 text-white" />
+            <div className="flex h-16 shrink-0 items-center justify-between border-b border-subtle mb-4">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 dark:bg-blue-500 overflow-hidden flex-shrink-0">
+                <img 
+                  src="/brand/alain-logo.webp" 
+                  alt="Alain CRM" 
+                  className="w-full h-full object-contain"
+                  onError={(e) => {
+                    // Fallback to icon if image fails
+                    const target = e.target as HTMLImageElement
+                    target.style.display = 'none'
+                    const parent = target.parentElement
+                    if (parent && !parent.querySelector('.logo-fallback')) {
+                      const fallback = document.createElement('div')
+                      fallback.className = 'logo-fallback'
+                      fallback.innerHTML = '<svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>'
+                      parent.appendChild(fallback)
+                    }
+                  }}
+                />
               </div>
-              <div>
-                  <h1 className="text-base font-semibold tracking-tight text-foreground">Alain CRM</h1>
-                  <p className="text-xs text-muted-foreground font-normal">Business Center</p>
+              <div className="flex-1 min-w-0">
+                  <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">Alain CRM</h1>
+                  <p className="text-xs text-muted-foreground font-normal truncate">Business Center</p>
                 </div>
               </div>
           <Button
@@ -118,6 +134,34 @@ export function Sidebar() {
         </div>
           <nav className="flex flex-1 flex-col">
             <ul role="list" className="flex flex-1 flex-col gap-y-1">
+              {/* Logo + Brand */}
+              <div className="flex items-center gap-3 px-4 py-4 mb-4 border-b border-subtle">
+                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-600 dark:bg-blue-500 flex items-center justify-center overflow-hidden">
+                  <img 
+                    src="/brand/alain-logo.webp" 
+                    alt="Alain CRM" 
+                    className="w-full h-full object-contain"
+                    onError={(e) => {
+                      // Fallback to text if image fails to load
+                      const target = e.target as HTMLImageElement
+                      target.style.display = 'none'
+                      const parent = target.parentElement
+                      if (parent && !parent.querySelector('.logo-fallback')) {
+                        const fallback = document.createElement('div')
+                        fallback.className = 'logo-fallback text-white font-bold text-sm'
+                        fallback.textContent = 'A'
+                        parent.appendChild(fallback)
+                      }
+                    }}
+                  />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">
+                    Alain CRM
+                  </h1>
+                </div>
+              </div>
+              
               {/* Main Navigation */}
               {mainNavigation.map((item) => {
                 // Filter based on adminOnly

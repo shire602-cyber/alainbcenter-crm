@@ -3,7 +3,16 @@ import { getCurrentUser } from '@/lib/auth-server'
 import { prisma } from '@/lib/prisma'
 
 // Debug endpoint to check user role
+// D) LOCK DOWN: Only available in development
 export async function GET(req: NextRequest) {
+  // Lock down in production
+  if (process.env.NODE_ENV === 'production') {
+    return NextResponse.json(
+      { error: 'This endpoint is only available in development' },
+      { status: 403 }
+    )
+  }
+  
   try {
     const user = await getCurrentUser()
     

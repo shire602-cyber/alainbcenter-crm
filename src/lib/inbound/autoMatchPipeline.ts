@@ -76,8 +76,28 @@ export async function handleInboundMessageAutoMatch(
   // Step 2: FIND/CREATE Contact (using new upsert logic with normalization)
   // Extract waId from webhook payload if available
   const webhookPayload = input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata?.rawPayload || input.metadata
+  
+  // Normalize phone for WhatsApp (digits-only → E.164)
+  let normalizedPhone: string | null = null
+  if (input.fromPhone && input.channel === 'WHATSAPP') {
+    try {
+      normalizedPhone = normalizeInboundPhone(input.fromPhone)
+      console.log(`✅ [AUTO-MATCH] Normalized phone: ${input.fromPhone} → ${normalizedPhone}`)
+    } catch (normalizeError: any) {
+      // Log structured error but don't abort - use raw phone
+      console.error(`❌ [AUTO-MATCH] Failed to normalize phone`, {
+        conversationId: null, // Will be set after conversation creation
+        inboundProviderMessageId: input.providerMessageId,
+        rawFrom: input.fromPhone,
+        normalizedPhoneAttempt: null,
+        error: normalizeError.message,
+      })
+      // Continue with raw phone - upsertContact will try to normalize again
+    }
+  }
+  
   const contactResult = await upsertContact(prisma, {
-    phone: input.fromPhone || input.fromEmail || 'unknown',
+    phone: normalizedPhone || input.fromPhone || input.fromEmail || 'unknown',
     fullName: input.fromName || undefined,
     email: input.fromEmail || null,
     source: input.channel.toLowerCase(),
@@ -92,6 +112,22 @@ export async function handleInboundMessageAutoMatch(
   
   if (!contact) {
     throw new Error(`Failed to fetch contact after upsert: ${contactResult.id}`)
+  }
+  
+  // Ensure we have a normalized phone for outbound (use phoneNormalized if available, otherwise try to normalize)
+  if (!contact.phoneNormalized && contact.phone && input.channel === 'WHATSAPP') {
+    try {
+      const finalNormalized = normalizeInboundPhone(contact.phone)
+      // Update contact with normalized phone
+      await prisma.contact.update({
+        where: { id: contact.id },
+        data: { phoneNormalized: finalNormalized },
+      })
+      contact.phoneNormalized = finalNormalized
+      console.log(`✅ [AUTO-MATCH] Updated contact ${contact.id} with normalized phone: ${finalNormalized}`)
+    } catch (error: any) {
+      console.warn(`⚠️ [AUTO-MATCH] Could not normalize phone for contact ${contact.id}: ${error.message}`)
+    }
   }
 
   // Step 3: FIND/CREATE Lead (smart rules) - MUST be before conversation to get leadId

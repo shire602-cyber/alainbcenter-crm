@@ -15,8 +15,9 @@ Even though it's auto-generated, you can **override** it with a custom value:
 4. Select **"Override"** or **"Edit"**
 5. Paste the full connection string with pool parameters:
    ```
-   postgresql://neondb_owner:npg_o3Pqr4FnOmsT@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require&channel_binding=require&connection_limit=20&pool_timeout=20
+   postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require&channel_binding=require&connection_limit=20&pool_timeout=20
    ```
+   **⚠️ SECURITY:** Never commit real credentials. Get the actual connection string from Neon Dashboard → Connection Details.
 6. Save
 
 **Note:** This will override the auto-generated value. The integration will still show the green 'R' icon, but your custom value will be used.

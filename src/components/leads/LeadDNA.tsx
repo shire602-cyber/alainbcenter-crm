@@ -148,54 +148,51 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
   }
 
   return (
-    <Card className="card-premium p-4">
-      <div className="flex items-center justify-between mb-3">
-        <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
-          Qualification Progress
-        </h3>
-        <Badge className="chip">
-          {completedCount}/{totalCount}
-        </Badge>
-      </div>
-
-      {/* Progress Bar */}
-      <div className="mb-4">
-        <div className="w-full bg-slate-200 dark:bg-slate-800 rounded-full h-2 mb-2">
-          <div
+    <Card className="card-premium inset-card">
+      {/* Progress Header: 0/5 pill + progress bar */}
+      <div className="flex items-center justify-between mb-4">
+        <div className="flex items-center gap-2">
+          <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+            {completedCount}/{requiredFields.length}
+          </Badge>
+          <span className="text-meta muted-text">Complete</span>
+        </div>
+        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-800 rounded-full mx-3 overflow-hidden">
+          <div 
             className={cn(
-              "h-2 rounded-full transition-all duration-300",
-              progressPercent === 100 ? "bg-green-500" : progressPercent >= 60 ? "bg-blue-500" : "bg-amber-500"
+              "h-full transition-all duration-300",
+              progressPercent === 100 ? "bg-green-500 dark:bg-green-400" : progressPercent >= 60 ? "bg-blue-500 dark:bg-blue-400" : "bg-amber-500 dark:bg-amber-400"
             )}
-            style={{ width: `${progressPercent}%` }}
+            style={{ width: `${(completedCount / requiredFields.length) * 100}%` }}
           />
         </div>
-        <p className="text-meta muted-text">
-          {progressPercent === 100 ? 'Complete' : `${Math.round(progressPercent)}% complete`}
-        </p>
       </div>
 
-      {/* Checklist */}
-      <div className="space-y-2 mb-4">
+      {/* Field Checklist - Premium */}
+      <div className="space-y-2">
         {requiredFields.map((field) => {
-          const isComplete = field.value && field.value.trim() !== ''
+          const hasValue = !!field.value
           return (
-            <div key={field.key} className="flex items-center gap-2">
-              {isComplete ? (
+            <div
+              key={field.key}
+              className={cn(
+                "flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200",
+                hasValue 
+                  ? "bg-green-50/50 dark:bg-green-900/10 border border-green-200/40 dark:border-green-800/40" 
+                  : "bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/40 dark:border-slate-800/40"
+              )}
+            >
+              {hasValue ? (
                 <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
               ) : (
-                <Circle className="h-4 w-4 text-slate-400 flex-shrink-0" />
+                <Circle className="h-4 w-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
               )}
               <span className={cn(
                 "text-body",
-                isComplete ? "text-slate-900 dark:text-slate-100" : "muted-text"
+                hasValue ? "text-slate-900 dark:text-slate-100 font-medium" : "text-slate-500 dark:text-slate-400"
               )}>
                 {field.label}
               </span>
-              {isComplete && (
-                <Badge className="chip ml-auto">
-                  {field.value}
-                </Badge>
-              )}
             </div>
           )
         })}
@@ -403,49 +400,51 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="space-y-4 p-4 sm:p-6">
+      <div className="stack-6 inset-hero">
         {/* Identity Section */}
-        <Card className="card-premium p-4">
-          <div className="space-y-3">
-            <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-                <User className="h-5 w-5 text-slate-500 dark:text-slate-400" />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className="text-body font-semibold text-slate-900 dark:text-slate-100 truncate">
-                  {contact?.fullName || 'Unknown'}
-                </p>
-                {contact?.nationality && (
-                  <p className="text-meta muted-text mt-0.5">
-                    {contact.nationality}
-                  </p>
-                )}
-              </div>
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Identity</h2>
+          <Card className="card-premium inset-card">
+        <div className="space-y-3">
+          <div className="flex items-start gap-3">
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <User className="h-5 w-5 text-slate-500 dark:text-slate-400" />
             </div>
+            <div className="flex-1 min-w-0">
+                <p className="text-body font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {contact?.fullName || 'Unknown'}
+              </p>
+              {contact?.nationality && (
+                  <p className="text-meta muted-text mt-0.5">
+                  {contact.nationality}
+                </p>
+              )}
+            </div>
+          </div>
 
-            {contact?.phone && (
+          {contact?.phone && (
               <div className="flex items-center gap-2 text-body pl-13">
-                <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                <a 
-                  href={`tel:${contact.phone}`}
+              <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+              <a 
+                href={`tel:${contact.phone}`}
                   className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors truncate"
-                >
-                  {contact.phone}
-                </a>
-              </div>
-            )}
+              >
+                {contact.phone}
+              </a>
+            </div>
+          )}
 
-            {contact?.email && (
+          {contact?.email && (
               <div className="flex items-center gap-2 text-body pl-13">
-                <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
-                <a 
-                  href={`mailto:${contact.email}`}
+              <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
+              <a 
+                href={`mailto:${contact.email}`}
                   className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors truncate"
-                >
-                  {contact.email}
-                </a>
-              </div>
-            )}
+              >
+                {contact.email}
+              </a>
+            </div>
+          )}
 
             {/* Channel Badges */}
             {channels.length > 0 && (
@@ -467,43 +466,59 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
             )}
           </div>
         </Card>
+        </div>
 
         {/* Service */}
-        <Card className="card-premium p-4">
-          <div className="flex items-center gap-2">
-            <Target className="h-4 w-4 text-slate-500" />
-            <span className="text-body font-medium text-slate-900 dark:text-slate-100">
-              {serviceName}
-            </span>
-          </div>
-          {lead.requestedServiceRaw && lead.requestedServiceRaw !== serviceName && (
-            <p className="text-meta muted-text italic mt-1 pl-6">
-              "{lead.requestedServiceRaw}"
-            </p>
-          )}
-        </Card>
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Service</h2>
+          <Card className="card-premium inset-card">
+            <div className="flex items-center gap-2">
+              <Target className="h-4 w-4 text-slate-500" />
+              <span className="text-body font-medium text-slate-900 dark:text-slate-100">
+                {serviceName}
+              </span>
+            </div>
+            {lead.requestedServiceRaw && lead.requestedServiceRaw !== serviceName && (
+              <p className="text-meta muted-text italic mt-1 pl-6">
+                "{lead.requestedServiceRaw}"
+              </p>
+            )}
+          </Card>
+        </div>
 
         {/* Qualification Progress */}
-        <QualificationProgress lead={lead} />
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
+          <QualificationProgress lead={lead} />
+        </div>
 
         {/* Expiry Timeline */}
-        <ExpiryTimeline lead={lead} />
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
+          <ExpiryTimeline lead={lead} />
+        </div>
 
         {/* Sponsor Search */}
-        <SponsorSearch lead={lead} />
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
+          <SponsorSearch lead={lead} />
+        </div>
 
         {/* Documents Placeholder */}
-        <Card className="card-premium p-4">
-          <div className="flex items-center gap-2 mb-3">
-            <FileText className="h-4 w-4 text-slate-500" />
-            <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
-              Documents
-            </h3>
-          </div>
-          <p className="text-meta muted-text">
-            Document upload coming soon
-          </p>
-        </Card>
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Documents</h2>
+          <Card className="card-premium inset-card">
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="h-4 w-4 text-slate-500" />
+              <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+                Documents
+              </h3>
+            </div>
+            <p className="text-meta muted-text">
+              Document upload coming soon
+            </p>
+          </Card>
+        </div>
       </div>
     </div>
   )

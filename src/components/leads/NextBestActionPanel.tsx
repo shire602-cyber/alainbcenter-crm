@@ -291,7 +291,7 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="space-y-4 p-6">
+      <div className="stack-6 inset-hero">
         {/* Primary Recommended Action */}
         <ActionCockpitCard
           action={recommendedAction}
@@ -334,12 +334,12 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
 
         {/* Tasks Mini List (Collapsed by Default) */}
         {tasks.length > 0 && (
-          <Accordion type="single" defaultValue={[]}>
-            <AccordionItem value="tasks">
-              <AccordionTrigger className="text-body font-semibold">
+          <Accordion type="single" className="w-full">
+            <AccordionItem value="tasks" className="border-none">
+              <AccordionTrigger className="text-h2 font-semibold hover:no-underline py-3 transition-all duration-300">
                 Tasks ({tasks.filter(t => t.status === 'OPEN').length})
               </AccordionTrigger>
-              <AccordionContent>
+              <AccordionContent className="pt-0 pb-0 data-[state=open]:animate-accordion-down data-[state=closed]:animate-accordion-up transition-all duration-300">
                 <div className="space-y-2">
                   {displayTasks.map((task) => {
                     const isOverdue = task.dueAt && new Date(task.dueAt) < new Date()

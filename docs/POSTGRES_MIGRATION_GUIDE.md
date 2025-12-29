@@ -9,8 +9,8 @@
 This creates a new migration history for PostgreSQL:
 
 ```powershell
-# Set Neon database URL
-$env:DATABASE_URL="postgresql://neondb_owner:npg_o3Pqr4FnOmsT@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+# Set Neon database URL (replace with your actual connection string from Neon Dashboard)
+$env:DATABASE_URL="postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require"
 
 # Generate Prisma client for PostgreSQL
 npx prisma generate
@@ -33,7 +33,8 @@ npx prisma migrate dev --name init_postgresql
 If you just want to sync the schema without migration history:
 
 ```powershell
-$env:DATABASE_URL="postgresql://neondb_owner:npg_o3Pqr4FnOmsT@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+# Replace with your actual connection string from Neon Dashboard
+$env:DATABASE_URL="postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require"
 
 # Generate Prisma client
 npx prisma generate
@@ -51,7 +52,8 @@ npx prisma db push
 ### 1. Seed Initial Data
 
 ```powershell
-$env:DATABASE_URL="postgresql://neondb_owner:npg_o3Pqr4FnOmsT@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require"
+# Replace with your actual connection string from Neon Dashboard
+$env:DATABASE_URL="postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require"
 
 # Create admin user
 npx tsx scripts/create-admin.ts
@@ -68,8 +70,8 @@ npx tsx scripts/seed-automation-rules.ts
 Run the PostgreSQL indexes file:
 
 ```powershell
-# Option A: Via psql (if installed)
-psql "postgresql://neondb_owner:npg_o3Pqr4FnOmsT@ep-raspy-hill-adlqrxgm-pooler.c-2.us-east-1.aws.neon.tech/neondb?sslmode=require" -f prisma/migrations/add_performance_indexes_postgres.sql
+# Option A: Via psql (if installed) - Replace with your actual connection string from Neon Dashboard
+psql "postgresql://USERNAME:PASSWORD@HOST-pooler.REGION.aws.neon.tech/DATABASE?sslmode=require" -f prisma/migrations/add_performance_indexes_postgres.sql
 
 # Option B: Copy SQL to Neon Console SQL Editor
 # 1. Open Neon Dashboard

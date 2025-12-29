@@ -1,8 +1,22 @@
 'use client'
 
-import { useState } from 'react'
+import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 
 export default function TestLoginPage() {
+  const router = useRouter()
+  
+  // D) LOCK DOWN: Only available in development
+  useEffect(() => {
+    if (process.env.NODE_ENV === 'production') {
+      router.push('/login')
+    }
+  }, [router])
+  
+  // Don't render in production
+  if (process.env.NODE_ENV === 'production') {
+    return null
+  }
   const [result, setResult] = useState<any>(null)
   const [cookieCheck, setCookieCheck] = useState<any>(null)
 

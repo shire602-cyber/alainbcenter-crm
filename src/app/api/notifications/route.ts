@@ -10,36 +10,20 @@ export async function GET(req: NextRequest) {
   try {
     await getCurrentUser()
 
-    // E) FIX NOTIFICATIONS SCHEMA MISMATCH
-    // Guard code: Don't query snoozedUntil if column doesn't exist in production DB
-    // Use try-catch to handle missing column gracefully
-    let notifications
-    try {
-      // Try to query with snoozedUntil (if column exists)
-      notifications = await prisma.notification.findMany({
-        where: {
-          // Only show notifications that are not snoozed (if column exists)
-          // If column doesn't exist, Prisma will throw and we'll catch it
-          OR: [
-            { snoozedUntil: null },
-            { snoozedUntil: { lt: new Date() } },
-          ],
-        },
-        orderBy: { createdAt: 'desc' },
-        take: 100, // Limit to last 100 notifications
-      })
-    } catch (schemaError: any) {
-      // If snoozedUntil column doesn't exist, query without it
-      if (schemaError.message?.includes('snoozedUntil') || schemaError.code === 'P2021') {
-        console.warn('⚠️ [NOTIFICATIONS] snoozedUntil column not found - querying without it')
-        notifications = await prisma.notification.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 100,
-        })
-      } else {
-        throw schemaError
-      }
-    }
+    // D) REMOVE FRAGILE GUARDS: Query with snoozedUntil (migration must be applied)
+    // Production requires: npx prisma migrate deploy
+    // If column doesn't exist, Prisma will throw - this ensures migration is applied
+    const notifications = await prisma.notification.findMany({
+      where: {
+        // Only show notifications that are not snoozed
+        OR: [
+          { snoozedUntil: null },
+          { snoozedUntil: { lt: new Date() } },
+        ],
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100, // Limit to last 100 notifications
+    })
 
     const unreadCount = notifications.filter(n => !n.isRead).length
 

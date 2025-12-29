@@ -13,10 +13,6 @@ export async function middleware(req: NextRequest) {
     '/api/auth/logout',
     '/setup',
     '/api/auth/setup',
-    '/api/debug-cookie',
-    '/api/test-cookie',
-    '/test-login',
-    '/test', // Test page
     '/api/health', // Health check endpoint
     '/marketing', // Marketing pages are public
     '/api/webhooks/meta-leads',
@@ -25,6 +21,16 @@ export async function middleware(req: NextRequest) {
     '/api/automation/run-daily',
     '/api/auth/emergency-reset',
   ]
+  
+  // D) LOCK DOWN DEBUG ROUTES: Only allow in development
+  if (process.env.NODE_ENV === 'development') {
+    publicPaths.push(
+      '/api/debug-cookie',
+      '/api/test-cookie',
+      '/test-login',
+      '/test' // Test page
+    )
+  }
 
   // Check if path is public
   if (publicPaths.some((p) => pathname.startsWith(p))) {

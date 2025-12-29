@@ -7,14 +7,20 @@
  * Hover reveals "Open" action (not primary CTA).
  */
 
-import { useState, memo } from 'react'
-import { Clock, MessageSquare, Phone, Mail, ChevronRight, RefreshCw } from 'lucide-react'
+import { useState, memo, useCallback } from 'react'
+import { Clock, MessageSquare, Phone, Mail, ChevronRight, RefreshCw, MoreVertical, Eye, Clock as ClockIcon } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 
 import type { CommandItem } from '@/lib/dashboard/commandCenterTypes'
 
@@ -48,31 +54,40 @@ const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }
   const router = useRouter()
   const [hovered, setHovered] = useState(false)
   const preview = item.latestMessage || item.reason
-  const previewText = preview.length > 60 ? preview.substring(0, 60) + '...' : preview
+  const previewText = preview.length > 50 ? preview.substring(0, 50) + '...' : preview
   const waitingTime = item.waitingTime?.match(/(\d+[hd])/)?.[0] || '—'
+  const isUrgent = item.priority === 'URGENT' || item.priority === 'HIGH'
+
+  const handleOpen = (e: React.MouseEvent) => {
+    e.stopPropagation()
+    router.push(`/leads/${item.leadId}`)
+  }
 
   return (
     <div
       className={cn(
-        "group flex items-center gap-3 p-3 rounded-[12px]",
-        "bg-card-muted border border-slate-200/60 dark:border-slate-800/60",
+        "group flex items-center gap-3 p-3 radius-xl",
+        "bg-card-muted border border-subtle",
         "hover:bg-card hover:border-slate-300 dark:hover:border-slate-700",
-        "hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 cursor-pointer",
-        "active:scale-[0.98]"
+        "card-pressable"
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
-      onClick={() => router.push(`/leads/${item.leadId}`)}
+      onClick={handleOpen}
     >
-      <ChannelIcon channel={item.channel} />
+      {/* LEFT: Channel icon in soft circle */}
+      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+        <ChannelIcon channel={item.channel} />
+      </div>
       
+      {/* MIDDLE: Name + Service + Preview */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
           <p className="text-body font-medium text-slate-900 dark:text-slate-100 truncate">
             {item.contactName || 'Unknown'}
           </p>
           {item.serviceType && (
-            <Badge className="chip text-[11px]">{item.serviceType}</Badge>
+            <Badge className="chip text-[11px] px-2 py-0.5">{item.serviceType}</Badge>
           )}
         </div>
         <p className="text-meta text-slate-600 dark:text-slate-400 line-clamp-1">
@@ -80,17 +95,42 @@ const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }
         </p>
       </div>
 
+      {/* RIGHT: Time + Risk dot + Micro-actions */}
       <div className="flex items-center gap-2 flex-shrink-0">
-        <Badge variant="outline" className="pill text-[11px]">
-          <Clock className="h-3 w-3 mr-1" />
-          {waitingTime}
-        </Badge>
-        <ChevronRight 
-          className={cn(
-            "h-4 w-4 text-slate-400 transition-opacity duration-200",
-            hovered ? "opacity-100" : "opacity-0"
-          )} 
-        />
+        <div className="flex items-center gap-1.5">
+          {isUrgent && (
+            <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
+          )}
+          <span className="text-meta muted-text text-[11px]">{waitingTime}</span>
+        </div>
+        
+        {/* Micro-actions (desktop only, on hover) */}
+        <div className={cn(
+          "flex items-center gap-1 transition-opacity duration-200",
+          hovered ? "opacity-100" : "opacity-0"
+        )}>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 rounded-lg btn-pressable"
+              >
+                <MoreVertical className="h-3.5 w-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+              <DropdownMenuItem onClick={handleOpen}>
+                <Eye className="h-3.5 w-3.5 mr-2" />
+                Open
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => e.stopPropagation()}>
+                <ClockIcon className="h-3.5 w-3.5 mr-2" />
+                Snooze 30m
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
       </div>
     </div>
   )
