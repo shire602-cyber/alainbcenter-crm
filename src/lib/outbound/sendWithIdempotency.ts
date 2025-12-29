@@ -305,7 +305,44 @@ export async function sendOutboundWithIdempotency(
       },
     })
     
-    // Step 4.5: If this was the first outbound message, persist firstGreetingSentAt
+    // Step 4.5: Create Message record for Inbox UI visibility
+    // This ensures outbound messages appear in the Inbox and conversation history
+    try {
+      const channelUpper = provider.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
+      const sentAt = new Date()
+      
+      await prisma.message.create({
+        data: {
+          conversationId,
+          contactId,
+          leadId,
+          direction: 'OUTBOUND',
+          channel: channelUpper,
+          type: 'text',
+          body: text, // Use final text (after greeting and sanitization)
+          providerMessageId: messageId || null,
+          status: 'SENT',
+          sentAt,
+        },
+      })
+      
+      // Update conversation timestamps
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          lastOutboundAt: sentAt,
+          lastMessageAt: sentAt,
+        },
+      })
+      
+      console.log(`[OUTBOUND-IDEMPOTENCY] Message record created for Inbox UI: conversationId=${conversationId}, messageId=${messageId}`)
+    } catch (messageError: any) {
+      // Non-critical - log but don't fail the send
+      // This could fail if Message already exists (unique constraint on providerMessageId)
+      console.warn(`[OUTBOUND-IDEMPOTENCY] Failed to create Message record (non-critical):`, messageError.message)
+    }
+    
+    // Step 4.6: If this was the first outbound message, persist firstGreetingSentAt
     if (isFirstOutboundMessage && provider === 'whatsapp') {
       try {
         const conversation = await prisma.conversation.findUnique({

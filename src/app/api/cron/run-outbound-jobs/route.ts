@@ -4,7 +4,7 @@
  * Triggers job runner to process queued outbound jobs.
  * Can be called by Vercel Cron or external cron service.
  * 
- * Configured in vercel.json to run every 30 seconds
+ * Configured in vercel.json to run every minute: * * * * *
  */
 
 // Ensure Node.js runtime for Prisma compatibility
@@ -16,17 +16,17 @@ const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret-change-in-production'
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify cron secret - Allow Vercel cron (x-vercel-cron header) OR Bearer token
+    // Verify cron secret - Allow Vercel cron (x-vercel-cron header === "1") OR Bearer token
     const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
     
-    // Allow Vercel cron (has x-vercel-cron header) OR valid CRON_SECRET
+    // Allow Vercel cron (x-vercel-cron === "1") OR valid CRON_SECRET
     let isAuthorized = false
     
-    if (vercelCronHeader) {
+    if (vercelCronHeader === '1') {
       // Vercel cron request - automatically authorized
       isAuthorized = true
-      console.log('✅ [CRON] Vercel cron request detected for outbound jobs')
+      console.log('✅ [CRON] Vercel cron request detected for outbound jobs (x-vercel-cron: 1)')
     } else if (authHeader && authHeader.startsWith('Bearer ')) {
       const token = authHeader.substring(7)
       if (token === CRON_SECRET) {
