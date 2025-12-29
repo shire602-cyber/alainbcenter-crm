@@ -10,7 +10,13 @@ export async function POST(req: NextRequest) {
 
     // Meta webhook verification (for initial setup)
     if (body['hub.mode'] === 'subscribe' && body['hub.verify_token']) {
-      const verifyToken = process.env.META_VERIFY_TOKEN || 'alainbcenter_meta_webhook'
+      const verifyToken = process.env.META_VERIFY_TOKEN
+      if (!verifyToken) {
+        return NextResponse.json(
+          { error: 'META_VERIFY_TOKEN not configured' },
+          { status: 500 }
+        )
+      }
       if (body['hub.verify_token'] === verifyToken) {
         return NextResponse.json(body['hub.challenge'], { status: 200 })
       }

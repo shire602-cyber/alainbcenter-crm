@@ -12,17 +12,19 @@ export async function GET(req: NextRequest) {
     const channelParam = req.nextUrl.searchParams.get('channel') || 'whatsapp'
 
     // Build where clause - if channel is 'all', don't filter by channel
-    // Exclude soft-deleted conversations
-    const whereClause: any = {
-      deletedAt: null, // Only show non-deleted conversations
-    }
+    // Exclude soft-deleted conversations (with defensive fallback if column doesn't exist)
+    const whereClause: any = {}
     if (channelParam && channelParam !== 'all') {
       whereClause.channel = channelParam
     }
-
-    // Optimized: Limit results and use selective loading
-    const conversations = await prisma.conversation.findMany({
-      where: whereClause,
+    
+    // Defensive: Only filter by deletedAt if column exists (migration applied)
+    // If column doesn't exist, query will fail with P2022, catch and retry without filter
+    let conversations
+    try {
+      whereClause.deletedAt = null // Only show non-deleted conversations
+      conversations = await prisma.conversation.findMany({
+        where: whereClause,
       select: {
         id: true,
         channel: true,
@@ -82,6 +84,73 @@ export async function GET(req: NextRequest) {
       // Add limit to prevent fetching too many conversations at once
       take: 500, // Reasonable limit for inbox view
     })
+    } catch (error: any) {
+      // Defensive: If deletedAt column doesn't exist (P2022), retry without filter
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.warn('⚠️ [INBOX] deletedAt column not found - migration not applied. Querying without deletedAt filter.')
+        delete whereClause.deletedAt
+        conversations = await prisma.conversation.findMany({
+          where: whereClause,
+          select: {
+            id: true,
+            channel: true,
+            status: true,
+            lastMessageAt: true,
+            lastInboundAt: true,
+            lastOutboundAt: true,
+            unreadCount: true,
+            priorityScore: true,
+            createdAt: true,
+            contactId: true,
+            contact: {
+              select: {
+                id: true,
+                fullName: true,
+                phone: true,
+                email: true,
+              },
+            },
+            messages: {
+              orderBy: { createdAt: 'desc' },
+              take: 1,
+              select: {
+                id: true,
+                direction: true,
+                body: true,
+                createdAt: true,
+              },
+            },
+            lead: {
+              select: {
+                id: true,
+                aiScore: true,
+                nextFollowUpAt: true,
+                expiryItems: {
+                  orderBy: { expiryDate: 'asc' },
+                  take: 1,
+                  select: {
+                    expiryDate: true,
+                  },
+                },
+              },
+            },
+            assignedUser: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+          },
+          orderBy: {
+            lastMessageAt: 'desc',
+          },
+          take: 500,
+        })
+      } else {
+        throw error
+      }
+    }
 
         // Compute intelligence flags directly from fetched data (optimized - no extra queries)
         const now = new Date()

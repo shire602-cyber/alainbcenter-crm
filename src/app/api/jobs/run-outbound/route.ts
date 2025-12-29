@@ -126,6 +126,7 @@ export async function GET(req: NextRequest) {
         
         // Run orchestrator
         console.log(`🎯 [JOB-RUNNER] Running orchestrator for job ${job.id} (requestId: ${requestId})`)
+        const orchestratorStartTime = Date.now()
         const orchestratorResult = await generateAIReply({
           conversationId: conversation.id,
           leadId: conversation.lead.id,
@@ -134,6 +135,11 @@ export async function GET(req: NextRequest) {
           inboundMessageId: message.id,
           channel: message.channel,
           language: 'en',
+        })
+        const orchestratorElapsed = Date.now() - orchestratorStartTime
+        console.log(`✅ [JOB-RUNNER] Orchestrator complete jobId=${job.id} requestId=${requestId} elapsed=${orchestratorElapsed}ms`, {
+          replyLength: orchestratorResult.replyText?.length || 0,
+          hasHandover: 'handoverReason' in orchestratorResult,
         })
         
         // Check if reply is empty (deduplication or stop)
@@ -230,6 +236,7 @@ export async function GET(req: NextRequest) {
           throw new Error(`Invalid phone number format for outbound: ${phoneForOutbound}. Must be E.164 format (e.g., +260777711059). Contact ID: ${conversation.contact.id}`)
         }
         
+        const sendStartTime = Date.now()
         const sendResult = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
           contactId: conversation.contact.id,
@@ -242,14 +249,16 @@ export async function GET(req: NextRequest) {
           lastQuestionKey: questionKey,
           flowStep: null,
         })
+        const sendElapsed = Date.now() - sendStartTime
         
         if (sendResult.wasDuplicate) {
-          console.log(`⚠️ [JOB-RUNNER] Duplicate outbound blocked for job ${job.id} (keyComponents: ${outboundKeyComponents}, requestId: ${requestId})`)
+          console.log(`⚠️ [JOB-RUNNER] Duplicate outbound blocked jobId=${job.id} requestId=${requestId} keyComponents=${outboundKeyComponents}`)
         } else if (!sendResult.success) {
           throw new Error(`Failed to send outbound: ${sendResult.error}`)
+        } else {
+          console.log(`✅ [JOB-RUNNER] Outbound sent jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} elapsed=${sendElapsed}ms`)
+          console.log(`✅ [JOB-RUNNER] Message row created jobId=${job.id} conversationId=${conversation.id} requestId=${requestId}`)
         }
-        
-        console.log(`✅ [JOB-RUNNER] Outbound sent successfully for job ${job.id} (requestId: ${requestId})`)
         
         // Mark job as done
         await prisma.outboundJob.update({

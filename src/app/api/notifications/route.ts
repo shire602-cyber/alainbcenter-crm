@@ -10,20 +10,32 @@ export async function GET(req: NextRequest) {
   try {
     await getCurrentUser()
 
-    // D) REMOVE FRAGILE GUARDS: Query with snoozedUntil (migration must be applied)
-    // Production requires: npx prisma migrate deploy
-    // If column doesn't exist, Prisma will throw - this ensures migration is applied
-    const notifications = await prisma.notification.findMany({
-      where: {
-        // Only show notifications that are not snoozed
-        OR: [
-          { snoozedUntil: null },
-          { snoozedUntil: { lt: new Date() } },
-        ],
-      },
-      orderBy: { createdAt: 'desc' },
-      take: 100, // Limit to last 100 notifications
-    })
+    // Defensive: Query with snoozedUntil, but fallback if column doesn't exist (migration not applied)
+    let notifications
+    try {
+      notifications = await prisma.notification.findMany({
+        where: {
+          // Only show notifications that are not snoozed
+          OR: [
+            { snoozedUntil: null },
+            { snoozedUntil: { lt: new Date() } },
+          ],
+        },
+        orderBy: { createdAt: 'desc' },
+        take: 100, // Limit to last 100 notifications
+      })
+    } catch (error: any) {
+      // Defensive: If snoozedUntil column doesn't exist (P2022), retry without filter
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.warn('⚠️ [NOTIFICATIONS] snoozedUntil column not found - migration not applied. Querying without snoozedUntil filter.')
+        notifications = await prisma.notification.findMany({
+          orderBy: { createdAt: 'desc' },
+          take: 100,
+        })
+      } else {
+        throw error
+      }
+    }
 
     const unreadCount = notifications.filter(n => !n.isRead).length
 
