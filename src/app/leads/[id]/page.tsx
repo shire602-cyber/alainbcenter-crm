@@ -330,10 +330,12 @@ export default function LeadDetailPage({
         )}>
           {/* Left: Lead DNA */}
           <div className={cn(
-            "w-72 border-r border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0 overflow-y-auto transition-opacity",
+            "w-80 border-r border-slate-200/60 dark:border-slate-800/60 bg-card flex-shrink-0 overflow-y-auto transition-opacity",
             actionPending && "opacity-50"
           )}>
-            <LeadDNA lead={lead} />
+            <div className="p-6">
+              <LeadDNA lead={lead} />
+            </div>
           </div>
 
           {/* Center: Conversation */}
@@ -350,15 +352,17 @@ export default function LeadDetailPage({
 
           {/* Right: Next Best Action */}
           <div className={cn(
-            "w-96 border-l border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex-shrink-0 overflow-y-auto",
-            actionPending && "ring-2 ring-primary ring-offset-2"
+            "w-96 border-l border-slate-200/60 dark:border-slate-800/60 bg-card flex-shrink-0 overflow-y-auto",
+            actionPending && "ring-2 ring-primary/20 ring-offset-2"
           )}>
-            <NextBestActionPanel
-              leadId={leadId}
-              lead={lead}
-              tasks={lead.tasks || []}
-              onActionPending={setActionPending}
-            />
+            <div className="p-6">
+              <NextBestActionPanel
+                leadId={leadId}
+                lead={lead}
+                tasks={lead.tasks || []}
+                onActionPending={setActionPending}
+              />
+            </div>
           </div>
         </div>
       </div>

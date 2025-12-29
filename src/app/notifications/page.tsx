@@ -11,6 +11,8 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { NotificationCard } from '@/components/notifications/NotificationCard'
 import { CheckCircle2 } from 'lucide-react'
 import { Button } from '@/components/ui/button'
+import { Card } from '@/components/ui/card'
+import { Skeleton } from '@/components/ui/skeleton'
 
 interface ActionableNotification {
   id: number
@@ -205,10 +207,23 @@ export default function NotificationsPage() {
   if (loading) {
     return (
       <MainLayout>
-        <div className="p-6">
+        <div className="p-6 max-w-4xl mx-auto">
+          <div className="mb-6">
+            <Skeleton className="h-8 w-48 mb-2" />
+            <Skeleton className="h-4 w-32" />
+          </div>
           <div className="space-y-4">
-            {[1, 2, 3].map((i) => (
-              <div key={i} className="h-24 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+            {[1, 2, 3, 4].map((i) => (
+              <Card key={i} className="card-premium p-5">
+                <div className="flex items-start gap-4">
+                  <Skeleton className="h-10 w-10 rounded-[12px] flex-shrink-0" />
+                  <div className="flex-1 space-y-2">
+                    <Skeleton className="h-5 w-3/4" />
+                    <Skeleton className="h-4 w-full" />
+                    <Skeleton className="h-4 w-2/3" />
+                  </div>
+                </div>
+              </Card>
             ))}
           </div>
         </div>
@@ -221,10 +236,10 @@ export default function NotificationsPage() {
       <div className="p-6 max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold text-slate-900 dark:text-slate-100">
+            <h1 className="text-heading text-slate-900 dark:text-slate-100">
               Notifications
             </h1>
-            <p className="text-sm text-slate-500 dark:text-slate-400 mt-1">
+            <p className="text-meta muted-text mt-1">
               {notifications.length} actionable {notifications.length === 1 ? 'item' : 'items'}
             </p>
           </div>
@@ -233,7 +248,7 @@ export default function NotificationsPage() {
               variant="outline"
               size="sm"
               onClick={markAllAsRead}
-              className="rounded-xl"
+              className="rounded-[12px] border-slate-200/60 dark:border-slate-800/60"
             >
               Mark all as read
             </Button>
@@ -241,17 +256,17 @@ export default function NotificationsPage() {
         </div>
 
         {notifications.length === 0 ? (
-          <div className="p-12 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+          <Card className="card-premium p-12 text-center">
             <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
               <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
             </div>
-            <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
-              All caught up!
+            <p className="text-heading text-slate-900 dark:text-slate-100 mb-2">
+              All caught up
             </p>
-            <p className="text-xs text-slate-500 dark:text-slate-400">
-              No actionable notifications
+            <p className="text-body muted-text">
+              No actionable notifications right now
             </p>
-          </div>
+          </Card>
         ) : (
           <div className="space-y-6">
             {notifications.filter(n => {
@@ -261,7 +276,7 @@ export default function NotificationsPage() {
               return createdAt >= today
             }).length > 0 && (
               <div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+                <h2 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-4">
                   Today
                 </h2>
                 <div className="space-y-3">
@@ -292,7 +307,7 @@ export default function NotificationsPage() {
               return createdAt >= yesterday && createdAt < today
             }).length > 0 && (
               <div>
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-3">
+                <h2 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-4">
                   Yesterday
                 </h2>
                 <div className="space-y-3">

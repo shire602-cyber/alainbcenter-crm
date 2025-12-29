@@ -28,6 +28,16 @@ import {
   type ConversationState,
 } from './stateMachine'
 
+// BANNED QUESTION KEYS - These must NEVER be asked
+const BANNED_QUESTION_KEYS = new Set([
+  'new_or_renewal',
+  'new_or_renew',
+  'company_name',
+  'companyName',
+  'ASK_COMPANY',
+  'ASK_NEW_OR_RENEW',
+])
+
 export interface OrchestratorInput {
   conversationId: number
   leadId?: number
@@ -237,7 +247,177 @@ export async function generateAIReply(
       throw new Error(`Lead not found for conversation ${input.conversationId}`)
     }
     
-    // Step 1.5: Extract fields from inbound message and update state
+    // Step 1.5: Check question budget (max 6 questions)
+    if (conversationState.questionsAskedCount >= 6) {
+      console.log(`[ORCHESTRATOR] Question budget reached (${conversationState.questionsAskedCount} questions) - triggering handoff`)
+      
+      // Check if handoff was already triggered
+      const handoffTriggered = conversationState.knownFields.handoffTriggeredAt
+      if (!handoffTriggered) {
+        // Send handoff message (greeting will be added globally)
+        const handoffMessage = `Perfect ✅ I have enough to proceed.
+Please share your email for the quotation and the best time for our consultant to call you (today or tomorrow).`
+        
+        // Mark handoff as triggered
+        await updateConversationState(
+          input.conversationId,
+          {
+            knownFields: {
+              ...conversationState.knownFields,
+              handoffTriggeredAt: new Date().toISOString(),
+            },
+          },
+          expectedStateVersion
+        )
+        
+        return {
+          replyText: handoffMessage,
+          extractedFields: {},
+          confidence: 100,
+          nextStepKey: 'HANDOFF',
+          tasksToCreate: [{
+            type: 'FOLLOW_UP',
+            title: 'Follow up with customer for email and call time',
+            dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+          }],
+          shouldEscalate: false,
+        }
+      } else {
+        // Handoff already triggered - don't send again
+        return {
+          replyText: '',
+          extractedFields: {},
+          confidence: 0,
+          tasksToCreate: [],
+          shouldEscalate: true,
+          handoverReason: 'Question budget exceeded, waiting for customer response',
+        }
+      }
+    }
+    
+    // Step 1.6: Check for qualification complete (name + service + nationality)
+    const hasCoreQualification = 
+      conversationState.knownFields.name && 
+      conversationState.knownFields.service && 
+      conversationState.knownFields.nationality
+    
+    if (hasCoreQualification && !conversationState.knownFields.qualificationConfirmedAt) {
+      // Check if we already sent confirmation
+      const confirmationSent = conversation.messages.some(m => 
+        m.direction === 'OUTBOUND' && 
+        (m.body || '').includes('Perfect') && 
+        (m.body || '').includes('Noted:')
+      )
+      
+      if (!confirmationSent) {
+        const name = conversationState.knownFields.name || lead.contact.fullName || 'there'
+        const service = conversationState.knownFields.service || lead.serviceType?.name || 'service'
+        const nationality = conversationState.knownFields.nationality || lead.contact.nationality || 'nationality'
+        
+        // Confirmation message (greeting will be added globally)
+        const confirmationMessage = `Perfect, ${name}! ✅ I've noted:
+• Service: ${service}
+• Nationality: ${nationality}
+
+Please share your email so I can send you the quotation,
+and let me know the best time for our consultant to call you.`
+        
+        // Mark confirmation as sent
+        await updateConversationState(
+          input.conversationId,
+          {
+            knownFields: {
+              ...conversationState.knownFields,
+              qualificationConfirmedAt: new Date().toISOString(),
+            },
+          },
+          expectedStateVersion
+        )
+        
+        return {
+          replyText: confirmationMessage,
+          extractedFields: {
+            name: conversationState.knownFields.name,
+            service: conversationState.knownFields.service,
+            nationality: conversationState.knownFields.nationality,
+          },
+          confidence: 100,
+          nextStepKey: 'QUALIFICATION_COMPLETE',
+          tasksToCreate: [],
+          shouldEscalate: false,
+        }
+      }
+    }
+    
+    // Step 1.7: STAGE 1 QUALIFICATION GATE
+    // Stage 1 = core qualification only: name, service, nationality
+    // Before core qualification is complete, ask ONLY missing among {name, service, nationality}
+    // Fixed priority: 1) name, 2) service, 3) nationality
+    // NEVER ask any other questions until Stage 1 is complete
+    
+    const hasCoreQualificationCheck = 
+      conversationState.knownFields.name && 
+      conversationState.knownFields.service && 
+      conversationState.knownFields.nationality
+    
+    // If Stage 1 not complete, enforce strict gate
+    if (!hasCoreQualificationCheck) {
+      // Determine which core field to ask for (priority order)
+      let nextCoreQuestion: { questionKey: string; question: string } | null = null
+      
+      if (!conversationState.knownFields.name) {
+        nextCoreQuestion = {
+          questionKey: 'ASK_NAME',
+          question: 'May I know your full name, please?',
+        }
+      } else if (!conversationState.knownFields.service) {
+        const name = conversationState.knownFields.name || lead.contact.fullName || ''
+        nextCoreQuestion = {
+          questionKey: 'ASK_SERVICE',
+          question: `Thanks${name ? `, ${name}` : ''}. Which service are you looking for today? (Family Visa / Visit Visa / Freelance Visa / Freelance Permit / Business Setup / Golden Visa / PRO Services)`,
+        }
+      } else if (!conversationState.knownFields.nationality) {
+        nextCoreQuestion = {
+          questionKey: 'ASK_NATIONALITY',
+          question: 'What is your nationality?',
+        }
+      }
+      
+      // If we have a core question to ask, check no-repeat guard
+      if (nextCoreQuestion) {
+        // Check if this question was asked recently
+        const wasAsked = wasQuestionAsked(conversationState, nextCoreQuestion.questionKey)
+        
+        if (!wasAsked && !BANNED_QUESTION_KEYS.has(nextCoreQuestion.questionKey)) {
+          // Record question asked
+          const { recordQuestionAsked } = await import('../conversation/flowState')
+          await recordQuestionAsked(input.conversationId, nextCoreQuestion.questionKey, `WAIT_${nextCoreQuestion.questionKey}`)
+          
+          // Increment question count
+          const newQuestionsCount = conversationState.questionsAskedCount + 1
+          await updateConversationState(
+            input.conversationId,
+            {
+              questionsAskedCount: newQuestionsCount,
+              lastQuestionKey: nextCoreQuestion.questionKey,
+              knownFields: conversationState.knownFields,
+            },
+            expectedStateVersion
+          )
+          
+          return {
+            replyText: nextCoreQuestion.question,
+            extractedFields: {},
+            confidence: 100,
+            nextStepKey: nextCoreQuestion.questionKey,
+            tasksToCreate: [],
+            shouldEscalate: false,
+          }
+        }
+      }
+    }
+    
+    // Step 1.8: Extract fields from inbound message and update state
     const stateExtractedFields = extractFieldsToState(input.inboundText, conversationState)
     const updatedKnownFields = {
       ...conversationState.knownFields,
@@ -299,50 +479,89 @@ export async function generateAIReply(
       if (ruleEngineResult.reply && !ruleEngineResult.needsHuman) {
         console.log(`[ORCHESTRATOR] Rule engine generated reply (deterministic)`)
         
-        // Validate with strictQualification
+        // Step 3.1: HARD BAN - Check for banned question keys in reply
+        const replyLower = ruleEngineResult.reply.toLowerCase()
+        let isBanned = false
+        for (const bannedKey of BANNED_QUESTION_KEYS) {
+          if (replyLower.includes(bannedKey.toLowerCase()) || 
+              replyLower.includes('new or renew') || 
+              replyLower.includes('company name')) {
+            console.error(`[ORCHESTRATOR] BANNED QUESTION DETECTED: ${bannedKey} - blocking reply`)
+            isBanned = true
+            break
+          }
+        }
+        
+        // Step 3.2: Check if lastQuestionKey is banned
+        const currentQuestionKey = conversationState.lastQuestionKey
+        if (currentQuestionKey && BANNED_QUESTION_KEYS.has(currentQuestionKey)) {
+          console.error(`[ORCHESTRATOR] BANNED QUESTION KEY: ${currentQuestionKey} - skipping`)
+          isBanned = true
+        }
+        
+        // Step 3.3: Check no-repeat guard (prevent asking same questionKey in last 3 outbound)
+        if (!isBanned && currentQuestionKey) {
+          const wasAsked = wasQuestionAsked(conversationState, currentQuestionKey)
+          if (wasAsked) {
+            console.log(`[ORCHESTRATOR] Question ${currentQuestionKey} was asked recently - skipping`)
+            isBanned = true
+          }
+        }
+        
+        // If banned, skip this reply and fall through to LLM
+        if (isBanned) {
+          console.log(`[ORCHESTRATOR] Rule engine reply blocked - falling back to LLM`)
+        } else {
+          // Validate with strictQualification
         const validation = await validateQualificationRules(
           input.conversationId,
           ruleEngineResult.reply
         )
         
-        if (validation.isValid && validation.sanitizedReply) {
-          // Reload state to check if lastQuestionKey was updated by flow state system
-          const stateAfterRuleEngine = await loadConversationState(input.conversationId)
-          const lastQuestionKeyChanged = stateAfterRuleEngine.lastQuestionKey !== conversationState.lastQuestionKey
-          const hasQuestionKey = stateAfterRuleEngine.lastQuestionKey && 
-            (stateAfterRuleEngine.lastQuestionKey.startsWith('BS_Q') || 
-             stateAfterRuleEngine.lastQuestionKey.startsWith('ASK_') ||
-             stateAfterRuleEngine.lastQuestionKey.startsWith('Q'))
-          
-          // If lastQuestionKey changed and indicates a question was asked, increment count
-          if (lastQuestionKeyChanged && hasQuestionKey && stateAfterRuleEngine.lastQuestionKey) {
-            const newQuestionsCount = conversationState.questionsAskedCount + 1
-            await updateConversationState(
-              input.conversationId,
-              {
-                questionsAskedCount: newQuestionsCount,
-                knownFields: updatedKnownFields,
-              },
-              stateAfterRuleEngine.stateVersion
-            )
-          } else {
-            // No question asked - just update known fields
-            await updateConversationState(
-              input.conversationId,
-              {
-                knownFields: updatedKnownFields,
-              },
-              stateAfterRuleEngine.stateVersion
-            )
-          }
-          
-          return {
-            replyText: validation.sanitizedReply,
-            extractedFields: extractFieldsFromReply(ruleEngineResult.reply, input.inboundText),
-            confidence: 90, // High confidence for rule engine
-            nextStepKey: stateAfterRuleEngine.lastQuestionKey,
-            tasksToCreate: [],
-            shouldEscalate: false,
+          if (validation.isValid && validation.sanitizedReply) {
+            // Reload state to check if lastQuestionKey was updated by flow state system
+            const stateAfterRuleEngine = await loadConversationState(input.conversationId)
+            const lastQuestionKeyChanged = stateAfterRuleEngine.lastQuestionKey !== conversationState.lastQuestionKey
+            const hasQuestionKey = stateAfterRuleEngine.lastQuestionKey && 
+              (stateAfterRuleEngine.lastQuestionKey.startsWith('BS_Q') || 
+               stateAfterRuleEngine.lastQuestionKey.startsWith('ASK_') ||
+               stateAfterRuleEngine.lastQuestionKey.startsWith('Q'))
+            
+            // If lastQuestionKey changed and indicates a question was asked, increment count
+            if (lastQuestionKeyChanged && hasQuestionKey && stateAfterRuleEngine.lastQuestionKey) {
+              // Check if question key is banned
+              if (BANNED_QUESTION_KEYS.has(stateAfterRuleEngine.lastQuestionKey)) {
+                console.error(`[ORCHESTRATOR] BANNED QUESTION KEY in state: ${stateAfterRuleEngine.lastQuestionKey} - not incrementing count`)
+              } else {
+                const newQuestionsCount = conversationState.questionsAskedCount + 1
+                await updateConversationState(
+                  input.conversationId,
+                  {
+                    questionsAskedCount: newQuestionsCount,
+                    knownFields: updatedKnownFields,
+                  },
+                  stateAfterRuleEngine.stateVersion
+                )
+              }
+            } else {
+              // No question asked - just update known fields
+              await updateConversationState(
+                input.conversationId,
+                {
+                  knownFields: updatedKnownFields,
+                },
+                stateAfterRuleEngine.stateVersion
+              )
+            }
+            
+            return {
+              replyText: validation.sanitizedReply,
+              extractedFields: extractFieldsFromReply(ruleEngineResult.reply, input.inboundText),
+              confidence: 90, // High confidence for rule engine
+              nextStepKey: stateAfterRuleEngine.lastQuestionKey,
+              tasksToCreate: [],
+              shouldEscalate: false,
+            }
           }
         }
       }

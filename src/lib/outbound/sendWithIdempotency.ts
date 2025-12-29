@@ -15,6 +15,7 @@
 import { prisma } from '../prisma'
 import { createHash } from 'crypto'
 import { sendTextMessage } from '../whatsapp'
+import { withGlobalGreeting } from './globalGreeting'
 
 export interface OutboundSendOptions {
   conversationId: number
@@ -119,9 +120,66 @@ export async function sendOutboundWithIdempotency(
   const { conversationId, contactId, leadId, phone, text: rawText, provider, triggerProviderMessageId, replyType, lastQuestionKey, flowStep } = options
   
   // CRITICAL: Normalize text to ensure it's always plain text (never JSON)
-  const text = normalizeOutboundText(rawText)
+  let text = normalizeOutboundText(rawText)
   
-  // Step 1: Compute dedupe key (using normalized text)
+  // Step 0: Detect first outbound message (before applying greeting)
+  // This is safer than counting messages during retries
+  let isFirstOutboundMessage = false
+  
+  if (provider === 'whatsapp') {
+    // Check conversation's knownFields for firstGreetingSentAt
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { knownFields: true },
+    })
+    
+    let knownFields: any = {}
+    if (conversation?.knownFields) {
+      try {
+        knownFields = typeof conversation.knownFields === 'string'
+          ? JSON.parse(conversation.knownFields)
+          : conversation.knownFields
+      } catch {
+        knownFields = {}
+      }
+    }
+    
+    // Check if first greeting was already sent
+    const firstGreetingSentAt = knownFields.firstGreetingSentAt
+    
+    if (!firstGreetingSentAt) {
+      // This is the first outbound message
+      isFirstOutboundMessage = true
+      
+      // Also check outbound message count as fallback
+      const outboundCount = await prisma.message.count({
+        where: {
+          conversationId,
+          direction: 'OUTBOUND',
+        },
+      })
+      
+      // If count is 0, confirm it's first message
+      if (outboundCount === 0) {
+        isFirstOutboundMessage = true
+      } else {
+        // Count > 0 but firstGreetingSentAt not set - likely a race condition
+        // Don't add greeting to be safe
+        isFirstOutboundMessage = false
+      }
+    } else {
+      // First greeting already sent - not first message
+      isFirstOutboundMessage = false
+    }
+    
+    // CRITICAL: Apply global greeting prefix for WhatsApp messages (context-aware)
+    text = withGlobalGreeting(text, {
+      isFirstOutboundMessage,
+      conversationId,
+    })
+  }
+  
+  // Step 1: Compute dedupe key (using normalized text, greeting applied if needed)
   const outboundDedupeKey = computeOutboundDedupeKey({ ...options, text })
   
   // Step 2: Try to insert OutboundMessageLog with status="PENDING"
@@ -196,6 +254,44 @@ export async function sendOutboundWithIdempotency(
         sentAt: new Date(),
       },
     })
+    
+    // Step 4.5: If this was the first outbound message, persist firstGreetingSentAt
+    if (isFirstOutboundMessage && provider === 'whatsapp') {
+      try {
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { knownFields: true },
+        })
+        
+        let knownFields: any = {}
+        if (conversation?.knownFields) {
+          try {
+            knownFields = typeof conversation.knownFields === 'string'
+              ? JSON.parse(conversation.knownFields)
+              : conversation.knownFields
+          } catch {
+            knownFields = {}
+          }
+        }
+        
+        // Only set if not already set (idempotent)
+        if (!knownFields.firstGreetingSentAt) {
+          knownFields.firstGreetingSentAt = new Date().toISOString()
+          
+          await prisma.conversation.update({
+            where: { id: conversationId },
+            data: {
+              knownFields: JSON.stringify(knownFields),
+            },
+          })
+          
+          console.log(`[OUTBOUND-IDEMPOTENCY] Marked first greeting as sent for conversation ${conversationId}`)
+        }
+      } catch (error: any) {
+        // Non-critical - log but don't fail
+        console.warn(`[OUTBOUND-IDEMPOTENCY] Failed to persist firstGreetingSentAt:`, error.message)
+      }
+    }
     
     console.log(`[OUTBOUND-IDEMPOTENCY] Message sent successfully: ${messageId}, log: ${outboundLogId}`)
     

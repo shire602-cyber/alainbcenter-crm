@@ -79,13 +79,12 @@ const RULE_ENGINE_JSON = {
         "visit_duration_days": { "type": "integer", "required": false },
         "license_type": { "type": "string", "required": false },
         "business_activity": { "type": "string", "required": false },
-        "new_or_renewal": { "type": "string", "required": false },
         "partners_count": { "type": "integer", "required": false },
         "visas_count": { "type": "integer", "required": false },
         "golden_category": { "type": "string", "required": false }
       },
       "rules": {
-        "never_reask_if_present": ["name", "service", "nationality", "inside_uae", "visit_duration_days", "license_type", "new_or_renewal"],
+        "never_reask_if_present": ["name", "service", "nationality", "inside_uae", "visit_duration_days", "license_type"],
         "acknowledge_correction_then_continue": true
       }
     }
@@ -134,7 +133,7 @@ const RULE_ENGINE_JSON = {
         "actions": [
           {
             "type": "send_message",
-            "template": "Hello! 👋 I'm Hamdi from Al Ain Business Center. I'm here to help with visas and business setup in the UAE."
+            "template": "To help quickly, may I have your full name, service needed, and nationality?"
           }
         ],
         "next": "S1_CAPTURE_NAME"
@@ -510,7 +509,6 @@ export interface ConversationMemory {
   visit_duration_days?: number
   license_type?: string // 'freezone' | 'mainland'
   business_activity?: string
-  new_or_renewal?: string
   partners_count?: number
   visas_count?: number
   golden_category?: string

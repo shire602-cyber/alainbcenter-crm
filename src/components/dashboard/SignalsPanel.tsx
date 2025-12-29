@@ -1,17 +1,15 @@
 'use client'
 
 /**
- * SIGNALS PANEL
+ * SIGNALS PANEL - CONTROL TOWER
  * 
- * Right column with 3 compact cards:
- * - Renewals Coming Up (max 5)
- * - Waiting on Customer (max 5)
- * - Alerts (only true system alerts)
+ * Radar-like data display: Renewals, Waiting, Alerts
+ * Compact, informative, scannable in <5 seconds
  */
 
-import { useState, useEffect } from 'react'
-import { Calendar, Hourglass, AlertTriangle, ArrowRight } from 'lucide-react'
-import { format, differenceInDays } from 'date-fns'
+import { useState, useEffect, memo } from 'react'
+import { Calendar, Hourglass, AlertTriangle, ChevronRight } from 'lucide-react'
+import { format, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Card } from '@/components/ui/card'
 import { Badge } from '@/components/ui/badge'
@@ -43,11 +41,51 @@ interface AlertItem {
   leadId?: number
 }
 
-export function SignalsPanel() {
+function RenewalBadge({ daysUntil }: { daysUntil: number }) {
+  if (daysUntil <= 7) return <Badge className="pill bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400">{daysUntil}d</Badge>
+  if (daysUntil <= 30) return <Badge className="pill bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">{daysUntil}d</Badge>
+  if (daysUntil <= 60) return <Badge className="pill bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">{daysUntil}d</Badge>
+  return <Badge className="pill">{daysUntil}d</Badge>
+}
+
+const SignalRow = memo(function SignalRow({ 
+  href, 
+  children, 
+  hovered 
+}: { 
+  href: string
+  children: React.ReactNode
+  hovered: boolean
+}) {
+  return (
+    <Link
+      href={href}
+      className={cn(
+        "group flex items-center gap-3 p-2.5 rounded-[10px]",
+        "bg-card-muted border border-slate-200/60 dark:border-slate-800/60",
+        "hover:bg-card hover:border-slate-300 dark:hover:border-slate-700",
+        "hover:shadow-sm transition-all duration-200"
+      )}
+    >
+      <div className="flex-1 min-w-0">
+        {children}
+      </div>
+      <ChevronRight 
+        className={cn(
+          "h-3.5 w-3.5 text-slate-400 transition-opacity duration-200",
+          hovered ? "opacity-100" : "opacity-0"
+        )} 
+      />
+    </Link>
+  )
+})
+
+export const SignalsPanel = memo(function SignalsPanel() {
   const [renewals, setRenewals] = useState<RenewalItem[]>([])
   const [waiting, setWaiting] = useState<WaitingItem[]>([])
   const [alerts, setAlerts] = useState<AlertItem[]>([])
   const [loading, setLoading] = useState(true)
+  const [hoveredIds, setHoveredIds] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     loadData()
@@ -57,42 +95,40 @@ export function SignalsPanel() {
 
   async function loadData() {
     try {
-      // Load renewals
-      const renewalsRes = await fetch('/api/dashboard/command-center')
+      const [renewalsRes, waitingRes, alertsRes] = await Promise.all([
+        fetch('/api/dashboard/command-center'),
+        fetch('/api/dashboard/waiting-on-customer'),
+        fetch('/api/notifications')
+      ])
+
       if (renewalsRes.ok) {
         const data = await renewalsRes.json()
-        // Extract renewals from operations (expiring items)
         const renewalItems = (data.operations || [])
-          .filter((item: any) => item.title.includes('expires'))
+          .filter((item: any) => item.title?.includes('expires'))
           .slice(0, 5)
           .map((item: any) => ({
             id: parseInt(item.id.split('_')[1]) || 0,
             leadId: item.leadId,
             contactName: item.contactName,
             serviceType: item.serviceType,
-            expiryType: item.title.split(' expires')[0] || 'Expiry',
+            expiryType: item.title?.split(' expires')[0] || 'Expiry',
             expiryDate: item.dueDate || '',
-            daysUntil: parseInt(item.reason.match(/(\d+)/)?.[0] || '0'),
+            daysUntil: parseInt(item.reason?.match(/(\d+)/)?.[0] || '0'),
           }))
         setRenewals(renewalItems)
       }
 
-      // Load waiting on customer
-      const waitingRes = await fetch('/api/dashboard/waiting-on-customer')
       if (waitingRes.ok) {
         const data = await waitingRes.json()
-        const waitingItems = (data.items || []).slice(0, 5).map((item: any) => ({
+        setWaiting((data.items || []).slice(0, 5).map((item: any) => ({
           id: item.id,
           leadId: item.leadId,
           contactName: item.contactName,
           serviceType: item.serviceType,
           daysWaiting: item.daysWaiting || 0,
-        }))
-        setWaiting(waitingItems)
+        })))
       }
 
-      // Load system alerts (only true alerts, not "reply due" spam)
-      const alertsRes = await fetch('/api/notifications')
       if (alertsRes.ok) {
         const data = await alertsRes.json()
         const systemAlerts = (data.notifications || [])
@@ -122,8 +158,8 @@ export function SignalsPanel() {
     return (
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
-          <Card key={i} className="p-4 rounded-xl border border-slate-200 dark:border-slate-800">
-            <div className="h-32 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+          <Card key={i} className="card-premium p-4">
+            <div className="h-24 bg-slate-200 dark:bg-slate-800 rounded-[10px] animate-pulse" />
           </Card>
         ))}
       </div>
@@ -132,128 +168,119 @@ export function SignalsPanel() {
 
   return (
     <div className="space-y-4">
-      {/* Renewals Coming Up */}
-      <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+      {/* Renewals */}
+      {renewals.length > 0 && (
+        <Card className="card-premium p-4">
+          <div className="flex items-center gap-2 mb-3">
             <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
               Renewals Coming Up
             </h4>
           </div>
-          {renewals.length > 5 && (
-            <Link href="/renewals">
-              <Badge variant="outline" className="text-xs">
-                View all
-              </Badge>
-            </Link>
-          )}
-        </div>
-        {renewals.length === 0 ? (
-          <p className="text-xs text-slate-500 dark:text-slate-400">No renewals in next 30 days</p>
-        ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {renewals.map((item) => (
-              <Link
+              <SignalRow
                 key={item.id}
                 href={`/leads/${item.leadId}`}
-                className="block p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-smooth"
+                hovered={hoveredIds.has(`renewal-${item.id}`)}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate">
-                    {item.contactName}
+                <div 
+                  onMouseEnter={() => setHoveredIds(prev => new Set(prev).add(`renewal-${item.id}`))}
+                  onMouseLeave={() => setHoveredIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(`renewal-${item.id}`)
+                    return next
+                  })}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-body font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {item.contactName}
+                    </p>
+                    <RenewalBadge daysUntil={item.daysUntil} />
+                  </div>
+                  <p className="text-meta text-slate-600 dark:text-slate-400 truncate">
+                    {item.expiryType} • {item.serviceType || 'Service'}
                   </p>
-                  <Badge 
-                    variant={item.daysUntil <= 7 ? 'destructive' : 'outline'} 
-                    className="text-xs"
-                  >
-                    {item.daysUntil}d
-                  </Badge>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {item.expiryType} • {item.serviceType || 'Service'}
-                </p>
-              </Link>
+              </SignalRow>
             ))}
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Waiting on Customer */}
-      <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
-        <div className="flex items-center justify-between mb-3">
-          <div className="flex items-center gap-2">
+      {waiting.length > 0 && (
+        <Card className="card-premium p-4">
+          <div className="flex items-center gap-2 mb-3">
             <Hourglass className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
               Customer hasn't replied yet
             </h4>
           </div>
-          {waiting.length > 5 && (
-            <Link href="/leads?filter=waiting">
-              <Badge variant="outline" className="text-xs">
-                View all
-              </Badge>
-            </Link>
-          )}
-        </div>
-        {waiting.length === 0 ? (
-          <p className="text-xs text-slate-500 dark:text-slate-400">No items waiting</p>
-        ) : (
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {waiting.map((item) => (
-              <Link
+              <SignalRow
                 key={item.id}
                 href={`/leads/${item.leadId}`}
-                className="block p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-800/50 transition-smooth"
+                hovered={hoveredIds.has(`waiting-${item.id}`)}
               >
-                <div className="flex items-center justify-between mb-1">
-                  <p className="text-xs font-medium text-slate-900 dark:text-slate-100 truncate">
-                    {item.contactName}
+                <div
+                  onMouseEnter={() => setHoveredIds(prev => new Set(prev).add(`waiting-${item.id}`))}
+                  onMouseLeave={() => setHoveredIds(prev => {
+                    const next = new Set(prev)
+                    next.delete(`waiting-${item.id}`)
+                    return next
+                  })}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <p className="text-body font-medium text-slate-900 dark:text-slate-100 truncate">
+                      {item.contactName}
+                    </p>
+                    <span className={cn(
+                      "text-meta font-medium",
+                      item.daysWaiting > 7 ? "text-amber-600 dark:text-amber-400" : "muted-text"
+                    )}>
+                      Last reply: {item.daysWaiting === 1 ? 'yesterday' : `${item.daysWaiting} days ago`}
+                    </span>
+                  </div>
+                  <p className="text-meta muted-text truncate">
+                    {item.serviceType || 'Service'}
                   </p>
-                  <span className={cn(
-                    "text-xs font-medium",
-                    item.daysWaiting > 7 ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-400"
-                  )}>
-                    {item.daysWaiting === 1 ? 'Since yesterday' : `${item.daysWaiting} days`}
-                  </span>
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
-                  {item.serviceType || 'Service'}
-                </p>
-              </Link>
+              </SignalRow>
             ))}
           </div>
-        )}
-      </Card>
+        </Card>
+      )}
 
       {/* Alerts */}
       {alerts.length > 0 && (
-        <Card className="p-4 rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-900/10">
+        <Card className="card-premium p-4 border-amber-200/60 dark:border-amber-800/60 bg-amber-50/50 dark:bg-amber-900/5">
           <div className="flex items-center gap-2 mb-3">
             <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />
-            <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
               System Alerts
             </h4>
           </div>
-          <div className="space-y-2">
+          <div className="space-y-1.5">
             {alerts.map((alert) => (
               <div
                 key={alert.id}
-                className="p-2 rounded-lg bg-white dark:bg-slate-900 border border-amber-200 dark:border-amber-800"
+                className="p-2.5 rounded-[10px] bg-card border border-amber-200/60 dark:border-amber-800/60"
               >
-                <p className="text-xs font-medium text-slate-900 dark:text-slate-100 mb-1">
+                <p className="text-body font-medium text-slate-900 dark:text-slate-100 mb-1">
                   {alert.title}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 line-clamp-2">
+                <p className="text-meta muted-text line-clamp-2">
                   {alert.message}
                 </p>
                 {alert.leadId && (
                   <Link
                     href={`/leads/${alert.leadId}`}
-                    className="text-xs text-amber-600 dark:text-amber-400 hover:underline mt-1 inline-flex items-center gap-1"
+                    className="text-meta text-amber-600 dark:text-amber-400 hover:underline mt-1.5 inline-flex items-center gap-1"
                   >
                     View lead
-                    <ArrowRight className="h-3 w-3" />
+                    <ChevronRight className="h-3 w-3" />
                   </Link>
                 )}
               </div>
@@ -263,5 +290,4 @@ export function SignalsPanel() {
       )}
     </div>
   )
-}
-
+})
