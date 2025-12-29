@@ -14,9 +14,26 @@ const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret-change-in-production'
 
 export async function GET(req: NextRequest) {
   try {
-    // Verify cron secret
+    // Verify cron secret - Allow Vercel cron (x-vercel-cron header) OR Bearer token
+    const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
-    if (authHeader !== `Bearer ${CRON_SECRET}`) {
+    
+    // Allow Vercel cron (has x-vercel-cron header) OR valid CRON_SECRET
+    let isAuthorized = false
+    
+    if (vercelCronHeader) {
+      // Vercel cron request - automatically authorized
+      isAuthorized = true
+      console.log('✅ [CRON] Vercel cron request detected for outbound jobs')
+    } else if (authHeader && authHeader.startsWith('Bearer ')) {
+      const token = authHeader.substring(7)
+      if (token === CRON_SECRET) {
+        isAuthorized = true
+        console.log('✅ [CRON] Authorized via CRON_SECRET for outbound jobs')
+      }
+    }
+    
+    if (!isAuthorized) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
