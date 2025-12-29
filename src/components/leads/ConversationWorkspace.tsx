@@ -187,6 +187,7 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
   // Memoize grouped messages to avoid recalculation
   const messageGroups = useMemo(() => groupMessages(messages), [messages])
 
+  // A) Define loadMessages FIRST (before useSmartPolling)
   const loadMessages = useCallback(async () => {
     try {
       const res = await fetch(`/api/leads/${leadId}/messages?channel=${channel}`)
@@ -200,6 +201,20 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
       setLoading(false)
     }
   }, [leadId, channel])
+
+  // B) Call useSmartPolling AFTER loadMessages exists
+  useSmartPolling({
+    fetcher: loadMessages,
+    intervalMs: 5000, // 5s polling for messages
+    enabled: true,
+    pauseWhenHidden: true,
+    onErrorBackoff: false, // Don't backoff on message polling errors
+  })
+
+  // C) useEffect to call loadMessages on mount
+  useEffect(() => {
+    loadMessages()
+  }, [loadMessages])
 
   const loadSmartReplies = useCallback(async () => {
     try {
@@ -302,6 +317,10 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
       loadSmartReplies()
     }
   }, [messages.length, loadSmartReplies])
+
+  useEffect(() => {
+    scrollToBottom()
+  }, [messages, scrollToBottom])
 
   // Skeleton loader (shows within 100ms)
   if (loading) {
