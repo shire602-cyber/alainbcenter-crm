@@ -76,21 +76,35 @@ function MetricPill({
   )
 }
 
-export const MomentumStrip = memo(function MomentumStrip() {
+interface MomentumStripProps {
+  momentum?: {
+    repliesToday: number
+    quotesToday: number
+    renewalsNext7Days: number
+    revenuePotentialToday: number | null
+  }
+}
+
+export const MomentumStrip = memo(function MomentumStrip({ momentum: propMomentum }: MomentumStripProps) {
   const [metrics, setMetrics] = useState<MomentumMetrics>({
     repliesToday: 0,
     quotesToday: 0,
     renewals7d: 0,
     revenuePotentialToday: null,
   })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!propMomentum)
 
   const loadMetrics = async () => {
     try {
       const res = await fetch('/api/dashboard/momentum')
       if (res.ok) {
         const data = await res.json()
-        setMetrics(data)
+        setMetrics({
+          repliesToday: data.repliesToday,
+          quotesToday: data.quotesToday,
+          renewals7d: data.renewals7d,
+          revenuePotentialToday: data.revenuePotentialToday,
+        })
       }
     } catch (error) {
       console.error('Failed to load momentum metrics:', error)
@@ -102,14 +116,24 @@ export const MomentumStrip = memo(function MomentumStrip() {
   const { isPolling } = useSmartPolling({
     fetcher: loadMetrics,
     intervalMs: 60000, // 60s polling
-    enabled: true,
+    enabled: !propMomentum, // Disable polling if momentum provided via props
     pauseWhenHidden: true,
     onErrorBackoff: true,
   })
 
   useEffect(() => {
-    loadMetrics()
-  }, [])
+    if (!propMomentum) {
+      loadMetrics()
+    }
+  }, [propMomentum])
+
+  // Use prop momentum if provided
+  const displayMetrics = propMomentum ? {
+    repliesToday: propMomentum.repliesToday,
+    quotesToday: propMomentum.quotesToday,
+    renewals7d: propMomentum.renewalsNext7Days,
+    revenuePotentialToday: propMomentum.revenuePotentialToday,
+  } : metrics
 
   if (loading) {
     return (
@@ -123,10 +147,10 @@ export const MomentumStrip = memo(function MomentumStrip() {
     )
   }
 
-  const hasMetrics = metrics.repliesToday > 0 || 
-                     metrics.quotesToday > 0 || 
-                     metrics.renewals7d > 0 || 
-                     (metrics.revenuePotentialToday !== null && metrics.revenuePotentialToday > 0)
+  const hasMetrics = displayMetrics.repliesToday > 0 || 
+                     displayMetrics.quotesToday > 0 || 
+                     displayMetrics.renewals7d > 0 || 
+                     (displayMetrics.revenuePotentialToday !== null && displayMetrics.revenuePotentialToday > 0)
 
   if (!hasMetrics) {
     return (
@@ -147,43 +171,43 @@ export const MomentumStrip = memo(function MomentumStrip() {
   return (
     <Card className="card-premium p-4">
       <div className="flex items-center gap-3 flex-wrap">
-        {metrics.repliesToday > 0 && (
+        {displayMetrics.repliesToday > 0 && (
           <MetricPill
             icon={<MessageSquare className="h-3.5 w-3.5" />}
-            value={metrics.repliesToday}
+            value={displayMetrics.repliesToday}
             label="replies"
             href="/inbox"
             color="blue"
           />
         )}
-        {metrics.quotesToday > 0 && (
+        {displayMetrics.quotesToday > 0 && (
           <MetricPill
             icon={<FileText className="h-3.5 w-3.5" />}
-            value={metrics.quotesToday}
+            value={displayMetrics.quotesToday}
             label="quotes"
             href="/leads?filter=quotes"
             color="purple"
           />
         )}
-        {metrics.renewals7d > 0 && (
+        {displayMetrics.renewals7d > 0 && (
           <MetricPill
             icon={<Calendar className="h-3.5 w-3.5" />}
-            value={metrics.renewals7d}
+            value={displayMetrics.renewals7d}
             label="renewals"
             href="/leads?filter=renewals"
             color="amber"
           />
         )}
-        {metrics.revenuePotentialToday !== null && metrics.revenuePotentialToday > 0 && (
+        {displayMetrics.revenuePotentialToday !== null && displayMetrics.revenuePotentialToday > 0 && (
           <MetricPill
             icon={<TrendingUp className="h-3.5 w-3.5" />}
-            value={`${(metrics.revenuePotentialToday / 1000).toFixed(0)}k`}
+            value={`${(displayMetrics.revenuePotentialToday / 1000).toFixed(0)}k`}
             label="AED"
             href="/leads?filter=qualified"
             color="green"
           />
         )}
-        {metrics.revenuePotentialToday === null && (
+        {displayMetrics.revenuePotentialToday === null && (
           <MetricPill
             icon={<TrendingUp className="h-3.5 w-3.5" />}
             value="—"

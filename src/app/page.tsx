@@ -13,9 +13,7 @@ import {
 import { format, differenceInDays, parseISO, subDays } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { KPICard } from '@/components/dashboard/KPICard'
-import { UpNextList } from '@/components/dashboard/UpNextList'
-import { MomentumStrip } from '@/components/dashboard/MomentumStrip'
-import { DashboardPanels, DashboardSignalsPanel } from '@/components/dashboard/DashboardPanels'
+import { CommandCenterDashboard } from '@/components/dashboard/CommandCenterDashboard'
 
 const STAGES = [
   { value: 'NEW', label: 'New', color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' },
@@ -342,26 +340,15 @@ export default async function DashboardPage() {
             />
           </div>
 
-          {/* Main Grid - Phase 1 Structure ONLY */}
-          <div className="grid gap-4 md:grid-cols-3">
-            {/* FOCUS STACK - Main column (2/3 width) */}
-            <div className="md:col-span-2 space-y-4">
-              {/* 1. Your Focus Now - EXACTLY 1 item, EXACTLY 1 CTA */}
-              <DashboardPanels />
-              
-              {/* 2. Up Next - Max 3 items, no primary CTAs */}
-              <UpNextList />
-              
-              {/* 4. Today's Impact - Metrics only, read-only */}
-              <MomentumStrip />
-            </div>
-
-            {/* SIGNALS PANEL - Right column (1/3 width) */}
-            <div className="md:col-span-1">
-              {/* 3. Signals Panel - Renewals (max 5), Waiting on Customer (max 5), Alerts (max 5) */}
-              <DashboardSignalsPanel />
+          {/* COMMAND CENTER - Personal Command Center Dashboard */}
+          <div className="mb-2">
+            <div className="flex items-center gap-2 text-meta muted-text">
+              <span>Today</span>
+              <span>/</span>
+              <span className="font-medium text-slate-700 dark:text-slate-300">Command Center</span>
             </div>
           </div>
+          <CommandCenterDashboard />
         </div>
       </MainLayout>
     )
