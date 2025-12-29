@@ -1,68 +1,27 @@
 'use client'
 
 /**
- * NEXT BEST ACTION PANEL - PREMIUM ACTION COCKPIT
- * 
- * UX RATIONALE:
- * - ONE primary recommended action (never 2 competing CTAs)
- * - Clear "why this matters" explanation
- * - Impact pills (urgency/revenue/risk) for quick scanning
- * - Quick context strip (last inbound/outbound, stage, service)
- * - Tasks collapsed by default (progressive disclosure)
- * - Mobile: becomes bottom sheet via Sheet component
- * 
- * Performance:
- * - Memoized action computation (useMemo)
- * - Memoized task list (useMemo)
- * - React.memo on component
- * - Skeleton within 50ms
+ * NEXT BEST ACTION PANEL - COMMAND CENTER VERSION
+ * Visually dominant action with urgency indicators
+ * Secondary info collapsed by default
  */
 
-import { useState, useEffect, useMemo, useCallback, memo } from 'react'
-import { Clock, MessageSquare, CheckCircle2, Plus, ChevronDown, ChevronUp } from 'lucide-react'
-import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
+import { useState, useEffect } from 'react'
+import { AlertCircle, Clock, ChevronDown, ChevronUp, Target, MessageSquare } from 'lucide-react'
+import { format, differenceInHours, formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Card } from '@/components/ui/card'
-import { Skeleton } from '@/components/ui/skeleton'
-import { ActionCockpitCard } from './ActionCockpitCard'
-import { computeNextBestAction, computeExpiryContext, type NextBestAction, type LeadContext, type ConversationContext, type TasksContext } from '@/lib/leads/nextBestAction'
-import { useToast } from '@/components/ui/toast'
-import { useRouter } from 'next/navigation'
-import {
-  Accordion,
-  AccordionContent,
-  AccordionItem,
-  AccordionTrigger,
-} from '@/components/ui/accordion'
+import { Accordion, AccordionItem, AccordionTrigger, AccordionContent } from '@/components/ui/accordion'
 
 interface NextBestActionPanelProps {
   leadId: number
   lead?: {
-    id: number
     stage?: string | null
-    serviceTypeEnum?: string | null
-    serviceType?: { name: string } | null
-    expiryDate?: Date | string | null
+    dealProbability?: number | null
     lastInboundAt?: Date | string | null
     lastOutboundAt?: Date | string | null
-    assignedUserId?: number | null
-    dealProbability?: number | null
-    aiScore?: number | null
-    isRenewal?: boolean
-    valueEstimate?: string | null
-    expiryItems?: Array<{
-      type: string
-      expiryDate: Date | string
-    }>
-    conversations?: Array<{
-      messages?: Array<{
-        direction: string
-        body: string | null
-        createdAt: string
-      }>
-    }>
   }
   tasks?: Array<{
     id: number
@@ -72,327 +31,274 @@ interface NextBestActionPanelProps {
     status: string
   }>
   onActionPending?: (isPending: boolean) => void
-  onComposerOpen?: () => void
 }
 
-export const NextBestActionPanel = memo(function NextBestActionPanel({
-  leadId,
-  lead,
-  tasks = [],
-  onActionPending,
-  onComposerOpen,
-}: NextBestActionPanelProps) {
-  const [loading, setLoading] = useState(true)
-  const [action, setAction] = useState<NextBestAction | null>(null)
-  const { showToast } = useToast()
-  const router = useRouter()
+export function NextBestActionPanel({ leadId, lead, tasks = [], onActionPending }: NextBestActionPanelProps) {
+  const [primaryAction, setPrimaryAction] = useState<{
+    type: 'reply' | 'call' | 'quote' | 'follow_up' | 'qualify'
+    label: string
+    reason: string
+    urgency: 'low' | 'normal' | 'high' | 'urgent'
+  } | null>(null)
 
-  // Memoize task context
-  const tasksContext = useMemo<TasksContext>(() => {
-    const now = new Date()
-    const openTasks = tasks.filter(t => t.status === 'OPEN')
-    const dueTasks = openTasks.filter(t => {
-      if (!t.dueAt) return false
-      const due = typeof t.dueAt === 'string' ? new Date(t.dueAt) : t.dueAt
-      return due <= now
-    })
-    const quoteTaskDue = openTasks.some(t => 
-      t.type === 'QUOTE' || t.title.toLowerCase().includes('quote')
-    )
-
-    return {
-      dueCount: dueTasks.length,
-      overdueCount: dueTasks.filter(t => {
-        if (!t.dueAt) return false
-        const due = typeof t.dueAt === 'string' ? new Date(t.dueAt) : t.dueAt
-        return due < now
-      }).length,
-      quoteTaskDue,
-    }
-  }, [tasks])
-
-  // Memoize conversation context
-  const conversationContext = useMemo<ConversationContext>(() => {
-    if (!lead) return {}
+  // Calculate SLA status
+  const slaStatus = (() => {
+    if (!lead?.lastInboundAt) return null
+    const lastInbound = typeof lead.lastInboundAt === 'string' 
+      ? new Date(lead.lastInboundAt) 
+      : lead.lastInboundAt
+    const hoursSince = differenceInHours(new Date(), lastInbound)
     
-    const lastConversation = lead.conversations?.[0]
-    const lastMessage = lastConversation?.messages?.[0]
-    const unreadCount = 0 // TODO: Get from API if available
-    
-    return {
-      needsReplySince: lead.lastInboundAt && !lead.lastOutboundAt 
-        ? lead.lastInboundAt 
-        : lead.lastInboundAt && lead.lastOutboundAt
-        ? (() => {
-            const inbound = typeof lead.lastInboundAt === 'string' ? new Date(lead.lastInboundAt) : lead.lastInboundAt
-            const outbound = typeof lead.lastOutboundAt === 'string' ? new Date(lead.lastOutboundAt) : lead.lastOutboundAt
-            return inbound > outbound ? lead.lastInboundAt : null
-          })()
-        : null,
-      unreadCount,
-      lastInboundAt: lead.lastInboundAt,
-      lastOutboundAt: lead.lastOutboundAt,
-      latestMessage: lastMessage?.body || null,
-    }
-  }, [lead])
+    if (hoursSince > 24) return { level: 'breach', hours: hoursSince, slaRisk: 'high' as const }
+    if (hoursSince > 10) return { level: 'warning', hours: hoursSince, slaRisk: 'medium' as const }
+    if (hoursSince > 4) return { level: 'caution', hours: hoursSince, slaRisk: 'low' as const }
+    return { level: 'ok', hours: hoursSince, slaRisk: 'none' as const }
+  })()
 
-  // Memoize expiry context
-  const expiryContext = useMemo(() => {
-    if (!lead) return {}
-    return computeExpiryContext(lead as LeadContext, lead.expiryItems)
-  }, [lead])
-
-  // Memoize lead context
-  const leadContext = useMemo<LeadContext>(() => {
-    if (!lead) return { id: leadId }
-    
-    return {
-      id: lead.id,
-      stage: lead.stage,
-      serviceTypeEnum: lead.serviceTypeEnum,
-      serviceType: lead.serviceType,
-      expiryDate: lead.expiryDate,
-      lastInboundAt: lead.lastInboundAt,
-      lastOutboundAt: lead.lastOutboundAt,
-      assignedUserId: lead.assignedUserId,
-      dealProbability: lead.dealProbability,
-      aiScore: lead.aiScore,
-      isRenewal: lead.isRenewal,
-      valueEstimate: lead.valueEstimate,
-      qualificationComplete: false, // TODO: Compute from dataJson if available
-      missingFields: [], // TODO: Extract from dataJson if available
-    }
-  }, [lead, leadId])
-
-  // Memoize computed action
-  const computedAction = useMemo(() => {
-    if (!lead) return null
-    return computeNextBestAction(leadContext, conversationContext, tasksContext, expiryContext)
-  }, [leadContext, conversationContext, tasksContext, expiryContext])
-
+  // Determine primary action
   useEffect(() => {
-    if (computedAction) {
-      setAction(computedAction)
-      setLoading(false)
-      
-      // Notify parent of urgency
-      if (onActionPending) {
-        const isUrgent = computedAction.impact.urgency >= 70
-        onActionPending(isUrgent)
-      }
+    if (slaStatus && slaStatus.level === 'breach') {
+      setPrimaryAction({
+        type: 'reply',
+        label: 'Reply Now',
+        reason: 'Customer waiting for your response',
+        urgency: 'urgent',
+      })
+    } else if (lead?.stage === 'PROPOSAL_SENT' || lead?.stage === 'QUOTE_SENT') {
+      setPrimaryAction({
+        type: 'follow_up',
+        label: 'Follow Up',
+        reason: 'Quote sent - check in with customer',
+        urgency: 'high',
+      })
+    } else if (lead?.dealProbability && lead.dealProbability >= 70) {
+      setPrimaryAction({
+        type: 'qualify',
+        label: 'Qualify Lead',
+        reason: 'High-value opportunity - needs attention',
+        urgency: 'high',
+      })
     } else {
-      setLoading(false)
+      setPrimaryAction({
+        type: 'reply',
+        label: 'Continue Conversation',
+        reason: 'Keep the momentum going',
+        urgency: 'normal',
+      })
     }
-  }, [computedAction, onActionPending])
+  }, [slaStatus, lead])
 
-  const handlePrimaryAction = useCallback(async () => {
-    if (!action) return
+  // Notify parent when action is pending
+  useEffect(() => {
+    if (onActionPending) {
+      onActionPending(primaryAction !== null && (primaryAction.urgency === 'urgent' || primaryAction.urgency === 'high'))
+    }
+  }, [primaryAction, onActionPending])
 
-    switch (action.primaryAction) {
-      case 'open_composer':
-        if (onComposerOpen) {
-          onComposerOpen()
-          // Scroll to composer
-          setTimeout(() => {
-            const composer = document.querySelector('textarea[placeholder*="message"]')
-            composer?.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            ;(composer as HTMLTextAreaElement)?.focus()
-          }, 100)
-        }
-        break
-      
-      case 'create_task':
-        try {
-          const res = await fetch('/api/tasks', {
-            method: 'POST',
-            headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({
-              leadId,
-              title: action.title,
-              type: 'FOLLOW_UP',
-              dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
-            }),
-          })
-          if (res.ok) {
-            showToast('Task created', 'success')
-            router.refresh()
-          }
-        } catch (error) {
-          showToast('Failed to create task', 'error')
-        }
-        break
-      
-      case 'open_quote_modal':
-        // TODO: Open quote modal if available
-        showToast('Quote feature coming soon', 'info')
-        break
-      
-      case 'navigate':
-        if (action.primaryRoute) {
-          router.push(action.primaryRoute)
-        }
-        break
-      
+  const openTasks = tasks.filter(t => t.status === 'OPEN')
+  const urgentTasks = openTasks.filter(t => {
+    if (!t.dueAt) return false
+    const due = typeof t.dueAt === 'string' ? new Date(t.dueAt) : t.dueAt
+    return due <= new Date()
+  })
+
+  function getActionUrl(actionType: string): string {
+    switch (actionType) {
+      case 'reply':
+        return `/leads/${leadId}?action=reply`
+      case 'call':
+        return `/leads/${leadId}?action=call`
+      case 'quote':
+        return `/leads/${leadId}?action=quote`
+      case 'follow_up':
+        return `/leads/${leadId}?action=followup`
+      case 'qualify':
+        return `/leads/${leadId}?action=qualify`
       default:
-        // Fallback: open composer
-        if (onComposerOpen) {
-          onComposerOpen()
-        }
+        return `/leads/${leadId}`
     }
-  }, [action, leadId, onComposerOpen, router, showToast])
-
-  const handleSnooze = useCallback(() => {
-    showToast('Action snoozed for 30 minutes', 'info')
-    // TODO: Implement snooze logic
-  }, [showToast])
-
-  const handleMarkHandled = useCallback(() => {
-    showToast('Action marked as handled', 'success')
-    // TODO: Implement mark handled logic
-  }, [showToast])
-
-  // Memoize tasks list (max 3, due/overdue first)
-  const displayTasks = useMemo(() => {
-    const openTasks = tasks.filter(t => t.status === 'OPEN')
-    const now = new Date()
-    
-    const sorted = openTasks.sort((a, b) => {
-      const aDue = a.dueAt ? (typeof a.dueAt === 'string' ? new Date(a.dueAt) : a.dueAt) : null
-      const bDue = b.dueAt ? (typeof b.dueAt === 'string' ? new Date(b.dueAt) : b.dueAt) : null
-      
-      // Overdue first
-      if (aDue && aDue < now && (!bDue || bDue >= now)) return -1
-      if (bDue && bDue < now && (!aDue || aDue >= now)) return 1
-      
-      // Then by due date
-      if (aDue && bDue) return aDue.getTime() - bDue.getTime()
-      if (aDue) return -1
-      if (bDue) return 1
-      return 0
-    })
-    
-    return sorted.slice(0, 3)
-  }, [tasks])
-
-  if (loading) {
-    return (
-      <div className="space-y-4 p-6">
-        <Skeleton className="h-48 rounded-[14px]" />
-        <Skeleton className="h-24 rounded-[14px]" />
-      </div>
-    )
   }
 
-  if (!action) {
-    return (
-      <Card className="card-premium p-6 text-center">
-        <CheckCircle2 className="h-12 w-12 text-green-500 mx-auto mb-4" />
-        <p className="text-body font-medium text-slate-900 dark:text-slate-100 mb-2">
-          All caught up
-        </p>
-        <p className="text-meta muted-text">
-          No action needed right now
-        </p>
-      </Card>
-    )
+  function handleAction() {
+    if (primaryAction) {
+      window.location.href = getActionUrl(primaryAction.type)
+    }
   }
+
+  const urgencyIndicators = primaryAction ? {
+    timeWaiting: lead?.lastInboundAt 
+      ? formatDistanceToNow(new Date(lead.lastInboundAt), { addSuffix: true })
+      : undefined,
+    slaRisk: slaStatus?.slaRisk || 'none' as const,
+  } : undefined
 
   return (
     <div className="h-full overflow-y-auto">
-      <div className="space-y-6 p-6">
-        {/* Primary Recommended Action */}
-        <ActionCockpitCard
-          action={action}
-          onPrimaryAction={handlePrimaryAction}
-          onSnooze={handleSnooze}
-          onMarkHandled={handleMarkHandled}
-        />
-
-        {/* Quick Context Strip */}
-        {lead && (
-          <Card className="card-muted p-4">
-            <div className="space-y-2">
-              {lead.lastInboundAt && (
-                <div className="flex items-center gap-2 text-meta muted-text">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span>Last inbound: {formatDistanceToNow(new Date(lead.lastInboundAt), { addSuffix: true })}</span>
-                </div>
-              )}
-              {lead.lastOutboundAt && (
-                <div className="flex items-center gap-2 text-meta muted-text">
-                  <MessageSquare className="h-3.5 w-3.5" />
-                  <span>Last outbound: {formatDistanceToNow(new Date(lead.lastOutboundAt), { addSuffix: true })}</span>
-                </div>
-              )}
-              {lead.stage && (
-                <div className="flex items-center gap-2">
-                  <Badge className="chip">{lead.stage}</Badge>
-                  {lead.serviceType?.name && (
-                    <Badge className="chip">{lead.serviceType.name}</Badge>
+      <div className="space-y-6">
+        {/* Recommended Action Card */}
+        {primaryAction && (
+          <Card className="card-premium p-6">
+            <div className="flex items-start gap-3 mb-4">
+              <div className="flex-shrink-0 w-10 h-10 rounded-[12px] bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
+                <Target className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+              </div>
+              <div className="flex-1 min-w-0">
+                <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                  Recommended Action
+                </h3>
+                <p className="text-body muted-text mb-4">
+                  {primaryAction.reason}
+                </p>
+                <Button
+                  onClick={handleAction}
+                  className={cn(
+                    "w-full h-11 rounded-[14px] font-semibold",
+                    "bg-primary hover:bg-primary/90 text-primary-foreground",
+                    "transition-all duration-200 hover:shadow-md active:scale-95"
                   )}
-                </div>
-              )}
+                >
+                  {primaryAction.label}
+                </Button>
+                {urgencyIndicators && (
+                  <div className="mt-4 pt-4 divider-soft">
+                    <div className="flex items-center gap-4 text-meta muted-text">
+                      {urgencyIndicators.timeWaiting && (
+                        <div className="flex items-center gap-1.5">
+                          <Clock className="h-3.5 w-3.5" />
+                          <span>{urgencyIndicators.timeWaiting}</span>
+                        </div>
+                      )}
+                      {urgencyIndicators.slaRisk !== 'none' && (
+                        <div className="flex items-center gap-1.5">
+                          <div className={cn(
+                            "w-1.5 h-1.5 rounded-full",
+                            urgencyIndicators.slaRisk === 'high' ? "bg-red-500" : "bg-amber-500"
+                          )} />
+                          <span>SLA {urgencyIndicators.slaRisk === 'high' ? 'breach' : 'warning'}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </div>
             </div>
           </Card>
         )}
 
-        {/* Tasks (Collapsed by Default) */}
-        {displayTasks.length > 0 && (
-          <Accordion type="single" collapsible defaultValue={undefined}>
-            <AccordionItem value="tasks" className="border-none">
-              <AccordionTrigger className="text-body font-semibold text-slate-900 dark:text-slate-100 py-2">
-                Tasks ({tasks.filter(t => t.status === 'OPEN').length})
+        {/* Collapsed Secondary Info */}
+        <Accordion type="multiple" defaultValue={[]}>
+          {/* Status Indicators */}
+          <AccordionItem value="status">
+            <AccordionTrigger>
+              Status & Metrics
+            </AccordionTrigger>
+            <AccordionContent>
+              <div className="space-y-3">
+                {slaStatus && (
+                  <div className={cn(
+                    "p-3 rounded-lg border text-sm",
+                    slaStatus.level === 'breach' && "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800",
+                    slaStatus.level === 'warning' && "bg-orange-50 dark:bg-orange-900/20 border-orange-200 dark:border-orange-800",
+                    slaStatus.level === 'caution' && "bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800",
+                    slaStatus.level === 'ok' && "bg-green-50 dark:bg-green-900/20 border-green-200 dark:border-green-800"
+                  )}>
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Clock className={cn("h-4 w-4", slaStatus.level === 'breach' ? 'text-red-600' : slaStatus.level === 'warning' ? 'text-orange-600' : 'text-slate-400')} />
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          Response Time
+                        </span>
+                      </div>
+                      <span className={cn(
+                        "text-sm font-bold",
+                        slaStatus.level === 'breach' ? 'text-red-600' : slaStatus.level === 'warning' ? 'text-orange-600' : 'text-slate-600'
+                      )}>
+                        {slaStatus.hours}h
+                      </span>
+                    </div>
+                  </div>
+                )}
+
+                {lead?.dealProbability !== null && lead?.dealProbability !== undefined && (
+                  <div className="p-3 rounded-lg bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Target className="h-4 w-4 text-slate-400" />
+                        <span className="text-xs font-medium text-slate-700 dark:text-slate-300">
+                          Deal Probability
+                        </span>
+                      </div>
+                      <span className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                        {lead.dealProbability}%
+                      </span>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </AccordionContent>
+          </AccordionItem>
+
+          {/* Tasks */}
+          {openTasks.length > 0 && (
+            <AccordionItem value="tasks">
+              <AccordionTrigger>
+                <div className="flex items-center gap-2">
+                  <span>Customer waiting ({openTasks.length})</span>
+                  {urgentTasks.length > 0 && (
+                    <Badge variant="destructive" className="text-xs">
+                      {urgentTasks.length}
+                    </Badge>
+                  )}
+                </div>
               </AccordionTrigger>
               <AccordionContent>
                 <div className="space-y-2">
-                  {displayTasks.map((task) => {
-                    const dueDate = task.dueAt ? (typeof task.dueAt === 'string' ? new Date(task.dueAt) : task.dueAt) : null
-                    const isOverdue = dueDate && dueDate < new Date()
-                    
+                  {openTasks.slice(0, 5).map((task) => {
+                    const isOverdue = task.dueAt && new Date(task.dueAt) <= new Date()
                     return (
                       <div
                         key={task.id}
                         className={cn(
-                          "p-3 rounded-[10px] border",
+                          "p-3 rounded-lg border text-sm",
                           isOverdue
-                            ? "bg-red-50 dark:bg-red-900/20 border-red-200/60 dark:border-red-800/60"
-                            : "bg-card border-slate-200/60 dark:border-slate-800/60"
+                            ? "bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800"
+                            : "bg-slate-50 dark:bg-slate-900/50 border-slate-200 dark:border-slate-800"
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-body font-medium text-slate-900 dark:text-slate-100">
+                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
                               {task.title}
                             </p>
-                            {dueDate && (
-                              <p className="text-meta muted-text mt-1">
-                                {isOverdue ? 'Overdue' : 'Due'} {format(dueDate, 'MMM d, h:mm a')}
+                            {task.dueAt && (
+                              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                                {format(new Date(task.dueAt), 'MMM d, h:mm a')}
                               </p>
                             )}
                           </div>
                           {isOverdue && (
-                            <div className="w-1.5 h-1.5 rounded-full bg-red-500 flex-shrink-0 mt-1.5" />
+                            <AlertCircle className="h-4 w-4 text-red-500 flex-shrink-0" />
                           )}
                         </div>
                       </div>
                     )
                   })}
-                  {tasks.filter(t => t.status === 'OPEN').length > 3 && (
+                  {openTasks.length > 5 && (
                     <Button
                       variant="ghost"
                       size="sm"
-                      className="w-full text-meta"
-                      onClick={() => router.push(`/leads/${leadId}?tab=tasks`)}
+                      className="w-full text-xs"
+                      onClick={() => window.location.href = `/leads/${leadId}?tab=tasks`}
                     >
-                      View all {tasks.filter(t => t.status === 'OPEN').length} tasks
+                      View all {openTasks.length} tasks
                     </Button>
                   )}
                 </div>
               </AccordionContent>
             </AccordionItem>
-          </Accordion>
-        )}
+          )}
+        </Accordion>
       </div>
     </div>
   )
-})
+}

@@ -1294,19 +1294,6 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
         
         const { sendOutboundWithIdempotency } = await import('./outbound/sendWithIdempotency')
-        // Determine replyType based on nextStepKey
-        // If nextStepKey indicates a question (ASK_*, ask_*), use replyType='question'
-        const isQuestion = orchestratorResult.nextStepKey && 
-          (orchestratorResult.nextStepKey.startsWith('ASK_') || 
-           orchestratorResult.nextStepKey.startsWith('ask_') ||
-           orchestratorResult.nextStepKey.includes('_Q') ||
-           orchestratorResult.nextStepKey === 'ASK_SERVICE' ||
-           orchestratorResult.nextStepKey === 'ASK_NAME' ||
-           orchestratorResult.nextStepKey === 'ASK_NATIONALITY')
-        
-        const effectiveReplyType = isQuestion ? 'question' : 'answer'
-        const effectiveQuestionKey = isQuestion ? orchestratorResult.nextStepKey : (lastQuestionKey || null)
-        
         const result = await sendOutboundWithIdempotency({
           conversationId: conversationForOutbound.id,
           contactId: contactId,
@@ -1315,8 +1302,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           text: replyText,
           provider: 'whatsapp',
           triggerProviderMessageId: effectiveTriggerId || null,
-          replyType: effectiveReplyType,
-          lastQuestionKey: effectiveQuestionKey,
+          replyType: 'answer',
+          lastQuestionKey: lastQuestionKey || null,
           flowStep: flowStep || null,
         })
 
