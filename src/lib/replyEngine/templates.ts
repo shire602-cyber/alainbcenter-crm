@@ -16,8 +16,8 @@ export const TEMPLATES: Record<string, Template> = {
     textAr: 'ما هو اسمك الكامل؟',
   },
   ask_service: {
-    text: 'Which service are you interested in? (Freelance Visa, Family Visa, Visit Visa, Business Setup, Golden Visa, etc.)',
-    textAr: 'ما هي الخدمة التي تهتم بها؟ (تأشيرة العمل الحر، تأشيرة العائلة، تأشيرة الزيارة، تأسيس شركة، التأشيرة الذهبية، إلخ)',
+    text: 'How can I help you today?',
+    textAr: 'كيف يمكنني مساعدتك اليوم؟',
   },
   ask_nationality: {
     text: 'What is your nationality?',

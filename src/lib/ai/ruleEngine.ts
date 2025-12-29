@@ -155,7 +155,7 @@ const RULE_ENGINE_JSON = {
         "actions": [
           {
             "type": "ask_question",
-            "template": "Thanks{{#if name}}, {{name}}{{/if}}. Which service are you looking for today? (Family Visa / Visit Visa / Freelance Visa / Freelance Permit / Business Setup / Golden Visa / PRO Services)"
+            "template": "Thanks{{#if name}}, {{name}}{{/if}}. How can I help you today?"
           }
         ],
         "next": "S3_SERVICE_FLOW"
