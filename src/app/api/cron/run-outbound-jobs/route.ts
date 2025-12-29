@@ -3,6 +3,8 @@
  * 
  * Triggers job runner to process queued outbound jobs.
  * Can be called by Vercel Cron or external cron service.
+ * 
+ * Configured in vercel.json to run every 30 seconds: */30 * * * * *
  */
 
 // Ensure Node.js runtime for Prisma compatibility
