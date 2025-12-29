@@ -21,12 +21,12 @@ import { createHash } from 'crypto'
 import {
   loadConversationState,
   updateConversationState,
+  wasQuestionAsked,
   getNextBusinessSetupQuestion,
   extractFieldsToState,
   shouldStopAsking,
   type ConversationState,
 } from './stateMachine'
-import { wasQuestionAsked as wasQuestionAskedDB } from '../conversation/flowState'
 
 // BANNED QUESTION KEYS - These must NEVER be asked
 const BANNED_QUESTION_KEYS = new Set([
@@ -374,7 +374,7 @@ and let me know the best time for our consultant to call you.`
         const name = conversationState.knownFields.name || lead.contact.fullName || ''
         nextCoreQuestion = {
           questionKey: 'ASK_SERVICE',
-          question: `Thanks${name ? `, ${name}` : ''}. How can I help you today?`,
+          question: `Thanks${name ? `, ${name}` : ''}. Which service are you looking for today? (Family Visa / Visit Visa / Freelance Visa / Freelance Permit / Business Setup / Golden Visa / PRO Services)`,
         }
       } else if (!conversationState.knownFields.nationality) {
         nextCoreQuestion = {
@@ -385,8 +385,8 @@ and let me know the best time for our consultant to call you.`
       
       // If we have a core question to ask, check no-repeat guard
       if (nextCoreQuestion) {
-        // Check if this question was asked recently (DB-based check for last 3 outbound)
-        const wasAsked = await wasQuestionAskedDB(input.conversationId, nextCoreQuestion.questionKey, 3)
+        // Check if this question was asked recently
+        const wasAsked = wasQuestionAsked(conversationState, nextCoreQuestion.questionKey)
         
         if (!wasAsked && !BANNED_QUESTION_KEYS.has(nextCoreQuestion.questionKey)) {
           // Record question asked
@@ -501,7 +501,7 @@ and let me know the best time for our consultant to call you.`
         
         // Step 3.3: Check no-repeat guard (prevent asking same questionKey in last 3 outbound)
         if (!isBanned && currentQuestionKey) {
-          const wasAsked = await wasQuestionAskedDB(input.conversationId, currentQuestionKey, 3)
+          const wasAsked = wasQuestionAsked(conversationState, currentQuestionKey)
           if (wasAsked) {
             console.log(`[ORCHESTRATOR] Question ${currentQuestionKey} was asked recently - skipping`)
             isBanned = true
