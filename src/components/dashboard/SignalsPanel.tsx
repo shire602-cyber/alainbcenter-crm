@@ -136,14 +136,18 @@ function SignalModule({
   )
 }
 
-export const SignalsPanel = memo(function SignalsPanel() {
+interface SignalsPanelProps {
+  signals?: SignalsData
+}
+
+export const SignalsPanel = memo(function SignalsPanel({ signals: propSignals }: SignalsPanelProps) {
   const [data, setData] = useState<SignalsData>({
     renewals: [],
     waiting: [],
     alerts: [],
     counts: { renewalsTotal: 0, waitingTotal: 0, alertsTotal: 0 },
   })
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!propSignals)
 
   async function loadData() {
     try {
@@ -162,10 +166,13 @@ export const SignalsPanel = memo(function SignalsPanel() {
   const { isPolling, manualRefresh } = useSmartPolling({
     fetcher: loadData,
     intervalMs: 60000, // 60s polling for dashboard
-    enabled: true,
+    enabled: !propSignals, // Disable polling if signals provided via props
     pauseWhenHidden: true,
     onErrorBackoff: true,
   })
+
+  // Use prop signals if provided
+  const displayData = propSignals || data
 
   if (loading) {
     return (
@@ -185,12 +192,12 @@ export const SignalsPanel = memo(function SignalsPanel() {
       <SignalModule
         title="Renewals Coming Up"
         icon={Calendar}
-        items={data.renewals}
-        count={data.renewals.length}
-        total={data.counts.renewalsTotal}
+        items={displayData.renewals}
+        count={displayData.renewals.length}
+        total={displayData.counts.renewalsTotal}
         emptyMessage="All clear ✅ No renewals in the next 90 days"
         iconType="renewal"
-        onRefresh={manualRefresh}
+        onRefresh={!propSignals ? manualRefresh : undefined}
         isRefreshing={isPolling}
       />
 
@@ -198,12 +205,12 @@ export const SignalsPanel = memo(function SignalsPanel() {
       <SignalModule
         title="Customer hasn't replied yet"
         icon={Hourglass}
-        items={data.waiting}
-        count={data.waiting.length}
-        total={data.counts.waitingTotal}
+        items={displayData.waiting}
+        count={displayData.waiting.length}
+        total={displayData.counts.waitingTotal}
         emptyMessage="All clear ✅ All customers have replied"
         iconType="waiting"
-        onRefresh={manualRefresh}
+        onRefresh={!propSignals ? manualRefresh : undefined}
         isRefreshing={isPolling}
       />
 
@@ -211,12 +218,12 @@ export const SignalsPanel = memo(function SignalsPanel() {
       <SignalModule
         title="System Alerts"
         icon={AlertTriangle}
-        items={data.alerts}
-        count={data.alerts.length}
-        total={data.counts.alertsTotal}
+        items={displayData.alerts}
+        count={displayData.alerts.length}
+        total={displayData.counts.alertsTotal}
         emptyMessage="All clear ✅ No alerts"
         iconType="alert"
-        onRefresh={manualRefresh}
+        onRefresh={!propSignals ? manualRefresh : undefined}
         isRefreshing={isPolling}
       />
     </div>

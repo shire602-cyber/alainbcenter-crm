@@ -287,8 +287,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     console.log(`📝 [AUTO-REPLY] Creating AutoReplyLog entry...`)
     autoReplyLog = await (prisma as any).autoReplyLog.create({
       data: {
-        leadId,
-        contactId,
+          leadId,
+          contactId,
         messageId,
         channel: channel.toLowerCase(),
         messageText: messageText.substring(0, 500), // Truncate for storage
@@ -317,10 +317,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     // This checks if we already processed THIS specific messageId (not other messages)
     // IMPORTANT: Only block if we already replied to THIS exact messageId, not if we replied to a different message
     const existingLog = await (prisma as any).autoReplyLog.findFirst({
-      where: {
+          where: {
         messageId: messageId, // CRITICAL: Only check THIS specific messageId
         leadId: leadId,
-        channel: channelLower,
+            channel: channelLower,
         OR: [
           { decision: 'replied' },
           { replySent: true },
@@ -715,7 +715,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               data: {
                 retrievalDocsCount: retrievalResult.relevantDocuments.length,
                 retrievalSimilarity: maxSimilarity,
-                retrievalReason: retrievalResult.reason,
+                  retrievalReason: retrievalResult.reason,
                 hasUsefulContext,
               },
             })
@@ -788,10 +788,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         ...lead.messages
           .filter(m => m.id !== messageId)
           .map(m => ({
-            direction: m.direction,
-            body: m.body || '',
-            createdAt: m.createdAt,
-          })),
+        direction: m.direction,
+        body: m.body || '',
+        createdAt: m.createdAt,
+      })),
       ],
       mode: 'QUALIFY' as AIMessageMode, // Default mode
       channel: channel.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT',
@@ -807,7 +807,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     
     try {
       // Always generate fresh AI reply (not saved/cached)
-      // Pass agent to AI generation for custom prompts and settings
+    // Pass agent to AI generation for custom prompts and settings
       console.log(`🤖 [AI-GEN] Calling generateAIAutoresponse with context:`, {
         leadId: aiContext.lead.id,
         messageCount: aiContext.recentMessages?.length || 0,
@@ -1296,8 +1296,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         const { sendOutboundWithIdempotency } = await import('./outbound/sendWithIdempotency')
         const result = await sendOutboundWithIdempotency({
           conversationId: conversationForOutbound.id,
-          contactId: contactId,
-          leadId: leadId,
+            contactId: contactId,
+            leadId: leadId,
           phone: phoneNumber,
           text: replyText,
           provider: 'whatsapp',
@@ -1323,25 +1323,25 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         if (conversationForOutbound) {
           try {
             savedMessage = await prisma.message.create({
-              data: {
+            data: {
                 conversationId: conversationForOutbound.id,
-                leadId: leadId,
-                contactId: contactId,
-                direction: 'OUTBOUND',
-                channel: channel.toLowerCase(),
-                type: 'text',
+              leadId: leadId,
+              contactId: contactId,
+              direction: 'OUTBOUND',
+              channel: channel.toLowerCase(),
+              type: 'text',
                 body: replyText,
-                status: 'SENT',
-                providerMessageId: result.messageId,
-                rawPayload: JSON.stringify({
-                  automation: true,
-                  autoReply: true,
-                  aiGenerated: true,
-                  confidence: aiResult.confidence,
-                }),
-                sentAt: new Date(),
-              },
-            })
+              status: 'SENT',
+              providerMessageId: result.messageId,
+              rawPayload: JSON.stringify({
+                automation: true,
+                autoReply: true,
+                aiGenerated: true,
+                confidence: aiResult.confidence,
+              }),
+              sentAt: new Date(),
+            },
+          })
           } catch (msgError: any) {
             // Non-critical - message may already exist from idempotency system
             if (!msgError.message?.includes('Unique constraint')) {
@@ -1350,7 +1350,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           }
         }
 
-        // Update conversation
+          // Update conversation
         if (conversationForOutbound) {
           await prisma.conversation.update({
             where: { id: conversationForOutbound.id },
@@ -1392,7 +1392,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
             
             await (prisma as any).autoReplyLog.update({
               where: { id: autoReplyLog.id },
-              data: {
+            data: {
                 conversationId: conversation?.id || null,
                 decision: 'replied',
                 decisionReason: 'AI reply sent successfully',
@@ -1400,9 +1400,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 replyText: aiResult.text.substring(0, 500),
                 replyStatus: 'sent',
                 replyError: null,
-              },
-            })
-          } catch (logError: any) {
+            },
+          })
+        } catch (logError: any) {
             console.warn('Failed to update AutoReplyLog with success:', logError.message)
           }
         }

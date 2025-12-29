@@ -16,6 +16,8 @@ import { Button } from '@/components/ui/button'
 import { useRouter } from 'next/navigation'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
 
+import type { CommandItem } from '@/lib/dashboard/commandCenterTypes'
+
 interface UpNextItem {
   id: string
   leadId: number
@@ -55,7 +57,8 @@ const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }
         "group flex items-center gap-3 p-3 rounded-[12px]",
         "bg-card-muted border border-slate-200/60 dark:border-slate-800/60",
         "hover:bg-card hover:border-slate-300 dark:hover:border-slate-700",
-        "hover:shadow-sm transition-all duration-200 cursor-pointer"
+        "hover:-translate-y-0.5 hover:shadow-md transition-all duration-200 cursor-pointer",
+        "active:scale-[0.98]"
       )}
       onMouseEnter={() => setHovered(true)}
       onMouseLeave={() => setHovered(false)}
@@ -93,9 +96,13 @@ const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }
   )
 })
 
-export const UpNextList = memo(function UpNextList() {
+interface UpNextListProps {
+  items?: CommandItem[]
+}
+
+export const UpNextList = memo(function UpNextList({ items: propItems }: UpNextListProps) {
   const [items, setItems] = useState<UpNextItem[]>([])
-  const [loading, setLoading] = useState(true)
+  const [loading, setLoading] = useState(!propItems)
 
   async function loadItems() {
     try {
@@ -114,10 +121,25 @@ export const UpNextList = memo(function UpNextList() {
   const { isPolling, manualRefresh } = useSmartPolling({
     fetcher: loadItems,
     intervalMs: 60000, // 60s polling for dashboard
-    enabled: true,
+    enabled: !propItems, // Disable polling if items provided via props
     pauseWhenHidden: true,
     onErrorBackoff: true,
   })
+
+  // Use prop items if provided, otherwise use state
+  const displayItems: UpNextItem[] = propItems 
+    ? propItems.map(item => ({
+        id: item.id,
+        leadId: item.leadId || 0,
+        contactName: item.title.split(' — ')[0] || item.title,
+        serviceType: item.title.match(/\(([^)]+)\)/)?.[1],
+        reason: item.preview || '',
+        priority: (item.slaLabel ? 'URGENT' : 'NORMAL') as 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT',
+        waitingTime: item.waitingDays ? `${item.waitingDays}d` : undefined,
+        channel: item.channel,
+        latestMessage: item.preview,
+      }))
+    : items
 
   if (loading) {
     return (
@@ -131,7 +153,7 @@ export const UpNextList = memo(function UpNextList() {
     )
   }
 
-  if (items.length === 0) {
+  if (displayItems.length === 0) {
     return null
   }
 
@@ -141,18 +163,20 @@ export const UpNextList = memo(function UpNextList() {
         <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
           Up Next
         </h4>
-        <Button
-          variant="ghost"
-          size="icon"
-          className="h-8 w-8 rounded-[10px]"
-          onClick={manualRefresh}
-          disabled={isPolling}
-        >
-          <RefreshCw className={cn("h-4 w-4", isPolling && "animate-spin")} />
-        </Button>
+        {!propItems && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-8 w-8 rounded-[10px]"
+            onClick={manualRefresh}
+            disabled={isPolling}
+          >
+            <RefreshCw className={cn("h-4 w-4", isPolling && "animate-spin")} />
+          </Button>
+        )}
       </div>
       <div className="space-y-2">
-        {items.map((item) => (
+        {displayItems.map((item) => (
           <UpNextItemRow key={item.id} item={item} />
         ))}
       </div>
