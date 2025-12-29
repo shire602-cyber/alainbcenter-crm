@@ -32,6 +32,7 @@ export default function LeadDetailPage({
   const [channel, setChannel] = useState('whatsapp')
   const [actionPending, setActionPending] = useState(false)
   const [infoSheetOpen, setInfoSheetOpen] = useState(false)
+  const [actionSheetOpen, setActionSheetOpen] = useState(false)
   const [composerOpen, setComposerOpen] = useState(true)
   const router = useRouter()
 
@@ -47,7 +48,16 @@ export default function LeadDetailPage({
       await loadLead(id)
     }
     init()
-  }, [params, router])
+    
+    // Poll for updates every 15 seconds (instant sync)
+    const interval = setInterval(() => {
+      if (leadId) {
+        loadLead(leadId)
+      }
+    }, 15000)
+    
+    return () => clearInterval(interval)
+  }, [params, router, leadId])
 
   async function loadLead(id: number) {
     try {
@@ -260,7 +270,7 @@ export default function LeadDetailPage({
               <Send className="h-5 w-5" />
               <span className="text-xs">WhatsApp</span>
             </Button>
-            <Sheet open={infoSheetOpen} onOpenChange={setInfoSheetOpen}>
+            <Sheet open={actionSheetOpen} onOpenChange={setActionSheetOpen}>
               <SheetTrigger asChild>
                 <Button
                   variant="ghost"
@@ -280,6 +290,10 @@ export default function LeadDetailPage({
                     lead={lead}
                     tasks={lead.tasks || []}
                     onActionPending={setActionPending}
+                    onComposerFocus={() => {
+                      setComposerOpen(true)
+                      setActionSheetOpen(false)
+                    }}
                   />
                 </div>
               </SheetContent>
@@ -361,6 +375,13 @@ export default function LeadDetailPage({
                 lead={lead}
                 tasks={lead.tasks || []}
                 onActionPending={setActionPending}
+                onComposerFocus={() => {
+                  const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+                  if (composer) {
+                    composer.focus()
+                    composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }
+                }}
               />
             </div>
           </div>

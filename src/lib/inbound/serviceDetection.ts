@@ -1,8 +1,9 @@
 /**
  * SERVICE DETECTION FROM MESSAGES
  * 
- * Uses services.seed.json to detect services and extract business activities.
- * Immediately sets Lead.serviceTypeEnum when service is detected.
+ * C) REMOVED DEPENDENCY ON services.seed.json
+ * Uses in-code keyword map for service detection (from serviceSynonyms.ts).
+ * If detection fails, returns null (never shows service list).
  */
 
 import { matchServiceWithSynonyms } from './serviceSynonyms'
@@ -30,36 +31,9 @@ interface ServicesSeed {
   }
 }
 
-let servicesSeedCache: ServicesSeed | null = null
-
-/**
- * Load services seed JSON (cached)
- */
-async function loadServicesSeed(): Promise<ServicesSeed> {
-  if (servicesSeedCache) {
-    return servicesSeedCache
-  }
-
-  try {
-    const fs = await import('fs/promises')
-    const path = await import('path')
-    const seedPath = path.join(process.cwd(), 'config', 'services.seed.json')
-    const content = await fs.readFile(seedPath, 'utf-8')
-    servicesSeedCache = JSON.parse(content) as ServicesSeed
-    return servicesSeedCache!
-  } catch (error: any) {
-    console.warn('⚠️ [SERVICE-DETECT] Failed to load services.seed.json, using fallback:', error.message)
-    // Fallback to basic structure
-    return {
-      version: 'fallback',
-      services: [],
-      businessActivityRules: {
-        note: 'Fallback mode',
-        keywordsThatUsuallyIndicateActivity: [],
-      },
-    }
-  }
-}
+// C) REMOVED: services.seed.json dependency
+// All service detection now uses in-code keyword map from serviceSynonyms.ts
+// This ensures no file system dependencies and no service list fallbacks
 
 /**
  * Detect service from message text using services seed
@@ -74,36 +48,18 @@ export async function detectServiceFromText(text: string): Promise<{
     return { serviceTypeEnum: null, serviceSlug: null, confidence: 0 }
   }
 
-  // First try synonym matching (fast, deterministic)
+  // C) USE IN-CODE KEYWORD MAP (no file dependency)
+  // All service detection uses serviceSynonyms.ts (in-code, no file system)
   const synonymMatch = matchServiceWithSynonyms(text)
   if (synonymMatch) {
-    // Find service slug from seed
-    const seed = await loadServicesSeed()
-    const service = seed.services.find((s) => s.serviceTypeEnum === synonymMatch)
     return {
       serviceTypeEnum: synonymMatch,
-      serviceSlug: service?.slug || null,
+      serviceSlug: synonymMatch.toLowerCase().replace(/_/g, '-'), // Generate slug from enum
       confidence: 0.9,
     }
   }
 
-  // Try services seed synonyms
-  const seed = await loadServicesSeed()
-  const lower = text.toLowerCase()
-
-  for (const service of seed.services) {
-    // Check if any synonym matches
-    for (const synonym of service.synonyms) {
-      if (lower.includes(synonym.toLowerCase())) {
-        return {
-          serviceTypeEnum: service.serviceTypeEnum,
-          serviceSlug: service.slug,
-          confidence: 0.85,
-        }
-      }
-    }
-  }
-
+  // No match found - return null (never show service list)
   return { serviceTypeEnum: null, serviceSlug: null, confidence: 0 }
 }
 
@@ -116,29 +72,14 @@ export async function extractBusinessActivityRaw(text: string): Promise<string |
     return null
   }
   
-  const lower = text.toLowerCase()
-  let seed: ServicesSeed
+  // C) USE IN-CODE KEYWORD MAP (no file dependency)
+  // Inline business activity keywords (no file system dependency)
+  const activityKeywords = [
+    'marketing', 'trading', 'consultancy', 'it', 'ecommerce', 'restaurant',
+    'salon', 'cleaning', 'real estate', 'logistics', 'general trading', 'professional', 'commercial'
+  ]
   
-  try {
-    seed = await loadServicesSeed()
-  } catch (error: any) {
-    // Fallback to inline rules if seed file not found
-    console.warn('⚠️ [SERVICE-DETECT] Failed to load services seed, using fallback:', error.message)
-    seed = {
-      version: 'fallback',
-      services: [],
-      businessActivityRules: {
-        note: 'Fallback mode',
-        keywordsThatUsuallyIndicateActivity: [
-          'marketing', 'trading', 'consultancy', 'it', 'ecommerce', 'restaurant',
-          'salon', 'cleaning', 'real estate', 'logistics', 'general trading', 'professional', 'commercial'
-        ],
-      },
-    }
-  }
-
-  // Check for explicit activity mentions
-  const activityKeywords = seed.businessActivityRules.keywordsThatUsuallyIndicateActivity
+  const lower = text.toLowerCase()
 
   for (const keyword of activityKeywords) {
     if (lower.includes(keyword)) {
@@ -186,20 +127,18 @@ export async function extractBusinessActivityRaw(text: string): Promise<string |
 
 /**
  * Check if message triggers special offer (e.g., "cheapest")
+ * C) REMOVED: services.seed.json dependency - using in-code rules
  */
 export async function checkSpecialOffer(text: string, serviceSlug: string): Promise<string | null> {
-  const seed = await loadServicesSeed()
-  const service = seed.services.find((s) => s.slug === serviceSlug)
-
-  if (!service?.specialOffer) {
-    return null
-  }
-
+  // In-code special offer triggers (no file dependency)
   const lower = text.toLowerCase()
-  const hasTrigger = service.specialOffer.triggerSynonyms.some((trigger) => lower.includes(trigger))
-
+  const specialOfferTriggers = ['cheapest', 'cheap', 'lowest price', 'best price', 'affordable']
+  
+  const hasTrigger = specialOfferTriggers.some((trigger) => lower.includes(trigger))
+  
   if (hasTrigger) {
-    return service.specialOffer.message
+    // Return generic special offer message (no service-specific messages from file)
+    return 'We offer competitive pricing. Let me connect you with our consultant for the best quote.'
   }
 
   return null
@@ -207,10 +146,10 @@ export async function checkSpecialOffer(text: string, serviceSlug: string): Prom
 
 /**
  * Get max questions for a service
+ * C) REMOVED: services.seed.json dependency - using default value
  */
 export async function getMaxQuestionsForService(serviceSlug: string): Promise<number> {
-  const seed = await loadServicesSeed()
-  const service = seed.services.find((s) => s.slug === serviceSlug)
-  return service?.maxQuestions || 5 // Default to 5
+  // Default to 5 questions for all services (no file dependency)
+  return 5
 }
 

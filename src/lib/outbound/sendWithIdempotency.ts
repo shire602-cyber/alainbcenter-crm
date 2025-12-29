@@ -156,8 +156,21 @@ export async function sendOutboundWithIdempotency(
   
   // Step 0.6: SANITIZE FORBIDDEN TERMS
   // Replace "Freelance Permit" and "Freelance Visa" with "Freelance (self-sponsored)"
+  // C) BLOCK SERVICE LISTS: Remove any text containing service lists (e.g., "(Family Visa / Visit Visa / ...)")
   text = text.replace(/Freelance Permit/gi, 'Freelance (self-sponsored)')
   text = text.replace(/Freelance Visa/gi, 'Freelance (self-sponsored)')
+  
+  // Block service lists: Remove patterns like "(Family Visa / Visit Visa / ...)"
+  const serviceListPattern = /\([^)]*(?:Visa|Permit|Setup|Services)[^)]*\)/gi
+  if (serviceListPattern.test(text)) {
+    console.warn(`⚠️ [OUTBOUND] Blocked service list in outbound text - sanitizing`)
+    text = text.replace(serviceListPattern, '')
+    text = text.trim()
+    // If text becomes empty after removing list, use fallback
+    if (!text || text.length === 0) {
+      text = 'How can I help you today?'
+    }
+  }
   
   // Step 0: Detect first outbound message (before applying greeting)
   // This is safer than counting messages during retries
