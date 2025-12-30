@@ -13,14 +13,31 @@ export async function POST(req: NextRequest) {
     await requireAdminOrManagerApi()
 
     // Get all open WhatsApp conversations
-    const conversations = await prisma.conversation.findMany({
-      where: {
-        channel: 'whatsapp',
-        status: 'open',
-        deletedAt: null, // Exclude soft-deleted conversations
-      },
-      select: { id: true },
-    })
+    // Defensive: Handle missing deletedAt column (P2022)
+    let conversations
+    try {
+      conversations = await prisma.conversation.findMany({
+        where: {
+          channel: 'whatsapp',
+          status: 'open',
+          deletedAt: null, // Exclude soft-deleted conversations
+        },
+        select: { id: true },
+      })
+    } catch (error: any) {
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.warn('⚠️ [REFRESH-INTELLIGENCE] deletedAt column not found - migration not applied. Querying without deletedAt filter.')
+        conversations = await prisma.conversation.findMany({
+          where: {
+            channel: 'whatsapp',
+            status: 'open',
+          },
+          select: { id: true },
+        })
+      } else {
+        throw error
+      }
+    }
 
     console.log(`Refreshing intelligence for ${conversations.length} conversations...`)
 
