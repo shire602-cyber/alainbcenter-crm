@@ -284,12 +284,18 @@ export async function sendOutboundWithIdempotency(
   
   try {
     if (provider === 'whatsapp') {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:286',message:'Before sendTextMessage call',data:{phone,textLength:text.length,provider},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
       const result = await sendTextMessage(phone, text, {
         contactId,
         leadId,
         skipIdempotency: true, // We're handling idempotency here
       })
       messageId = result.messageId
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:293',message:'sendTextMessage succeeded',data:{messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
     } else {
       // Other providers not implemented yet
       throw new Error(`Provider ${provider} not implemented`)
@@ -309,6 +315,9 @@ export async function sendOutboundWithIdempotency(
     // This ensures outbound messages appear in the Inbox and conversation history
     // Task D: After WhatsApp send succeeds and OutboundMessageLog is marked SENT
     // Task D: Wrap DB writes in try/catch so send success does not get reversed by UI logging failure
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:312',message:'Before Message row creation',data:{conversationId,messageId,provider},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+    // #endregion
     try {
       const channelUpper = provider.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
       const sentAt = new Date()
@@ -338,8 +347,14 @@ export async function sendOutboundWithIdempotency(
         },
       })
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:338',message:'Message row created',data:{conversationId,messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+      // #endregion
       console.log(`[OUTBOUND-IDEMPOTENCY] Message row created conversationId=${conversationId} messageId=${messageId} providerMessageId=${messageId || 'N/A'}`)
     } catch (messageError: any) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:341',message:'Message row creation failed',data:{conversationId,messageId,error:messageError.message,code:messageError.code},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+      // #endregion
       // Task D: DO log errors but don't fail the send (send success should not be reversed)
       // This could fail if Message already exists (unique constraint on providerMessageId)
       console.warn(`[OUTBOUND-IDEMPOTENCY] Message row creation failed (non-critical) conversationId=${conversationId} messageId=${messageId} error="${messageError.message}"`)
@@ -393,17 +408,34 @@ export async function sendOutboundWithIdempotency(
   } catch (error: any) {
     sendError = error
     
-    // Step 5: Update log to FAILED
-    await prisma.outboundMessageLog.update({
-      where: { id: outboundLogId },
-      data: {
-        status: 'FAILED',
-        error: error.message || 'Unknown error',
-        failedAt: new Date(),
-      },
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:408',message:'sendWithIdempotency error caught',data:{errorMessage:error.message,errorStack:error.stack?.substring(0,200),errorCode:error.code,outboundLogId,conversationId,phone},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
+    
+    // Enhanced error logging for debugging
+    console.error(`[OUTBOUND-IDEMPOTENCY] Message send failed: ${error.message}, log: ${outboundLogId}`)
+    console.error(`[OUTBOUND-IDEMPOTENCY] Error details:`, {
+      errorMessage: error.message,
+      errorCode: error.code,
+      errorStack: error.stack?.substring(0, 500),
+      conversationId,
+      phone,
+      provider,
     })
     
-    console.error(`[OUTBOUND-IDEMPOTENCY] Message send failed: ${error.message}, log: ${outboundLogId}`)
+    // Step 5: Update log to FAILED
+    try {
+      await prisma.outboundMessageLog.update({
+        where: { id: outboundLogId },
+        data: {
+          status: 'FAILED',
+          error: error.message || 'Unknown error',
+          failedAt: new Date(),
+        },
+      })
+    } catch (updateError: any) {
+      console.error(`[OUTBOUND-IDEMPOTENCY] Failed to update log status:`, updateError.message)
+    }
     
     return {
       success: false,

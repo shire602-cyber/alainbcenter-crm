@@ -189,6 +189,9 @@ export async function GET(req: NextRequest) {
  * - messages: inbound messages from users
  */
 export async function POST(req: NextRequest) {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:191',message:'Webhook POST entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
   console.log(`📥 [WEBHOOK] WhatsApp webhook received at ${new Date().toISOString()}`)
   let rawBody: string = ''
   let body: any = null
@@ -571,6 +574,9 @@ export async function POST(req: NextRequest) {
               const { enqueueOutboundJob } = await import('@/lib/jobs/enqueueOutbound')
               
               try {
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:574',message:'Before enqueueOutboundJob',data:{conversationId:result.conversation.id,inboundMessageId:result.message.id,messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 const enqueueResult = await enqueueOutboundJob({
                   conversationId: result.conversation.id,
                   inboundMessageId: result.message.id,
@@ -579,6 +585,9 @@ export async function POST(req: NextRequest) {
                 })
                 
                 const totalElapsed = Date.now() - webhookStartTime
+                // #region agent log
+                fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:582',message:'After enqueueOutboundJob',data:{jobId:enqueueResult.jobId,wasDuplicate:enqueueResult.wasDuplicate,elapsed:totalElapsed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+                // #endregion
                 console.log(`✅ [WEBHOOK] Job enqueued requestId=${requestId} jobId=${enqueueResult.jobId} wasDuplicate=${enqueueResult.wasDuplicate} elapsed=${totalElapsed}ms`)
                 
                 if (enqueueResult.wasDuplicate) {

@@ -25,6 +25,9 @@ interface WhatsAppError {
 }
 
 export async function getWhatsAppCredentials() {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:27',message:'getWhatsAppCredentials entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
   // PRIORITY: Check Integration model first (database), then fallback to env vars
   let accessToken: string | null = null
   let phoneNumberId: string | null = null
@@ -33,6 +36,9 @@ export async function getWhatsAppCredentials() {
     const integration = await prisma.integration.findUnique({
       where: { name: 'whatsapp' },
     })
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:33',message:'Integration lookup result',data:{hasIntegration:!!integration,isEnabled:integration?.isEnabled},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+    // #endregion
 
     if (integration) {
       // Get from config JSON
@@ -60,10 +66,14 @@ export async function getWhatsAppCredentials() {
   if (!accessToken) accessToken = process.env.WHATSAPP_ACCESS_TOKEN || null
   if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
 
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:70',message:'Credentials check',data:{hasAccessToken:!!accessToken,hasPhoneNumberId:!!phoneNumberId,accessTokenLength:accessToken?.length||0,phoneNumberIdLength:phoneNumberId?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+  // #endregion
   if (!accessToken || !phoneNumberId) {
-    throw new Error(
-      'WhatsApp not configured. Please configure it in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables'
-    )
+    const errorMsg = 'WhatsApp not configured. Please configure it in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables'
+    console.error(`❌ [WHATSAPP-CREDENTIALS] ${errorMsg}`)
+    console.error(`❌ [WHATSAPP-CREDENTIALS] Debug: accessToken=${!!accessToken}, phoneNumberId=${!!phoneNumberId}`)
+    throw new Error(errorMsg)
   }
 
   return { accessToken, phoneNumberId }
@@ -117,6 +127,9 @@ export async function sendTextMessage(
     },
   }
 
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:107',message:'Before WhatsApp API call',data:{normalizedPhone,phoneNumberId,bodyLength:body.length,url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+  // #endregion
   try {
     console.log(`📤 [WHATSAPP-SEND] Sending to ${normalizedPhone} via ${phoneNumberId}`)
     console.log(`📤 [WHATSAPP-SEND] Payload:`, JSON.stringify(payload).substring(0, 200))
@@ -135,11 +148,27 @@ export async function sendTextMessage(
     const data = await response.json()
     console.log(`📡 [WHATSAPP-SEND] Response data:`, JSON.stringify(data).substring(0, 500))
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:135',message:'WhatsApp API response',data:{status:response.status,ok:response.ok,hasError:!!(data as any).error,errorMessage:(data as any).error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
     if (!response.ok) {
       const error = data as WhatsAppError
       const errorMessage = error.error?.message || `WhatsApp API error: ${response.status} ${response.statusText}`
+      const errorCode = error.error?.code
+      const errorType = error.error?.type
       console.error(`❌ [WHATSAPP-SEND] API error:`, errorMessage)
+      console.error(`❌ [WHATSAPP-SEND] Error code:`, errorCode)
+      console.error(`❌ [WHATSAPP-SEND] Error type:`, errorType)
       console.error(`❌ [WHATSAPP-SEND] Full error:`, JSON.stringify(error))
+      console.error(`❌ [WHATSAPP-SEND] Request details:`, {
+        url,
+        phoneNumberId,
+        normalizedPhone,
+        hasAccessToken: !!accessToken,
+      })
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:154',message:'WhatsApp API error response',data:{status:response.status,errorMessage,errorCode,errorType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+      // #endregion
       throw new Error(errorMessage)
     }
 
@@ -151,6 +180,9 @@ export async function sendTextMessage(
       throw new Error('WhatsApp API did not return a message ID')
     }
 
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:154',message:'WhatsApp send success',data:{messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    // #endregion
     console.log(`✅ [WHATSAPP-SEND] Success! Message ID: ${messageId}`)
     return {
       messageId,

@@ -22,12 +22,38 @@ const JOB_RUNNER_TOKEN = process.env.JOB_RUNNER_TOKEN || 'dev-token-change-in-pr
  * Process queued outbound jobs
  */
 export async function GET(req: NextRequest) {
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:24',message:'Job runner GET entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+  // #endregion
   try {
-    // Verify token
-    const token = req.nextUrl.searchParams.get('token')
-    if (token !== JOB_RUNNER_TOKEN) {
-      return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
+    // Task B: Verify token - accept query token OR Authorization bearer
+    const tokenQuery = req.nextUrl.searchParams.get('token')
+    const authHeader = req.headers.get('authorization')
+    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+    
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:30',message:'Token check',data:{hasTokenQuery:!!tokenQuery,hasBearer:!!bearer,tokenMatch:tokenQuery===JOB_RUNNER_TOKEN||bearer===JOB_RUNNER_TOKEN},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
+    
+    // Task B: Check query token OR bearer token
+    const isAuthorized = (tokenQuery && tokenQuery === JOB_RUNNER_TOKEN) || (bearer && bearer === JOB_RUNNER_TOKEN)
+    
+    if (!isAuthorized) {
+      console.warn(`[JOB-RUNNER] unauthorized`, {
+        hasTokenQuery: !!tokenQuery,
+        hasBearer: !!bearer,
+      })
+      // Task B: MUST return JSON (not HTML)
+      return NextResponse.json(
+        { ok: false, error: 'Unauthorized' },
+        { 
+          status: 401,
+          headers: { 'Content-Type': 'application/json' },
+        }
+      )
     }
+    
+    console.log(`[JOB-RUNNER] authorized requestId=${req.headers.get('x-request-id') || 'N/A'}`)
     
     const maxJobs = parseInt(req.nextUrl.searchParams.get('max') || '10')
     const processed: number[] = []
@@ -53,11 +79,16 @@ export async function GET(req: NextRequest) {
       FOR UPDATE SKIP LOCKED
     `
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:60',message:'Jobs query result',data:{jobsCount:jobs.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+    // #endregion
     if (jobs.length === 0) {
       return NextResponse.json({ 
         ok: true, 
         message: 'No jobs to process',
         processed: 0,
+      }, {
+        headers: { 'Content-Type': 'application/json' },
       })
     }
     
@@ -133,6 +164,9 @@ export async function GET(req: NextRequest) {
         
         // Task C: Run orchestrator - log start and end
         console.log(`🎯 [JOB-RUNNER] orchestrator start jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} inboundMessageId=${message.id}`)
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:136',message:'Before orchestrator',data:{jobId:job.id,conversationId:conversation.id,inboundMessageId:message.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+        // #endregion
         const orchestratorStartTime = Date.now()
         const orchestratorResult = await generateAIReply({
           conversationId: conversation.id,
@@ -144,6 +178,9 @@ export async function GET(req: NextRequest) {
           language: 'en',
         })
         const orchestratorElapsed = Date.now() - orchestratorStartTime
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:145',message:'After orchestrator',data:{jobId:job.id,replyLength:orchestratorResult.replyText?.length||0,hasHandover:'handoverReason' in orchestratorResult,elapsed:orchestratorElapsed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'G'})}).catch(()=>{});
+        // #endregion
         console.log(`✅ [JOB-RUNNER] orchestrator end jobId=${job.id} requestId=${requestId} elapsed=${orchestratorElapsed}ms replyLength=${orchestratorResult.replyText?.length || 0} hasHandover=${'handoverReason' in orchestratorResult}`)
         
         // Check if reply is empty (deduplication or stop)
@@ -242,7 +279,9 @@ export async function GET(req: NextRequest) {
         
         // Task C: Log before sendOutboundWithIdempotency
         console.log(`📤 [JOB-RUNNER] send start jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'}`)
-        
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:172',message:'Before sendOutboundWithIdempotency',data:{jobId:job.id,phone:phoneForOutbound,replyTextLength:orchestratorResult.replyText?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+        // #endregion
         const sendStartTime = Date.now()
         const sendResult = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
@@ -278,6 +317,9 @@ export async function GET(req: NextRequest) {
           throw new Error(`Failed to send outbound: ${sendResult.error}`)
         } else {
           // Task C: Send succeeded - log success
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:281',message:'Send succeeded',data:{jobId:job.id,messageId:sendResult.messageId,success:sendResult.success,elapsed:sendElapsed},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+          // #endregion
           console.log(`✅ [JOB-RUNNER] send end jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} success=${sendResult.success} elapsed=${sendElapsed}ms`)
         }
         
@@ -323,7 +365,11 @@ export async function GET(req: NextRequest) {
         }
         
       } catch (error: any) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'jobs/run-outbound/route.ts:345',message:'Job error caught',data:{jobId:job.id,errorMessage:error.message,errorStack:error.stack?.substring(0,200),attempts:job.attempts,maxAttempts:job.maxAttempts},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         console.error(`❌ [JOB-RUNNER] Job ${job.id} failed:`, error.message)
+        console.error(`❌ [JOB-RUNNER] Error stack:`, error.stack)
         
         // Check if we should retry
         const shouldRetry = job.attempts < job.maxAttempts
@@ -365,12 +411,20 @@ export async function GET(req: NextRequest) {
       processed: processed.length,
       failed: failed.length,
       jobIds: { processed, failed },
+    }, {
+      headers: { 'Content-Type': 'application/json' },
     })
   } catch (error: any) {
     console.error('❌ [JOB-RUNNER] Error:', error)
     return NextResponse.json(
-      { error: error.message || 'Internal server error' },
-      { status: 500 }
+      { 
+        ok: false,
+        error: error.message || 'Internal server error' 
+      },
+      { 
+        status: 500,
+        headers: { 'Content-Type': 'application/json' },
+      }
     )
   }
 }
