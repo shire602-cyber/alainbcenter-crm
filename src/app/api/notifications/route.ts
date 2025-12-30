@@ -10,7 +10,7 @@ export async function GET(req: NextRequest) {
   try {
     await getCurrentUser()
 
-    // Defensive: Query with snoozedUntil, but fallback if column doesn't exist (migration not applied)
+    // TASK 3: Loud failure if schema mismatch (P2022) - do NOT silently work around
     let notifications
     try {
       notifications = await prisma.notification.findMany({
@@ -22,19 +22,22 @@ export async function GET(req: NextRequest) {
           ],
         },
         orderBy: { createdAt: 'desc' },
-        take: 100, // Limit to last 100 notifications
+        take: 100,
       })
     } catch (error: any) {
-      // Defensive: If snoozedUntil column doesn't exist (P2022), retry without filter
+      // TASK 3: Loud failure for schema mismatch - do NOT silently work around
       if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
-        console.warn('⚠️ [NOTIFICATIONS] snoozedUntil column not found - migration not applied. Querying without snoozedUntil filter.')
-        notifications = await prisma.notification.findMany({
-          orderBy: { createdAt: 'desc' },
-          take: 100,
-        })
-      } else {
-        throw error
+        console.error('[DB-MISMATCH] Notification.snoozedUntil column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+            code: 'DB_MISMATCH',
+          },
+          { status: 500 }
+        )
       }
+      throw error
     }
 
     const unreadCount = notifications.filter(n => !n.isRead).length

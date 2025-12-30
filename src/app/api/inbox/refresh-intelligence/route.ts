@@ -13,7 +13,7 @@ export async function POST(req: NextRequest) {
     await requireAdminOrManagerApi()
 
     // Get all open WhatsApp conversations
-    // Defensive: Handle missing deletedAt column (P2022)
+    // TASK 3: Loud failure if schema mismatch (P2022) - do NOT silently work around
     let conversations
     try {
       conversations = await prisma.conversation.findMany({
@@ -25,18 +25,19 @@ export async function POST(req: NextRequest) {
         select: { id: true },
       })
     } catch (error: any) {
+      // TASK 3: Loud failure for schema mismatch - do NOT silently work around
       if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
-        console.warn('⚠️ [REFRESH-INTELLIGENCE] deletedAt column not found - migration not applied. Querying without deletedAt filter.')
-        conversations = await prisma.conversation.findMany({
-          where: {
-            channel: 'whatsapp',
-            status: 'open',
+        console.error('[DB-MISMATCH] Conversation.deletedAt column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+            code: 'DB_MISMATCH',
           },
-          select: { id: true },
-        })
-      } else {
-        throw error
+          { status: 500 }
+        )
       }
+      throw error
     }
 
     console.log(`Refreshing intelligence for ${conversations.length} conversations...`)

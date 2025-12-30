@@ -23,79 +23,94 @@ export async function GET(
       )
     }
 
-    // Use select instead of include for lead to avoid loading fields that may not exist yet (infoSharedAt, etc.)
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-      include: {
-        contact: true,
-        lead: {
-          select: {
-            id: true,
-            stage: true,
-            pipelineStage: true,
-            leadType: true,
-            serviceTypeId: true,
-            priority: true,
-            aiScore: true,
-            notes: true,
-            nextFollowUpAt: true,
-            expiryDate: true,
-            assignedUserId: true,
-            contact: {
-              select: {
-                id: true,
-                fullName: true,
-                phone: true,
-                email: true,
+    // TASK 3: Loud failure if schema mismatch (P2022) - do NOT silently work around
+    let conversation
+    try {
+      conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        include: {
+          contact: true,
+          lead: {
+            select: {
+              id: true,
+              stage: true,
+              pipelineStage: true,
+              leadType: true,
+              serviceTypeId: true,
+              priority: true,
+              aiScore: true,
+              notes: true,
+              nextFollowUpAt: true,
+              expiryDate: true,
+              assignedUserId: true,
+              contact: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  phone: true,
+                  email: true,
+                },
               },
-            },
-            serviceType: {
-              select: {
-                id: true,
-                name: true,
+              serviceType: {
+                select: {
+                  id: true,
+                  name: true,
+                },
               },
-            },
-            assignedUser: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+              assignedUser: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
               },
-            },
-            expiryItems: {
-              orderBy: { expiryDate: 'asc' },
-              take: 5,
-              select: {
-                id: true,
-                type: true,
-                expiryDate: true,
-              },
-            },
-            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
-            // These will be available after migration is run
-          },
-        },
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
-          },
-        },
-        messages: {
-          orderBy: { createdAt: 'asc' }, // Chronological order
-          include: {
-            createdByUser: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
+              expiryItems: {
+                orderBy: { expiryDate: 'asc' },
+                take: 5,
+                select: {
+                  id: true,
+                  type: true,
+                  expiryDate: true,
+                },
               },
             },
           },
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
+            },
+          },
+          messages: {
+            orderBy: { createdAt: 'asc' },
+            include: {
+              createdByUser: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
+            },
+          },
         },
-      },
-    })
+      })
+    } catch (error: any) {
+      // TASK 3: Loud failure for schema mismatch - do NOT silently work around
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.error('[DB-MISMATCH] Conversation.deletedAt column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+            code: 'DB_MISMATCH',
+          },
+          { status: 500 }
+        )
+      }
+      throw error
+    }
 
     if (!conversation) {
       return NextResponse.json(
@@ -105,8 +120,8 @@ export async function GET(
     }
 
     // Check if conversation is archived (soft-deleted)
-    // Defensive: Handle missing deletedAt column (P2022) - property access is safe, but log if null
-    const isArchived = conversation.deletedAt !== null && conversation.deletedAt !== undefined
+    // Safe property access - deletedAt may not be in select, but Prisma will include it if in schema
+    const isArchived = (conversation as any).deletedAt !== null && (conversation as any).deletedAt !== undefined
 
     // Format messages for frontend
     const formattedMessages = conversation.messages.map((msg) => ({
