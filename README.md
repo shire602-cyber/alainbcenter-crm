@@ -841,13 +841,14 @@ See `.env.example` for the complete list. Required for production:
 ### Environment Variables
 
 Make sure all required environment variables are set:
-- `DATABASE_URL`
-- `CRON_SECRET` - Secret for cron job authentication
-- `JOB_RUNNER_TOKEN` - Token for job runner authentication (required for WhatsApp job queue)
-- `WHATSAPP_ACCESS_TOKEN` (required for WhatsApp)
-- `WHATSAPP_PHONE_NUMBER_ID` (required for WhatsApp)
-- `WHATSAPP_VERIFY_TOKEN` (required for WhatsApp webhooks)
-- `WHATSAPP_APP_SECRET` (optional but recommended for WhatsApp webhook security)
+- `DATABASE_URL` - PostgreSQL connection string (pooler endpoint)
+- `DIRECT_URL` - PostgreSQL direct connection (for migrations)
+- `CRON_SECRET` - Secret for cron job authentication (REQUIRED)
+- `JOB_RUNNER_TOKEN` - Token for job runner authentication (REQUIRED for WhatsApp job queue)
+- `WHATSAPP_ACCESS_TOKEN` - Meta Cloud API access token (REQUIRED for WhatsApp)
+- `WHATSAPP_PHONE_NUMBER_ID` - Meta phone number ID (REQUIRED for WhatsApp)
+- `WHATSAPP_VERIFY_TOKEN` - Webhook verification token (REQUIRED for WhatsApp webhooks)
+- `WHATSAPP_APP_SECRET` - Meta app secret (optional but recommended for WhatsApp webhook security)
 - `META_VERIFY_TOKEN` (if using Meta Lead Ads)
 - `META_APP_SECRET` (if using Meta Lead Ads)
 - `META_PAGE_ACCESS_TOKEN` (if using Meta Lead Ads)
