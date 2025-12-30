@@ -24,18 +24,20 @@ export async function GET(req: NextRequest) {
     // Support: (a) Vercel Cron header x-vercel-cron (accept ANY truthy value)
     //          (b) Authorization Bearer <CRON_SECRET>
     //          (c) Query param ?token=<CRON_SECRET> as fallback
+    // Step C: Auth must accept Vercel cron (x-vercel-cron === "1"), Bearer token, or query token
     const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
     const tokenQuery = req.nextUrl.searchParams.get('token')
     
     const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
-    const isVercelCron = !!vercelCronHeader
+    // Step C: Check x-vercel-cron === "1" specifically (not just truthy)
+    const isVercelCron = vercelCronHeader === '1'
     const isSecretOk = (bearer && bearer === CRON_SECRET) || (tokenQuery && tokenQuery === CRON_SECRET)
     
     if (!isVercelCron && !isSecretOk) {
-      // Log unauthorized request details (never print secrets)
+      // Step C: Log unauthorized request details (never print secrets)
       console.warn(`[CRON] unauthorized requestId=${requestId}`, {
-        hasVercelHeader: isVercelCron,
+        hasVercelHeader: !!vercelCronHeader,
         vercelHeaderValue: vercelCronHeader || null,
         hasAuthHeader: !!authHeader,
         hasTokenQuery: !!tokenQuery,
@@ -43,7 +45,7 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
     
-    // Determine auth method for logging
+    // Step C: Determine auth method for logging
     const authMethod = isVercelCron ? 'vercel' : (bearer ? 'bearer' : 'query')
     console.log(`✅ [CRON] authorized method=${authMethod} requestId=${requestId} vercelHeaderValue="${vercelCronHeader || 'N/A'}"`)
     

@@ -37,10 +37,27 @@ export async function POST(
 
     const snoozedUntil = new Date(Date.now() + minutes * 60 * 1000)
 
-    await prisma.notification.update({
-      where: { id: notificationId },
-      data: { snoozedUntil },
-    })
+    // Step A: Update notification with P2022 handling
+    try {
+      await prisma.notification.update({
+        where: { id: notificationId },
+        data: { snoozedUntil },
+      })
+    } catch (error: any) {
+      // Step A: Loud failure for schema mismatch
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.error('[DB-MISMATCH] Notification.snoozedUntil column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            code: 'DB_MISMATCH',
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+          },
+          { status: 500 }
+        )
+      }
+      throw error
+    }
 
     return NextResponse.json({
       ok: true,
