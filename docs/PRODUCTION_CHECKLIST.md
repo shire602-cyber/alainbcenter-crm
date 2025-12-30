@@ -15,14 +15,14 @@ Set all required environment variables in Vercel Dashboard → Settings → Envi
 - ✅ `SESSION_SECRET` - Session encryption key
 
 **WhatsApp / Meta:**
-- ✅ `WHATSAPP_ACCESS_TOKEN` - Meta Cloud API access token
-- ✅ `WHATSAPP_PHONE_NUMBER_ID` - Meta phone number ID
+- ✅ `WHATSAPP_ACCESS_TOKEN` - Meta Cloud API access token (REQUIRED)
+- ✅ `WHATSAPP_PHONE_NUMBER_ID` - Meta phone number ID (REQUIRED)
 - ✅ `WHATSAPP_VERIFY_TOKEN` - Webhook verification token
 - ✅ `WHATSAPP_APP_SECRET` - Meta app secret (optional)
 
 **Automation / Cron:**
-- ✅ `CRON_SECRET` - Secret for cron endpoint auth
-- ✅ `JOB_RUNNER_TOKEN` - Secret for job runner auth
+- ✅ `CRON_SECRET` - Secret for cron endpoint auth (REQUIRED)
+- ✅ `JOB_RUNNER_TOKEN` - Secret for job runner auth (REQUIRED)
 
 **AI (Optional):**
 - ✅ `OPENAI_API_KEY` - OpenAI API key (for embeddings fallback)
@@ -119,10 +119,11 @@ Verify `vercel.json` has cron job configured:
 2. **Check Vercel Function Logs:**
    - Vercel Dashboard → Your Project → Functions → `/api/jobs/run-outbound` → Logs
    - Look for: `📦 [JOB-RUNNER] Processing X job(s)`
+   - Look for: `✅ [JOB-RUNNER] picked jobId=... conversationId=... inboundProviderMessageId=...`
    - Look for: `🎯 [JOB-RUNNER] Running orchestrator for job X`
    - Look for: `✅ [JOB-RUNNER] Orchestrator complete jobId=... elapsed=...ms`
-   - Look for: `✅ [JOB-RUNNER] Outbound sent jobId=... messageId=...`
-   - Look for: `✅ [JOB-RUNNER] Message row created jobId=... conversationId=...`
+   - Look for: `📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=... phone=...`
+   - Look for: `✅ [JOB-RUNNER] outbound sent jobId=... messageId=... conversationId=... phone=... success=true`
 
 3. **Check Database:**
    ```sql

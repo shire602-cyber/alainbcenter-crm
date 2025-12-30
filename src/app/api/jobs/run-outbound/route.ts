@@ -77,7 +77,7 @@ export async function GET(req: NextRequest) {
           },
         })
         
-        console.log(`🔄 [JOB-RUNNER] Processing job ${job.id} (requestId: ${requestId})`)
+        console.log(`✅ [JOB-RUNNER] picked jobId=${job.id} requestId=${requestId} conversationId=${job.conversationId} inboundProviderMessageId=${job.inboundProviderMessageId || 'N/A'}`)
         
         // Load conversation and message
         const conversation = await prisma.conversation.findUnique({
@@ -236,6 +236,9 @@ export async function GET(req: NextRequest) {
           throw new Error(`Invalid phone number format for outbound: ${phoneForOutbound}. Must be E.164 format (e.g., +260777711059). Contact ID: ${conversation.contact.id}`)
         }
         
+        // TASK C: Add logging before sendOutboundWithIdempotency
+        console.log(`📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'}`)
+        
         const sendStartTime = Date.now()
         const sendResult = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
@@ -251,13 +254,14 @@ export async function GET(req: NextRequest) {
         })
         const sendElapsed = Date.now() - sendStartTime
         
+        // TASK C: Add logging after sendOutboundWithIdempotency result
         if (sendResult.wasDuplicate) {
           console.log(`⚠️ [JOB-RUNNER] Duplicate outbound blocked jobId=${job.id} requestId=${requestId} keyComponents=${outboundKeyComponents}`)
         } else if (!sendResult.success) {
+          console.error(`❌ [JOB-RUNNER] outbound send failed jobId=${job.id} requestId=${requestId} error=${sendResult.error}`)
           throw new Error(`Failed to send outbound: ${sendResult.error}`)
         } else {
-          console.log(`✅ [JOB-RUNNER] Outbound sent jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} elapsed=${sendElapsed}ms`)
-          console.log(`✅ [JOB-RUNNER] Message row created jobId=${job.id} conversationId=${conversation.id} requestId=${requestId}`)
+          console.log(`✅ [JOB-RUNNER] outbound sent jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} success=${sendResult.success}`)
         }
         
         // Mark job as done

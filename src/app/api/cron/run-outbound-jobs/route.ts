@@ -20,47 +20,32 @@ export async function GET(req: NextRequest) {
   try {
     console.log(`[CRON] trigger start requestId=${requestId}`)
     
-    // 1) FIX CRON AUTH: Accept ANY truthy x-vercel-cron header value (not just "1")
-    // Vercel Cron sends x-vercel-cron header, but value may vary
+    // TASK A: Fix Cron authorization permanently
+    // Support: (a) Vercel Cron header x-vercel-cron (accept ANY truthy value)
+    //          (b) Authorization Bearer <CRON_SECRET>
+    //          (c) Query param ?token=<CRON_SECRET> as fallback
     const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
-    const queryToken = req.nextUrl.searchParams.get('token')
+    const tokenQuery = req.nextUrl.searchParams.get('token')
     
-    // Auth rules: authorized if (x-vercel-cron header exists) OR (Authorization: Bearer <CRON_SECRET>) OR (query token === CRON_SECRET)
-    let isAuthorized = false
-    let authMethod = 'none'
+    const bearer = authHeader?.startsWith('Bearer ') ? authHeader.slice(7) : null
+    const isVercelCron = !!vercelCronHeader
+    const isSecretOk = (bearer && bearer === CRON_SECRET) || (tokenQuery && tokenQuery === CRON_SECRET)
     
-    if (vercelCronHeader) {
-      // Accept ANY truthy value (not just "1")
-      isAuthorized = true
-      authMethod = 'vercel'
-      console.log(`[CRON] authorized via vercel requestId=${requestId} x-vercel-cron="${vercelCronHeader}"`)
-    } else if (authHeader && authHeader.startsWith('Bearer ')) {
-      const token = authHeader.substring(7)
-      if (token === CRON_SECRET) {
-        isAuthorized = true
-        authMethod = 'bearer'
-        console.log(`[CRON] authorized via bearer requestId=${requestId}`)
-      }
-    } else if (queryToken && queryToken === CRON_SECRET) {
-      // Query token support for manual debugging
-      isAuthorized = true
-      authMethod = 'query'
-      console.log(`[CRON] authorized via query requestId=${requestId}`)
-    }
-    
-    if (!isAuthorized) {
+    if (!isVercelCron && !isSecretOk) {
       // Log unauthorized request details (never print secrets)
       console.warn(`[CRON] unauthorized requestId=${requestId}`, {
-        hasVercelCronHeader: !!vercelCronHeader,
-        vercelCronValue: vercelCronHeader ? `"${vercelCronHeader}"` : null,
+        hasVercelHeader: isVercelCron,
+        vercelHeaderValue: vercelCronHeader || null,
         hasAuthHeader: !!authHeader,
-        authHeaderPrefix: authHeader ? authHeader.substring(0, 20) + '...' : null,
-        hasQueryToken: !!queryToken,
-        queryTokenLength: queryToken?.length || 0,
+        hasTokenQuery: !!tokenQuery,
       })
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
+    
+    // Determine auth method for logging
+    const authMethod = isVercelCron ? 'vercel' : (bearer ? 'bearer' : 'query')
+    console.log(`✅ [CRON] authorized method=${authMethod} requestId=${requestId} vercelHeaderValue="${vercelCronHeader || 'N/A'}"`)
     
     // 2) IMPROVE OBSERVABILITY: Call job runner with structured logging
     console.log(`[CRON] calling job runner requestId=${requestId} authMethod=${authMethod}`)

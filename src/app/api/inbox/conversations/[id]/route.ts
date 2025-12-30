@@ -105,7 +105,8 @@ export async function GET(
     }
 
     // Check if conversation is archived (soft-deleted)
-    const isArchived = conversation.deletedAt !== null
+    // Defensive: Handle missing deletedAt column (P2022) - property access is safe, but log if null
+    const isArchived = conversation.deletedAt !== null && conversation.deletedAt !== undefined
 
     // Format messages for frontend
     const formattedMessages = conversation.messages.map((msg) => ({
@@ -200,7 +201,7 @@ export async function GET(
         lastMessageAt: conversation.lastMessageAt.toISOString(),
         unreadCount: conversation.unreadCount,
         createdAt: conversation.createdAt.toISOString(),
-        deletedAt: conversation.deletedAt?.toISOString() || null,
+        deletedAt: (conversation as any).deletedAt?.toISOString() || null,
         isArchived,
         messages: formattedMessages,
         lastMessage: lastMessage
