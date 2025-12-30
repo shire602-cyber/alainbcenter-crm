@@ -59,7 +59,6 @@ export async function GET(req: NextRequest) {
         id: true,
         status: true,
         createdAt: true,
-        updatedAt: true,
         lastAttemptAt: true,
         claimedAt: true,
         errorLog: true,
@@ -70,6 +69,8 @@ export async function GET(req: NextRequest) {
         content: true,
         runAt: true,
         error: true,
+        startedAt: true,
+        completedAt: true,
       },
     })
     
@@ -126,9 +127,10 @@ export async function GET(req: NextRequest) {
       id: job.id,
       status: job.status,
       createdAt: job.createdAt.toISOString(),
-      updatedAt: job.updatedAt.toISOString(),
       lastAttemptAt: job.lastAttemptAt?.toISOString() || null,
       claimedAt: job.claimedAt?.toISOString() || null,
+      startedAt: job.startedAt?.toISOString() || null,
+      completedAt: job.completedAt?.toISOString() || null,
       errorLog: job.errorLog ? (job.errorLog.length > 500 ? job.errorLog.substring(0, 500) + '...' : job.errorLog) : null,
       conversationId: job.conversationId,
       inboundProviderMessageId: job.inboundProviderMessageId,
