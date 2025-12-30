@@ -116,3 +116,4 @@ When testing, capture screenshots of:
 - [ ] No layout shift on load
 - [ ] Polling interval: 60s (not too frequent)
 
+

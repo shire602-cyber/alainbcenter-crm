@@ -65,6 +65,21 @@ export async function processOutboundJobs(
     // READY_TO_SEND: AI content already generated, just needs sending
     // This ensures only one worker processes each job
     // Also claim the job by setting claimedAt for optimistic locking
+    
+    // First, check for jobs that are not due yet (for logging)
+    const notDueJobs = await prisma.$queryRaw<Array<{ id: number; runAt: Date }>>`
+      SELECT id, "runAt"
+      FROM "OutboundJob"
+      WHERE status IN ('PENDING', 'READY_TO_SEND')
+        AND "runAt" > NOW()
+      LIMIT 5
+    `
+    if (notDueJobs.length > 0) {
+      console.log(`⏰ [JOB-PROCESSOR] ${notDueJobs.length} job(s) not due yet (scheduled in future) source=${source} requestId=${requestId}`, 
+        notDueJobs.map(j => ({ jobId: j.id, runAt: j.runAt.toISOString() }))
+      )
+    }
+    
     const jobs = await prisma.$queryRaw<Array<{
       id: number
       conversationId: number
@@ -75,8 +90,9 @@ export async function processOutboundJobs(
       maxAttempts: number
       status: string
       content: string | null
+      runAt: Date
     }>>`
-      SELECT id, "conversationId", "inboundMessageId", "inboundProviderMessageId", "requestId", attempts, "maxAttempts", status, content
+      SELECT id, "conversationId", "inboundMessageId", "inboundProviderMessageId", "requestId", attempts, "maxAttempts", status, content, "runAt"
       FROM "OutboundJob"
       WHERE status IN ('PENDING', 'READY_TO_SEND')
         AND "runAt" <= NOW()
@@ -129,7 +145,7 @@ export async function processOutboundJobs(
             },
           })
           
-          console.log(`✅ [JOB-PROCESSOR] picked jobId=${job.id} requestId=${jobRequestId} conversationId=${job.conversationId} inboundProviderMessageId=${job.inboundProviderMessageId || 'N/A'} status=GENERATING`)
+          console.log(`✅ [JOB-PROCESSOR] picked jobId=${job.id} requestId=${jobRequestId} conversationId=${job.conversationId} inboundProviderMessageId=${job.inboundProviderMessageId || 'N/A'} status=GENERATING claimedAt=${now.toISOString()}`)
         }
         
         // Load conversation and message
@@ -400,8 +416,12 @@ export async function processOutboundJobs(
           processed.push(job.id)
           continue
         } else if (!sendResult.success) {
-          // If send failed, throw error (will be caught and job marked failed)
+          // If send failed, log Meta response details and throw error (will be caught and job marked failed)
           console.error(`❌ [JOB-PROCESSOR] outbound send failed jobId=${job.id} requestId=${jobRequestId} error=${sendResult.error}`)
+          // Log Meta API response if available in error details
+          if (sendResult.error && typeof sendResult.error === 'string' && sendResult.error.includes('WhatsApp API')) {
+            console.error(`❌ [JOB-PROCESSOR] Meta API error details jobId=${job.id} requestId=${jobRequestId} error=${sendResult.error}`)
+          }
           throw new Error(`Failed to send outbound: ${sendResult.error}`)
         } else {
           // Send succeeded - log success
@@ -451,6 +471,11 @@ export async function processOutboundJobs(
       } catch (error: any) {
         console.error(`❌ [JOB-PROCESSOR] Job ${job.id} failed:`, error.message)
         console.error(`❌ [JOB-PROCESSOR] Error stack:`, error.stack)
+        
+        // Log Meta API response if error contains WhatsApp API details
+        if (error.message && typeof error.message === 'string' && (error.message.includes('WhatsApp API') || error.message.includes('Meta'))) {
+          console.error(`❌ [JOB-PROCESSOR] Meta API error response jobId=${job.id} requestId=${jobRequestId} errorMessage="${error.message}" errorCode=${error.code || 'N/A'}`)
+        }
         
         // Check if we should retry
         const shouldRetry = job.attempts < job.maxAttempts

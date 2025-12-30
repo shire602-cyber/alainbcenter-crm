@@ -127,3 +127,4 @@ This means your database schema doesn't match Prisma schema. Options:
 - ✅ Use environment variables, never hardcode credentials
 - ✅ Rotate credentials if accidentally exposed
 
+

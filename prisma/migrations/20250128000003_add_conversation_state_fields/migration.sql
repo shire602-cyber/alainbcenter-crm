@@ -11,3 +11,4 @@ ADD COLUMN IF NOT EXISTS "knownFields" TEXT;
 -- Create index for state version queries
 CREATE INDEX IF NOT EXISTS "Conversation_stateVersion_idx" ON "Conversation"("stateVersion");
 
+

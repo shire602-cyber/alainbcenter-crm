@@ -595,22 +595,9 @@ export async function POST(req: NextRequest) {
                 if (enqueueResult.wasDuplicate) {
                   console.log(`⚠️ [WEBHOOK] Duplicate job blocked requestId=${requestId} inboundProviderMessageId=${messageId}`)
                 } else {
-                  // A) FIRE-AND-FORGET KICK: Trigger job runner immediately (don't await)
-                  // This ensures jobs process without waiting for cron, while keeping webhook fast
-                  const baseUrl = req.nextUrl.origin || `https://${req.headers.get('host') || 'localhost:3000'}`
-                  const jobRunnerUrl = `${baseUrl}/api/jobs/run-outbound?token=${process.env.JOB_RUNNER_TOKEN || 'dev-token-change-in-production'}&max=10`
-                  
-                  // Fire-and-forget: don't await, don't block webhook
-                  fetch(jobRunnerUrl, {
-                    method: 'GET',
-                    headers: { 'Content-Type': 'application/json' },
-                    cache: 'no-store',
-                  }).catch((kickError: any) => {
-                    // Log but don't fail - job will be processed by cron if kick fails
-                    console.warn(`⚠️ [WEBHOOK] Job runner kick failed (non-critical) requestId=${requestId}:`, kickError.message)
-                  })
-                  
-                  console.log(`🚀 [WEBHOOK] Kicked job runner requestId=${requestId} inboundMessageId=${messageId}`)
+                  // Job enqueued - will be processed by cron (runs every minute)
+                  // No HTTP kick - webhook must remain fast and independent
+                  console.log(`✅ [WEBHOOK] Job enqueued, will be processed by cron requestId=${requestId} jobId=${enqueueResult.jobId}`)
                 }
               } catch (enqueueError: any) {
                 console.error(`❌ [WEBHOOK] Failed to enqueue job requestId=${requestId}:`, enqueueError.message)

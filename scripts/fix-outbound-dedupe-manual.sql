@@ -26,3 +26,4 @@ SELECT
   COUNT(*) - COUNT("outboundDedupeKey") as rows_without_key
 FROM "OutboundMessageLog";
 
+

@@ -17,3 +17,4 @@ npx prisma db push --skip-generate --accept-data-loss
 echo "✅ Database schema repaired!"
 echo "   Run 'npx prisma generate' to regenerate Prisma client"
 
+

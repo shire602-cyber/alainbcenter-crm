@@ -5,3 +5,4 @@ CREATE INDEX IF NOT EXISTS "Conversation_channel_contactId_externalThreadId_idx"
 ON "Conversation" (channel, "contactId", "externalThreadId") 
 WHERE "externalThreadId" IS NOT NULL;
 
+

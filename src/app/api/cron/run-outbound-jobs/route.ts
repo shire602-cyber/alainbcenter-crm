@@ -20,12 +20,16 @@ const CRON_SECRET = process.env.CRON_SECRET || 'dev-secret-change-in-production'
 export async function GET(req: NextRequest) {
   const requestId = `cron_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
   
+  // Log at the very top to confirm handler was reached
+  const vercelCronHeader = req.headers.get('x-vercel-cron')
+  const userAgent = req.headers.get('user-agent') || 'unknown'
+  console.log(`[CRON] reached handler requestId=${requestId} xVercelCron=${vercelCronHeader || 'N/A'} ua=${userAgent.substring(0, 50)}`)
+  
   try {
     console.log(`[CRON] start requestId=${requestId}`)
     
     // Auth - accept ANY truthy x-vercel-cron header (do NOT require === "1")
     // Keep Bearer + query token support for manual testing
-    const vercelCronHeader = req.headers.get('x-vercel-cron')
     const authHeader = req.headers.get('authorization')
     const tokenQuery = req.nextUrl.searchParams.get('token')
     

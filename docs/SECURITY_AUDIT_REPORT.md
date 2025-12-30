@@ -244,3 +244,4 @@ npx prisma migrate dev
 
 **Note:** Never commit `.env` or `.env.local` files. They are already in `.gitignore`.
 
+
