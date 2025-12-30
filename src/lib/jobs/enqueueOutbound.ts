@@ -30,12 +30,13 @@ export async function enqueueOutboundJob(
   // #endregion
   try {
     // Try to create job (unique constraint on inboundProviderMessageId prevents duplicates)
+    // Status: PENDING (will be picked up by job runner)
     const job = await prisma.outboundJob.create({
       data: {
         conversationId: input.conversationId,
         inboundMessageId: input.inboundMessageId,
         inboundProviderMessageId: input.inboundProviderMessageId,
-        status: 'queued',
+        status: 'PENDING', // New status enum: PENDING | GENERATING | READY_TO_SEND | SENT | FAILED
         runAt: new Date(), // Run immediately
         requestId,
       },

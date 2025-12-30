@@ -361,6 +361,7 @@ model Conversation {
   outboundMessageLogs  OutboundMessageLog[]
   replyEngineLogs      ReplyEngineLog[]
   outboundJobs         OutboundJob[]
+  // Note: Partial unique index for externalThreadId will be added via migration
 
   // C) CONVERSATION UNIQUENESS: One conversation per (contactId, channel, externalThreadId)
   // PostgreSQL handles NULL in unique constraints: multiple NULLs are allowed
@@ -373,7 +374,6 @@ model Conversation {
   @@index([assignedUserId, lastMessageAt])
   @@index([externalId])
   @@index([channel, contactId, externalThreadId]) // For upsert logic with externalThreadId
-  // Note: Partial unique index for externalThreadId will be added via migration
 }
 
 model Message {
@@ -876,18 +876,24 @@ model OutboundJob {
   inboundMessage           Message?     @relation("OutboundJobInboundMessage", fields: [inboundMessageId], references: [id])
   inboundMessageId         Int
   inboundProviderMessageId String? // WhatsApp message ID for idempotency
-  status                   String       @default("queued") // queued | running | done | failed
+  status                   String       @default("PENDING") // PENDING | GENERATING | READY_TO_SEND | SENT | FAILED
   runAt                    DateTime     @default(now()) // When to run (for retries with backoff)
   attempts                 Int          @default(0) // Number of attempts
   maxAttempts              Int          @default(3) // Max attempts before marking failed
   error                    String? // Error message if failed
+  errorLog                 String? // Detailed error log (Meta/AI error details)
+  content                  String? // AI-generated reply content (stored before sending)
   requestId                String? // Request ID for tracing
   createdAt                DateTime     @default(now())
   startedAt                DateTime? // When job started processing
   completedAt              DateTime? // When job completed
+  lastAttemptAt            DateTime? // Last attempt timestamp (updated on every retry)
+  claimedAt                DateTime? // Timestamp when job was claimed by a worker (for optimistic locking)
 
   @@unique([inboundProviderMessageId]) // Prevent duplicate jobs for same inbound message
   @@index([status, runAt]) // For job runner to pick queued jobs
   @@index([conversationId, createdAt])
   @@index([requestId])
+  @@index([claimedAt]) // For stale job recovery
+  @@index([status, claimedAt]) // For finding stale jobs
 }

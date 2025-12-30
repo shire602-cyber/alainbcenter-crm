@@ -11,7 +11,7 @@ const WHATSAPP_API_VERSION = 'v21.0'
 interface WhatsAppResponse {
   messaging_product: string
   contacts: Array<{ input: string; wa_id: string }>
-  messages: Array<{ id: string }>
+  messages: Array<{ id: string; pacing?: string }> // TASK 5: Include pacing status
 }
 
 interface WhatsAppError {
@@ -147,9 +147,19 @@ export async function sendTextMessage(
 
     const data = await response.json()
     console.log(`📡 [WHATSAPP-SEND] Response data:`, JSON.stringify(data).substring(0, 500))
+    
+    // TASK 5: Log full Meta response (including pacing status)
+    const metaResponse = {
+      status: response.status,
+      statusText: response.statusText,
+      ok: response.ok,
+      data: data,
+      timestamp: new Date().toISOString(),
+    }
+    console.log(`📡 [WHATSAPP-SEND] Full Meta response:`, JSON.stringify(metaResponse))
 
     // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:135',message:'WhatsApp API response',data:{status:response.status,ok:response.ok,hasError:!!(data as any).error,errorMessage:(data as any).error?.message},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:148',message:'WhatsApp API response',data:{status:response.status,ok:response.ok,hasError:!!(data as any).error,errorMessage:(data as any).error?.message,hasPacing:!!(data as any).messages?.[0]?.pacing},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
     // #endregion
     if (!response.ok) {
       const error = data as WhatsAppError
