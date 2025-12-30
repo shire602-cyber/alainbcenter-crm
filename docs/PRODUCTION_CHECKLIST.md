@@ -108,10 +108,14 @@ Verify `vercel.json` has cron job configured:
 
 **Command to test manually:**
 ```bash
+# Test cron endpoint
 curl "https://your-domain.vercel.app/api/cron/run-outbound-jobs?token=YOUR_CRON_SECRET"
+
+# Test job runner directly
+curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER_TOKEN&max=1"
 ```
 
-**Expected response:**
+**Expected response (cron):**
 ```json
 {
   "ok": true,
@@ -126,6 +130,27 @@ curl "https://your-domain.vercel.app/api/cron/run-outbound-jobs?token=YOUR_CRON_
   "elapsed": "1234ms"
 }
 ```
+
+**Expected response (job runner):**
+```json
+{
+  "ok": true,
+  "processed": 0,
+  "failed": 0,
+  "jobIds": {
+    "processed": [],
+    "failed": []
+  }
+}
+```
+
+**Error responses (cron):**
+- `{ "ok": false, "code": "MISSING_ENV", "error": "JOB_RUNNER_TOKEN missing in environment" }` - Set `JOB_RUNNER_TOKEN` in Vercel env vars
+- `{ "ok": false, "code": "DOWNSTREAM_NOT_JSON", "statusCode": 500, "bodyPreview": "<html>..." }` - Job runner returned HTML error page
+- `{ "ok": false, "code": "DOWNSTREAM_ERROR", "statusCode": 401, "bodyPreview": "..." }` - Job runner returned error status
+
+**Error responses (job runner):**
+- `{ "ok": false, "error": "Unauthorized" }` - Invalid or missing token
 
 1. **Check Vercel Cron Logs (PRODUCTION only):**
    - Vercel Dashboard → Your Project → Deployments → [Production Deployment] → Functions → `/api/cron/run-outbound-jobs` → Logs
