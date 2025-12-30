@@ -131,8 +131,8 @@ export async function GET(req: NextRequest) {
           continue
         }
         
-        // Run orchestrator
-        console.log(`🎯 [JOB-RUNNER] Running orchestrator for job ${job.id} (requestId: ${requestId})`)
+        // Task C: Run orchestrator - log start and end
+        console.log(`🎯 [JOB-RUNNER] orchestrator start jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} inboundMessageId=${message.id}`)
         const orchestratorStartTime = Date.now()
         const orchestratorResult = await generateAIReply({
           conversationId: conversation.id,
@@ -144,10 +144,7 @@ export async function GET(req: NextRequest) {
           language: 'en',
         })
         const orchestratorElapsed = Date.now() - orchestratorStartTime
-        console.log(`✅ [JOB-RUNNER] Orchestrator complete jobId=${job.id} requestId=${requestId} elapsed=${orchestratorElapsed}ms`, {
-          replyLength: orchestratorResult.replyText?.length || 0,
-          hasHandover: 'handoverReason' in orchestratorResult,
-        })
+        console.log(`✅ [JOB-RUNNER] orchestrator end jobId=${job.id} requestId=${requestId} elapsed=${orchestratorElapsed}ms replyLength=${orchestratorResult.replyText?.length || 0} hasHandover=${'handoverReason' in orchestratorResult}`)
         
         // Check if reply is empty (deduplication or stop)
         if (!orchestratorResult.replyText || orchestratorResult.replyText.trim().length === 0) {
@@ -243,8 +240,8 @@ export async function GET(req: NextRequest) {
           throw new Error(`Invalid phone number format for outbound: ${phoneForOutbound}. Must be E.164 format (e.g., +260777711059). Contact ID: ${conversation.contact.id}`)
         }
         
-        // TASK C: Add logging before sendOutboundWithIdempotency
-        console.log(`📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'}`)
+        // Task C: Log before sendOutboundWithIdempotency
+        console.log(`📤 [JOB-RUNNER] send start jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'}`)
         
         const sendStartTime = Date.now()
         const sendResult = await sendOutboundWithIdempotency({
@@ -261,10 +258,11 @@ export async function GET(req: NextRequest) {
         })
         const sendElapsed = Date.now() - sendStartTime
         
-        // TASK 4: Add logging after sendOutboundWithIdempotency result
+        // Task C: Add logging after sendOutboundWithIdempotency result
+        // Task C: Ensure job is marked DONE only if outbound send success=true
         if (sendResult.wasDuplicate) {
           console.log(`⚠️ [JOB-RUNNER] Duplicate outbound blocked jobId=${job.id} requestId=${requestId} keyComponents=${outboundKeyComponents}`)
-          // Mark as done even if duplicate (idempotency worked)
+          // Mark as done even if duplicate (idempotency worked - message already sent)
           await prisma.outboundJob.update({
             where: { id: job.id },
             data: {
@@ -275,13 +273,16 @@ export async function GET(req: NextRequest) {
           processed.push(job.id)
           continue
         } else if (!sendResult.success) {
+          // Task C: If send failed, throw error (will be caught and job marked failed)
           console.error(`❌ [JOB-RUNNER] outbound send failed jobId=${job.id} requestId=${requestId} error=${sendResult.error}`)
           throw new Error(`Failed to send outbound: ${sendResult.error}`)
         } else {
-          console.log(`✅ [JOB-RUNNER] outbound sent jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} success=${sendResult.success} elapsed=${sendElapsed}ms`)
+          // Task C: Send succeeded - log success
+          console.log(`✅ [JOB-RUNNER] send end jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} success=${sendResult.success} elapsed=${sendElapsed}ms`)
         }
         
-        // TASK 4: Verify Message row was created (for inbox UI)
+        // Task C: Verify Message row was created (for inbox UI)
+        console.log(`🔍 [JOB-RUNNER] Message row check start jobId=${job.id} requestId=${requestId} providerMessageId=${sendResult.messageId || 'N/A'}`)
         try {
           const messageRow = await prisma.message.findFirst({
             where: {
@@ -296,23 +297,30 @@ export async function GET(req: NextRequest) {
           if (messageRow) {
             console.log(`✅ [JOB-RUNNER] Message row confirmed jobId=${job.id} requestId=${requestId} messageRowId=${messageRow.id} status=${messageRow.status}`)
           } else {
-            console.warn(`⚠️ [JOB-RUNNER] Message row not found (may be created asynchronously) jobId=${job.id} requestId=${requestId} providerMessageId=${sendResult.messageId || 'N/A'}`)
+            console.warn(`⚠️ [JOB-RUNNER] Message row not found jobId=${job.id} requestId=${requestId} providerMessageId=${sendResult.messageId || 'N/A'} - inbox may not show reply`)
           }
         } catch (messageCheckError: any) {
           console.warn(`⚠️ [JOB-RUNNER] Failed to verify Message row (non-critical) jobId=${job.id} requestId=${requestId}:`, messageCheckError.message)
         }
         
-        // Mark job as done only if send succeeded
-        await prisma.outboundJob.update({
-          where: { id: job.id },
-          data: {
-            status: 'done',
-            completedAt: new Date(),
-          },
-        })
-        
-        console.log(`✅ [JOB-RUNNER] Job ${job.id} completed successfully (requestId: ${requestId})`)
-        processed.push(job.id)
+        // Task C: Mark job as done ONLY if send succeeded (success=true)
+        // This is already in the else block above, but ensure it's explicit
+        if (sendResult.success) {
+          console.log(`💾 [JOB-RUNNER] Marking job DONE jobId=${job.id} requestId=${requestId} success=true`)
+          await prisma.outboundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'done',
+              completedAt: new Date(),
+            },
+          })
+          
+          console.log(`✅ [JOB-RUNNER] job done jobId=${job.id} requestId=${requestId} status=done`)
+          processed.push(job.id)
+        } else {
+          // This should not happen (we throw above), but defensive check
+          throw new Error(`Job ${job.id} send result success=false but no error thrown`)
+        }
         
       } catch (error: any) {
         console.error(`❌ [JOB-RUNNER] Job ${job.id} failed:`, error.message)

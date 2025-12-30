@@ -305,12 +305,15 @@ export async function sendOutboundWithIdempotency(
       },
     })
     
-    // Step 4.5: Create Message record for Inbox UI visibility
+    // Task D: Create Message record for Inbox UI visibility
     // This ensures outbound messages appear in the Inbox and conversation history
+    // Task D: After WhatsApp send succeeds and OutboundMessageLog is marked SENT
+    // Task D: Wrap DB writes in try/catch so send success does not get reversed by UI logging failure
     try {
       const channelUpper = provider.toUpperCase() as 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
       const sentAt = new Date()
       
+      // Task D: Create Message row (OUTBOUND) with providerMessageId and final text
       await prisma.message.create({
         data: {
           conversationId,
@@ -319,14 +322,14 @@ export async function sendOutboundWithIdempotency(
           direction: 'OUTBOUND',
           channel: channelUpper,
           type: 'text',
-          body: text, // Use final text (after greeting and sanitization)
+          body: text, // Task D: Use final text (after greeting and sanitization)
           providerMessageId: messageId || null,
           status: 'SENT',
           sentAt,
         },
       })
       
-      // Update conversation timestamps
+      // Task D: Update conversation timestamps (lastOutboundAt, lastMessageAt)
       await prisma.conversation.update({
         where: { id: conversationId },
         data: {
@@ -335,11 +338,11 @@ export async function sendOutboundWithIdempotency(
         },
       })
       
-      console.log(`[OUTBOUND-IDEMPOTENCY] Message record created for Inbox UI: conversationId=${conversationId}, messageId=${messageId}`)
+      console.log(`[OUTBOUND-IDEMPOTENCY] Message row created conversationId=${conversationId} messageId=${messageId} providerMessageId=${messageId || 'N/A'}`)
     } catch (messageError: any) {
-      // Non-critical - log but don't fail the send
+      // Task D: DO log errors but don't fail the send (send success should not be reversed)
       // This could fail if Message already exists (unique constraint on providerMessageId)
-      console.warn(`[OUTBOUND-IDEMPOTENCY] Failed to create Message record (non-critical):`, messageError.message)
+      console.warn(`[OUTBOUND-IDEMPOTENCY] Message row creation failed (non-critical) conversationId=${conversationId} messageId=${messageId} error="${messageError.message}"`)
     }
     
     // Step 4.6: If this was the first outbound message, persist firstGreetingSentAt
