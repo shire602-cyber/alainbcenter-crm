@@ -38,14 +38,14 @@ export async function createAutoTasks(input: AutoTaskInput): Promise<number> {
         conversationId: input.conversationId,
         title: 'Reply due',
         type: 'REPLY_WHATSAPP',
-        dueAt: new Date(Date.now() + 10 * 60 * 1000), // 10 minutes
+        dueAt: new Date(), // Due immediately (no delay)
         status: 'OPEN',
         idempotencyKey: replyTaskKey,
         aiSuggested: true,
       },
       update: {
         // Update due date if task already exists (refresh the deadline)
-        dueAt: new Date(Date.now() + 10 * 60 * 1000),
+        dueAt: new Date(), // Due immediately (no delay)
         status: 'OPEN', // Reopen if it was closed
       },
     })

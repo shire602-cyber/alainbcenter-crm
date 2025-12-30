@@ -166,3 +166,4 @@ Run: `npx prisma migrate dev --name add_conversation_external_thread_index`
   - Training documents: Delete/recreate in admin UI
   - Rule engine: Update `RULE_ENGINE_JSON` in `ruleEngine.ts` and redeploy
 
+

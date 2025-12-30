@@ -6,6 +6,23 @@ import { decodeSessionToken } from '@/lib/auth-session-edge'
 export async function middleware(req: NextRequest) {
   const { pathname } = req.nextUrl
 
+  // CRITICAL: Hard bypass for cron, webhooks, jobs, and health endpoints
+  // These MUST bypass auth checks BEFORE any session validation
+  // Path-based bypass (does not rely on headers which may vary)
+  const bypassPaths = [
+    '/api/cron',      // All cron endpoints (including /api/cron/run-outbound-jobs, /api/cron/debug)
+    '/api/webhooks',  // All webhook endpoints
+    '/api/jobs',      // All job runner endpoints
+    '/api/health',   // Health check endpoints
+  ]
+  
+  // Check bypass FIRST (before any auth logic)
+  if (bypassPaths.some((p) => pathname.startsWith(p))) {
+    const userAgent = req.headers.get('user-agent') || 'unknown'
+    console.log(`[MIDDLEWARE] bypass path=${pathname} ua=${userAgent.substring(0, 50)}`)
+    return NextResponse.next()
+  }
+
   // Public paths that don't require authentication
   const publicPaths = [
     '/login',
@@ -13,11 +30,7 @@ export async function middleware(req: NextRequest) {
     '/api/auth/logout',
     '/setup',
     '/api/auth/setup',
-    '/api/health', // Health check endpoint
     '/marketing', // Marketing pages are public
-    '/api/webhooks/meta-leads',
-    '/api/webhooks/whatsapp',
-    '/api/webhooks/instagram',
     '/api/automation/run-daily',
     '/api/auth/emergency-reset',
   ]

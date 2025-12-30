@@ -201,6 +201,7 @@ export async function POST(
         messageContent = `Template: ${templateName}`
       } else if (text && within24HourWindow) {
         // Send free-form text message (only within 24-hour window) with idempotency
+        // NOTE: sendOutboundWithIdempotency already creates a Message record, so we don't create another one
         const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
         const result = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
@@ -224,16 +225,90 @@ export async function POST(
 
         whatsappMessageId = result.messageId || null
         messageContent = text.trim()
+        
+        // sendOutboundWithIdempotency already created the Message record, so find it
+        // Note: sendOutboundWithIdempotency uses uppercase channel ('WHATSAPP'), but we search case-insensitively
+        let message = null
+        if (whatsappMessageId) {
+          // Try to find the message created by sendOutboundWithIdempotency
+          // It uses uppercase 'WHATSAPP', but the unique constraint is case-insensitive (LOWER(channel))
+          message = await prisma.message.findFirst({
+            where: {
+              conversationId: conversation.id,
+              providerMessageId: whatsappMessageId,
+              // Channel can be 'WHATSAPP' (from sendOutboundWithIdempotency) or 'whatsapp' (normalized)
+              // The unique index uses LOWER(channel), so both match
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        }
+        
+        // If message not found (shouldn't happen, but handle gracefully)
+        // sendOutboundWithIdempotency should have created it, so if it's missing, log a warning
+        // but don't create a duplicate - the send succeeded, so we'll proceed with updates
+        if (!message) {
+          console.warn(`[INBOX-MESSAGES] Message not found after sendOutboundWithIdempotency: conversationId=${conversation.id}, providerMessageId=${whatsappMessageId}`)
+        }
+        
+        // Update conversation (sendOutboundWithIdempotency already did this, but ensure it's done)
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastMessageAt: sentAt,
+            unreadCount: 0,
+          },
+        })
+        
+        // Update lead lastContactAt
+        if (conversation.leadId) {
+          const { detectInfoOrQuotationShared, markInfoShared } = await import('@/lib/automation/infoShared')
+          const detection = detectInfoOrQuotationShared(messageContent)
+          
+          const updateData: any = {
+            lastContactAt: sentAt,
+            lastContactChannel: 'whatsapp',
+          }
+
+          if (detection.isInfoShared && detection.infoType) {
+            await markInfoShared(conversation.leadId, detection.infoType)
+          }
+
+          await prisma.lead.update({
+            where: { id: conversation.leadId },
+            data: updateData,
+          })
+        }
+        
+        // Return success - message was created by sendOutboundWithIdempotency
+        return NextResponse.json({
+          ok: true,
+          message: message ? {
+            id: message.id,
+            direction: message.direction,
+            body: message.body,
+            status: message.status,
+            providerMessageId: message.providerMessageId,
+            createdAt: message.createdAt.toISOString(),
+          } : {
+            id: 0, // Placeholder if not found
+            direction: 'OUTBOUND',
+            body: messageContent,
+            status: 'SENT',
+            providerMessageId: whatsappMessageId,
+            createdAt: sentAt.toISOString(),
+          },
+        })
       } else {
         throw new Error('Invalid message type or outside 24-hour window')
       }
     } catch (error: any) {
       console.error('WhatsApp send error:', error)
       sendError = error
-      // Continue to create message record with FAILED status
+      // Continue to create message record with FAILED status (only for template/media, not text)
     }
 
-    // Create outbound Message(OUT) record
+    // Create outbound Message(OUT) record (only for template/media messages, not text)
+    // Text messages are handled above via sendOutboundWithIdempotency
     const messageStatus = whatsappMessageId ? 'SENT' : 'FAILED'
     const message = await prisma.message.create({
       data: {

@@ -12,3 +12,4 @@ CREATE UNIQUE INDEX IF NOT EXISTS "OutboundMessageLog_outboundDedupeKey_key"
   ON "OutboundMessageLog"("outboundDedupeKey") 
   WHERE "outboundDedupeKey" IS NOT NULL;
 
+
