@@ -1022,45 +1022,84 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </TabsList>
                   </Tabs>
                     {currentUser?.role === 'ADMIN' && conversationId && (
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
-                        onClick={async () => {
-                          if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
-                            return
-                          }
-                          try {
-                            setDeletingChat(true)
-                            const res = await fetch(`/api/admin/conversations/${conversationId}/delete`, {
-                              method: 'DELETE',
-                              credentials: 'include',
-                            })
-                            const data = await res.json()
-                            if (data.ok) {
-                              showToast(`Deleted conversation and ${data.deletedMessages} messages`, 'success')
-                              setConversationId(null)
-                              setMessages([])
-                              await loadLead()
-                              await loadMessages()
-                            } else {
-                              showToast(data.error || 'Failed to delete conversation', 'error')
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                          onClick={async () => {
+                            if (!confirm('⚠️ Wipe all test data for this lead?\n\nThis will:\n- Delete all messages\n- Delete all OutboundJobs\n- Clear conversation state (AI memory)\n- Delete all logs\n\nThis action cannot be undone. Use for testing AI behavior from scratch.')) {
+                              return
                             }
-                          } catch (err: any) {
-                            showToast('Failed to delete conversation', 'error')
-                          } finally {
-                            setDeletingChat(false)
-                          }
-                        }}
-                        disabled={deletingChat}
-                      >
-                        {deletingChat ? (
-                          <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                        ) : (
-                          <Trash2 className="h-3.5 w-3.5" />
-                        )}
-                        Delete Chat
-                      </Button>
+                            try {
+                              setDeletingChat(true)
+                              const res = await fetch(`/api/admin/data/wipe-test-data?leadId=${leadId}`, {
+                                method: 'DELETE',
+                                credentials: 'include',
+                              })
+                              const data = await res.json()
+                              if (data.ok) {
+                                showToast(`Wiped test data: ${data.deletionLog?.length || 0} operations completed`, 'success')
+                                await loadLead()
+                                await loadMessages()
+                              } else {
+                                showToast(data.error || 'Failed to wipe test data', 'error')
+                              }
+                            } catch (err: any) {
+                              showToast('Failed to wipe test data', 'error')
+                            } finally {
+                              setDeletingChat(false)
+                            }
+                          }}
+                          disabled={deletingChat}
+                        >
+                          {deletingChat ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Wipe Test Data
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={async () => {
+                            if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
+                              return
+                            }
+                            try {
+                              setDeletingChat(true)
+                              const res = await fetch(`/api/admin/conversations/${conversationId}/delete`, {
+                                method: 'DELETE',
+                                credentials: 'include',
+                              })
+                              const data = await res.json()
+                              if (data.ok) {
+                                showToast(`Deleted conversation and ${data.deletedMessages} messages`, 'success')
+                                setConversationId(null)
+                                setMessages([])
+                                await loadLead()
+                                await loadMessages()
+                              } else {
+                                showToast(data.error || 'Failed to delete conversation', 'error')
+                              }
+                            } catch (err: any) {
+                              showToast('Failed to delete conversation', 'error')
+                            } finally {
+                              setDeletingChat(false)
+                            }
+                          }}
+                          disabled={deletingChat}
+                        >
+                          {deletingChat ? (
+                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
+                          ) : (
+                            <Trash2 className="h-3.5 w-3.5" />
+                          )}
+                          Delete Chat
+                        </Button>
+                      </div>
                     )}
                   </div>
                 </div>
