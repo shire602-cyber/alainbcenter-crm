@@ -8,6 +8,8 @@ import { markInboundProcessed } from '@/lib/webhook/idempotency'
 
 // Ensure this runs in Node.js runtime (not Edge) for Prisma compatibility
 export const runtime = 'nodejs'
+// Prevent Vercel caching
+export const dynamic = 'force-dynamic'
 
 /**
  * GET /api/webhooks/whatsapp

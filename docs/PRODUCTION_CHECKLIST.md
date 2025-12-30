@@ -119,11 +119,12 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 ```json
 {
   "ok": true,
-  "message": "Job runner triggered",
-  "jobRunnerResult": {
-    "ok": true,
-    "processed": 0,
-    "failed": 0
+  "message": "Jobs processed",
+  "processed": 0,
+  "failed": 0,
+  "jobIds": {
+    "processed": [],
+    "failed": []
   },
   "requestId": "cron_1234567890_abc123",
   "authMethod": "query",
@@ -145,9 +146,8 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 ```
 
 **Error responses (cron):**
-- `{ "ok": false, "code": "MISSING_ENV", "error": "JOB_RUNNER_TOKEN missing in environment" }` - Set `JOB_RUNNER_TOKEN` in Vercel env vars
-- `{ "ok": false, "code": "DOWNSTREAM_NOT_JSON", "statusCode": 500, "bodyPreview": "<html>..." }` - Job runner returned HTML error page
-- `{ "ok": false, "code": "DOWNSTREAM_ERROR", "statusCode": 401, "bodyPreview": "..." }` - Job runner returned error status
+- `{ "ok": false, "code": "UNAUTHORIZED", "error": "Unauthorized" }` - Invalid or missing CRON_SECRET
+- `{ "ok": false, "code": "PROCESSING_ERROR", "error": "..." }` - Job processing failed
 
 **Error responses (job runner):**
 - `{ "ok": false, "error": "Unauthorized" }` - Invalid or missing token
@@ -159,13 +159,12 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
      ```
      [CRON] start requestId=cron_1234567890_abc123
      [CRON] authorized method=vercel requestId=cron_1234567890_abc123 vercelHeaderValue="1"
-     [CRON] calling job runner requestId=cron_1234567890_abc123 authMethod=vercel
-     [CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=1234ms ok=true processed=0 failed=0
+     [CRON] processing jobs directly requestId=cron_1234567890_abc123 max=50
+     📦 [JOB-PROCESSOR] Processing 1 job(s) source=cron requestId=cron_1234567890_abc123
+     [CRON] job processing complete requestId=cron_1234567890_abc123 elapsed=1234ms ok=true processed=1 failed=0
      ```
    - **If you see 401:** Check `CRON_SECRET` is set in Vercel Environment Variables
-   - **If you see MISSING_ENV:** Check `JOB_RUNNER_TOKEN` is set in Vercel Environment Variables
-   - **If you see DOWNSTREAM_NOT_JSON:** Job runner returned HTML error page (check job runner logs)
-   - **If you see DOWNSTREAM_ERROR:** Job runner returned error status (check statusCode and bodyPreview)
+   - **If you see PROCESSING_ERROR:** Check job processor logs for details
    - **If no logs:** Cron only runs on PRODUCTION, not preview deployments
 
 2. **Manual Test (if needed):**
@@ -176,11 +175,12 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
    ```json
    {
      "ok": true,
-     "message": "Job runner triggered",
-     "jobRunnerResult": {
-       "ok": true,
-       "processed": 1,
-       "failed": 0
+     "message": "Jobs processed",
+     "processed": 1,
+     "failed": 0,
+     "jobIds": {
+       "processed": [123],
+       "failed": []
      },
      "requestId": "cron_1234567890_abc123",
      "authMethod": "query",
@@ -243,23 +243,28 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 1. **Wait 1-2 minutes** (cron runs every minute)
 
 2. **Check Vercel Function Logs (PRODUCTION deployment):**
-   - Vercel Dashboard → Your Project → Deployments → [Production Deployment] → Functions → `/api/jobs/run-outbound` → Logs
+   - Vercel Dashboard → Your Project → Deployments → [Production Deployment] → Functions → `/api/cron/run-outbound-jobs` → Logs
    - **Expected log lines (in order):**
      ```
-     📦 [JOB-RUNNER] Processing 1 job(s)
-     ✅ [JOB-RUNNER] picked jobId=123 requestId=job_123_1234567890 conversationId=456 inboundProviderMessageId=wamid.xxx
-     📥 [JOB-RUNNER] Loading conversation jobId=123 requestId=job_123_1234567890 conversationId=456
-     ✅ [JOB-RUNNER] Conversation loaded jobId=123 requestId=job_123_1234567890 conversationId=456 contactId=789 leadId=101
-     📥 [JOB-RUNNER] Loading inbound message jobId=123 requestId=job_123_1234567890 inboundMessageId=202
-     ✅ [JOB-RUNNER] Inbound message loaded jobId=123 requestId=job_123_1234567890 messageId=202 bodyLength=25
-     🎯 [JOB-RUNNER] orchestrator start jobId=123 requestId=job_123_1234567890 conversationId=456 inboundMessageId=202
-     ✅ [JOB-RUNNER] orchestrator end jobId=123 requestId=job_123_1234567890 elapsed=1234ms replyLength=150 hasHandover=false
-     📤 [JOB-RUNNER] send start jobId=123 requestId=job_123_1234567890 conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx
-     ✅ [JOB-RUNNER] send end jobId=123 requestId=job_123_1234567890 messageId=wamid.yyy conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx success=true elapsed=567ms
-     🔍 [JOB-RUNNER] Message row check start jobId=123 requestId=job_123_1234567890 providerMessageId=wamid.yyy
-     ✅ [JOB-RUNNER] Message row confirmed jobId=123 requestId=job_123_1234567890 messageRowId=303 status=SENT
-     💾 [JOB-RUNNER] Marking job DONE jobId=123 requestId=job_123_1234567890 success=true
-     ✅ [JOB-RUNNER] job done jobId=123 requestId=job_123_1234567890 status=done
+     [CRON] start requestId=cron_1234567890_abc123
+     [CRON] authorized method=vercel requestId=cron_1234567890_abc123
+     [CRON] processing jobs directly requestId=cron_1234567890_abc123 max=50
+     📦 [JOB-PROCESSOR] Processing 1 job(s) source=cron requestId=cron_1234567890_abc123
+     ✅ [JOB-PROCESSOR] picked jobId=123 requestId=job_123_1234567890 conversationId=456 inboundProviderMessageId=wamid.xxx status=GENERATING
+     📥 [JOB-PROCESSOR] Loading conversation jobId=123 requestId=job_123_1234567890 conversationId=456
+     ✅ [JOB-PROCESSOR] Conversation loaded jobId=123 requestId=job_123_1234567890 conversationId=456 contactId=789 leadId=101
+     📥 [JOB-PROCESSOR] Loading inbound message jobId=123 requestId=job_123_1234567890 inboundMessageId=202
+     ✅ [JOB-PROCESSOR] Inbound message loaded jobId=123 requestId=job_123_1234567890 messageId=202 bodyLength=25
+     🎯 [JOB-PROCESSOR] orchestrator start jobId=123 requestId=job_123_1234567890 conversationId=456 inboundMessageId=202
+     ✅ [JOB-PROCESSOR] orchestrator end jobId=123 requestId=job_123_1234567890 elapsed=1234ms replyLength=150 hasHandover=false
+     ✅ [JOB-PROCESSOR] AI content saved jobId=123 contentLength=150 status=READY_TO_SEND
+     📤 [JOB-PROCESSOR] send start jobId=123 requestId=job_123_1234567890 conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx within24h=true
+     ✅ [JOB-PROCESSOR] send end jobId=123 requestId=job_123_1234567890 messageId=wamid.yyy conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx success=true elapsed=567ms
+     🔍 [JOB-PROCESSOR] Message row check start jobId=123 requestId=job_123_1234567890 providerMessageId=wamid.yyy
+     ✅ [JOB-PROCESSOR] Message row confirmed jobId=123 requestId=job_123_1234567890 messageRowId=303 status=SENT
+     💾 [JOB-PROCESSOR] Marking job SENT jobId=123 requestId=job_123_1234567890 success=true
+     ✅ [JOB-PROCESSOR] job done jobId=123 requestId=job_123_1234567890 status=SENT
+     [CRON] job processing complete requestId=cron_1234567890_abc123 elapsed=2345ms ok=true processed=1 failed=0
      ```
 
 3. **Check Database:**
@@ -271,7 +276,7 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
    ORDER BY "createdAt" DESC
    LIMIT 1;
    ```
-   Expected: `status = 'done'` (not `queued` or `failed`)
+   Expected: `status = 'SENT'` (not `PENDING`, `GENERATING`, `READY_TO_SEND`, or `FAILED`)
 
 ### Step 4: Verify Outbound Message Appears in Inbox
 
@@ -307,7 +312,7 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 
 2. **Check Logs:**
    - Look for: `⚠️ [WEBHOOK] Duplicate job blocked requestId=...`
-   - Look for: `⚠️ [JOB-RUNNER] Duplicate outbound blocked jobId=...`
+   - Look for: `⚠️ [JOB-PROCESSOR] Duplicate outbound blocked jobId=...`
 
 3. **Check Database:**
    ```sql
@@ -335,17 +340,18 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 - Verify `CRON_SECRET` in Vercel Dashboard
 - Check cron route logs for authorization method
 
-### Issue: Jobs stay in "queued" status
+### Issue: Jobs stay in "PENDING" status
 
 **Check:**
 - Cron is running (check Vercel Cron logs)
-- Job runner endpoint is accessible
-- `JOB_RUNNER_TOKEN` is set correctly
+- `CRON_SECRET` is set correctly
+- Jobs are being picked up by processor
 
 **Fix:**
-- Verify `JOB_RUNNER_TOKEN` in Vercel environment variables
-- Manually trigger job runner: `GET /api/jobs/run-outbound?token=JOB_RUNNER_TOKEN`
-- Check job runner logs for errors
+- Verify `CRON_SECRET` in Vercel environment variables
+- Manually trigger cron: `GET /api/cron/run-outbound-jobs?token=CRON_SECRET`
+- Or manually trigger job runner: `GET /api/jobs/run-outbound?token=JOB_RUNNER_TOKEN`
+- Check cron/job processor logs for errors
 
 ### Issue: Outbound messages not appearing in Inbox
 
@@ -364,12 +370,12 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 **Check:**
 - Job enqueue is fast (<50ms)
 - No blocking operations in webhook
-- Fire-and-forget kick is non-blocking
+- Fire-and-forget kick is non-blocking (optional - cron will process anyway)
 
 **Fix:**
 - Verify job enqueue doesn't await orchestrator
 - Check webhook logs for slow operations
-- Ensure kick is fire-and-forget (no await)
+- Ensure kick is fire-and-forget (no await) - note: cron will process jobs even if kick fails
 
 ### Issue: Schema mismatch errors (P2022)
 
@@ -388,13 +394,13 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 ## Success Criteria
 
 ✅ **Webhook:** Returns <300ms, enqueues job  
-✅ **Cron:** Runs every minute, processes jobs  
-✅ **Job Runner:** Processes queued jobs, sends outbound  
+✅ **Cron:** Runs every minute, processes jobs directly (no HTTP call to job runner)  
+✅ **Job Processor:** Shared logic processes queued jobs, sends outbound (used by both cron and manual trigger)  
 ✅ **Message Row:** Created for outbound replies  
 ✅ **Inbox UI:** Shows outbound replies  
 ✅ **WhatsApp:** User receives AI reply  
 ✅ **No Duplicates:** Same message doesn't trigger duplicate replies  
-✅ **No Manual Trigger:** Replies arrive automatically without calling `/api/jobs/run-outbound` manually
+✅ **No Manual Trigger:** Replies arrive automatically via cron (manual trigger `/api/jobs/run-outbound` remains for debugging)
 
 ---
 
@@ -414,11 +420,11 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 # Webhook enqueue success
 grep "✅ \[WEBHOOK\] Job enqueued" logs
 
-# Job runner processing
-grep "📦 \[JOB-RUNNER\] Processing" logs
+# Job processor processing (cron or manual)
+grep "📦 \[JOB-PROCESSOR\] Processing" logs
 
 # Outbound sent
-grep "✅ \[JOB-RUNNER\] Outbound sent" logs
+grep "✅ \[JOB-PROCESSOR\] send end" logs
 
 # Duplicate blocked
 grep "⚠️.*Duplicate.*blocked" logs
