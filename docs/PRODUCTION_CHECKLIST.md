@@ -30,27 +30,46 @@ Set all required environment variables in Vercel Dashboard → Settings → Envi
 
 ### 2. Database Migrations
 
-Run migrations on production database:
+**CRITICAL:** Run migrations on production database before deploying:
 
 ```bash
 # Option 1: Via Prisma (recommended)
 DATABASE_URL="your-production-db-url" npx prisma migrate deploy
 
 # Option 2: Via Neon Dashboard SQL Editor
-# Run SQL from: prisma/migrations/20250130000000_add_conversation_soft_delete/migration.sql
-# Run SQL from: prisma/migrations/20251229190109_add_notification_snoozed_until/migration.sql
+# Run SQL from: prisma/migrations/20251230122512_fix_schema_drift_deleted_at_snoozed_until/migration.sql
 ```
 
-**Verify migrations:**
+**Verify migrations applied:**
+```bash
+# Option 1: Use verification script (recommended)
+DATABASE_URL="your-production-db-url" npx tsx scripts/db/verify-schema.ts
+
+# Expected output:
+# ✅ Conversation.deletedAt: EXISTS
+# ✅ Notification.snoozedUntil: EXISTS
+# ✅ Conversation_deletedAt_idx: EXISTS
+# ✅ Notification_snoozedUntil_idx: EXISTS
+# ✅ Schema verification PASSED
+```
+
+**Or verify via SQL:**
 ```sql
 -- Check deletedAt column exists
 SELECT column_name FROM information_schema.columns 
 WHERE table_name = 'Conversation' AND column_name = 'deletedAt';
+-- Expected: 1 row
 
 -- Check snoozedUntil column exists
 SELECT column_name FROM information_schema.columns 
 WHERE table_name = 'Notification' AND column_name = 'snoozedUntil';
+-- Expected: 1 row
 ```
+
+**If migrations fail:**
+- Check `DATABASE_URL` is correct
+- Ensure database user has `ALTER TABLE` permissions
+- Run SQL manually via Neon Dashboard if needed
 
 ### 3. Vercel Cron Configuration
 
@@ -79,27 +98,61 @@ Verify `vercel.json` has cron job configured:
 
 ### Step 1: Verify Cron is Running
 
+**Command to test manually:**
+```bash
+curl "https://your-domain.vercel.app/api/cron/run-outbound-jobs?token=YOUR_CRON_SECRET"
+```
+
 1. **Check Vercel Cron Logs:**
    - Vercel Dashboard → Your Project → Cron Jobs → `/api/cron/run-outbound-jobs` → View Logs
-   - Look for: `[CRON] trigger start requestId=...`
-   - Look for: `[CRON] authorized via vercel`
-   - Look for: `[CRON] job runner response statusCode=200`
+   - **Expected log lines:**
+     ```
+     [CRON] trigger start requestId=cron_1234567890_abc123
+     ✅ [CRON] authorized method=vercel requestId=cron_1234567890_abc123 vercelHeaderValue="1"
+     [CRON] calling job runner requestId=cron_1234567890_abc123 authMethod=vercel
+     [CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=1234ms
+     ```
 
 2. **Manual Test (if needed):**
    ```bash
    curl "https://your-domain.vercel.app/api/cron/run-outbound-jobs?token=YOUR_CRON_SECRET"
    ```
-   Expected: `{"ok": true, "message": "Job runner triggered", ...}`
+   **Expected response:**
+   ```json
+   {
+     "ok": true,
+     "message": "Job runner triggered",
+     "jobRunnerResult": {
+       "ok": true,
+       "processed": 1,
+       "failed": 0
+     },
+     "requestId": "cron_1234567890_abc123",
+     "authMethod": "query",
+     "elapsed": "1234ms"
+   }
+   ```
 
 ### Step 2: Verify Webhook Enqueues Jobs
+
+**Command to test manually (if you have webhook URL):**
+```bash
+# This is typically called by Meta, but you can test with curl if needed
+curl -X POST "https://your-domain.vercel.app/api/webhooks/whatsapp" \
+  -H "Content-Type: application/json" \
+  -d '{"entry":[{"changes":[{"value":{"messages":[{"from":"260777711059","id":"test123","text":{"body":"Hello"}}]}}]}]}'
+```
 
 1. **Send a WhatsApp message** to your business number
 
 2. **Check Vercel Function Logs:**
    - Vercel Dashboard → Your Project → Functions → `/api/webhooks/whatsapp` → Logs
-   - Look for: `[WEBHOOK] INBOUND-ENTRY requestId=...`
-   - Look for: `✅ [WEBHOOK] Job enqueued requestId=... jobId=... elapsed=...ms`
-   - Look for: `🚀 [WEBHOOK] Kicked job runner requestId=...`
+   - **Expected log lines:**
+     ```
+     [WEBHOOK] INBOUND-ENTRY requestId=webhook_1234567890_abc123
+     ✅ [WEBHOOK] Job enqueued requestId=webhook_1234567890_abc123 jobId=123 wasDuplicate=false elapsed=45ms
+     🚀 [WEBHOOK] Kicked job runner requestId=webhook_1234567890_abc123 inboundMessageId=wamid.xxx
+     ```
    - **Target:** Webhook should return <300ms
 
 3. **Check Database:**
@@ -114,16 +167,43 @@ Verify `vercel.json` has cron job configured:
 
 ### Step 3: Verify Job Runner Processes Jobs
 
+**Command to test manually:**
+```bash
+curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER_TOKEN&max=10"
+```
+
+**Expected response:**
+```json
+{
+  "ok": true,
+  "processed": 1,
+  "failed": 0,
+  "jobIds": {
+    "processed": [123],
+    "failed": []
+  }
+}
+```
+
 1. **Wait 1-2 minutes** (cron runs every minute)
 
 2. **Check Vercel Function Logs:**
    - Vercel Dashboard → Your Project → Functions → `/api/jobs/run-outbound` → Logs
-   - Look for: `📦 [JOB-RUNNER] Processing X job(s)`
-   - Look for: `✅ [JOB-RUNNER] picked jobId=... conversationId=... inboundProviderMessageId=...`
-   - Look for: `🎯 [JOB-RUNNER] Running orchestrator for job X`
-   - Look for: `✅ [JOB-RUNNER] Orchestrator complete jobId=... elapsed=...ms`
-   - Look for: `📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=... phone=...`
-   - Look for: `✅ [JOB-RUNNER] outbound sent jobId=... messageId=... conversationId=... phone=... success=true`
+   - **Expected log lines (in order):**
+     ```
+     📦 [JOB-RUNNER] Processing 1 job(s)
+     ✅ [JOB-RUNNER] picked jobId=123 requestId=job_123_1234567890 conversationId=456 inboundProviderMessageId=wamid.xxx
+     📥 [JOB-RUNNER] Loading conversation jobId=123 requestId=job_123_1234567890 conversationId=456
+     ✅ [JOB-RUNNER] Conversation loaded jobId=123 requestId=job_123_1234567890 conversationId=456 contactId=789 leadId=101
+     📥 [JOB-RUNNER] Loading inbound message jobId=123 requestId=job_123_1234567890 inboundMessageId=202
+     ✅ [JOB-RUNNER] Inbound message loaded jobId=123 requestId=job_123_1234567890 messageId=202 bodyLength=25
+     🎯 [JOB-RUNNER] Running orchestrator for job 123 (requestId: job_123_1234567890)
+     ✅ [JOB-RUNNER] Orchestrator complete jobId=123 requestId=job_123_1234567890 elapsed=1234ms replyLength=150 hasHandover=false
+     📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=123 requestId=job_123_1234567890 conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx
+     ✅ [JOB-RUNNER] outbound sent jobId=123 requestId=job_123_1234567890 messageId=wamid.yyy conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx success=true elapsed=567ms
+     ✅ [JOB-RUNNER] Message row confirmed jobId=123 requestId=job_123_1234567890 messageRowId=303 status=SENT
+     ✅ [JOB-RUNNER] Job 123 completed successfully (requestId: job_123_1234567890)
+     ```
 
 3. **Check Database:**
    ```sql

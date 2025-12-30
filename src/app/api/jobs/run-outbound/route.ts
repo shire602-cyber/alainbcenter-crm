@@ -79,7 +79,8 @@ export async function GET(req: NextRequest) {
         
         console.log(`✅ [JOB-RUNNER] picked jobId=${job.id} requestId=${requestId} conversationId=${job.conversationId} inboundProviderMessageId=${job.inboundProviderMessageId || 'N/A'}`)
         
-        // Load conversation and message
+        // TASK 4: Load conversation and message
+        console.log(`📥 [JOB-RUNNER] Loading conversation jobId=${job.id} requestId=${requestId} conversationId=${job.conversationId}`)
         const conversation = await prisma.conversation.findUnique({
           where: { id: job.conversationId },
           include: {
@@ -96,6 +97,10 @@ export async function GET(req: NextRequest) {
           throw new Error(`Conversation ${job.conversationId} not found`)
         }
         
+        console.log(`✅ [JOB-RUNNER] Conversation loaded jobId=${job.id} requestId=${requestId} conversationId=${conversation.id} contactId=${conversation.contactId} leadId=${conversation.leadId || 'N/A'}`)
+        
+        // TASK 4: Load inbound message
+        console.log(`📥 [JOB-RUNNER] Loading inbound message jobId=${job.id} requestId=${requestId} inboundMessageId=${job.inboundMessageId}`)
         const message = job.inboundMessageId 
           ? await prisma.message.findUnique({
               where: { id: job.inboundMessageId },
@@ -105,6 +110,8 @@ export async function GET(req: NextRequest) {
         if (!message || message.direction !== 'INBOUND') {
           throw new Error(`Inbound message ${job.inboundMessageId} not found or not inbound`)
         }
+        
+        console.log(`✅ [JOB-RUNNER] Inbound message loaded jobId=${job.id} requestId=${requestId} messageId=${message.id} bodyLength=${message.body?.length || 0}`)
         
         if (!conversation.lead || !conversation.contact) {
           throw new Error(`Conversation ${job.conversationId} missing lead or contact`)
@@ -254,17 +261,48 @@ export async function GET(req: NextRequest) {
         })
         const sendElapsed = Date.now() - sendStartTime
         
-        // TASK C: Add logging after sendOutboundWithIdempotency result
+        // TASK 4: Add logging after sendOutboundWithIdempotency result
         if (sendResult.wasDuplicate) {
           console.log(`⚠️ [JOB-RUNNER] Duplicate outbound blocked jobId=${job.id} requestId=${requestId} keyComponents=${outboundKeyComponents}`)
+          // Mark as done even if duplicate (idempotency worked)
+          await prisma.outboundJob.update({
+            where: { id: job.id },
+            data: {
+              status: 'done',
+              completedAt: new Date(),
+            },
+          })
+          processed.push(job.id)
+          continue
         } else if (!sendResult.success) {
           console.error(`❌ [JOB-RUNNER] outbound send failed jobId=${job.id} requestId=${requestId} error=${sendResult.error}`)
           throw new Error(`Failed to send outbound: ${sendResult.error}`)
         } else {
-          console.log(`✅ [JOB-RUNNER] outbound sent jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} success=${sendResult.success}`)
+          console.log(`✅ [JOB-RUNNER] outbound sent jobId=${job.id} requestId=${requestId} messageId=${sendResult.messageId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} success=${sendResult.success} elapsed=${sendElapsed}ms`)
         }
         
-        // Mark job as done
+        // TASK 4: Verify Message row was created (for inbox UI)
+        try {
+          const messageRow = await prisma.message.findFirst({
+            where: {
+              conversationId: conversation.id,
+              direction: 'OUTBOUND',
+              providerMessageId: sendResult.messageId || null,
+            },
+            select: { id: true, status: true },
+            orderBy: { createdAt: 'desc' },
+          })
+          
+          if (messageRow) {
+            console.log(`✅ [JOB-RUNNER] Message row confirmed jobId=${job.id} requestId=${requestId} messageRowId=${messageRow.id} status=${messageRow.status}`)
+          } else {
+            console.warn(`⚠️ [JOB-RUNNER] Message row not found (may be created asynchronously) jobId=${job.id} requestId=${requestId} providerMessageId=${sendResult.messageId || 'N/A'}`)
+          }
+        } catch (messageCheckError: any) {
+          console.warn(`⚠️ [JOB-RUNNER] Failed to verify Message row (non-critical) jobId=${job.id} requestId=${requestId}:`, messageCheckError.message)
+        }
+        
+        // Mark job as done only if send succeeded
         await prisma.outboundJob.update({
           where: { id: job.id },
           data: {
