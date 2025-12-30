@@ -543,14 +543,28 @@ export async function POST(req: NextRequest) {
               result.conversation?.id) {
             
             // Check if conversation is assigned to a user (skip auto-reply if assigned)
-            const conversation = await prisma.conversation.findUnique({
-              where: { id: result.conversation.id },
-              select: { assignedUserId: true },
-            })
+            // Step 1d: Add P2022 handling for conversation lookup
+            let conversation: { assignedUserId: number | null } | null = null
+            try {
+              conversation = await prisma.conversation.findUnique({
+                where: { id: result.conversation.id },
+                select: { assignedUserId: true },
+              })
+            } catch (error: any) {
+              // Step 1d: Loud failure for schema mismatch
+              if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+                console.error('[DB-MISMATCH] Conversation.deletedAt column does not exist. DB migrations not applied. Route: /api/webhooks/whatsapp')
+                // Don't fail webhook - log and continue (job will be enqueued anyway)
+                console.warn(`⚠️ [WEBHOOK] Schema mismatch detected but continuing - job will be enqueued requestId=${requestId}`)
+                conversation = null // Treat as unassigned
+              } else {
+                throw error
+              }
+            }
             
             const isAssignedToUser = conversation?.assignedUserId !== null && conversation?.assignedUserId !== undefined
             
-            if (isAssignedToUser) {
+            if (isAssignedToUser && conversation) {
               console.log(`⏭️ [WEBHOOK] Skipping auto-reply requestId=${requestId} - conversation assigned to user ${conversation.assignedUserId}`)
             } else {
               // Enqueue outbound job
