@@ -12,144 +12,89 @@ export async function GET(req: NextRequest) {
     const channelParam = req.nextUrl.searchParams.get('channel') || 'whatsapp'
 
     // Build where clause - if channel is 'all', don't filter by channel
-    // Exclude soft-deleted conversations (with defensive fallback if column doesn't exist)
-    const whereClause: any = {}
+    // Exclude soft-deleted conversations
+    const whereClause: any = {
+      deletedAt: null, // Only show non-deleted conversations
+    }
     if (channelParam && channelParam !== 'all') {
       whereClause.channel = channelParam
     }
-    
-    // Defensive: Only filter by deletedAt if column exists (migration applied)
-    // If column doesn't exist, query will fail with P2022, catch and retry without filter
+
+    // TASK 3: Loud failure if schema mismatch (P2022) - do NOT silently work around
     let conversations
     try {
-      whereClause.deletedAt = null // Only show non-deleted conversations
       conversations = await prisma.conversation.findMany({
         where: whereClause,
-      select: {
-        id: true,
-        channel: true,
-        status: true,
-        lastMessageAt: true,
-        lastInboundAt: true,
-        lastOutboundAt: true,
-        unreadCount: true,
-        priorityScore: true,
-        createdAt: true,
-        contactId: true,
-        contact: {
-          select: {
-            id: true,
-            fullName: true,
-            phone: true,
-            email: true,
-          },
-        },
-        // Only get last message (already optimized)
-        messages: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            direction: true,
-            body: true,
-            createdAt: true,
-          },
-        },
-        // Only get nearest expiry item (already optimized)
-        lead: {
-          select: {
-            id: true,
-            aiScore: true,
-            nextFollowUpAt: true,
-            expiryItems: {
-              orderBy: { expiryDate: 'asc' },
-              take: 1,
-              select: {
-                expiryDate: true,
-              },
+        select: {
+          id: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          contactId: true,
+          contact: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              email: true,
             },
           },
-        },
-        assignedUser: {
-          select: {
-            id: true,
-            name: true,
-            email: true,
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 1,
+            select: {
+              id: true,
+              direction: true,
+              body: true,
+              createdAt: true,
+            },
           },
-        },
-      },
-      orderBy: {
-        lastMessageAt: 'desc', // Sort by last message (always has value) - client-side will prioritize inbound
-      },
-      // Add limit to prevent fetching too many conversations at once
-      take: 500, // Reasonable limit for inbox view
-    })
-    } catch (error: any) {
-      // Defensive: If deletedAt column doesn't exist (P2022), retry without filter
-      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
-        console.warn('⚠️ [INBOX] deletedAt column not found - migration not applied. Querying without deletedAt filter.')
-        delete whereClause.deletedAt
-        conversations = await prisma.conversation.findMany({
-          where: whereClause,
-          select: {
-            id: true,
-            channel: true,
-            status: true,
-            lastMessageAt: true,
-            lastInboundAt: true,
-            lastOutboundAt: true,
-            unreadCount: true,
-            priorityScore: true,
-            createdAt: true,
-            contactId: true,
-            contact: {
-              select: {
-                id: true,
-                fullName: true,
-                phone: true,
-                email: true,
-              },
-            },
-            messages: {
-              orderBy: { createdAt: 'desc' },
-              take: 1,
-              select: {
-                id: true,
-                direction: true,
-                body: true,
-                createdAt: true,
-              },
-            },
-            lead: {
-              select: {
-                id: true,
-                aiScore: true,
-                nextFollowUpAt: true,
-                expiryItems: {
-                  orderBy: { expiryDate: 'asc' },
-                  take: 1,
-                  select: {
-                    expiryDate: true,
-                  },
+          lead: {
+            select: {
+              id: true,
+              aiScore: true,
+              nextFollowUpAt: true,
+              expiryItems: {
+                orderBy: { expiryDate: 'asc' },
+                take: 1,
+                select: {
+                  expiryDate: true,
                 },
               },
             },
-            assignedUser: {
-              select: {
-                id: true,
-                name: true,
-                email: true,
-              },
+          },
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+              email: true,
             },
           },
-          orderBy: {
-            lastMessageAt: 'desc',
+        },
+        orderBy: {
+          lastMessageAt: 'desc',
+        },
+        take: 500,
+      })
+    } catch (error: any) {
+      // TASK 3: Loud failure for schema mismatch - do NOT silently work around
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.error('[DB-MISMATCH] Conversation.deletedAt column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+            code: 'DB_MISMATCH',
           },
-          take: 500,
-        })
-      } else {
-        throw error
+          { status: 500 }
+        )
       }
+      throw error
     }
 
         // Compute intelligence flags directly from fetched data (optimized - no extra queries)
