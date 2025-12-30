@@ -241,6 +241,90 @@ After applying migration, verify:
 3. ✅ Test notifications load correctly
 4. ✅ Test admin delete conversation (soft delete)
 
+## Testing Cron Manually
+
+**Step C: Test cron endpoint with token query:**
+
+```bash
+curl "https://your-domain.vercel.app/api/cron/run-outbound-jobs?token=YOUR_CRON_SECRET"
+```
+
+**Expected response:**
+```json
+{
+  "ok": true,
+  "message": "Job runner triggered",
+  "jobRunnerResult": {
+    "ok": true,
+    "processed": 1,
+    "failed": 0
+  },
+  "requestId": "cron_1234567890_abc123",
+  "authMethod": "query",
+  "elapsed": "1234ms"
+}
+```
+
+**Expected Vercel log lines:**
+```
+[CRON] trigger start requestId=cron_1234567890_abc123
+✅ [CRON] authorized method=query requestId=cron_1234567890_abc123 vercelHeaderValue="N/A"
+[CRON] calling job runner requestId=cron_1234567890_abc123 authMethod=query
+[CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=1234ms
+```
+
+## Expected Vercel Log Lines for Successful End-to-End Send
+
+**Step D: Complete flow from webhook to outbound send:**
+
+### 1. Webhook receives inbound message:
+```
+[WEBHOOK] INBOUND-ENTRY requestId=webhook_1234567890_abc123
+✅ [WEBHOOK] Job enqueued requestId=webhook_1234567890_abc123 jobId=123 wasDuplicate=false elapsed=45ms
+🚀 [WEBHOOK] Kicked job runner requestId=webhook_1234567890_abc123 inboundMessageId=wamid.xxx
+```
+
+### 2. Cron triggers job runner:
+```
+[CRON] trigger start requestId=cron_1234567890_abc123
+✅ [CRON] authorized method=vercel requestId=cron_1234567890_abc123 vercelHeaderValue="1"
+[CRON] calling job runner requestId=cron_1234567890_abc123 authMethod=vercel
+[CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=2345ms
+```
+
+### 3. Job runner processes job:
+```
+📦 [JOB-RUNNER] Processing 1 job(s)
+✅ [JOB-RUNNER] picked jobId=123 requestId=job_123_1234567890 conversationId=456 inboundProviderMessageId=wamid.xxx
+📥 [JOB-RUNNER] Loading conversation jobId=123 requestId=job_123_1234567890 conversationId=456
+✅ [JOB-RUNNER] Conversation loaded jobId=123 requestId=job_123_1234567890 conversationId=456 contactId=789 leadId=101
+📥 [JOB-RUNNER] Loading inbound message jobId=123 requestId=job_123_1234567890 inboundMessageId=202
+✅ [JOB-RUNNER] Inbound message loaded jobId=123 requestId=job_123_1234567890 messageId=202 bodyLength=25
+🎯 [JOB-RUNNER] Running orchestrator for job 123 (requestId: job_123_1234567890)
+✅ [JOB-RUNNER] Orchestrator complete jobId=123 requestId=job_123_1234567890 elapsed=1234ms replyLength=150 hasHandover=false
+📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=123 requestId=job_123_1234567890 conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx
+✅ [JOB-RUNNER] outbound sent jobId=123 requestId=job_123_1234567890 messageId=wamid.yyy conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx success=true elapsed=567ms
+✅ [JOB-RUNNER] Message row confirmed jobId=123 requestId=job_123_1234567890 messageRowId=303 status=SENT
+✅ [JOB-RUNNER] Job 123 completed successfully (requestId: job_123_1234567890)
+```
+
+### 4. Outbound idempotency creates Message row:
+```
+[OUTBOUND-IDEMPOTENCY] Created PENDING log: 456, dedupeKey: abc123def456...
+[OUTBOUND-IDEMPOTENCY] Message record created for Inbox UI: conversationId=456, messageId=wamid.yyy
+```
+
+**If job fails:**
+```
+❌ [JOB-RUNNER] Job 123 failed: Failed to send outbound: Invalid phone number
+🔄 [JOB-RUNNER] Job 123 will retry in 2s (attempt 1/3)
+```
+
+**If max attempts reached:**
+```
+❌ [JOB-RUNNER] Job 123 failed after 3 attempts
+```
+
 ## Related Files
 
 - **Migration**: `prisma/migrations/20251230122512_fix_schema_drift_deleted_at_snoozed_until/migration.sql`
@@ -248,6 +332,8 @@ After applying migration, verify:
 - **Verification Script**: `scripts/db/verify-schema.ts`
 - **FK Verification Script**: `scripts/db/verify-fks.ts`
 - **Admin Delete**: `src/app/api/admin/conversations/[id]/delete/route.ts`
+- **Cron Route**: `src/app/api/cron/run-outbound-jobs/route.ts`
+- **Job Runner**: `src/app/api/jobs/run-outbound/route.ts`
 
 ---
 

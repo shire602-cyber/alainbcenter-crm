@@ -25,10 +25,27 @@ export async function POST(
       )
     }
 
-    // Check if conversation exists
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-    })
+    // Step A: Check if conversation exists (with P2022 handling)
+    let conversation
+    try {
+      conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+      })
+    } catch (error: any) {
+      // Step A: Loud failure for schema mismatch
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.error('[DB-MISMATCH] Conversation.deletedAt column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            code: 'DB_MISMATCH',
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+          },
+          { status: 500 }
+        )
+      }
+      throw error
+    }
 
     if (!conversation) {
       return NextResponse.json(
@@ -37,21 +54,38 @@ export async function POST(
       )
     }
 
-    if (!conversation.deletedAt) {
+    // Safe property access for deletedAt
+    if (!(conversation as any).deletedAt) {
       return NextResponse.json(
         { ok: false, error: 'Conversation is not archived' },
         { status: 400 }
       )
     }
 
-    // Restore: clear deletedAt and set status back to open
-    await prisma.conversation.update({
-      where: { id: conversationId },
-      data: {
-        deletedAt: null,
-        status: 'open',
-      },
-    })
+    // Step A: Restore: clear deletedAt and set status back to open (with P2022 handling)
+    try {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          deletedAt: null,
+          status: 'open',
+        },
+      })
+    } catch (error: any) {
+      // Step A: Loud failure for schema mismatch
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.error('[DB-MISMATCH] Conversation.deletedAt column does not exist. DB migrations not applied.')
+        return NextResponse.json(
+          { 
+            ok: false, 
+            code: 'DB_MISMATCH',
+            error: 'DB migrations not applied. Run: npx prisma migrate deploy',
+          },
+          { status: 500 }
+        )
+      }
+      throw error
+    }
 
     console.log(`♻️ Admin ${user.email} restored conversation ${conversationId}`)
 
