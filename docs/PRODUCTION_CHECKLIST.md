@@ -96,22 +96,49 @@ Verify `vercel.json` has cron job configured:
 
 ## Post-Deployment Verification
 
-### Step 1: Verify Cron is Running
+### Step 1: Verify Cron is Running on PRODUCTION
+
+**IMPORTANT:** Cron jobs only run on PRODUCTION deployments, not preview deployments.
+
+**How to confirm you're on PRODUCTION:**
+1. Vercel Dashboard → Your Project → Deployments
+2. Find the deployment with "Production" badge (green)
+3. Click on it → Check "Cron Jobs" tab
+4. Verify `/api/cron/run-outbound-jobs` is listed and "Enabled"
 
 **Command to test manually:**
 ```bash
 curl "https://your-domain.vercel.app/api/cron/run-outbound-jobs?token=YOUR_CRON_SECRET"
 ```
 
-1. **Check Vercel Cron Logs:**
-   - Vercel Dashboard → Your Project → Cron Jobs → `/api/cron/run-outbound-jobs` → View Logs
+**Expected response:**
+```json
+{
+  "ok": true,
+  "message": "Job runner triggered",
+  "jobRunnerResult": {
+    "ok": true,
+    "processed": 0,
+    "failed": 0
+  },
+  "requestId": "cron_1234567890_abc123",
+  "authMethod": "query",
+  "elapsed": "1234ms"
+}
+```
+
+1. **Check Vercel Cron Logs (PRODUCTION only):**
+   - Vercel Dashboard → Your Project → Deployments → [Production Deployment] → Functions → `/api/cron/run-outbound-jobs` → Logs
+   - **OR:** Vercel Dashboard → Your Project → Cron Jobs → `/api/cron/run-outbound-jobs` → View Logs
    - **Expected log lines:**
      ```
      [CRON] trigger start requestId=cron_1234567890_abc123
-     ✅ [CRON] authorized method=vercel requestId=cron_1234567890_abc123 vercelHeaderValue="1"
+     ✅ [CRON] authorized requestId=cron_1234567890_abc123 isVercelCron=true vercelHeaderValue="1" authMethod=vercel
      [CRON] calling job runner requestId=cron_1234567890_abc123 authMethod=vercel
      [CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=1234ms
      ```
+   - **If you see 401:** Check `CRON_SECRET` is set in Vercel Environment Variables
+   - **If no logs:** Cron only runs on PRODUCTION, not preview deployments
 
 2. **Manual Test (if needed):**
    ```bash
@@ -187,8 +214,8 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
 
 1. **Wait 1-2 minutes** (cron runs every minute)
 
-2. **Check Vercel Function Logs:**
-   - Vercel Dashboard → Your Project → Functions → `/api/jobs/run-outbound` → Logs
+2. **Check Vercel Function Logs (PRODUCTION deployment):**
+   - Vercel Dashboard → Your Project → Deployments → [Production Deployment] → Functions → `/api/jobs/run-outbound` → Logs
    - **Expected log lines (in order):**
      ```
      📦 [JOB-RUNNER] Processing 1 job(s)
@@ -197,12 +224,14 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
      ✅ [JOB-RUNNER] Conversation loaded jobId=123 requestId=job_123_1234567890 conversationId=456 contactId=789 leadId=101
      📥 [JOB-RUNNER] Loading inbound message jobId=123 requestId=job_123_1234567890 inboundMessageId=202
      ✅ [JOB-RUNNER] Inbound message loaded jobId=123 requestId=job_123_1234567890 messageId=202 bodyLength=25
-     🎯 [JOB-RUNNER] Running orchestrator for job 123 (requestId: job_123_1234567890)
-     ✅ [JOB-RUNNER] Orchestrator complete jobId=123 requestId=job_123_1234567890 elapsed=1234ms replyLength=150 hasHandover=false
-     📤 [JOB-RUNNER] before sendOutboundWithIdempotency jobId=123 requestId=job_123_1234567890 conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx
-     ✅ [JOB-RUNNER] outbound sent jobId=123 requestId=job_123_1234567890 messageId=wamid.yyy conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx success=true elapsed=567ms
+     🎯 [JOB-RUNNER] orchestrator start jobId=123 requestId=job_123_1234567890 conversationId=456 inboundMessageId=202
+     ✅ [JOB-RUNNER] orchestrator end jobId=123 requestId=job_123_1234567890 elapsed=1234ms replyLength=150 hasHandover=false
+     📤 [JOB-RUNNER] send start jobId=123 requestId=job_123_1234567890 conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx
+     ✅ [JOB-RUNNER] send end jobId=123 requestId=job_123_1234567890 messageId=wamid.yyy conversationId=456 phone=+260777711059 inboundProviderMessageId=wamid.xxx success=true elapsed=567ms
+     🔍 [JOB-RUNNER] Message row check start jobId=123 requestId=job_123_1234567890 providerMessageId=wamid.yyy
      ✅ [JOB-RUNNER] Message row confirmed jobId=123 requestId=job_123_1234567890 messageRowId=303 status=SENT
-     ✅ [JOB-RUNNER] Job 123 completed successfully (requestId: job_123_1234567890)
+     💾 [JOB-RUNNER] Marking job DONE jobId=123 requestId=job_123_1234567890 success=true
+     ✅ [JOB-RUNNER] job done jobId=123 requestId=job_123_1234567890 status=done
      ```
 
 3. **Check Database:**
