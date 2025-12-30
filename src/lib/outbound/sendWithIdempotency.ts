@@ -222,11 +222,16 @@ export async function sendOutboundWithIdempotency(
       isFirstOutboundMessage = false
     }
     
-    // CRITICAL: Apply global greeting prefix for WhatsApp messages (context-aware)
-    text = withGlobalGreeting(text, {
+    // CRITICAL: Normalize text BEFORE applying greeting (ensure it's a string, never JSON)
+    const normalizedTextBeforeGreeting = normalizeOutboundText(text)
+    // Apply global greeting prefix for WhatsApp messages (context-aware)
+    text = withGlobalGreeting(normalizedTextBeforeGreeting, {
       isFirstOutboundMessage,
       conversationId,
     })
+  } else {
+    // For non-WhatsApp, still normalize text
+    text = normalizeOutboundText(text)
   }
   
   // Step 1: Compute dedupe key (using normalized text, greeting applied if needed)
@@ -278,7 +283,14 @@ export async function sendOutboundWithIdempotency(
     throw error
   }
   
-  // Step 3: Send message (only if insert succeeded)
+  // Step 3: Text is already normalized above, but log before sending
+  const textPreview = text.substring(0, 120)
+  const textLength = text.length
+  
+  // Log BEFORE Meta API call
+  console.log(`📤 [OUTBOUND-IDEMPOTENCY] Sending to Meta API conversationId=${conversationId} phone=${phone} textLength=${textLength} preview="${textPreview}${textLength > 120 ? '...' : ''}"`)
+  
+  // Step 4: Send message (only if insert succeeded)
   let messageId: string | undefined
   let sendError: Error | null = null
   
@@ -287,12 +299,16 @@ export async function sendOutboundWithIdempotency(
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:286',message:'Before sendTextMessage call',data:{phone,textLength:text.length,provider},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
       // #endregion
-      const result = await sendTextMessage(phone, text, {
+      const result = await sendTextMessage(phone, text, { // Use normalized text (already normalized above)
         contactId,
         leadId,
         skipIdempotency: true, // We're handling idempotency here
       })
       messageId = result.messageId
+      
+      // Log AFTER send with messageId
+      console.log(`✅ [OUTBOUND-IDEMPOTENCY] Meta API send succeeded messageId=${messageId} conversationId=${conversationId}`)
+      
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:293',message:'sendTextMessage succeeded',data:{messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
       // #endregion
@@ -323,6 +339,7 @@ export async function sendOutboundWithIdempotency(
       const sentAt = new Date()
       
       // Task D: Create Message row (OUTBOUND) with providerMessageId and final text
+      // Use normalizedText (never raw text which might be JSON)
       await prisma.message.create({
         data: {
           conversationId,
@@ -331,7 +348,7 @@ export async function sendOutboundWithIdempotency(
           direction: 'OUTBOUND',
           channel: channelUpper,
           type: 'text',
-          body: text, // Task D: Use final text (after greeting and sanitization)
+          body: text, // Use normalized text (already normalized above, never JSON)
           providerMessageId: messageId || null,
           status: 'SENT',
           sentAt,

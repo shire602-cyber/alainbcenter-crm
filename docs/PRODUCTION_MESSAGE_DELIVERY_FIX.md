@@ -10,6 +10,10 @@ Fixed production message delivery issues:
 5. ✅ Verified all routes have `export const dynamic = 'force-dynamic'`
 6. ✅ **Fixed middleware 401 blocking cron/webhooks/jobs** - Added hard bypass for `/api/cron/*`, `/api/webhooks/*`, `/api/jobs/*`, `/api/health/*`
 7. ✅ **Added cron debug endpoint** - `/api/cron/debug` for production debugging
+8. ✅ **Added job debug endpoint** - `/api/jobs/debug` for inspecting job status, stuck jobs, not-eligible jobs
+9. ✅ **Fixed duplication prevention** - Ensured text is always extracted as string (never JSON stringified)
+10. ✅ **Enhanced logging** - Added text preview and messageId logging before/after Meta API calls
+11. ✅ **Verified UI message visibility** - Confirmed `/api/leads/[id]/messages` and `/api/inbox/conversations/[id]` include outbound messages
 
 ## Middleware 401 Fix (CRITICAL)
 

@@ -215,7 +215,27 @@ export async function processOutboundJobs(
               channel: message.channel,
               language: 'en',
             })
-            aiGeneratedContent = orchestratorResult.replyText || null
+            
+            // CRITICAL: Extract ONLY the string replyText, NEVER stringify the object
+            // Orchestrator returns { replyText: string, ... } - extract the string only
+            if (orchestratorResult && typeof orchestratorResult === 'object' && 'replyText' in orchestratorResult) {
+              aiGeneratedContent = typeof orchestratorResult.replyText === 'string' 
+                ? orchestratorResult.replyText 
+                : null
+            } else if (typeof orchestratorResult === 'string') {
+              // Fallback: if orchestrator somehow returns a string directly
+              aiGeneratedContent = orchestratorResult
+            } else {
+              // Invalid response - log error
+              console.error(`❌ [JOB-PROCESSOR] Orchestrator returned invalid format jobId=${job.id}:`, typeof orchestratorResult)
+              aiGeneratedContent = null
+            }
+            
+            // Validate extracted content is a string (not JSON)
+            if (aiGeneratedContent && typeof aiGeneratedContent !== 'string') {
+              console.error(`❌ [JOB-PROCESSOR] Content is not a string jobId=${job.id} type=${typeof aiGeneratedContent}`)
+              aiGeneratedContent = String(aiGeneratedContent).trim()
+            }
           } catch (orchestratorError: any) {
             // If AI generation fails, save error and mark as FAILED
             console.error(`❌ [JOB-PROCESSOR] Orchestrator failed jobId=${job.id}:`, orchestratorError.message)
@@ -385,15 +405,23 @@ export async function processOutboundJobs(
         const outboundKeyComponents = `${conversation.id}:${inboundProviderMessageId || 'unknown'}:${questionKey || 'reply'}`
         console.log(`📤 [JOB-PROCESSOR] Sending outbound for job ${job.id} (keyComponents: ${outboundKeyComponents}, requestId: ${jobRequestId})`)
         
-        // Log before sendOutboundWithIdempotency
-        console.log(`📤 [JOB-PROCESSOR] send start jobId=${job.id} requestId=${jobRequestId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} within24h=${within24HourWindow}`)
+        // CRITICAL: Normalize text to ensure it's a string (never JSON)
+        // Use normalizeOutboundText to extract string from any format
+        const { normalizeOutboundText } = await import('@/lib/outbound/sendWithIdempotency')
+        const finalOutboundText = normalizeOutboundText(aiGeneratedContent)
+        const finalOutboundTextPreview = finalOutboundText.substring(0, 120)
+        const contentLength = finalOutboundText.length
+        
+        // Log BEFORE Meta API call with text preview
+        console.log(`📤 [JOB-PROCESSOR] send start jobId=${job.id} requestId=${jobRequestId} conversationId=${conversation.id} phone=${phoneForOutbound} inboundProviderMessageId=${inboundProviderMessageId || 'N/A'} within24h=${within24HourWindow} contentLength=${contentLength} preview="${finalOutboundTextPreview}${contentLength > 120 ? '...' : ''}"`)
+        
         const sendStartTime = Date.now()
         const sendResult = await sendOutboundWithIdempotency({
           conversationId: conversation.id,
           contactId: conversation.contact.id,
           leadId: conversation.lead.id,
           phone: phoneForOutbound,
-          text: aiGeneratedContent!, // Use stored/generated content
+          text: finalOutboundText, // Use normalized string (never JSON)
           provider: 'whatsapp',
           triggerProviderMessageId: inboundProviderMessageId,
           replyType: questionKey ? 'question' : 'answer',
@@ -401,6 +429,11 @@ export async function processOutboundJobs(
           flowStep: null,
         })
         const sendElapsed = Date.now() - sendStartTime
+        
+        // Log AFTER send with messageId
+        if (sendResult.success && sendResult.messageId) {
+          console.log(`✅ [JOB-PROCESSOR] send end jobId=${job.id} requestId=${jobRequestId} messageId=${sendResult.messageId} elapsed=${sendElapsed}ms`)
+        }
         
         // Handle send result
         if (sendResult.wasDuplicate) {
