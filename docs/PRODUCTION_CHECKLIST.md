@@ -157,12 +157,15 @@ curl "https://your-domain.vercel.app/api/jobs/run-outbound?token=YOUR_JOB_RUNNER
    - **OR:** Vercel Dashboard → Your Project → Cron Jobs → `/api/cron/run-outbound-jobs` → View Logs
    - **Expected log lines:**
      ```
-     [CRON] trigger start requestId=cron_1234567890_abc123
-     ✅ [CRON] authorized requestId=cron_1234567890_abc123 isVercelCron=true vercelHeaderValue="1" authMethod=vercel
+     [CRON] start requestId=cron_1234567890_abc123
+     [CRON] authorized method=vercel requestId=cron_1234567890_abc123 vercelHeaderValue="1"
      [CRON] calling job runner requestId=cron_1234567890_abc123 authMethod=vercel
-     [CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=1234ms
+     [CRON] job runner response requestId=cron_1234567890_abc123 statusCode=200 elapsed=1234ms ok=true processed=0 failed=0
      ```
    - **If you see 401:** Check `CRON_SECRET` is set in Vercel Environment Variables
+   - **If you see MISSING_ENV:** Check `JOB_RUNNER_TOKEN` is set in Vercel Environment Variables
+   - **If you see DOWNSTREAM_NOT_JSON:** Job runner returned HTML error page (check job runner logs)
+   - **If you see DOWNSTREAM_ERROR:** Job runner returned error status (check statusCode and bodyPreview)
    - **If no logs:** Cron only runs on PRODUCTION, not preview deployments
 
 2. **Manual Test (if needed):**
