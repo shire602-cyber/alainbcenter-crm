@@ -29,21 +29,49 @@ export function AudioMessagePlayer({ mediaId, mimeType, messageId, className }: 
       setIsLoading(true)
       setError(null)
       
+      // PHASE 1 DEBUG: Log audio fetch attempt
+      console.log('[AUDIO-DEBUG] Fetching audio', {
+        mediaId,
+        messageId,
+        url: `/api/whatsapp/media/${encodeURIComponent(mediaId)}?messageId=${messageId}`,
+      })
+      
       try {
         // CRITICAL FIX: Use credentials for auth and support Range requests
         const res = await fetch(`/api/whatsapp/media/${encodeURIComponent(mediaId)}?messageId=${messageId}`, {
           credentials: 'include', // Include cookies for auth
         })
+        
+        // PHASE 1 DEBUG: Log response details
+        console.log('[AUDIO-DEBUG] Response received', {
+          status: res.status,
+          statusText: res.statusText,
+          contentType: res.headers.get('content-type'),
+          contentLength: res.headers.get('content-length'),
+          acceptRanges: res.headers.get('accept-ranges'),
+          contentRange: res.headers.get('content-range'),
+        })
+        
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}))
           throw new Error(errorData.error || `Failed to fetch audio: ${res.status}`)
         }
         const blob = await res.blob()
+        
+        // PHASE 1 DEBUG: Log blob details
+        console.log('[AUDIO-DEBUG] Blob created', {
+          size: blob.size,
+          type: blob.type,
+        })
+        
         if (blob.size === 0) {
           throw new Error('Audio file is empty')
         }
         const url = URL.createObjectURL(blob)
         setAudioUrl(url)
+        
+        // PHASE 1 DEBUG: Log success
+        console.log('[AUDIO-DEBUG] Audio URL created', { url })
       } catch (err: any) {
         console.error('Failed to fetch audio:', err)
         setError(err.message || 'Failed to load audio. Media may have expired or be unavailable.')

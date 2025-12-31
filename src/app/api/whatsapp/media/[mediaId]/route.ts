@@ -152,6 +152,16 @@ export async function GET(
       })
     }
 
+    // PHASE 1 DEBUG: Log media response details
+    console.log('[MEDIA-DEBUG] Serving media', {
+      mediaId,
+      contentType,
+      bufferSize: buffer.length,
+      hasRange: !!rangeHeader,
+      status: rangeHeader && contentRange ? 206 : 200,
+      headers: Object.keys(responseHeaders),
+    })
+
     // Return media file
     return new NextResponse(buffer, {
       headers: responseHeaders,
