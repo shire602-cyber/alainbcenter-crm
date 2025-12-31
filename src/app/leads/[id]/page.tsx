@@ -28,6 +28,11 @@ export default function LeadDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  // PHASE 1 DEBUG: Log component render to track hook order
+  useEffect(() => {
+    console.log('[LEAD-PAGE] Component mounted/updated')
+  })
+
   const [leadId, setLeadId] = useState<number | null>(null)
   const [lead, setLead] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -91,18 +96,21 @@ export default function LeadDetailPage({
         }
         
         setLead(data)
+        setLoading(false)
       } else if (res.status === 404) {
         const errorData = await res.json()
         setLead(null)
+        setLoading(false)
         // Store fallback info for empty state
         setFallbackInfo({
           conversationId: errorData._conversationId,
           contactId: errorData._contactId,
         })
+      } else {
+        setLoading(false)
       }
     } catch (error) {
       console.error('Failed to load lead:', error)
-    } finally {
       setLoading(false)
     }
   }
@@ -117,7 +125,8 @@ export default function LeadDetailPage({
         body: JSON.stringify({ stage: newStage }),
       })
       if (res.ok) {
-        await loadLead(leadId)
+        const updated = await res.json()
+        setLead(updated)
       }
     } catch (error) {
       console.error('Failed to update stage:', error)
@@ -131,12 +140,10 @@ export default function LeadDetailPage({
       const res = await fetch(`/api/leads/${leadId}/messages/send`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          channel: channel.toUpperCase(),
-          body: message,
-        }),
+        body: JSON.stringify({ message, channel }),
       })
       if (res.ok) {
+        // Refresh lead data
         await loadLead(leadId)
       }
     } catch (error) {
@@ -158,6 +165,8 @@ export default function LeadDetailPage({
     return { label: 'Continue', urgency: 'normal', url: `#continue` }
   }
 
+  // PHASE 1 DEBUG: All hooks called before conditional returns
+  // Loading state - render AFTER all hooks
   if (loading || !leadId) {
     return (
       <MainLayout>
@@ -173,6 +182,7 @@ export default function LeadDetailPage({
     )
   }
 
+  // Not found state - render AFTER all hooks
   if (!lead && !loading) {
     return (
       <MainLayout>
@@ -249,45 +259,34 @@ export default function LeadDetailPage({
         return
       }
 
-      // R: Focus reply composer
-      if (e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+      // Escape: Close command palette
+      if (e.key === 'Escape' && commandPaletteOpen) {
+        setCommandPaletteOpen(false)
+        return
+      }
+
+      // 'i' key: Toggle info sheet
+      if (e.key === 'i' && !commandPaletteOpen) {
         e.preventDefault()
-        if (typeof window !== 'undefined') {
-          const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-          if (composer) {
-            composer.focus()
-            composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
-          }
+        setInfoSheetOpen(!infoSheetOpen)
+        return
+      }
+
+      // 'c' key: Focus composer
+      if (e.key === 'c' && !commandPaletteOpen) {
+        e.preventDefault()
+        const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+        if (composer) {
+          composer.focus()
+          composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
         }
-        setComposerOpen(true)
-        return
-      }
-
-      // A: Open action panel/sheet
-      if (e.key === 'a' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        setActionSheetOpen(true)
-        return
-      }
-
-      // T: Open create task dialog
-      if (e.key === 't' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        router.push(`/leads/${leadId}?action=task`)
-        return
-      }
-
-      // S: Open snooze menu
-      if (e.key === 's' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
-        e.preventDefault()
-        router.push(`/leads/${leadId}?action=snooze`)
         return
       }
     }
 
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [leadId, router])
+  }, [leadId, router, commandPaletteOpen, infoSheetOpen])
 
   return (
     <MainLayout>
@@ -295,95 +294,48 @@ export default function LeadDetailPage({
       
       {/* Command Palette - PHASE C */}
       <LeadCommandPalette
-        leadId={leadId}
-        lead={lead}
         open={commandPaletteOpen}
         onOpenChange={setCommandPaletteOpen}
-        onComposerFocus={() => {
-          setComposerOpen(true)
-          if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-            const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-            if (composer) {
-              composer.focus()
-              composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
-            }
-          }
-        }}
+        leadId={leadId!}
+        lead={lead}
       />
-      {/* Mobile Layout (<1024px) */}
-      <div className={cn(
-        "lg:hidden h-screen flex flex-col transition-opacity duration-300",
-        isFocusMode && "opacity-100"
-      )}>
-        {/* Sticky Header */}
-        <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 flex-shrink-0 z-20">
-          <div className="flex items-center gap-3 flex-1 min-w-0">
+
+      {/* Mobile: Chat-first layout */}
+      <div className="flex flex-col h-screen md:hidden">
+        {/* Header */}
+        <div className="h-16 border-b border-subtle bg-app flex items-center justify-between px-4 shrink-0">
+          <div className="flex items-center gap-3">
             <Button
               variant="ghost"
-              size="sm"
+              size="icon"
               onClick={() => router.push('/leads')}
-              className="rounded-lg flex-shrink-0"
+              className="h-8 w-8"
             >
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-base font-semibold text-slate-900 dark:text-slate-100 truncate">
-                {lead.contact?.fullName || 'Unknown Lead'}
+              <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">
+                {lead?.contact?.fullName || 'Lead'}
               </h1>
-              <div className="flex items-center gap-2 mt-0.5">
-                <Badge variant="outline" className="text-xs">
-                  {serviceName}
-                </Badge>
-              </div>
+              <p className="text-meta muted-text truncate">
+                {serviceName}
+              </p>
             </div>
           </div>
-          <div className="flex items-center gap-2 flex-shrink-0">
-            {primaryAction && (
-              <Button
-                size="sm"
-                className={cn(
-                  "rounded-lg text-xs font-semibold",
-                  primaryAction.urgency === 'urgent' && "bg-blue-600 hover:bg-blue-700 border-2 border-red-500",
-                  primaryAction.urgency === 'high' && "bg-orange-600 hover:bg-orange-700",
-                  "bg-blue-600 hover:bg-blue-700"
-                )}
-                onClick={() => setComposerOpen(true)}
-              >
-                {primaryAction.label}
-              </Button>
-            )}
-            <Sheet open={infoSheetOpen} onOpenChange={setInfoSheetOpen}>
-              <SheetTrigger asChild>
-                <Button variant="ghost" size="sm" className="rounded-lg">
-                  <Info className="h-4 w-4" />
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="bottom" className="max-h-[85vh]">
-                <SheetHeader>
-                  <SheetTitle>Lead Details</SheetTitle>
-                </SheetHeader>
-                <div className="p-6">
-                  <LeadDNA lead={lead} />
-                  {lead.tasks && lead.tasks.length > 0 && (
-                    <div className="mt-6 space-y-3">
-                      <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300">Tasks</h3>
-                      {lead.tasks.slice(0, 5).map((task: any) => (
-                        <div key={task.id} className="p-3 rounded-lg border border-slate-200 dark:border-slate-800">
-                          <p className="text-sm font-medium text-slate-900 dark:text-slate-100">{task.title}</p>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setInfoSheetOpen(true)}
+            className="h-8 w-8"
+          >
+            <Info className="h-4 w-4" />
+          </Button>
         </div>
 
-        {/* Conversation - Full Screen */}
-        <div className="flex-1 flex flex-col min-h-0 pb-20">
+        {/* Conversation */}
+        <div className="flex-1 min-h-0">
           <ConversationWorkspace
-            leadId={leadId}
+            leadId={leadId!}
             lead={lead}
             channel={channel}
             onSend={handleSendMessage}
@@ -393,145 +345,112 @@ export default function LeadDetailPage({
         </div>
 
         {/* Bottom Action Dock */}
-        <div className="fixed bottom-0 left-0 right-0 z-30 bg-white dark:bg-slate-900 border-t border-slate-200 dark:border-slate-800 lg:hidden">
-          <div className="grid grid-cols-4 h-16">
-            <Button
-              variant="ghost"
-              className="flex flex-col items-center justify-center gap-1 rounded-none"
-              onClick={() => setComposerOpen(true)}
-            >
-              <MessageSquare className="h-5 w-5" />
-              <span className="text-xs">Reply</span>
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex flex-col items-center justify-center gap-1 rounded-none"
-              onClick={() => window.location.href = `tel:${lead.contact?.phone}`}
-            >
-              <Phone className="h-5 w-5" />
-              <span className="text-xs">Call</span>
-            </Button>
-            <Button
-              variant="ghost"
-              className="flex flex-col items-center justify-center gap-1 rounded-none"
-              onClick={() => window.open(`https://wa.me/${lead.contact?.phone?.replace(/[^0-9]/g, '')}`, '_blank')}
-            >
-              <Send className="h-5 w-5" />
-              <span className="text-xs">WhatsApp</span>
-            </Button>
-            <Sheet open={actionSheetOpen} onOpenChange={setActionSheetOpen}>
-              <SheetTrigger asChild>
-                <Button
-                  variant="ghost"
-                  className="flex flex-col items-center justify-center gap-1 rounded-none"
-                >
-                  <Zap className="h-5 w-5" />
-                  <span className="text-xs">Action</span>
-                </Button>
-              </SheetTrigger>
-              <SheetContent side="bottom" className="max-h-[85vh]">
-                <SheetHeader>
-                  <SheetTitle>Next Best Action</SheetTitle>
-                </SheetHeader>
-                <div className="p-6">
-                  <NextBestActionPanel
-                    leadId={leadId}
-                    lead={lead}
-                    tasks={lead.tasks || []}
-                    onActionPending={setActionPending}
-                    onComposerFocus={() => {
-                      setComposerOpen(true)
-                      setActionSheetOpen(false)
-                    }}
-                  />
-                </div>
-              </SheetContent>
-            </Sheet>
-          </div>
+        <div className="h-16 border-t border-subtle bg-app flex items-center justify-between px-4 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setActionSheetOpen(true)}
+            className="flex-1"
+          >
+            <Zap className="h-4 w-4 mr-2" />
+            Actions
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setInfoSheetOpen(true)}
+            className="flex-1"
+          >
+            <Info className="h-4 w-4 mr-2" />
+            Info
+          </Button>
         </div>
+
+        {/* Info Sheet */}
+        <Sheet open={infoSheetOpen} onOpenChange={setInfoSheetOpen}>
+          <SheetContent side="bottom" className="h-[80vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Lead Information</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">
+              <LeadDNA lead={lead} />
+            </div>
+          </SheetContent>
+        </Sheet>
+
+        {/* Action Sheet */}
+        <Sheet open={actionSheetOpen} onOpenChange={setActionSheetOpen}>
+          <SheetContent side="bottom" className="h-[60vh] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle>Quick Actions</SheetTitle>
+            </SheetHeader>
+            <div className="mt-4">
+              <NextBestActionPanel leadId={leadId!} lead={lead} />
+            </div>
+          </SheetContent>
+        </Sheet>
       </div>
 
-      {/* Desktop Layout (>=1024px) */}
-      <div className={cn(
-        "hidden lg:flex h-screen flex-col transition-opacity duration-300",
-        isFocusMode && "opacity-100"
-      )}>
-        {/* Sticky Header */}
-        <div className="h-16 border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 flex items-center justify-between px-4 sm:px-6 flex-shrink-0 z-10">
-          <div className="flex items-center gap-4">
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={() => router.push('/leads')}
-              className="rounded-lg"
-            >
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              <span>Back</span>
-            </Button>
-            <div>
-              <h1 className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                {lead.contact?.fullName || 'Unknown Lead'}
-              </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                Lead #{lead.id}
-              </p>
+      {/* Desktop: 3-column layout */}
+      <div className="hidden md:flex h-screen">
+        {/* Left: Conversation */}
+        <div className="flex-1 flex flex-col min-w-0 border-r border-subtle">
+          <div className="h-16 border-b border-subtle bg-app flex items-center justify-between px-4 shrink-0">
+            <div className="flex items-center gap-3">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => router.push('/leads')}
+                className="h-8 w-8"
+              >
+                <ArrowLeft className="h-4 w-4" />
+              </Button>
+              <div>
+                <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+                  {lead?.contact?.fullName || 'Lead'}
+                </h1>
+                <p className="text-meta muted-text">
+                  {serviceName}
+                </p>
+              </div>
             </div>
+            <Badge variant="outline" className="chip">
+              {lead?.stage || 'NEW'}
+            </Badge>
           </div>
-        </div>
-
-        {/* Progress Bar */}
-        <LeadProgressBar
-          currentStage={lead.stage}
-          leadId={leadId}
-          onStageChange={handleStageChange}
-        />
-
-        {/* 3-Column Layout */}
-        <div className={cn(
-          "flex-1 flex overflow-hidden transition-opacity duration-300",
-          actionPending && "opacity-60"
-        )}>
-          {/* Left: Lead DNA */}
-          <div className={cn(
-            "w-80 border-r border-subtle bg-card flex-shrink-0 overflow-y-auto transition-opacity",
-            actionPending && "opacity-50"
-          )}>
-            <LeadDNA lead={lead} />
-          </div>
-
-          {/* Center: Conversation */}
-          <div className={cn(
-            "flex-1 flex flex-col min-w-0 transition-opacity",
-            actionPending && "opacity-50"
-          )}>
+          <div className="flex-1 min-h-0">
             <ConversationWorkspace
-              leadId={leadId}
+              leadId={leadId!}
               lead={lead}
               channel={channel}
               onSend={handleSendMessage}
+              composerOpen={composerOpen}
+              onComposerChange={setComposerOpen}
             />
           </div>
+        </div>
 
-          {/* Right: Next Best Action */}
-          <div className={cn(
-            "w-96 border-l border-subtle bg-card flex-shrink-0 overflow-y-auto",
-            actionPending && "ring-2 ring-primary/20 ring-offset-2"
-          )}>
-            <NextBestActionPanel
-              leadId={leadId}
-              lead={lead}
-              tasks={lead.tasks || []}
-              onActionPending={setActionPending}
-              onComposerFocus={() => {
-                if (typeof window !== 'undefined' && typeof document !== 'undefined') {
-                  const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-                  if (composer) {
-                    composer.focus()
-                    composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
-                  }
-                }
-              }}
-            />
+        {/* Middle: Lead DNA */}
+        <div className="w-80 border-r border-subtle overflow-y-auto">
+          <div className="p-4 border-b border-subtle bg-app sticky top-0 z-10">
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+              Lead Details
+            </h2>
+          </div>
+          <div className="p-4">
+            <LeadDNA lead={lead} />
+          </div>
+        </div>
+
+        {/* Right: Actions */}
+        <div className="w-80 overflow-y-auto">
+          <div className="p-4 border-b border-subtle bg-app sticky top-0 z-10">
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+              Next Actions
+            </h2>
+          </div>
+          <div className="p-4">
+            <NextBestActionPanel lead={lead} />
           </div>
         </div>
       </div>

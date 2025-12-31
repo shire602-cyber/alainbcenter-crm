@@ -867,6 +867,17 @@ function InboxPageContent() {
                             </p>
                           ) : msg.type === 'audio' && msg.mediaUrl ? (
                             <div className="space-y-2">
+                              {/* PHASE 1 DEBUG: Log audio message rendering */}
+                              {(() => {
+                                console.log('[INBOX-DEBUG] Rendering audio message', {
+                                  messageId: msg.id,
+                                  mediaUrl: msg.mediaUrl,
+                                  mimeType: msg.mediaMimeType,
+                                  type: msg.type,
+                                  hasAttachments: !!(msg.attachments && msg.attachments.length > 0),
+                                })
+                                return null
+                              })()}
                               <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                 <AudioMessagePlayer
                                   mediaId={msg.mediaUrl}
