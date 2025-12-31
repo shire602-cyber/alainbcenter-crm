@@ -992,6 +992,9 @@ async function createCommunicationLog(input: {
   text: string
   providerMessageId: string
   timestamp: Date
+  metadata?: {
+    mediaMimeType?: string
+  }
 }): Promise<any> {
   // CRITICAL FIX: Include contactId to ensure proper linking
   // PROBLEM FIX: Normalize direction to INBOUND/OUTBOUND (not IN/OUT)
@@ -1003,7 +1006,9 @@ async function createCommunicationLog(input: {
   const normalizedChannel = normalizeChannel(input.channel)
   
   // CRITICAL FIX 3: Determine message type (audio if transcribed, otherwise text)
-  const messageType = input.metadata?.mediaMimeType?.startsWith('audio/') ? 'audio' : 'text'
+  // Check if input text indicates it was transcribed from audio
+  const isAudioTranscribed = input.metadata?.mediaMimeType?.startsWith('audio/') || false
+  const messageType = isAudioTranscribed ? 'audio' : 'text'
   
   const message = await prisma.message.create({
     data: {
