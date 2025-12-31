@@ -73,7 +73,9 @@ async function transcribeWithOpenAI(
 
   // Create form data for multipart/form-data request
   const formData = new FormData()
-  const blob = new Blob([buffer], { type: 'audio/ogg' }) // Default to ogg, adjust if needed
+  // Convert Buffer to Uint8Array for Blob compatibility
+  const uint8Array = new Uint8Array(buffer)
+  const blob = new Blob([uint8Array], { type: 'audio/ogg' }) // Default to ogg, adjust if needed
   formData.append('file', blob, 'audio.ogg')
   formData.append('model', 'whisper-1')
   if (options.language) {

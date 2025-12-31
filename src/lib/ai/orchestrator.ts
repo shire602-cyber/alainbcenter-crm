@@ -609,9 +609,9 @@ and let me know the best time for our consultant to call you.`
     
     // CRITICAL FIX 4: Determine reply language from conversation or agent profile
     let replyLanguage: 'en' | 'ar' = input.language || 'en'
-    if (!replyLanguage && conversation.language) {
+    if (!replyLanguage && (conversation as any).language) {
       // Use detected conversation language
-      replyLanguage = (conversation.language === 'ar' ? 'ar' : 'en')
+      replyLanguage = ((conversation as any).language === 'ar' ? 'ar' : 'en')
     } else if (!replyLanguage && lead.aiAgentProfile?.defaultLanguage) {
       // Fall back to agent profile default language
       replyLanguage = (lead.aiAgentProfile.defaultLanguage === 'ar' ? 'ar' : 'en')
