@@ -169,7 +169,8 @@ You must follow the rules and training documents exactly.`
 9. If user says "marketing license", accept it and log as business activity (don't interrogate)
 10. If confused or validation fails, use fallback: "Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation."
 
-${language === 'ar' ? 'Respond in Arabic when appropriate.' : 'Respond in English.'}`
+${language === 'ar' ? 'CRITICAL: You MUST respond in Arabic (Modern Standard Arabic). All replies must be in Arabic.' : 'CRITICAL: You MUST respond in English. All replies must be in English.'}
+If the user's message is in a different language, detect it and respond in that language. If language is unknown, default to ${language === 'ar' ? 'Arabic' : 'English'}.`
 
   return basePrompt + trainingSection + rulesSection
 }
@@ -229,6 +230,7 @@ export async function generateAIReply(
           include: {
             contact: true,
             serviceType: true,
+            aiAgentProfile: true, // CRITICAL FIX 4: Load agent profile for language settings
           },
         },
         messages: {
@@ -605,11 +607,31 @@ and let me know the best time for our consultant to call you.`
       console.warn(`[ORCHESTRATOR] Rule engine failed, falling back to LLM:`, ruleEngineError.message)
     }
     
+    // CRITICAL FIX 4: Determine reply language from conversation or agent profile
+    let replyLanguage: 'en' | 'ar' = input.language || 'en'
+    if (!replyLanguage && conversation.language) {
+      // Use detected conversation language
+      replyLanguage = (conversation.language === 'ar' ? 'ar' : 'en')
+    } else if (!replyLanguage && lead.aiAgentProfile?.defaultLanguage) {
+      // Fall back to agent profile default language
+      replyLanguage = (lead.aiAgentProfile.defaultLanguage === 'ar' ? 'ar' : 'en')
+    } else if (!replyLanguage && lead.aiAgentProfile?.autoDetectLanguage) {
+      // If auto-detect enabled but no language detected, try to detect from inbound text
+      try {
+        const { detectLanguage } = await import('./detectLanguage')
+        const detected = await detectLanguage(input.inboundText)
+        replyLanguage = (detected === 'ar' ? 'ar' : 'en')
+        console.log(`🌐 [ORCHESTRATOR] Auto-detected language: ${detected} -> ${replyLanguage}`)
+      } catch (error: any) {
+        console.warn(`⚠️ [ORCHESTRATOR] Language detection failed:`, error.message)
+      }
+    }
+    
     // Step 4: Build system prompt from rules + training
     // NOTE: For first messages, we still build the prompt but don't block if training is missing
     const systemPrompt = await buildSystemPrompt(
       input.agentProfileId || lead.aiAgentProfileId || undefined,
-      input.language
+      replyLanguage // CRITICAL FIX 4: Use determined language
     )
     
     // Step 4: Build conversation context
@@ -727,8 +749,15 @@ Reply:`
       })
     }
     
+    // CRITICAL FIX 2: Sanitize reply text to prevent JSON from being sent
+    const { sanitizeReplyText } = await import('./sanitizeReplyText')
+    const sanitized = sanitizeReplyText(replyText)
+    if (sanitized.wasJson) {
+      console.warn(`[ORCHESTRATOR] Sanitized JSON reply: ${replyText.substring(0, 100)} -> ${sanitized.text.substring(0, 100)}`)
+    }
+    
     return {
-      replyText,
+      replyText: sanitized.text,
       extractedFields,
       confidence,
       nextStepKey: undefined,

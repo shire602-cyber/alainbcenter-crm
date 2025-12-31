@@ -345,6 +345,7 @@ model Conversation {
   qualificationStage     String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
   questionsAskedCount    Int       @default(0) // Track total questions asked (max 5 for business setup)
   knownFields            String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
+  language               String? // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.) for multilingual support
   deletedAt              DateTime? // Soft delete timestamp
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt

@@ -36,6 +36,7 @@ interface Message {
   id: number
   direction: 'INBOUND' | 'OUTBOUND'
   body: string | null
+  type?: string // CRITICAL FIX 3: Message type (text, audio, etc.)
   createdAt: string
   status?: string
   channel: string
@@ -90,6 +91,8 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
   showAvatar: boolean
   isLastInGroup: boolean
 }) {
+  const isAudio = message.type === 'audio'
+  
   return (
     <div className={cn(
       "flex gap-2",
@@ -113,6 +116,15 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
           ? "bg-primary text-primary-foreground"
           : "bg-card border border-subtle"
       )}>
+        {/* CRITICAL FIX 3: Show audio label for audio messages */}
+        {isAudio && (
+          <div className={cn(
+            "mb-2 text-xs font-medium",
+            isOutbound ? "text-primary-foreground/80" : "text-muted-foreground"
+          )}>
+            🎤 Audio Message
+          </div>
+        )}
         <p className={cn(
           "text-body leading-relaxed whitespace-pre-wrap break-words",
           isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"

@@ -18,25 +18,27 @@ export async function GET(
     await requireAuthApi()
     
     const resolvedParams = await params
-    const leadId = parseInt(resolvedParams.id)
+    const numericId = parseInt(resolvedParams.id)
     
     // Check for fallback parameters (conversationId or contactId)
     const searchParams = req.nextUrl.searchParams
     const conversationId = searchParams.get('conversationId')
     const contactId = searchParams.get('contactId')
+    const action = searchParams.get('action') // Preserve action query param
     
-    if (isNaN(leadId)) {
+    if (isNaN(numericId)) {
       return NextResponse.json(
-        { error: 'Invalid lead ID' },
+        { error: 'Invalid ID' },
         { status: 400 }
       )
     }
 
-    console.log(`[API] Fetching lead ${leadId}`)
+    console.log(`[API] Fetching lead ${numericId} (with fallback resolution)`)
 
-    // Fetch lead with all includes - wrap in try-catch for each relation to handle missing data gracefully
+    // PHASE 2: Enhanced fallback resolution
+    // First, try to fetch as leadId
     let lead = await prisma.lead.findUnique({
-      where: { id: leadId },
+      where: { id: numericId },
       include: {
         contact: true,
         assignedUser: {
@@ -74,6 +76,7 @@ export async function GET(
           }
         },
         conversations: {
+          where: { deletedAt: null }, // PHASE 1: Exclude soft-deleted conversations
           orderBy: { createdAt: 'desc' },
           include: {
             messages: {
@@ -97,11 +100,54 @@ export async function GET(
       },
     })
 
-    // Fallback resolution if lead not found
+    // PHASE 2: Enhanced fallback resolution if lead not found
     if (!lead) {
-      console.log(`[API] Lead ${leadId} not found, attempting fallback resolution...`)
+      console.log(`[API] Lead ${numericId} not found, attempting fallback resolution...`)
       
-      // Try to find lead by conversationId if provided
+      // Strategy A: If numericId might be a conversationId, try that first
+      const conversationById = await prisma.conversation.findUnique({
+        where: { id: numericId },
+        select: { leadId: true, contactId: true },
+      })
+      
+      if (conversationById?.leadId) {
+        console.log(`[API] Found lead ${conversationById.leadId} via conversation ${numericId}`)
+        const redirectUrl = `/leads/${conversationById.leadId}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
+        return NextResponse.json({
+          _redirect: redirectUrl,
+          _fallbackReason: `ID ${numericId} was a conversationId, redirecting to lead ${conversationById.leadId}`,
+          _conversationId: numericId.toString(),
+        }, { status: 404 })
+      }
+      
+      // Strategy B: If numericId might be a contactId, find most recent open lead
+      const contactById = await prisma.contact.findUnique({
+        where: { id: numericId },
+        select: { id: true },
+      })
+      
+      if (contactById) {
+        const latestLead = await prisma.lead.findFirst({
+          where: { 
+            contactId: numericId,
+            stage: { notIn: ['COMPLETED_WON', 'LOST'] }, // Prefer active leads
+          },
+          orderBy: { createdAt: 'desc' },
+          select: { id: true },
+        })
+        
+        if (latestLead) {
+          console.log(`[API] Found lead ${latestLead.id} via contact ${numericId}`)
+          const redirectUrl = `/leads/${latestLead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
+          return NextResponse.json({
+            _redirect: redirectUrl,
+            _fallbackReason: `ID ${numericId} was a contactId, redirecting to lead ${latestLead.id}`,
+            _contactId: numericId.toString(),
+          }, { status: 404 })
+        }
+      }
+      
+      // Strategy C: Try to find lead by conversationId if provided in query params
       if (conversationId) {
         const conversation = await prisma.conversation.findUnique({
           where: { id: parseInt(conversationId) },
@@ -173,11 +219,12 @@ export async function GET(
           })
           
           if (lead) {
-            // Return redirect hint
+            // Return redirect hint with preserved query params
+            const redirectUrl = `/leads/${lead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
             return NextResponse.json({
               ...lead,
-              _redirect: `/leads/${lead.id}`,
-              _fallbackReason: 'Found via conversationId',
+              _redirect: redirectUrl,
+              _fallbackReason: 'Found via conversationId query param',
               tasksGrouped: {
                 open: (lead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
                 done: (lead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
@@ -187,10 +234,13 @@ export async function GET(
           }
         }
         
-        // Try to find latest lead by contactId from conversation
+        // Strategy D: Try to find latest lead by contactId from conversation
         if (conversation?.contactId) {
           const latestLead = await prisma.lead.findFirst({
-            where: { contactId: conversation.contactId },
+            where: { 
+              contactId: conversation.contactId,
+              stage: { notIn: ['COMPLETED_WON', 'LOST'] }, // Prefer active leads
+            },
             orderBy: { createdAt: 'desc' },
             include: {
               contact: true,
@@ -254,9 +304,10 @@ export async function GET(
           
           if (latestLead) {
             console.log(`[API] Found latest lead ${latestLead.id} via contactId ${conversation.contactId}`)
+            const redirectUrl = `/leads/${latestLead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
             return NextResponse.json({
               ...latestLead,
-              _redirect: `/leads/${latestLead.id}`,
+              _redirect: redirectUrl,
               _fallbackReason: 'Found latest lead via contactId',
               tasksGrouped: {
                 open: (latestLead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
@@ -335,9 +386,10 @@ export async function GET(
         
         if (latestLead) {
           console.log(`[API] Found latest lead ${latestLead.id} via contactId ${contactId}`)
+          const redirectUrl = `/leads/${latestLead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
           return NextResponse.json({
             ...latestLead,
-            _redirect: `/leads/${latestLead.id}`,
+            _redirect: redirectUrl,
             _fallbackReason: 'Found latest lead via contactId',
             tasksGrouped: {
               open: (latestLead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
@@ -349,11 +401,11 @@ export async function GET(
       }
       
       // No fallback found
-      console.log(`[API] Lead ${leadId} not found in database, no fallback available`)
+      console.log(`[API] Lead ${numericId} not found in database, no fallback available`)
       return NextResponse.json(
         { 
           error: 'Lead not found', 
-          leadId,
+          leadId: numericId,
           _fallbackAttempted: true,
           _conversationId: conversationId || null,
           _contactId: contactId || null,
@@ -362,7 +414,7 @@ export async function GET(
       )
     }
 
-    console.log(`[API] Successfully fetched lead ${leadId} (contact: ${lead.contact?.fullName || 'N/A'})`)
+    console.log(`[API] Successfully fetched lead ${lead.id} (contact: ${lead.contact?.fullName || 'N/A'})`)
 
     // Group tasks by status (handle case where tasks might not be included in fallback query)
     const tasks = (lead as any).tasks || []

@@ -1,5 +1,27 @@
 # AI Autopilot + Training System - Production Fixes Summary
 
+## VERCEL DEPLOYMENT NOTE (CRITICAL)
+
+**IMPORTANT**: Vercel deployments MUST run database migrations during build.
+
+The `package.json` includes a `vercel-build` script that runs:
+```bash
+prisma generate && prisma migrate deploy && next build
+```
+
+**Vercel automatically uses `vercel-build` if present**, so migrations will run automatically.
+
+If migrations fail:
+1. Check Vercel build logs for migration errors
+2. Ensure DATABASE_URL is set in Vercel environment variables
+3. Run `npx prisma migrate deploy` manually if needed
+
+**DO NOT** add migration logic to app startup - migrations should ONLY run during build.
+
+---
+
+# AI Autopilot + Training System - Production Fixes Summary
+
 ## Overview
 This document summarizes the critical production fixes applied to the AI Autopilot + Training system to address repetitive questions, fragile confirmation logic, duplicate outbound replies, and training management limitations.
 

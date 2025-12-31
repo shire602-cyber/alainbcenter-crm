@@ -450,9 +450,53 @@ export async function POST(req: NextRequest) {
           mediaUrl = message.image.id // Store media ID (can fetch URL later)
           mediaMimeType = message.image.mime_type || 'image/jpeg'
         } else if (messageType === 'audio' && message.audio) {
-          messageText = '[audio]'
+          // CRITICAL FIX 3: Transcribe audio messages
           mediaUrl = message.audio.id
           mediaMimeType = message.audio.mime_type || 'audio/ogg'
+          
+          try {
+            // Fetch media URL from Meta API
+            const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN
+            if (accessToken && mediaUrl) {
+              // Get media URL from Meta API
+              const mediaResponse = await fetch(`https://graph.facebook.com/v18.0/${mediaUrl}`, {
+                headers: {
+                  'Authorization': `Bearer ${accessToken}`,
+                },
+              })
+              
+              if (mediaResponse.ok) {
+                const mediaData = await mediaResponse.json()
+                const audioUrl = mediaData.url
+                
+                if (audioUrl) {
+                  // Transcribe audio
+                  const { transcribeAudio } = await import('@/lib/ai/transcribeAudio')
+                  const transcriptResult = await transcribeAudio(audioUrl)
+                  
+                  if (transcriptResult.transcript) {
+                    messageText = transcriptResult.transcript
+                    console.log(`✅ [WEBHOOK] Audio transcribed: ${transcriptResult.transcript.substring(0, 100)}...`)
+                  } else {
+                    messageText = '[Audio received]'
+                    console.warn(`⚠️ [WEBHOOK] Audio transcription failed: ${transcriptResult.error}`)
+                  }
+                } else {
+                  messageText = '[Audio received]'
+                  console.warn(`⚠️ [WEBHOOK] Could not get audio URL from Meta API`)
+                }
+              } else {
+                messageText = '[Audio received]'
+                console.warn(`⚠️ [WEBHOOK] Failed to fetch audio media: ${mediaResponse.statusText}`)
+              }
+            } else {
+              messageText = '[Audio received]'
+              console.warn(`⚠️ [WEBHOOK] No access token configured for audio transcription`)
+            }
+          } catch (audioError: any) {
+            messageText = '[Audio received]'
+            console.error(`❌ [WEBHOOK] Audio transcription error:`, audioError.message)
+          }
         } else if (messageType === 'document' && message.document) {
           messageText = `[document: ${message.document.filename || 'file'}]`
           mediaUrl = message.document.id

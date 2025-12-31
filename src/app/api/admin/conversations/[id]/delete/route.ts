@@ -61,12 +61,15 @@ export async function DELETE(
       )
     }
 
-    // Check if already deleted (safe property access)
+    // Check if already deleted - return success (idempotent)
     if ((conversation as any).deletedAt) {
-      return NextResponse.json(
-        { ok: false, error: 'Conversation is already archived' },
-        { status: 400 }
-      )
+      console.log(`♻️ Admin ${user.email} attempted to delete already-archived conversation ${conversationId} (idempotent - returning success)`)
+      return NextResponse.json({
+        ok: true,
+        message: `Conversation already archived`,
+        deletedMessages: conversation.messages.length,
+        wasAlreadyDeleted: true,
+      })
     }
 
     // TASK 2: Soft delete - set deletedAt timestamp and status (prevents FK constraint violations)
