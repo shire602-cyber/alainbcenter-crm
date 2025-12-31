@@ -3,6 +3,7 @@
 /**
  * Prisma Migration Script with Retry Logic
  * Handles Neon connection timeouts and advisory lock issues
+ * NEVER FAILS THE BUILD - always exits with code 0
  */
 
 const { execSync } = require('child_process')
@@ -34,7 +35,7 @@ async function runWithRetry(command, retries = MAX_RETRIES) {
       }
       
       // If DIRECT_URL is set, use it for migrations (bypasses connection pooling)
-      if (process.env.DIRECT_URL && !process.env.DATABASE_URL.includes('pooler')) {
+      if (process.env.DIRECT_URL && process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('pooler')) {
         log('Using DIRECT_URL for migration (non-pooled connection)')
         env.DATABASE_URL = process.env.DIRECT_URL
       }
@@ -48,14 +49,21 @@ async function runWithRetry(command, retries = MAX_RETRIES) {
       log(`✅ Migration succeeded on attempt ${attempt}`)
       return true
     } catch (error) {
-      const errorMsg = error.message || error.toString()
+      const errorMsg = error.message || error.toString() || String(error)
+      const errorOutput = error.stdout?.toString() || error.stderr?.toString() || ''
       log(`❌ Attempt ${attempt} failed: ${errorMsg}`)
+      if (errorOutput) {
+        log(`Error output: ${errorOutput.substring(0, 200)}`)
+      }
       
       // If it's a timeout or lock error, retry
       const isRetryable = errorMsg.includes('timeout') || 
                          errorMsg.includes('advisory lock') ||
                          errorMsg.includes('P1002') ||
-                         errorMsg.includes('ETIMEDOUT')
+                         errorMsg.includes('ETIMEDOUT') ||
+                         errorOutput.includes('timeout') ||
+                         errorOutput.includes('advisory lock') ||
+                         errorOutput.includes('P1002')
       
       if (attempt < retries && isRetryable) {
         // Exponential backoff with jitter
@@ -65,16 +73,18 @@ async function runWithRetry(command, retries = MAX_RETRIES) {
         )
         log(`⏳ Waiting ${Math.round(delay)}ms before retry...`)
         await sleep(delay)
-      } else if (!isRetryable) {
-        // Non-retryable error (e.g., syntax error, missing migration)
-        log(`❌ Non-retryable error detected, aborting`)
-        throw error
+      } else if (attempt < retries) {
+        // Non-retryable error but we have retries left - still retry (might be transient)
+        const delay = INITIAL_DELAY
+        log(`⏳ Non-retryable error, but retrying after ${delay}ms...`)
+        await sleep(delay)
       } else {
         log(`❌ All ${retries} attempts failed`)
-        throw error
+        return false // Don't throw, just return false
       }
     }
   }
+  return false
 }
 
 async function checkMigrationsStatus() {
@@ -82,7 +92,7 @@ async function checkMigrationsStatus() {
     log('Checking migration status...')
     
     const env = { ...process.env, PRISMA_MIGRATE_LOCK_TIMEOUT: '30000' }
-    if (process.env.DIRECT_URL && !process.env.DATABASE_URL.includes('pooler')) {
+    if (process.env.DIRECT_URL && process.env.DATABASE_URL && !process.env.DATABASE_URL.includes('pooler')) {
       env.DATABASE_URL = process.env.DIRECT_URL
     }
     
@@ -109,37 +119,62 @@ async function checkMigrationsStatus() {
 async function main() {
   log('Starting Prisma migration with retry logic...')
   
+  // Step 1: Generate Prisma Client (always required)
+  log('Step 1: Generating Prisma Client...')
   try {
-    // Step 1: Generate Prisma Client
-    log('Step 1: Generating Prisma Client...')
-    execSync('npx prisma generate', { stdio: 'inherit' })
+    execSync('npx prisma generate', { 
+      stdio: 'inherit',
+      timeout: 60000,
+    })
     log('✅ Prisma Client generated')
-    
-    // Step 2: Check if migrations are already applied
-    const isUpToDate = await checkMigrationsStatus()
-    
-    if (isUpToDate) {
-      log('✅ Migrations already applied, skipping deploy')
-      process.exit(0)
-    }
-    
-    // Step 3: Deploy migrations with retry
-    log('Step 2: Deploying migrations...')
-    await runWithRetry('npx prisma migrate deploy --skip-seed')
-    
+  } catch (genError) {
+    log(`⚠️  Prisma generate failed: ${genError.message || genError}`)
+    log('⚠️  Continuing anyway - client may have been generated previously')
+    // Don't fail - postinstall also runs prisma generate
+  }
+  
+  // Step 2: Check if migrations are already applied
+  let isUpToDate = false
+  try {
+    isUpToDate = await checkMigrationsStatus()
+  } catch (statusError) {
+    log(`⚠️  Could not check migration status: ${statusError.message || statusError}`)
+    log('⚠️  Will attempt to deploy migrations')
+  }
+  
+  if (isUpToDate) {
+    log('✅ Migrations already applied, skipping deploy')
+    return
+  }
+  
+  // Step 3: Deploy migrations with retry
+  log('Step 2: Deploying migrations...')
+  const success = await runWithRetry('npx prisma migrate deploy --skip-seed')
+  
+  if (success) {
     log('✅ Migration process completed successfully')
-    process.exit(0)
-  } catch (error) {
-    log(`❌ Migration failed after all retries: ${error.message}`)
+  } else {
+    log('⚠️  Migration failed after all retries')
     log('⚠️  Build will continue, but migrations may need to be applied manually')
-    // Don't fail the build - migrations can be applied manually if needed
-    // This allows the build to complete even if migrations timeout
-    process.exit(0)
+    log('⚠️  You can apply migrations manually after deployment using:')
+    log('⚠️  DATABASE_URL="..." npx prisma migrate deploy')
   }
 }
 
-main().catch(error => {
-  log(`❌ Fatal error: ${error.message}`)
+// Wrap everything to ensure we never fail the build
+try {
+  main()
+    .then(() => {
+      log('✅ Migration script completed')
+      process.exit(0)
+    })
+    .catch(error => {
+      log(`❌ Fatal error in main: ${error.message || error}`)
+      log('⚠️  Continuing build despite migration script error')
+      process.exit(0) // Don't fail build
+    })
+} catch (error) {
+  log(`❌ Fatal error: ${error.message || error}`)
+  log('⚠️  Continuing build despite migration script error')
   process.exit(0) // Don't fail build
-})
-
+}
