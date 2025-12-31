@@ -450,7 +450,7 @@ export default function LeadDetailPage({
             </h2>
           </div>
           <div className="p-4">
-            <NextBestActionPanel lead={lead} />
+            <NextBestActionPanel leadId={leadId!} lead={lead} />
           </div>
         </div>
       </div>
