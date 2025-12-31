@@ -25,21 +25,38 @@ async function runWithRetry(command, retries = MAX_RETRIES) {
     try {
       log(`Attempt ${attempt}/${retries}: Running ${command}`)
       
+      // Use DIRECT_URL if available (non-pooled connection for migrations)
+      const env = {
+        ...process.env,
+        // Increase Prisma timeout
+        PRISMA_MIGRATE_LOCK_TIMEOUT: '30000', // 30 seconds
+      }
+      
+      // If DIRECT_URL is set, use it for migrations (bypasses connection pooling)
+      if (process.env.DIRECT_URL && !process.env.DATABASE_URL.includes('pooler')) {
+        log('Using DIRECT_URL for migration (non-pooled connection)')
+        env.DATABASE_URL = process.env.DIRECT_URL
+      }
+      
       execSync(command, {
         stdio: 'inherit',
-        env: {
-          ...process.env,
-          // Increase Prisma timeout
-          PRISMA_MIGRATE_LOCK_TIMEOUT: '30000', // 30 seconds
-        }
+        env,
+        timeout: 60000, // 60 second timeout per attempt
       })
       
       log(`✅ Migration succeeded on attempt ${attempt}`)
       return true
     } catch (error) {
-      log(`❌ Attempt ${attempt} failed: ${error.message}`)
+      const errorMsg = error.message || error.toString()
+      log(`❌ Attempt ${attempt} failed: ${errorMsg}`)
       
-      if (attempt < retries) {
+      // If it's a timeout or lock error, retry
+      const isRetryable = errorMsg.includes('timeout') || 
+                         errorMsg.includes('advisory lock') ||
+                         errorMsg.includes('P1002') ||
+                         errorMsg.includes('ETIMEDOUT')
+      
+      if (attempt < retries && isRetryable) {
         // Exponential backoff with jitter
         const delay = Math.min(
           INITIAL_DELAY * Math.pow(2, attempt - 1) + Math.random() * 1000,
@@ -47,6 +64,10 @@ async function runWithRetry(command, retries = MAX_RETRIES) {
         )
         log(`⏳ Waiting ${Math.round(delay)}ms before retry...`)
         await sleep(delay)
+      } else if (!isRetryable) {
+        // Non-retryable error (e.g., syntax error, missing migration)
+        log(`❌ Non-retryable error detected, aborting`)
+        throw error
       } else {
         log(`❌ All ${retries} attempts failed`)
         throw error
@@ -58,15 +79,25 @@ async function runWithRetry(command, retries = MAX_RETRIES) {
 async function checkMigrationsStatus() {
   try {
     log('Checking migration status...')
-    execSync('npx prisma migrate status', {
+    
+    const env = { ...process.env, PRISMA_MIGRATE_LOCK_TIMEOUT: '30000' }
+    if (process.env.DIRECT_URL && !process.env.DATABASE_URL.includes('pooler')) {
+      env.DATABASE_URL = process.env.DIRECT_URL
+    }
+    
+    const output = execSync('npx prisma migrate status', {
       stdio: 'pipe',
-      env: {
-        ...process.env,
-        PRISMA_MIGRATE_LOCK_TIMEOUT: '30000',
-      }
-    })
-    log('✅ Migrations are up to date')
-    return true
+      env,
+      timeout: 30000,
+    }).toString()
+    
+    if (output.includes('Database schema is up to date')) {
+      log('✅ Migrations are up to date')
+      return true
+    }
+    
+    log('⚠️  Migrations pending, will deploy')
+    return false
   } catch (error) {
     // If status check fails, we still need to try deploy
     log('⚠️  Migration status check failed, will attempt deploy')
