@@ -30,7 +30,10 @@ export function AudioMessagePlayer({ mediaId, mimeType, messageId, className }: 
       setError(null)
       
       try {
-        const res = await fetch(`/api/whatsapp/media/${encodeURIComponent(mediaId)}?messageId=${messageId}`)
+        // CRITICAL FIX: Use credentials for auth and support Range requests
+        const res = await fetch(`/api/whatsapp/media/${encodeURIComponent(mediaId)}?messageId=${messageId}`, {
+          credentials: 'include', // Include cookies for auth
+        })
         if (!res.ok) {
           const errorData = await res.json().catch(() => ({}))
           throw new Error(errorData.error || `Failed to fetch audio: ${res.status}`)

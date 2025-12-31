@@ -887,6 +887,7 @@ function InboxPageContent() {
                                   alt={msg.body || 'Image message'}
                                   className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
                                   loading="lazy"
+                                  crossOrigin="anonymous"
                                   onError={(e) => {
                                     const target = e.currentTarget
                                     target.onerror = null
@@ -911,10 +912,11 @@ function InboxPageContent() {
                             <div className="space-y-2">
                               <div className="relative group">
                                 <video
-                                  src={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                  src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
                                   controls
                                   className="max-w-full h-auto rounded-lg"
                                   preload="metadata"
+                                  crossOrigin="anonymous"
                                 />
                               </div>
                               {msg.body && msg.body !== '[video]' && (
@@ -924,10 +926,11 @@ function InboxPageContent() {
                           ) : msg.type === 'document' && msg.mediaUrl ? (
                             <div className="space-y-2">
                               <a
-                                href={`/api/whatsapp/media/${msg.mediaUrl}?messageId=${msg.id}`}
+                                href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
                                 target="_blank"
                                 rel="noopener noreferrer"
                                 className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                download
                               >
                                 <FileText className="h-5 w-5" />
                                 <span className="text-sm font-medium">{msg.body || 'Document'}</span>
@@ -959,16 +962,17 @@ function InboxPageContent() {
                                   )
                                 } else if (att.type === 'document') {
                                   return (
-                                    <a
-                                      key={att.id}
-                                      href={att.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                    >
-                                      <FileText className="h-5 w-5" />
-                                      <span className="text-sm font-medium">{att.filename || 'Document'}</span>
-                                    </a>
+                                      <a
+                                        key={att.id}
+                                        href={att.url.startsWith('http') ? att.url : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                        download={att.filename || undefined}
+                                      >
+                                        <FileText className="h-5 w-5" />
+                                        <span className="text-sm font-medium">{att.filename || 'Document'}</span>
+                                      </a>
                                   )
                                 } else if (att.type === 'audio') {
                                   return (

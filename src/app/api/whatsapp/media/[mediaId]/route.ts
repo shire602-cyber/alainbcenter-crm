@@ -87,11 +87,19 @@ export async function GET(
       )
     }
 
-    // Step 2: Download media file from Meta
+    // Step 2: Download media file from Meta with Range support
+    const rangeHeader = req.headers.get('range')
+    const fetchHeaders: HeadersInit = {
+      Authorization: `Bearer ${accessToken}`,
+    }
+    
+    // Forward Range header for audio/video streaming
+    if (rangeHeader) {
+      fetchHeaders['Range'] = rangeHeader
+    }
+
     const mediaFileResponse = await fetch(mediaUrl, {
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-      },
+      headers: fetchHeaders,
     })
 
     if (!mediaFileResponse.ok) {
@@ -103,6 +111,8 @@ export async function GET(
 
     // Step 3: Get content type and file buffer
     const contentType = mediaFileResponse.headers.get('content-type') || 'application/octet-stream'
+    const contentLength = mediaFileResponse.headers.get('content-length')
+    const contentRange = mediaFileResponse.headers.get('content-range')
     const arrayBuffer = await mediaFileResponse.arrayBuffer()
     const buffer = Buffer.from(arrayBuffer)
 
@@ -120,13 +130,31 @@ export async function GET(
       } catch {}
     }
 
+    // CRITICAL FIX: Add headers for media streaming (especially audio)
+    const responseHeaders: HeadersInit = {
+      'Content-Type': contentType,
+      'Content-Disposition': `inline; filename="media-${mediaId}"`,
+      'Accept-Ranges': 'bytes', // MANDATORY for audio/video streaming
+      'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
+    }
+
+    // Add Content-Length if available
+    if (contentLength) {
+      responseHeaders['Content-Length'] = contentLength
+    }
+
+    // Handle partial content (206) for Range requests
+    if (rangeHeader && contentRange && mediaFileResponse.status === 206) {
+      responseHeaders['Content-Range'] = contentRange
+      return new NextResponse(buffer, {
+        status: 206,
+        headers: responseHeaders,
+      })
+    }
+
     // Return media file
     return new NextResponse(buffer, {
-      headers: {
-        'Content-Type': contentType,
-        'Content-Disposition': `inline; filename="media-${mediaId}"`,
-        'Cache-Control': 'public, max-age=31536000, immutable', // Cache for 1 year
-      },
+      headers: responseHeaders,
     })
   } catch (error: any) {
     console.error('Error fetching WhatsApp media:', error)
