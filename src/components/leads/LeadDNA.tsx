@@ -371,8 +371,14 @@ function ExpiryTimeline({ lead }: { lead: LeadDNAProps['lead'] }) {
     return items.sort((a, b) => a.daysUntil - b.daysUntil)
   }, [lead.expiryDate, lead.visaExpiryDate, lead.permitExpiryDate])
 
+  // CRITICAL FIX: Always return same structure - conditionally render content inside
+  // This ensures hooks are always called in the same order (React rules)
   if (expiries.length === 0) {
-    return null
+    return (
+      <Card className="card-premium p-4">
+        <p className="text-meta muted-text">No expiry dates recorded</p>
+      </Card>
+    )
   }
 
   function getExpiryBadge(daysUntil: number) {
