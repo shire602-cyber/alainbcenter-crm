@@ -230,32 +230,47 @@ function QuoteCadence({ leadId }: { leadId: number }) {
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    loadQuoteCadence()
-  }, [leadId])
+    let mounted = true
 
-  async function loadQuoteCadence() {
-    try {
-      // Load lead to check quotationSentAt
-      const leadRes = await fetch(`/api/leads/${leadId}`)
-      if (leadRes.ok) {
-        const leadData = await leadRes.json()
-        if (leadData.quotationSentAt) {
-          setQuotationSentAt(new Date(leadData.quotationSentAt))
+    async function loadQuoteCadence() {
+      try {
+        // Load lead to check quotationSentAt
+        const leadRes = await fetch(`/api/leads/${leadId}`)
+        if (leadRes.ok) {
+          const leadData = await leadRes.json()
+          if (mounted && leadData.quotationSentAt) {
+            setQuotationSentAt(new Date(leadData.quotationSentAt))
+          }
+        }
+
+        // Load next quote follow-up
+        const { getNextQuoteFollowup } = await import('@/lib/followups/quoteFollowups')
+        const followup = await getNextQuoteFollowup(leadId)
+        if (mounted) {
+          setQuoteFollowup(followup)
+        }
+      } catch (error) {
+        console.error('Failed to load quote cadence:', error)
+      } finally {
+        if (mounted) {
+          setLoading(false)
         }
       }
-
-      // Load next quote follow-up
-      const { getNextQuoteFollowup } = await import('@/lib/followups/quoteFollowups')
-      const followup = await getNextQuoteFollowup(leadId)
-      setQuoteFollowup(followup)
-    } catch (error) {
-      console.error('Failed to load quote cadence:', error)
-    } finally {
-      setLoading(false)
     }
+
+    loadQuoteCadence()
+
+    return () => {
+      mounted = false
+    }
+  }, [leadId])
+
+  // Always render hooks in same order - early return after all hooks
+  if (loading) {
+    return null
   }
 
-  if (loading || !quotationSentAt) {
+  if (!quotationSentAt) {
     return null
   }
 
