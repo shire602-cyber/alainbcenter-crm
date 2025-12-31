@@ -13,7 +13,7 @@
       "schedule": "* * * * *"
     }
   ],
-  "buildCommand": "npm run build",
+  "buildCommand": "npm run vercel-build",
   "installCommand": "npm install",
   "framework": "nextjs",
   "regions": ["iad1"]
