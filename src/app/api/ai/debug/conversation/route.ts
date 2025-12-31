@@ -95,13 +95,14 @@ export async function GET(req: NextRequest) {
         lastInboundAt: conversation.lastInboundAt,
         lastOutboundAt: conversation.lastOutboundAt,
         lastMessageAt: conversation.lastMessageAt,
-        lastAutoReplyAt: conversation.lastAutoReplyAt,
+        lastAutoReplyKey: conversation.lastAutoReplyKey, // Conversation-level auto-reply key
       },
       lead: conversation.lead ? {
         id: conversation.lead.id,
         serviceType: conversation.lead.serviceType?.name,
         autopilotEnabled: conversation.lead.autopilotEnabled,
         autoReplyEnabled: conversation.lead.autoReplyEnabled,
+        lastAutoReplyAt: conversation.lead.lastAutoReplyAt, // Lead-level auto-reply timestamp
         aiAgentProfileId: conversation.lead.aiAgentProfileId,
       } : null,
       lastOutboundJob: lastOutboundJob ? {
