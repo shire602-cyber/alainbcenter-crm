@@ -5,7 +5,9 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // Use non-pooled connection for migrations to avoid lock timeouts
+  // Use DIRECT_URL for migrations if available (non-pooled connection avoids lock timeouts)
+  // If not set, Prisma will use url (pooled connection)
+  directUrl = env("DIRECT_URL")
 }
 
 // ============================================
