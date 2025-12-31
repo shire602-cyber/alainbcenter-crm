@@ -174,6 +174,16 @@ function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttach
   }
 
   if (attachment.type === 'audio') {
+    // CRITICAL FIX: Handle WhatsApp media URLs - use proxy endpoint if needed
+    let audioUrl = attachment.url
+    if (attachment.url && !attachment.url.startsWith('http') && !attachment.url.startsWith('/')) {
+      // WhatsApp media ID - use proxy
+      audioUrl = `/api/whatsapp/media/${encodeURIComponent(attachment.url)}`
+    } else if (attachment.url && (attachment.url.includes('wamid') || attachment.url.includes('media_id'))) {
+      // WhatsApp media ID in URL - use proxy
+      audioUrl = `/api/whatsapp/media/${encodeURIComponent(attachment.url)}`
+    }
+    
     return (
       <div className={cn(
         "flex items-center gap-3 p-3 rounded-lg",
@@ -183,8 +193,10 @@ function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttach
           "h-5 w-5 flex-shrink-0",
           isOutbound ? "text-primary-foreground" : "text-slate-600 dark:text-slate-400"
         )} />
-        <audio controls className="flex-1 max-w-[250px]">
-          <source src={attachment.url} type={attachment.mimeType || 'audio/mpeg'} />
+        <audio controls className="flex-1 max-w-[250px]" preload="metadata">
+          <source src={audioUrl} type={attachment.mimeType || 'audio/mpeg'} />
+          <source src={audioUrl} type="audio/ogg" />
+          <source src={audioUrl} type="audio/wav" />
           Your browser does not support audio playback.
         </audio>
         {attachment.durationSec && (
@@ -291,10 +303,11 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
   const attachments = message.attachments || []
   
   // If message has mediaUrl but no attachments, create a virtual attachment
+  // CRITICAL: Ensure audio messages are properly detected
   const mediaAttachments = message.mediaUrl && attachments.length === 0
     ? [{
         id: message.id,
-        type: message.type || (message.mediaMimeType?.startsWith('image/') ? 'image' : message.mediaMimeType?.startsWith('audio/') ? 'audio' : 'document'),
+        type: isAudio ? 'audio' : (message.type || (message.mediaMimeType?.startsWith('image/') ? 'image' : message.mediaMimeType?.startsWith('video/') ? 'video' : 'document')),
         url: message.mediaUrl,
         mimeType: message.mediaMimeType,
         filename: null,
@@ -328,7 +341,7 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
           ? "bg-primary text-primary-foreground"
           : "bg-card border border-subtle"
       )}>
-        {/* PHASE 5C: Render media attachments */}
+        {/* PHASE 5C: Render media attachments - CRITICAL: Always render if hasMedia */}
         {hasMedia && mediaAttachments.length > 0 && (
           <div className="space-y-2 mb-2">
             {mediaAttachments.map((att) => (
@@ -337,8 +350,8 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
           </div>
         )}
         
-        {/* PHASE 5C: Show audio label for audio messages */}
-        {isAudio && !hasMedia && (
+        {/* PHASE 5C: Fallback audio label if mediaUrl exists but attachment rendering failed */}
+        {isAudio && hasMedia && mediaAttachments.length === 0 && (
           <div className={cn(
             "mb-2 text-xs font-medium",
             isOutbound ? "text-primary-foreground/80" : "text-muted-foreground"
