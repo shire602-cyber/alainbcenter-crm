@@ -35,6 +35,9 @@ export async function retrieveAndGuard(
     topK?: number
     subjectTags?: string[] // Optional: specific subjects to match
     trainingDocumentIds?: number[] // Optional: filter by specific training document IDs
+    language?: 'en' | 'ar' | null // CRITICAL FIX E: Filter by language
+    stage?: string | null // CRITICAL FIX E: Filter by stage (GREETING, QUALIFICATION, etc.)
+    serviceKey?: string | null // CRITICAL FIX E: Filter by serviceKey
   } = {}
 ): Promise<RetrievalResult> {
   const {
@@ -42,14 +45,20 @@ export async function retrieveAndGuard(
     topK = 5,
     subjectTags = [],
     trainingDocumentIds,
+    language,
+    stage,
+    serviceKey,
   } = options
 
   try {
-    // Step 1: Search vector store for relevant training
+    // CRITICAL FIX E: Search vector store with language/stage/serviceKey filters
     const searchResults = await searchTrainingDocuments(query, {
       topK,
       similarityThreshold,
       trainingDocumentIds,
+      language,
+      stage,
+      serviceKey,
     })
 
     // Step 2: Check if we have relevant training

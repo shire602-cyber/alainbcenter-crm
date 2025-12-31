@@ -66,48 +66,48 @@ export function normalizeOutboundText(input: unknown): string {
 }
 
 /**
- * Compute outbound dedupe key
- * Format: hash(conversationId + replyType + normalizedQuestionKey + dayBucket OR inboundMessageId + textHash)
+ * CRITICAL FIX D: Compute unified idempotency key
+ * For auto-reply jobs (triggerProviderMessageId exists):
+ * - Format: hash(conversationId + inboundProviderMessageId + channel + purpose=auto_reply)
+ * - This matches the key used in OutboundJob
  * 
  * For manual/test/reminder sends (triggerProviderMessageId is null):
+ * - Format: hash(conversationId + replyType + normalizedQuestionKey + dayBucket + textHash)
  * - Includes text hash to prevent same message sent twice in same day
- * - Uses dayBucket for day-based deduplication
- * 
- * For webhook-driven replies (triggerProviderMessageId exists):
- * - Uses inboundMessageId for stronger correlation
- * - Text hash still included for safety
  */
 function computeOutboundDedupeKey(options: OutboundSendOptions): string {
-  const { conversationId, replyType, lastQuestionKey, triggerProviderMessageId, text } = options
-  // Normalize text before hashing
-  const normalizedText = normalizeOutboundText(text)
+  const { conversationId, replyType, lastQuestionKey, triggerProviderMessageId, text, provider } = options
   
-  // Normalize question key (remove whitespace, lowercase)
+  // CRITICAL FIX D: For auto-reply (triggerProviderMessageId exists), use unified key format
+  if (triggerProviderMessageId) {
+    const keyParts = [
+      `conv:${conversationId}`,
+      `inbound:${triggerProviderMessageId}`,
+      `channel:${provider}`,
+      `purpose:auto_reply`,
+    ]
+    const keyString = keyParts.join('|')
+    return createHash('sha256').update(keyString).digest('hex')
+  }
+  
+  // For manual sends, use existing logic with text hash
+  const normalizedText = normalizeOutboundText(text)
   const normalizedQuestionKey = lastQuestionKey 
     ? lastQuestionKey.trim().toLowerCase().replace(/\s+/g, '_')
     : 'none'
-  
-  // Normalize text for hash (trim, lowercase, remove extra whitespace)
   const textForHash = normalizedText.toLowerCase().replace(/\s+/g, ' ')
-  const textHash = createHash('sha256').update(textForHash).digest('hex').substring(0, 16) // First 16 chars for shorter key
+  const textHash = createHash('sha256').update(textForHash).digest('hex').substring(0, 16)
+  const dayBucket = new Date().toISOString().split('T')[0]
   
-  // Use day bucket (YYYY-MM-DD) for day-based deduplication, or inboundMessageId if available
-  const dayBucket = new Date().toISOString().split('T')[0] // YYYY-MM-DD
-  const dedupeIdentifier = triggerProviderMessageId || dayBucket
-  
-  // Build key components
-  // CRITICAL: Include text hash for manual sends to prevent same message sent twice in same day
   const keyParts = [
     `conv:${conversationId}`,
     `type:${replyType || 'unknown'}`,
     `q:${normalizedQuestionKey}`,
-    `id:${dedupeIdentifier}`,
-    `text:${textHash}`, // Include text hash for manual sends
+    `id:${dayBucket}`,
+    `text:${textHash}`,
   ]
   
   const keyString = keyParts.join('|')
-  
-  // Hash for consistent length and security
   return createHash('sha256').update(keyString).digest('hex')
 }
 
@@ -236,6 +236,33 @@ export async function sendOutboundWithIdempotency(
   
   // Step 1: Compute dedupe key (using normalized text, greeting applied if needed)
   const outboundDedupeKey = computeOutboundDedupeKey({ ...options, text })
+  
+  // CRITICAL FIX D: For auto-reply (triggerProviderMessageId exists), check OutboundJob idempotencyKey
+  if (triggerProviderMessageId) {
+    // Compute unified idempotency key (same format as OutboundJob)
+    const jobIdempotencyKeyParts = [
+      `conv:${conversationId}`,
+      `inbound:${triggerProviderMessageId}`,
+      `channel:${provider}`,
+      `purpose:auto_reply`,
+    ]
+    const jobIdempotencyKey = createHash('sha256').update(jobIdempotencyKeyParts.join('|')).digest('hex')
+    
+    // Check if OutboundJob with this idempotencyKey already exists and is SENT
+    const existingJob = await prisma.outboundJob.findUnique({
+      where: { idempotencyKey: jobIdempotencyKey },
+      select: { id: true, status: true },
+    })
+    
+    if (existingJob && existingJob.status === 'SENT') {
+      console.log(`[OUTBOUND-IDEMPOTENCY] OutboundJob ${existingJob.id} already SENT for idempotencyKey: ${jobIdempotencyKey.substring(0, 16)}...`)
+      return {
+        success: false,
+        wasDuplicate: true,
+        error: `OutboundJob already SENT for this inbound message`,
+      }
+    }
+  }
   
   // Step 2: Try to insert OutboundMessageLog with status="PENDING"
   // This uses the UNIQUE constraint on outboundDedupeKey to prevent duplicates

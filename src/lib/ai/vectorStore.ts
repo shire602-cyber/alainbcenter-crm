@@ -15,6 +15,10 @@ interface VectorDocument {
     type: string
     documentId: number
     createdAt: string
+    language?: string | null // CRITICAL FIX E: Language tag
+    stage?: string | null // CRITICAL FIX E: Stage tag
+    serviceKey?: string | null // CRITICAL FIX E: Service key
+    serviceTypeId?: number | null // CRITICAL FIX E: Service type ID
   }
   embedding?: number[]
 }
@@ -236,7 +240,7 @@ export async function indexTrainingDocument(documentId: number): Promise<void> {
       return // Skip indexing but don't throw error
     }
 
-    // Store in vector store
+    // CRITICAL FIX E: Store in vector store with language/stage/serviceKey metadata
     await vectorStore.addDocument(
       {
         id: `doc_${documentId}`,
@@ -246,6 +250,10 @@ export async function indexTrainingDocument(documentId: number): Promise<void> {
           type: document.type,
           documentId: document.id,
           createdAt: document.createdAt.toISOString(),
+          language: document.language || null, // CRITICAL FIX E: Store language tag
+          stage: document.stage || null, // CRITICAL FIX E: Store stage tag
+          serviceKey: document.serviceKey || null, // CRITICAL FIX E: Store serviceKey
+          serviceTypeId: document.serviceTypeId || null, // CRITICAL FIX E: Store serviceTypeId
         },
       },
       embedding
@@ -268,13 +276,16 @@ export async function searchTrainingDocuments(
     similarityThreshold?: number
     type?: string
     trainingDocumentIds?: number[]
+    language?: string | null // CRITICAL FIX E: Filter by language
+    stage?: string | null // CRITICAL FIX E: Filter by stage
+    serviceKey?: string | null // CRITICAL FIX E: Filter by serviceKey
   } = {}
 ): Promise<{
   documents: VectorDocument[]
   scores: number[]
   hasRelevantTraining: boolean
 }> {
-  const { topK = 5, similarityThreshold = 0.7, type, trainingDocumentIds } = options
+  const { topK = 5, similarityThreshold = 0.7, type, trainingDocumentIds, language, stage, serviceKey } = options
 
   try {
     // Generate query embedding
@@ -290,8 +301,16 @@ export async function searchTrainingDocuments(
       }
     }
 
-    // Search vector store (pass trainingDocumentIds to filter)
-    const results = await vectorStore.search(queryEmbedding, topK, similarityThreshold, trainingDocumentIds)
+    // CRITICAL FIX E: Search vector store with language/stage/serviceKey filters
+    const results = await vectorStore.search(
+      queryEmbedding, 
+      topK, 
+      similarityThreshold, 
+      trainingDocumentIds,
+      language,
+      stage,
+      serviceKey
+    )
 
     // Filter by type if specified
     let filteredDocs = results.documents

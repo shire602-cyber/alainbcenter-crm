@@ -691,6 +691,10 @@ model AITrainingDocument {
   title           String
   content         String // Long text content for AI training
   type            String // guidance | examples | policies | scripts
+  language        String? // 'en' | 'ar' | null (null = all languages)
+  stage           String? // 'GREETING' | 'QUALIFICATION' | 'PRICING' | 'OBJECTIONS' | 'CLOSING' | 'POLICIES' | 'GENERAL' | null (null = all stages)
+  serviceTypeId   Int? // Optional: link to specific service type
+  serviceKey      String? // Optional: service key (e.g., 'FREELANCE_VISA', 'BUSINESS_SETUP') for filtering
   createdByUserId Int
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -699,6 +703,9 @@ model AITrainingDocument {
 
   @@index([type])
   @@index([createdAt])
+  @@index([language, stage])
+  @@index([serviceKey])
+  @@index([serviceTypeId])
 }
 
 model StaffSettings {
@@ -876,6 +883,7 @@ model OutboundJob {
   inboundMessage           Message?     @relation("OutboundJobInboundMessage", fields: [inboundMessageId], references: [id])
   inboundMessageId         Int
   inboundProviderMessageId String? // WhatsApp message ID for idempotency
+  idempotencyKey           String?      @unique // Unified idempotency key: hash(conversationId + inboundProviderMessageId + channel + purpose=auto_reply)
   status                   String       @default("PENDING") // PENDING | GENERATING | READY_TO_SEND | SENT | FAILED
   runAt                    DateTime     @default(now()) // When to run (for retries with backoff)
   attempts                 Int          @default(0) // Number of attempts
@@ -896,4 +904,5 @@ model OutboundJob {
   @@index([requestId])
   @@index([claimedAt]) // For stale job recovery
   @@index([status, claimedAt]) // For finding stale jobs
+  @@index([idempotencyKey]) // For idempotency lookups
 }

@@ -247,6 +247,61 @@ export async function generateAIReply(
       throw new Error(`Lead not found for conversation ${input.conversationId}`)
     }
     
+    // CRITICAL FIX A: Extract fields from inbound message BEFORE gating
+    // This ensures we don't ask for information that was just provided
+    const stateExtractedFields = extractFieldsToState(input.inboundText, conversationState)
+    const updatedKnownFields = {
+      ...conversationState.knownFields,
+      ...stateExtractedFields,
+    }
+    
+    // Detect service if not already known
+    if (!updatedKnownFields.service) {
+      const { extractService } = require('../inbound/fieldExtractors')
+      const detectedService = extractService(input.inboundText)
+      if (detectedService) {
+        updatedKnownFields.service = detectedService
+      }
+    }
+    
+    // Detect "cheapest" keyword
+    const lowerText = input.inboundText.toLowerCase()
+    if (lowerText.includes('cheapest') || lowerText.includes('cheap')) {
+      updatedKnownFields.priceSensitive = true
+      updatedKnownFields.recommendedOffer = 'Professional Mainland License + Investor Visa for AED 12,999'
+    }
+    
+    // Detect "marketing license"
+    if (lowerText.includes('marketing license') || lowerText.includes('marketing')) {
+      updatedKnownFields.businessActivity = 'Marketing License'
+      updatedKnownFields.customServiceLabel = 'Marketing License'
+    }
+    
+    // Write extracted fields to DB immediately (before gating)
+    if (Object.keys(stateExtractedFields).length > 0 || updatedKnownFields.service !== conversationState.knownFields.service) {
+      await updateConversationState(
+        input.conversationId,
+        {
+          knownFields: updatedKnownFields,
+        },
+        expectedStateVersion
+      )
+      // Reload state to get updated version
+      const reloadedState = await loadConversationState(input.conversationId)
+      conversationState.knownFields = reloadedState.knownFields
+      expectedStateVersion = reloadedState.stateVersion || expectedStateVersion
+    }
+    
+    // Structured log: extracted fields
+    console.log(`[ORCH] extracted fields`, JSON.stringify({
+      conversationId: input.conversationId,
+      extractedKeys: Object.keys(stateExtractedFields),
+      extractedValues: Object.fromEntries(
+        Object.entries(stateExtractedFields).map(([k, v]) => [k, typeof v === 'string' ? v.substring(0, 50) : v])
+      ),
+      updatedKnownFieldsKeys: Object.keys(updatedKnownFields),
+    }))
+    
     // Step 1.5: Check question budget (max 6 questions)
     if (conversationState.questionsAskedCount >= 6) {
       console.log(`[ORCHESTRATOR] Question budget reached (${conversationState.questionsAskedCount} questions) - triggering handoff`)
@@ -296,23 +351,19 @@ Please share your email for the quotation and the best time for our consultant t
     }
     
     // Step 1.6: Check for qualification complete (name + service + nationality)
+    // CRITICAL FIX B: Use state flag only, no substring matching
     const hasCoreQualification = 
-      conversationState.knownFields.name && 
-      conversationState.knownFields.service && 
-      conversationState.knownFields.nationality
+      updatedKnownFields.name && 
+      updatedKnownFields.service && 
+      updatedKnownFields.nationality
     
-    if (hasCoreQualification && !conversationState.knownFields.qualificationConfirmedAt) {
-      // Check if we already sent confirmation
-      const confirmationSent = conversation.messages.some(m => 
-        m.direction === 'OUTBOUND' && 
-        (m.body || '').includes('Perfect') && 
-        (m.body || '').includes('Noted:')
-      )
-      
-      if (!confirmationSent) {
-        const name = conversationState.knownFields.name || lead.contact.fullName || 'there'
-        const service = conversationState.knownFields.service || lead.serviceType?.name || 'service'
-        const nationality = conversationState.knownFields.nationality || lead.contact.nationality || 'nationality'
+    if (hasCoreQualification && !updatedKnownFields.qualificationConfirmedAt) {
+      // CRITICAL FIX B: Use qualificationConfirmedAt flag only (no substring check)
+      // If flag exists, confirmation already sent
+      if (!updatedKnownFields.qualificationConfirmedAt) {
+        const name = updatedKnownFields.name || lead.contact.fullName || 'there'
+        const service = updatedKnownFields.service || lead.serviceType?.name || 'service'
+        const nationality = updatedKnownFields.nationality || lead.contact.nationality || 'nationality'
         
         // Confirmation message (greeting will be added globally)
         const confirmationMessage = `Perfect, ${name}! ✅ I've noted:
@@ -322,14 +373,15 @@ Please share your email for the quotation and the best time for our consultant t
 Please share your email so I can send you the quotation,
 and let me know the best time for our consultant to call you.`
         
-        // Mark confirmation as sent
+        // Mark confirmation as sent using state flag
+        const confirmedFields = {
+          ...updatedKnownFields,
+          qualificationConfirmedAt: new Date().toISOString(),
+        }
         await updateConversationState(
           input.conversationId,
           {
-            knownFields: {
-              ...conversationState.knownFields,
-              qualificationConfirmedAt: new Date().toISOString(),
-            },
+            knownFields: confirmedFields,
           },
           expectedStateVersion
         )
@@ -337,9 +389,9 @@ and let me know the best time for our consultant to call you.`
         return {
           replyText: confirmationMessage,
           extractedFields: {
-            name: conversationState.knownFields.name,
-            service: conversationState.knownFields.service,
-            nationality: conversationState.knownFields.nationality,
+            name: updatedKnownFields.name,
+            service: updatedKnownFields.service,
+            nationality: updatedKnownFields.nationality,
           },
           confidence: 100,
           nextStepKey: 'QUALIFICATION_COMPLETE',
@@ -350,16 +402,26 @@ and let me know the best time for our consultant to call you.`
     }
     
     // Step 1.7: STAGE 1 QUALIFICATION GATE
-    // 2) FIX CONVERSATION UX ORDER
+    // CRITICAL FIX A: Use updatedKnownFields (after extraction) for gate check
     // Priority order: 1) service, 2) name, 3) nationality
-    // First question should be ONLY: "How can I help you today?" (service)
-    // After user answers with service intent: Ask for name, then nationality
-    // Remove any remaining path that asks name before service, unless the user already clearly stated service in their first message.
-    
     const hasCoreQualificationCheck = 
-      conversationState.knownFields.name && 
-      conversationState.knownFields.service && 
-      conversationState.knownFields.nationality
+      updatedKnownFields.name && 
+      updatedKnownFields.service && 
+      updatedKnownFields.nationality
+    
+    // Structured log: gate decision
+    const missingFields: string[] = []
+    if (!updatedKnownFields.service) missingFields.push('service')
+    if (!updatedKnownFields.name) missingFields.push('name')
+    if (!updatedKnownFields.nationality) missingFields.push('nationality')
+    
+    console.log(`[ORCH] gate decision`, JSON.stringify({
+      conversationId: input.conversationId,
+      missing: missingFields,
+      asked: conversationState.lastQuestionKey,
+      questionsAskedCount: conversationState.questionsAskedCount,
+      hasCoreQualification: hasCoreQualificationCheck,
+    }))
     
     // If Stage 1 not complete, enforce strict gate with NEW priority order
     if (!hasCoreQualificationCheck) {
@@ -367,7 +429,7 @@ and let me know the best time for our consultant to call you.`
       let nextCoreQuestion: { questionKey: string; question: string } | null = null
       
       // 1) SERVICE FIRST (unless user already stated service in first message)
-      if (!conversationState.knownFields.service) {
+      if (!updatedKnownFields.service) {
         // First question: "How can I help you today?" (no service list, no examples)
         nextCoreQuestion = {
           questionKey: 'ASK_SERVICE',
@@ -375,14 +437,14 @@ and let me know the best time for our consultant to call you.`
         }
       } 
       // 2) NAME SECOND (only after service is known)
-      else if (!conversationState.knownFields.name) {
+      else if (!updatedKnownFields.name) {
         nextCoreQuestion = {
           questionKey: 'ASK_NAME',
           question: 'May I know your full name, please?',
         }
       } 
       // 3) NATIONALITY THIRD (only after service and name are known)
-      else if (!conversationState.knownFields.nationality) {
+      else if (!updatedKnownFields.nationality) {
         nextCoreQuestion = {
           questionKey: 'ASK_NATIONALITY',
           question: 'What is your nationality?',
@@ -406,7 +468,7 @@ and let me know the best time for our consultant to call you.`
             {
               questionsAskedCount: newQuestionsCount,
               lastQuestionKey: nextCoreQuestion.questionKey,
-              knownFields: conversationState.knownFields,
+              knownFields: updatedKnownFields, // Use updated fields
             },
             expectedStateVersion
           )
@@ -423,36 +485,8 @@ and let me know the best time for our consultant to call you.`
       }
     }
     
-    // Step 1.8: Extract fields from inbound message and update state
-    const stateExtractedFields = extractFieldsToState(input.inboundText, conversationState)
-    const updatedKnownFields = {
-      ...conversationState.knownFields,
-      ...stateExtractedFields,
-    }
-    
-    // Detect service if not already known
-    if (!updatedKnownFields.service) {
-      const { extractService } = require('../inbound/fieldExtractors')
-      const detectedService = extractService(input.inboundText)
-      if (detectedService) {
-        updatedKnownFields.service = detectedService
-      }
-    }
-    
-    // Detect "cheapest" keyword
-    const lowerText = input.inboundText.toLowerCase()
-    if (lowerText.includes('cheapest') || lowerText.includes('cheap')) {
-      updatedKnownFields.priceSensitive = true
-      updatedKnownFields.recommendedOffer = 'Professional Mainland License + Investor Visa for AED 12,999'
-    }
-    
-    // Detect "marketing license"
-    if (lowerText.includes('marketing license') || lowerText.includes('marketing')) {
-      updatedKnownFields.businessActivity = 'Marketing License'
-      updatedKnownFields.customServiceLabel = 'Marketing License'
-    }
-    
     // Step 2: Check if this is first message (CRITICAL: First message bypasses retriever)
+    // Note: Field extraction already done above (Step 1.4)
     const outboundCount = conversation.messages.filter(m => m.direction === 'OUTBOUND').length
     const isFirstMessage = outboundCount === 0
     
@@ -482,94 +516,90 @@ and let me know the best time for our consultant to call you.`
         memory,
       })
       
-      if (ruleEngineResult.reply && !ruleEngineResult.needsHuman) {
-        console.log(`[ORCHESTRATOR] Rule engine generated reply (deterministic)`)
+      // CRITICAL FIX C: Handle structured rule engine output
+      if (ruleEngineResult.kind === 'QUESTION') {
+        console.log(`[ORCHESTRATOR] Rule engine generated QUESTION: ${ruleEngineResult.questionKey}`)
         
-        // Step 3.1: HARD BAN - Check for banned question keys in reply
-        const replyLower = ruleEngineResult.reply.toLowerCase()
-        let isBanned = false
-        for (const bannedKey of BANNED_QUESTION_KEYS) {
-          if (replyLower.includes(bannedKey.toLowerCase()) || 
-              replyLower.includes('new or renew') || 
-              replyLower.includes('company name')) {
-            console.error(`[ORCHESTRATOR] BANNED QUESTION DETECTED: ${bannedKey} - blocking reply`)
-            isBanned = true
-            break
-          }
-        }
-        
-        // Step 3.2: Check if lastQuestionKey is banned
-        const currentQuestionKey = conversationState.lastQuestionKey
-        if (currentQuestionKey && BANNED_QUESTION_KEYS.has(currentQuestionKey)) {
-          console.error(`[ORCHESTRATOR] BANNED QUESTION KEY: ${currentQuestionKey} - skipping`)
-          isBanned = true
-        }
-        
-        // Step 3.3: Check no-repeat guard (prevent asking same questionKey in last 3 outbound)
-        if (!isBanned && currentQuestionKey) {
-          const wasAsked = wasQuestionAsked(conversationState, currentQuestionKey)
-          if (wasAsked) {
-            console.log(`[ORCHESTRATOR] Question ${currentQuestionKey} was asked recently - skipping`)
-            isBanned = true
-          }
-        }
-        
-        // If banned, skip this reply and fall through to LLM
-        if (isBanned) {
-          console.log(`[ORCHESTRATOR] Rule engine reply blocked - falling back to LLM`)
+        // Step 3.1: HARD BAN - Check if questionKey is banned (NOT substring matching)
+        if (BANNED_QUESTION_KEYS.has(ruleEngineResult.questionKey)) {
+          console.error(`[ORCHESTRATOR] BANNED QUESTION KEY: ${ruleEngineResult.questionKey} - blocking`)
+          // Fall through to LLM or next allowed question
         } else {
-          // Validate with strictQualification
+          // Step 3.2: Check no-repeat guard (prevent asking same questionKey in last 3 outbound)
+          const wasAsked = wasQuestionAsked(conversationState, ruleEngineResult.questionKey)
+          if (wasAsked) {
+            console.log(`[ORCHESTRATOR] Question ${ruleEngineResult.questionKey} was asked recently - skipping`)
+            // Fall through to LLM
+          } else {
+            // Record question asked
+            const { recordQuestionAsked } = await import('../conversation/flowState')
+            await recordQuestionAsked(input.conversationId, ruleEngineResult.questionKey, `WAIT_${ruleEngineResult.questionKey}`)
+            
+            // Increment question count
+            const newQuestionsCount = conversationState.questionsAskedCount + 1
+            await updateConversationState(
+              input.conversationId,
+              {
+                questionsAskedCount: newQuestionsCount,
+                lastQuestionKey: ruleEngineResult.questionKey,
+                knownFields: updatedKnownFields,
+              },
+              expectedStateVersion
+            )
+            
+            // Validate with strictQualification
+            const validation = await validateQualificationRules(
+              input.conversationId,
+              ruleEngineResult.text
+            )
+            
+            if (validation.isValid && validation.sanitizedReply) {
+              return {
+                replyText: validation.sanitizedReply,
+                extractedFields: extractFieldsFromReply(ruleEngineResult.text, input.inboundText),
+                confidence: 90, // High confidence for rule engine
+                nextStepKey: ruleEngineResult.questionKey,
+                tasksToCreate: [],
+                shouldEscalate: false,
+              }
+            }
+          }
+        }
+      } else if (ruleEngineResult.kind === 'REPLY' && !ruleEngineResult.needsHuman) {
+        console.log(`[ORCHESTRATOR] Rule engine generated REPLY (deterministic)`)
+        
+        // CRITICAL FIX C: For REPLY kind, banned question keys don't apply (only for QUESTION kind)
+        // Validate with strictQualification
         const validation = await validateQualificationRules(
           input.conversationId,
-          ruleEngineResult.reply
+          ruleEngineResult.text
         )
         
-          if (validation.isValid && validation.sanitizedReply) {
-            // Reload state to check if lastQuestionKey was updated by flow state system
-            const stateAfterRuleEngine = await loadConversationState(input.conversationId)
-            const lastQuestionKeyChanged = stateAfterRuleEngine.lastQuestionKey !== conversationState.lastQuestionKey
-            const hasQuestionKey = stateAfterRuleEngine.lastQuestionKey && 
-              (stateAfterRuleEngine.lastQuestionKey.startsWith('BS_Q') || 
-               stateAfterRuleEngine.lastQuestionKey.startsWith('ASK_') ||
-               stateAfterRuleEngine.lastQuestionKey.startsWith('Q'))
-            
-            // If lastQuestionKey changed and indicates a question was asked, increment count
-            if (lastQuestionKeyChanged && hasQuestionKey && stateAfterRuleEngine.lastQuestionKey) {
-              // Check if question key is banned
-              if (BANNED_QUESTION_KEYS.has(stateAfterRuleEngine.lastQuestionKey)) {
-                console.error(`[ORCHESTRATOR] BANNED QUESTION KEY in state: ${stateAfterRuleEngine.lastQuestionKey} - not incrementing count`)
-              } else {
-                const newQuestionsCount = conversationState.questionsAskedCount + 1
-                await updateConversationState(
-                  input.conversationId,
-                  {
-                    questionsAskedCount: newQuestionsCount,
-                    knownFields: updatedKnownFields,
-                  },
-                  stateAfterRuleEngine.stateVersion
-                )
-              }
-            } else {
-              // No question asked - just update known fields
-              await updateConversationState(
-                input.conversationId,
-                {
-                  knownFields: updatedKnownFields,
-                },
-                stateAfterRuleEngine.stateVersion
-              )
-            }
-            
-            return {
-              replyText: validation.sanitizedReply,
-              extractedFields: extractFieldsFromReply(ruleEngineResult.reply, input.inboundText),
-              confidence: 90, // High confidence for rule engine
-              nextStepKey: stateAfterRuleEngine.lastQuestionKey,
-              tasksToCreate: [],
-              shouldEscalate: false,
-            }
+        if (validation.isValid && validation.sanitizedReply) {
+          // Update known fields
+          await updateConversationState(
+            input.conversationId,
+            {
+              knownFields: updatedKnownFields,
+            },
+            expectedStateVersion
+          )
+          
+          return {
+            replyText: validation.sanitizedReply,
+            extractedFields: extractFieldsFromReply(ruleEngineResult.text, input.inboundText),
+            confidence: 90, // High confidence for rule engine
+            nextStepKey: undefined,
+            tasksToCreate: [],
+            shouldEscalate: false,
           }
         }
+      } else if (ruleEngineResult.kind === 'REPLY' && ruleEngineResult.needsHuman) {
+        console.log(`[ORCHESTRATOR] Rule engine escalated to human: ${ruleEngineResult.handoverReason}`)
+        // Fall through to LLM or return escalation
+      } else if (ruleEngineResult.kind === 'NO_MATCH') {
+        console.log(`[ORCHESTRATOR] Rule engine no match - falling back to LLM`)
+        // Fall through to LLM
       }
     } catch (ruleEngineError: any) {
       console.warn(`[ORCHESTRATOR] Rule engine failed, falling back to LLM:`, ruleEngineError.message)

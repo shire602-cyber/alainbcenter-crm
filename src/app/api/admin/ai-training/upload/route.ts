@@ -62,6 +62,10 @@ export async function POST(req: NextRequest) {
     const file = formData.get('file') as File | null
     const title = formData.get('title') as string | null
     const type = formData.get('type') as string | null
+    const language = formData.get('language') as string | null // CRITICAL FIX E: Get language tag
+    const stage = formData.get('stage') as string | null // CRITICAL FIX E: Get stage tag
+    const serviceTypeId = formData.get('serviceTypeId') as string | null // CRITICAL FIX E: Get serviceTypeId
+    const serviceKey = formData.get('serviceKey') as string | null // CRITICAL FIX E: Get serviceKey
 
     console.log('Upload request received:', {
       hasFile: !!file,
@@ -193,11 +197,32 @@ export async function POST(req: NextRequest) {
         userId: user.id,
       })
       
+      // CRITICAL FIX E: Validate stage enum
+      const validStages = ['GREETING', 'QUALIFICATION', 'PRICING', 'OBJECTIONS', 'CLOSING', 'POLICIES', 'GENERAL']
+      if (stage && !validStages.includes(stage)) {
+        return NextResponse.json(
+          { ok: false, error: `Invalid stage. Must be one of: ${validStages.join(', ')}` },
+          { status: 400 }
+        )
+      }
+
+      // CRITICAL FIX E: Validate language
+      if (language && !['en', 'ar'].includes(language)) {
+        return NextResponse.json(
+          { ok: false, error: 'Invalid language. Must be "en" or "ar"' },
+          { status: 400 }
+        )
+      }
+
       document = await prisma.aITrainingDocument.create({
         data: {
           title: title.trim(),
           content: content.trim(),
           type,
+          language: language || null, // CRITICAL FIX E: Store language tag
+          stage: stage || null, // CRITICAL FIX E: Store stage tag
+          serviceTypeId: serviceTypeId ? parseInt(serviceTypeId) : null, // CRITICAL FIX E: Store serviceTypeId
+          serviceKey: serviceKey || null, // CRITICAL FIX E: Store serviceKey
           createdByUserId: user.id,
         },
       })
