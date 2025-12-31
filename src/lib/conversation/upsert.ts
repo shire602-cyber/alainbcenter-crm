@@ -61,6 +61,7 @@ export async function upsertConversation(
   }
   
   // Try to find existing conversation by (contactId, channel, externalThreadId)
+  // CRITICAL FIX: Include soft-deleted conversations so we can restore them
   const existing = await prisma.conversation.findFirst({
     where: {
       contactId: input.contactId,
@@ -70,18 +71,28 @@ export async function upsertConversation(
   })
   
   if (existing) {
+    // CRITICAL FIX: Restore soft-deleted conversations when new messages arrive
+    const updateData: any = {
+      leadId: input.leadId ?? existing.leadId,
+      lastMessageAt: timestamp,
+      lastInboundAt: timestamp,
+      status: input.status || existing.status || 'open',
+      channel: channelLower, // Ensure normalized
+      externalThreadId: effectiveThreadId, // Ensure thread ID is set
+      language: input.language ?? existing.language, // CRITICAL FIX 4: Update language if provided
+    }
+    
+    // Restore soft-deleted conversation (clear deletedAt)
+    if ((existing as any).deletedAt) {
+      updateData.deletedAt = null
+      updateData.status = 'open'
+      console.log(`♻️ [UPSERT-CONV] Restoring soft-deleted conversation ${existing.id} (new message received)`)
+    }
+    
     // Update existing conversation
     const updated = await prisma.conversation.update({
       where: { id: existing.id },
-      data: {
-        leadId: input.leadId ?? existing.leadId,
-        lastMessageAt: timestamp,
-        lastInboundAt: timestamp,
-        status: input.status || existing.status || 'open',
-        channel: channelLower, // Ensure normalized
-        externalThreadId: effectiveThreadId, // Ensure thread ID is set
-        language: input.language ?? existing.language, // CRITICAL FIX 4: Update language if provided
-      },
+      data: updateData,
     })
     
     // DIAGNOSTIC LOG: updated existing conversation

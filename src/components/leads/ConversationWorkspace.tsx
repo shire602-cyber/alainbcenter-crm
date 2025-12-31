@@ -119,21 +119,29 @@ function groupMessages(messages: Message[]): MessageGroup[] {
 }
 
 // PHASE 5C: Media rendering components
-function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttachment; isOutbound: boolean }) {
+function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: MessageAttachment; isOutbound: boolean; messageId?: number }) {
   const [imageError, setImageError] = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
+  
+  // CRITICAL FIX: Ensure URLs use proxy for WhatsApp media IDs
+  const getMediaUrl = (url: string) => {
+    if (url.startsWith('http') || url.startsWith('/')) return url
+    return `/api/whatsapp/media/${encodeURIComponent(url)}${messageId ? `?messageId=${messageId}` : ''}`
+  }
 
   if (attachment.type === 'image') {
+    const imageUrl = getMediaUrl(attachment.url)
     return (
       <>
         <div className="relative group">
           <img
-            src={attachment.url}
+            src={imageUrl}
             alt={attachment.filename || 'Image'}
             className={cn(
               "rounded-lg max-w-[300px] max-h-[300px] object-cover cursor-pointer",
               "hover:opacity-90 transition-opacity"
             )}
+            crossOrigin="anonymous"
             onError={() => setImageError(true)}
             onClick={() => setShowLightbox(true)}
           />
@@ -154,9 +162,10 @@ function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttach
           >
             <div className="relative max-w-4xl max-h-[90vh]">
               <img
-                src={attachment.url}
+                src={imageUrl}
                 alt={attachment.filename || 'Image'}
                 className="max-w-full max-h-[90vh] object-contain rounded-lg"
+                crossOrigin="anonymous"
               />
               <Button
                 variant="ghost"
@@ -175,14 +184,7 @@ function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttach
 
   if (attachment.type === 'audio') {
     // CRITICAL FIX: Handle WhatsApp media URLs - use proxy endpoint if needed
-    let audioUrl = attachment.url
-    if (attachment.url && !attachment.url.startsWith('http') && !attachment.url.startsWith('/')) {
-      // WhatsApp media ID - use proxy
-      audioUrl = `/api/whatsapp/media/${encodeURIComponent(attachment.url)}`
-    } else if (attachment.url && (attachment.url.includes('wamid') || attachment.url.includes('media_id'))) {
-      // WhatsApp media ID in URL - use proxy
-      audioUrl = `/api/whatsapp/media/${encodeURIComponent(attachment.url)}`
-    }
+    const audioUrl = getMediaUrl(attachment.url)
     
     return (
       <div className={cn(
@@ -222,9 +224,10 @@ function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttach
         : `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
       : null
 
+    const docUrl = getMediaUrl(attachment.url)
     return (
       <a
-        href={attachment.url}
+        href={docUrl}
         download={attachment.filename}
         className={cn(
           "flex items-center gap-3 p-3 rounded-lg border transition-colors",
@@ -269,12 +272,14 @@ function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttach
   }
 
   if (attachment.type === 'video') {
+    const videoUrl = getMediaUrl(attachment.url)
     return (
       <div className="relative">
         <video
-          src={attachment.url}
+          src={videoUrl}
           controls
           className="rounded-lg max-w-[300px] max-h-[300px]"
+          crossOrigin="anonymous"
         >
           Your browser does not support video playback.
         </video>
@@ -304,11 +309,14 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
   
   // CRITICAL FIX: If message has mediaUrl but no attachments, create a virtual attachment
   // Ensure audio messages are properly detected BEFORE creating virtual attachment
+  // CRITICAL: Use proxy endpoint for WhatsApp media IDs
   const mediaAttachments = message.mediaUrl && attachments.length === 0
     ? [{
         id: message.id,
         type: isAudio ? 'audio' : (message.type || (message.mediaMimeType?.startsWith('image/') ? 'image' : message.mediaMimeType?.startsWith('video/') ? 'video' : 'document')),
-        url: message.mediaUrl,
+        url: (message.mediaUrl.startsWith('http') || message.mediaUrl.startsWith('/')) 
+          ? message.mediaUrl 
+          : `/api/whatsapp/media/${encodeURIComponent(message.mediaUrl)}?messageId=${message.id}`, // Use proxy for WhatsApp media IDs
         mimeType: message.mediaMimeType,
         filename: null,
         sizeBytes: null,
@@ -345,7 +353,7 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
         {hasMedia && mediaAttachments.length > 0 && (
           <div className="space-y-2 mb-2">
             {mediaAttachments.map((att) => (
-              <MediaAttachment key={att.id} attachment={att} isOutbound={isOutbound} />
+              <MediaAttachment key={att.id} attachment={att} isOutbound={isOutbound} messageId={message.id} />
             ))}
           </div>
         )}

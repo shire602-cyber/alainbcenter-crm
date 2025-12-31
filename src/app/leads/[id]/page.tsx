@@ -40,6 +40,7 @@ export default function LeadDetailPage({
   const [fallbackInfo, setFallbackInfo] = useState<{ conversationId?: string | null; contactId?: string | null } | null>(null)
   const router = useRouter()
 
+  // CRITICAL: All hooks must be called before any conditional returns
   useEffect(() => {
     async function init() {
       const resolved = await params
@@ -54,12 +55,13 @@ export default function LeadDetailPage({
     init()
   }, [params, router])
 
-  // Smart polling for lead page (15s interval)
+  // Smart polling for lead page (15s interval) - ALWAYS call hook
   useSmartPolling({
     fetcher: () => {
       if (leadId) {
         return loadLead(leadId)
       }
+      return Promise.resolve() // Return resolved promise if no leadId
     },
     intervalMs: 15000, // 15s polling for lead detail
     enabled: !!leadId,
