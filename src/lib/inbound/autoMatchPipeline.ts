@@ -208,6 +208,7 @@ export async function handleInboundMessageAutoMatch(
     text: input.text,
     providerMessageId: input.providerMessageId,
     timestamp: input.timestamp || new Date(),
+    metadata: input.metadata, // CRITICAL FIX 3: Pass metadata for audio detection
   })
 
   // CRITICAL FIX: Update conversation unreadCount and lastMessageAt after message is created
