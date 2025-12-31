@@ -224,9 +224,10 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
 }
 
 // PHASE 5E: Quote Cadence component
-function QuoteCadence({ leadId }: { leadId: number }) {
+// NOTE: This component is only rendered when quotationSentAt exists in parent
+function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date }) {
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const [quoteFollowup, setQuoteFollowup] = useState<{ task: { id: number; title: string; dueAt: Date; cadenceDays: number } | null; daysUntil: number | null } | null>(null)
-  const [quotationSentAt, setQuotationSentAt] = useState<Date | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
@@ -234,15 +235,6 @@ function QuoteCadence({ leadId }: { leadId: number }) {
 
     async function loadQuoteCadence() {
       try {
-        // Load lead to check quotationSentAt
-        const leadRes = await fetch(`/api/leads/${leadId}`)
-        if (leadRes.ok) {
-          const leadData = await leadRes.json()
-          if (mounted && leadData.quotationSentAt) {
-            setQuotationSentAt(new Date(leadData.quotationSentAt))
-          }
-        }
-
         // Load next quote follow-up
         const { getNextQuoteFollowup } = await import('@/lib/followups/quoteFollowups')
         const followup = await getNextQuoteFollowup(leadId)
@@ -265,13 +257,13 @@ function QuoteCadence({ leadId }: { leadId: number }) {
     }
   }, [leadId])
 
-  // Always render hooks in same order - early return after all hooks
+  // NOW we can do conditional returns - all hooks have been called
   if (loading) {
-    return null
-  }
-
-  if (!quotationSentAt) {
-    return null
+    return (
+      <Card className="card-premium p-4">
+        <div className="h-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+      </Card>
+    )
   }
 
   if (!quoteFollowup || !quoteFollowup.task) {
@@ -600,11 +592,13 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
           <ExpiryTimeline lead={lead} />
         </div>
 
-        {/* PHASE 5E: Quote Cadence */}
-        <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
-          <QuoteCadence leadId={lead.id} />
-        </div>
+        {/* PHASE 5E: Quote Cadence - Only show if quotation was sent */}
+        {(lead as any).quotationSentAt && (
+          <div>
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
+            <QuoteCadence leadId={lead.id} quotationSentAt={new Date((lead as any).quotationSentAt)} />
+          </div>
+        )}
 
         {/* Sponsor Search */}
         <div>
