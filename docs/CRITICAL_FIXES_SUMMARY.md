@@ -1,169 +1,225 @@
-# Critical Fixes Summary - Single AI Brain + Deduplication
+# Critical Production Fixes - Summary
 
-## Overview
-This document summarizes the critical fixes implemented to:
-1. Create a single source of truth for AI replies (orchestrator)
-2. Fix duplicate conversations
-3. Ensure lead auto-fill works reliably
-4. Stop duplicate outbound messages
-5. Enforce max 5 questions for business setup
+## Date: 2025-01-28
+## Issues Fixed: React Error #310 + Inbox Media Broken
 
-## PART 1 — Single AI Brain (Orchestrator)
+---
 
-### Created: `src/lib/ai/orchestrator.ts`
-- **ONLY module allowed to call LLM**
-- Loads AI Rules from `ruleEngine.ts` (deterministic)
-- Loads AI Training Documents from DB (`AITrainingDocument` table)
-- Builds single system prompt from rules + training
-- Validates output with `strictQualification.ts`
-- Returns structured output: `{ replyText, extractedFields, confidence, nextStepKey, tasksToCreate }`
+## ISSUE A — React Error #310 Fixed
 
-### Files to Refactor (TODO):
-- `src/lib/aiMessaging.ts` → DELETE or make thin wrapper
-- `src/lib/aiReply.ts` → DELETE
-- `src/lib/aiMessageGeneration.ts` → Refactor to use orchestrator
-- `src/lib/autoReply.ts` → Refactor to use orchestrator only
-- `src/app/api/webhooks/whatsapp/route.ts` → Use orchestrator instead of replyEngine
+### Root Cause
+The `QuoteCadenceSection` component was conditionally returning `null` early, which could cause React to see different component tree structures between renders, leading to hook count mismatches.
 
-### How to Use Orchestrator:
+### Fix Applied
+**File:** `src/components/leads/LeadDNA.tsx`
+
+**Before:**
+```tsx
+function QuoteCadenceSection({ leadId, quotationSentAtStr }) {
+  const quotationSentAt = useMemo(...)
+  
+  if (!quotationSentAt) {
+    return null  // ❌ Early return changes component tree
+  }
+  
+  return <div>...</div>
+}
+```
+
+**After:**
+```tsx
+function QuoteCadenceSection({ leadId, quotationSentAtStr }) {
+  // ALL HOOKS CALLED FIRST
+  const quotationSentAt = useMemo(...)
+  
+  // Always return same structure
+  return (
+    <div>
+      <h2>Quote Follow-ups</h2>
+      {quotationSentAt ? <QuoteCadence ... /> : null}  // ✅ Conditional inside JSX
+    </div>
+  )
+}
+```
+
+### Why This Works
+- Component always renders the same wrapper structure
+- React sees consistent component tree on every render
+- Hooks are always called in the same order
+- Conditional rendering happens inside JSX, not via early return
+
+---
+
+## ISSUE B — Inbox Media Broken Fixed
+
+### Root Causes Identified
+
+1. **Missing HTTP Range Support** (CRITICAL for audio)
+   - Audio/video players require `Accept-Ranges: bytes` header
+   - Without Range support, browsers can't stream audio properly
+   - Missing 206 Partial Content handling
+
+2. **Missing Headers**
+   - No `Content-Length` header
+   - No `Content-Range` header for partial requests
+   - Missing proper CORS handling
+
+3. **URL Encoding Issues**
+   - Media IDs not properly encoded in URLs
+   - Special characters breaking media requests
+
+4. **Missing Credentials**
+   - Audio fetch not including credentials for auth
+
+### Fixes Applied
+
+#### 1. Media Proxy Route (`src/app/api/whatsapp/media/[mediaId]/route.ts`)
+
+**Added:**
+- `Accept-Ranges: bytes` header (MANDATORY for streaming)
+- Range request forwarding to Meta API
+- 206 Partial Content response handling
+- `Content-Length` and `Content-Range` headers
+- Proper content type detection
+
+**Key Changes:**
 ```typescript
-import { generateAIReply } from '@/lib/ai/orchestrator'
+// Forward Range header for audio/video streaming
+if (rangeHeader) {
+  fetchHeaders['Range'] = rangeHeader
+}
 
-const result = await generateAIReply({
-  conversationId,
-  leadId,
-  contactId,
-  inboundText,
-  inboundMessageId,
-  channel: 'whatsapp',
-  language: 'en',
-  agentProfileId: lead.aiAgentProfileId || undefined,
+// Handle partial content (206)
+if (rangeHeader && contentRange && mediaFileResponse.status === 206) {
+  responseHeaders['Content-Range'] = contentRange
+  return new NextResponse(buffer, {
+    status: 206,
+    headers: responseHeaders,
+  })
+}
+
+// Add Accept-Ranges header
+responseHeaders['Accept-Ranges'] = 'bytes'  // MANDATORY
+```
+
+#### 2. Audio Player Component (`src/components/inbox/AudioMessagePlayer.tsx`)
+
+**Added:**
+- `credentials: 'include'` for authenticated requests
+
+**Change:**
+```typescript
+const res = await fetch(`/api/whatsapp/media/...`, {
+  credentials: 'include',  // ✅ Include cookies for auth
 })
 ```
 
-## PART 2 — Conversation Deduplication
+#### 3. Inbox Message Rendering (`src/app/inbox/page.tsx`)
 
-### Created: `src/lib/conversation/upsert.ts`
-- **SINGLE SOURCE OF TRUTH** for conversation creation/updates
-- Enforces: ONE conversation per (contactId, channel, externalThreadId)
-- Uses normalized lowercase channel
-- Handles externalThreadId (WhatsApp waId, email thread ID, etc.)
+**Fixed:**
+- Proper URL encoding for all media URLs
+- Added `crossOrigin="anonymous"` for images/videos
+- Added `download` attribute for document links
+- Added error handling for images
+- Fixed attachment URLs to use proxy when needed
 
-### Schema Update:
-- Added index: `@@index([channel, contactId, externalThreadId])`
-- Existing constraint: `@@unique([contactId, channel])` (still enforced)
-
-### Usage:
+**Key Changes:**
 ```typescript
-import { upsertConversation } from '@/lib/conversation/upsert'
+// Images
+<img 
+  src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+  crossOrigin="anonymous"  // ✅ CORS support
+/>
 
-const { id } = await upsertConversation({
-  contactId,
-  channel: 'whatsapp',
-  leadId,
-  externalThreadId: contact.waId, // For WhatsApp
-  timestamp: new Date(),
-})
+// Videos
+<video 
+  src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+  crossOrigin="anonymous"  // ✅ CORS support
+/>
+
+// Documents
+<a 
+  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+  download  // ✅ Trigger download
+/>
 ```
 
-### Updated Files:
-- `src/lib/inbound/autoMatchPipeline.ts` → Uses `upsertConversation()`
-- All outbound send functions should use `upsertConversation()` before sending
+---
 
-## PART 3 — Lead Auto-Fill
+## Files Modified
 
-### Created: `src/lib/inbound/serviceMapping.ts`
-- Centralized service mapping function
-- Maps extracted service to `serviceTypeEnum` and `serviceTypeId`
-- Handles "cheapest" keyword → sets `PRICE_SENSITIVE` tag
-- Handles "marketing license" → accepts as business activity
+### Issue A (React Error #310)
+1. `src/components/leads/LeadDNA.tsx`
+   - Modified: `QuoteCadenceSection` component
+   - Change: Always render wrapper, conditional inside JSX
 
-### Current Implementation:
-- `src/lib/inbound/autoMatchPipeline.ts` already implements lead auto-fill
-- Extracts: service, nationality, expiry, counts, businessActivity
-- Updates Lead immediately after extraction
-- Stores in `lead.dataJson` and direct fields (`serviceTypeEnum`, `serviceTypeId`, `requestedServiceRaw`)
+### Issue B (Inbox Media)
+1. `src/app/api/whatsapp/media/[mediaId]/route.ts`
+   - Added: Range request support, Accept-Ranges header, 206 handling
+   - No schema changes, no AI logic touched
 
-### TODO: Refactor to use centralized mapping:
-```typescript
-import { mapExtractedServiceToLeadServiceType } from '@/lib/inbound/serviceMapping'
+2. `src/components/inbox/AudioMessagePlayer.tsx`
+   - Added: `credentials: 'include'` for auth
+   - No message structure changes
 
-const mapping = await mapExtractedServiceToLeadServiceType(extractedFields.service)
-// Use mapping.serviceTypeEnum, mapping.serviceTypeId, mapping.requestedServiceRaw
-```
+3. `src/app/inbox/page.tsx`
+   - Fixed: URL encoding, CORS attributes, download attributes
+   - No message schema changes, only rendering
 
-## PART 4 — Outbound Deduplication
+---
 
-### TODO: Implement deduplication guard
-Before sending outbound AI message:
-1. Compute hash: `sha256(conversationId + normalizedReplyText)`
-2. Check if same hash was sent in last 10 minutes
-3. If yes → DO NOT send again
+## Verification Checklist
 
-### Implementation Location:
-- Add to `src/lib/ai/orchestrator.ts` before returning reply
-- Store hash in `Conversation.lastAutoReplyKey` or new `OutboundIdempotencyLog` table
+### React Error #310
+- ✅ All hooks called at top level
+- ✅ No conditional hook execution
+- ✅ Component tree structure consistent
+- ✅ No early returns after hooks
 
-## PART 5 — Question State Machine (Max 5 Questions)
+### Inbox Media
+- ✅ Audio: Accept-Ranges header present
+- ✅ Audio: Range requests supported (206)
+- ✅ Audio: Credentials included in fetch
+- ✅ Images: Proper URL encoding
+- ✅ Images: CORS attributes added
+- ✅ Videos: Range support + encoding
+- ✅ Documents: Download attribute + encoding
+- ✅ Attachments: Proxy URL handling
 
-### Business Setup Flow (Max 5 Questions):
-1. Name
-2. Business activity (accept free text, don't force DB)
-3. Mainland or Freezone
-4. How many partners?
-5. How many visas?
+---
 
-Then ask for email/phone only if not already known.
+## AI/Automation Safety Confirmation
 
-### Implementation:
-- Already partially implemented in `src/lib/ai/ruleEngine.ts`
-- Track `lastQuestionKey` in `Conversation` model
-- Never ask "are you inside UAE" for business setup
-- Enforced by `strictQualification.ts` validation
+### ✅ NO AI FILES TOUCHED
+- No changes to `/ai`, `/autopilot`, `/prompts`, `/replies`, `/workflows`
+- No message schema changes
+- No AI prompt modifications
+- No reply generation logic changed
+- No webhook AI logic modified
 
-## PART 6 — Tests (TODO)
+### ✅ BACKWARD COMPATIBLE
+- All changes are additive (headers, attributes)
+- No breaking API changes
+- Message structure unchanged
+- Existing functionality preserved
 
-### Required Tests:
-1. Inbound+outbound on same contact → ONE conversation
-2. Inbound "I want freelance visa" → Lead.serviceType set immediately
-3. AI reply must not exceed 5 questions for business setup
-4. AI reply must not repeat same question twice
-5. Outbound dedupe: same reply not sent twice within 10 minutes
+---
 
-### Test Files to Create:
-- `src/lib/ai/orchestrator.test.ts`
-- `src/lib/conversation/upsert.test.ts`
-- `src/lib/inbound/serviceMapping.test.ts`
-- `src/lib/inbound/autoMatchPipeline.integration.test.ts`
+## Testing Recommendations
 
-## Migration Required
+1. **React Error #310:**
+   - Navigate to `/leads/[id]` for multiple leads
+   - Verify no React errors in console
+   - Check that Quote Follow-ups section renders correctly
 
-### Prisma Migration:
-```sql
--- Add index for externalThreadId uniqueness
-CREATE INDEX IF NOT EXISTS "Conversation_channel_contactId_externalThreadId_idx" 
-ON "Conversation" (channel, "contactId", "externalThreadId") 
-WHERE "externalThreadId" IS NOT NULL;
-```
+2. **Inbox Media:**
+   - Test audio playback (voice notes)
+   - Test image display
+   - Test PDF/document download
+   - Test video playback
+   - Verify Range requests in Network tab (should see 206 responses for audio)
 
-Run: `npx prisma migrate dev --name add_conversation_external_thread_index`
+---
 
-## Next Steps
-
-1. ✅ Create orchestrator
-2. ✅ Create upsertConversation
-3. ✅ Update schema
-4. ⏳ Refactor all AI calls to use orchestrator
-5. ⏳ Add outbound deduplication guard
-6. ⏳ Add automated tests
-7. ⏳ Update webhook to use orchestrator instead of replyEngine
-
-## Notes
-
-- **AI Prompt Storage**: Stored in `AITrainingDocument` table (admin UI: `/admin/ai-training`)
-- **AI Rules**: Stored in `src/lib/ai/ruleEngine.ts` (code-based, deterministic)
-- **How to Reset AI Rules**: 
-  - Training documents: Delete/recreate in admin UI
-  - Rule engine: Update `RULE_ENGINE_JSON` in `ruleEngine.ts` and redeploy
-
-
+## Commit
+`0c1ef88` - CRITICAL FIX: React error #310 + Inbox media broken
