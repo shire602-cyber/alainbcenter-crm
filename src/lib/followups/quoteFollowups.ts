@@ -91,17 +91,8 @@ export async function scheduleQuoteFollowups({
       continue
     }
 
-    // Determine priority based on cadence (3 = highest, 12 = lowest)
-    let priority: 'LOW' | 'NORMAL' | 'HIGH' | 'URGENT' = 'NORMAL'
-    if (cadenceDays === 3) {
-      priority = 'HIGH'
-    } else if (cadenceDays === 5) {
-      priority = 'NORMAL'
-    } else {
-      priority = 'LOW'
-    }
-
     // Create task
+    // Note: Priority is not stored in Task model - cadence days (3,5,7,9,12) indicate urgency
     try {
       await prisma.task.create({
         data: {
@@ -111,7 +102,6 @@ export async function scheduleQuoteFollowups({
           type: 'FOLLOW_UP',
           dueAt,
           status: 'OPEN',
-          priority,
           idempotencyKey,
           // Store metadata in a way that doesn't break existing logic
           // Using payload field if available, otherwise we'll use title/type
