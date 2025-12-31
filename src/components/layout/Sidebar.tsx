@@ -175,10 +175,10 @@ export function Sidebar() {
                     <Link
                       href={item.href}
                       className={cn(
-                        "group flex gap-x-3 rounded-lg px-3 py-2 text-sm font-medium leading-normal transition-all duration-200 relative",
+                        "group flex gap-x-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-normal transition-all duration-300 relative",
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-foreground/70 hover:bg-secondary hover:text-foreground"
+                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30 scale-105"
+                          : "text-foreground/70 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-950/30 dark:hover:to-purple-950/30 hover:text-blue-700 dark:hover:text-blue-300 hover:shadow-md"
                       )}
                       title={item.description}
                     >
