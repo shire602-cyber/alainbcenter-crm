@@ -12,9 +12,19 @@ export async function GET(req: NextRequest) {
     const channelParam = req.nextUrl.searchParams.get('channel') || 'whatsapp'
 
     // Build where clause - if channel is 'all', don't filter by channel
-    // Exclude soft-deleted conversations
+    // CRITICAL FIX: Include soft-deleted conversations if they have recent messages
+    // This allows seeing messages from "deleted" numbers that still send messages
     const whereClause: any = {
-      deletedAt: null, // Only show non-deleted conversations
+      // Show conversations that are either:
+      // 1. Not deleted (deletedAt is null)
+      // 2. OR deleted but have messages in the last 7 days (restored by new messages)
+      OR: [
+        { deletedAt: null },
+        {
+          deletedAt: { not: null },
+          lastMessageAt: { gte: new Date(Date.now() - 7 * 24 * 60 * 60 * 1000) }, // Last 7 days
+        },
+      ],
     }
     if (channelParam && channelParam !== 'all') {
       whereClause.channel = channelParam
