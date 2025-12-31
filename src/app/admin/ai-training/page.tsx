@@ -26,6 +26,10 @@ interface TrainingDocument {
   title: string
   content: string
   type: 'guidance' | 'examples' | 'policies' | 'scripts'
+  language?: string | null // CRITICAL FIX 5: Language tag
+  stage?: string | null // CRITICAL FIX 5: Stage tag
+  serviceTypeId?: number | null // CRITICAL FIX 5: Service type ID
+  serviceKey?: string | null // CRITICAL FIX 5: Service key
   createdAt: string
   updatedAt: string
 }
@@ -40,6 +44,9 @@ export default function AITrainingPage() {
   const [title, setTitle] = useState('')
   const [content, setContent] = useState('')
   const [type, setType] = useState<'guidance' | 'examples' | 'policies' | 'scripts'>('guidance')
+  const [language, setLanguage] = useState<string>('') // CRITICAL FIX 5: Language tag
+  const [stage, setStage] = useState<string>('') // CRITICAL FIX 5: Stage tag
+  const [serviceKey, setServiceKey] = useState<string>('') // CRITICAL FIX 5: Service key
   const [uploading, setUploading] = useState(false)
   const [uploadingFile, setUploadingFile] = useState(false)
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
@@ -89,6 +96,9 @@ export default function AITrainingPage() {
           title: title.trim(),
           content: content.trim(),
           type,
+          language: language || null, // CRITICAL FIX 5: Include language tag
+          stage: stage || null, // CRITICAL FIX 5: Include stage tag
+          serviceKey: serviceKey || null, // CRITICAL FIX 5: Include service key
         }),
       })
 
@@ -139,6 +149,9 @@ export default function AITrainingPage() {
     setTitle(doc.title)
     setContent(doc.content)
     setType(doc.type)
+    setLanguage(doc.language || '') // CRITICAL FIX 5: Load language tag
+    setStage(doc.stage || '') // CRITICAL FIX 5: Load stage tag
+    setServiceKey(doc.serviceKey || '') // CRITICAL FIX 5: Load service key
   }
 
   function newDocument() {
@@ -146,6 +159,9 @@ export default function AITrainingPage() {
     setTitle('')
     setContent('')
     setType('guidance')
+    setLanguage('') // CRITICAL FIX 5: Reset language tag
+    setStage('') // CRITICAL FIX 5: Reset stage tag
+    setServiceKey('') // CRITICAL FIX 5: Reset service key
     setSelectedFile(null)
   }
 
@@ -168,6 +184,9 @@ export default function AITrainingPage() {
       formData.append('file', selectedFile)
       formData.append('title', title.trim())
       formData.append('type', type)
+      if (language) formData.append('language', language) // CRITICAL FIX 5: Include language tag
+      if (stage) formData.append('stage', stage) // CRITICAL FIX 5: Include stage tag
+      if (serviceKey) formData.append('serviceKey', serviceKey) // CRITICAL FIX 5: Include service key
 
       const res = await fetch('/api/admin/ai-training/upload', {
         method: 'POST',
@@ -410,6 +429,56 @@ export default function AITrainingPage() {
                   <option value="policies">Policies</option>
                   <option value="scripts">Scripts</option>
                 </select>
+              </div>
+
+              {/* CRITICAL FIX 5: Language/Stage/Service Tags */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div className="space-y-2">
+                  <Label htmlFor="language">Language (Optional)</Label>
+                  <select
+                    id="language"
+                    value={language}
+                    onChange={(e) => setLanguage(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                  >
+                    <option value="">All Languages</option>
+                    <option value="en">English</option>
+                    <option value="ar">Arabic</option>
+                    <option value="hi">Hindi</option>
+                    <option value="ur">Urdu</option>
+                    <option value="fr">French</option>
+                    <option value="es">Spanish</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="stage">Stage (Optional)</Label>
+                  <select
+                    id="stage"
+                    value={stage}
+                    onChange={(e) => setStage(e.target.value)}
+                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                  >
+                    <option value="">All Stages</option>
+                    <option value="GREETING">Greeting</option>
+                    <option value="QUALIFICATION">Qualification</option>
+                    <option value="PRICING">Pricing</option>
+                    <option value="OBJECTIONS">Objections</option>
+                    <option value="CLOSING">Closing</option>
+                    <option value="POLICIES">Policies</option>
+                    <option value="GENERAL">General</option>
+                  </select>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="serviceKey">Service Key (Optional)</Label>
+                  <Input
+                    id="serviceKey"
+                    value={serviceKey}
+                    onChange={(e) => setServiceKey(e.target.value)}
+                    placeholder="e.g., FREELANCE_VISA, BUSINESS_SETUP"
+                  />
+                </div>
               </div>
 
               <div className="space-y-2">

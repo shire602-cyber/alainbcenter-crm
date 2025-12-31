@@ -211,7 +211,8 @@ export async function buildDraftReplyPrompt(
 
   let prompt = `${getSystemPrompt()}${trainingContext}${agentGuidelines}
 
-Generate a WhatsApp reply in ${language === 'ar' ? 'Arabic' : 'English'} with ${tone} tone.
+CRITICAL FIX 4: Generate a WhatsApp reply in ${language === 'ar' ? 'Modern Standard Arabic' : 'English'} with ${tone} tone.
+You MUST respond in ${language === 'ar' ? 'Arabic' : 'English'}. If the user's message is in a different language, detect it and respond in that language. If language is unknown, default to ${language === 'ar' ? 'Arabic' : 'English'}.
 
 Contact Information:
 - Name: ${contact.name}

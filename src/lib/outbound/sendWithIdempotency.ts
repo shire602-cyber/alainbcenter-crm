@@ -122,6 +122,14 @@ export async function sendOutboundWithIdempotency(
   // CRITICAL: Normalize text to ensure it's always plain text (never JSON)
   let text = normalizeOutboundText(rawText)
   
+  // CRITICAL FIX 2: Sanitize reply text (last line of defense before sending)
+  const { sanitizeReplyText } = await import('../ai/sanitizeReplyText')
+  const sanitized = sanitizeReplyText(text)
+  if (sanitized.wasJson) {
+    console.warn(`[OUTBOUND-IDEMPOTENCY] Sanitized JSON reply before send: ${text.substring(0, 100)} -> ${sanitized.text.substring(0, 100)}`)
+  }
+  text = sanitized.text
+  
   // Step 0.5: DUPLICATE QUESTION SEND BLOCKER
   // If this is a question (replyType='question' and lastQuestionKey exists),
   // check if we already sent this question recently (within last 60 minutes)

@@ -573,6 +573,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           // BUG FIX #3: Use channel.toLowerCase() for consistency with main flow
           // Note: Message may already be created by idempotency system
           try {
+            // CRITICAL FIX 2: Sanitize reply text before storing
+            const { sanitizeReplyText } = await import('./ai/sanitizeReplyText')
+            const sanitized = sanitizeReplyText(goldenVisaResult.replyText)
+            if (sanitized.wasJson) {
+              console.warn(`[AUTO-REPLY] Sanitized JSON reply in golden visa handler: ${goldenVisaResult.replyText.substring(0, 100)}`)
+            }
+            
             await prisma.message.create({
               data: {
                 conversationId: conversation.id,
@@ -581,7 +588,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
                 direction: 'OUTBOUND',
                 channel: channel.toLowerCase(), // BUG FIX #3: Use lowercase for consistency
                 type: 'text',
-                body: goldenVisaResult.replyText,
+                body: sanitized.text,
                 providerMessageId: result.messageId || null,
                 status: result.messageId ? 'SENT' : 'FAILED',
                 sentAt: new Date(),
@@ -1322,6 +1329,13 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         let savedMessage: any = null
         if (conversationForOutbound) {
           try {
+            // CRITICAL FIX 2: Sanitize reply text before storing
+            const { sanitizeReplyText } = await import('./ai/sanitizeReplyText')
+            const sanitized = sanitizeReplyText(replyText)
+            if (sanitized.wasJson) {
+              console.warn(`[AUTO-REPLY] Sanitized JSON reply: ${replyText.substring(0, 100)}`)
+            }
+            
             savedMessage = await prisma.message.create({
             data: {
                 conversationId: conversationForOutbound.id,
@@ -1330,7 +1344,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
               direction: 'OUTBOUND',
               channel: channel.toLowerCase(),
               type: 'text',
-                body: replyText,
+                body: sanitized.text,
               status: 'SENT',
               providerMessageId: result.messageId,
               rawPayload: JSON.stringify({

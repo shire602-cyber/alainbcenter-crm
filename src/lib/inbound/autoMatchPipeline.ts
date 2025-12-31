@@ -147,6 +147,18 @@ export async function handleInboundMessageAutoMatch(
     input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata
   )
   
+  // Step 3.5: CRITICAL FIX 4 - Detect language from inbound text
+  let detectedLanguage: string | null = null
+  if (input.text && input.text.trim().length > 0 && input.text !== '[audio]' && input.text !== '[Audio received]') {
+    try {
+      const { detectLanguage } = await import('../ai/detectLanguage')
+      detectedLanguage = await detectLanguage(input.text)
+      console.log(`🌐 [AUTO-MATCH] Detected language: ${detectedLanguage} for message: ${input.text.substring(0, 50)}...`)
+    } catch (error: any) {
+      console.warn(`⚠️ [AUTO-MATCH] Language detection failed:`, error.message)
+    }
+  }
+
   // DIAGNOSTIC LOG: before conversation upsert
   console.log(`[AUTO-MATCH] BEFORE-CONV-UPSERT`, JSON.stringify({
     contactId: contactResult.id,
@@ -155,6 +167,7 @@ export async function handleInboundMessageAutoMatch(
     externalThreadId,
     leadId: lead.id,
     providerMessageId: input.providerMessageId,
+    detectedLanguage,
   }))
   
   const conversationResult = await upsertConversation({
@@ -163,6 +176,7 @@ export async function handleInboundMessageAutoMatch(
     leadId: lead.id, // CRITICAL: Link conversation to lead
     timestamp: input.timestamp, // Use actual message timestamp
     externalThreadId, // Canonical external thread ID
+    language: detectedLanguage, // CRITICAL FIX 4: Store detected language
   })
   
   // Fetch full conversation record
@@ -988,6 +1002,9 @@ async function createCommunicationLog(input: {
   // CRITICAL: Normalize channel to lowercase for consistency
   const normalizedChannel = normalizeChannel(input.channel)
   
+  // CRITICAL FIX 3: Determine message type (audio if transcribed, otherwise text)
+  const messageType = input.metadata?.mediaMimeType?.startsWith('audio/') ? 'audio' : 'text'
+  
   const message = await prisma.message.create({
     data: {
       conversationId: input.conversationId,
@@ -995,8 +1012,8 @@ async function createCommunicationLog(input: {
       contactId: input.contactId, // CRITICAL: Link to contact
       direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
       channel: normalizedChannel, // Always lowercase for consistency
-      type: 'text',
-      body: input.text,
+      type: messageType, // CRITICAL FIX 3: Store as 'audio' if transcribed from audio
+      body: input.text, // CRITICAL FIX 3: Contains transcript if audio, or original text
       providerMessageId: input.providerMessageId,
       status: 'RECEIVED',
       createdAt: input.timestamp,

@@ -18,6 +18,7 @@ export interface UpsertConversationInput {
   externalId?: string | null // Legacy field
   status?: string
   timestamp?: Date
+  language?: string | null // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.)
 }
 
 /**
@@ -79,6 +80,7 @@ export async function upsertConversation(
         status: input.status || existing.status || 'open',
         channel: channelLower, // Ensure normalized
         externalThreadId: effectiveThreadId, // Ensure thread ID is set
+        language: input.language ?? existing.language, // CRITICAL FIX 4: Update language if provided
       },
     })
     
@@ -112,6 +114,7 @@ export async function upsertConversation(
       lastInboundAt: timestamp,
       status: input.status || 'open',
       channel: channelLower, // Ensure normalized
+      language: input.language ?? undefined, // CRITICAL FIX 4: Update language if provided
     },
     create: {
       contactId: input.contactId,
@@ -122,6 +125,7 @@ export async function upsertConversation(
       status: input.status || 'open',
       lastMessageAt: timestamp,
       lastInboundAt: timestamp,
+      language: input.language ?? null, // CRITICAL FIX 4: Store detected language
     },
   })
   
