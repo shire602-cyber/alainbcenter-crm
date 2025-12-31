@@ -302,8 +302,8 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
   const hasMedia = message.mediaUrl || (message.attachments && message.attachments.length > 0)
   const attachments = message.attachments || []
   
-  // If message has mediaUrl but no attachments, create a virtual attachment
-  // CRITICAL: Ensure audio messages are properly detected
+  // CRITICAL FIX: If message has mediaUrl but no attachments, create a virtual attachment
+  // Ensure audio messages are properly detected BEFORE creating virtual attachment
   const mediaAttachments = message.mediaUrl && attachments.length === 0
     ? [{
         id: message.id,
