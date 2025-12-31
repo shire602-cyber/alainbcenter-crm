@@ -5,7 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  directUrl = env("DIRECT_URL") // CRITICAL: Use direct connection for migrations (bypasses connection pooling to prevent timeout)
+  directUrl = env("DIRECT_URL")? // CRITICAL: Use direct connection for migrations (bypasses connection pooling to prevent timeout) - optional
 }
 
 // ============================================

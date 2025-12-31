@@ -95,6 +95,7 @@ export async function GET(
       },
       orderBy: {
         createdAt: 'asc', // Oldest first - chronological order
+      },
     })
 
     // Format response - PHASE 5A: Include all media fields
