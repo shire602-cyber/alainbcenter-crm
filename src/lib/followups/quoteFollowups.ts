@@ -92,7 +92,7 @@ export async function scheduleQuoteFollowups({
     }
 
     // Create task
-    // Note: Priority is not stored in Task model - cadence days (3,5,7,9,12) indicate urgency
+    // Note: Priority field removed - Task model doesn't have priority field
     try {
       await prisma.task.create({
         data: {
@@ -103,8 +103,6 @@ export async function scheduleQuoteFollowups({
           dueAt,
           status: 'OPEN',
           idempotencyKey,
-          // Store metadata in a way that doesn't break existing logic
-          // Using payload field if available, otherwise we'll use title/type
           aiSuggested: false,
         },
       })
