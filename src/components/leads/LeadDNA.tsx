@@ -223,20 +223,38 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
   )
 }
 
+// PHASE 5E: Quote Cadence wrapper - ensures stable rendering
+function QuoteCadenceSection({ leadId, quotationSentAtStr }: { leadId: number; quotationSentAtStr: string | null | undefined }) {
+  // Memoize date conversion to prevent unnecessary re-renders
+  const quotationSentAt = useMemo(() => {
+    if (!quotationSentAtStr) return null
+    try {
+      return new Date(quotationSentAtStr)
+    } catch {
+      return null
+    }
+  }, [quotationSentAtStr])
+
+  if (!quotationSentAt) {
+    return null
+  }
+
+  return (
+    <div>
+      <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
+      <QuoteCadence leadId={leadId} quotationSentAt={quotationSentAt} />
+    </div>
+  )
+}
+
 // PHASE 5E: Quote Cadence component
-// ALWAYS render this component - it handles null quotationSentAt internally
-function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date | null }) {
+// This component is only rendered when quotationSentAt exists (handled by wrapper)
+function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date }) {
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const [quoteFollowup, setQuoteFollowup] = useState<{ task: { id: number; title: string; dueAt: Date; cadenceDays: number } | null; daysUntil: number | null } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
-    // Only load if quotationSentAt exists
-    if (!quotationSentAt) {
-      setLoading(false)
-      return
-    }
-
     let mounted = true
 
     async function loadQuoteCadence() {
@@ -261,14 +279,9 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
     return () => {
       mounted = false
     }
-  }, [leadId, quotationSentAt])
+  }, [leadId])
 
   // NOW we can do conditional returns - all hooks have been called
-  // Return null if no quotationSentAt (this is safe because all hooks were called)
-  if (!quotationSentAt) {
-    return null
-  }
-
   if (loading) {
     return (
       <Card className="card-premium p-4">
@@ -604,13 +617,7 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
         </div>
 
         {/* PHASE 5E: Quote Cadence - Always render component, it handles null internally */}
-        <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
-          <QuoteCadence 
-            leadId={lead.id} 
-            quotationSentAt={(lead as any)?.quotationSentAt ? new Date((lead as any).quotationSentAt) : null} 
-          />
-        </div>
+        <QuoteCadenceSection leadId={lead.id} quotationSentAtStr={(lead as any)?.quotationSentAt} />
 
         {/* Sponsor Search */}
         <div>
