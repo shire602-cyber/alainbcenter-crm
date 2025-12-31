@@ -66,6 +66,35 @@ export async function markInfoShared(
     updateData.quotationSentAt = now
   }
 
+  // PHASE 5E: Schedule quote follow-ups when quotation is sent
+  if (infoType === 'quotation') {
+    try {
+      // Get conversation ID if available (from recent messages)
+      const recentMessage = await prisma.message.findFirst({
+        where: {
+          leadId,
+          direction: 'OUTBOUND',
+        },
+        orderBy: {
+          createdAt: 'desc',
+        },
+        select: {
+          conversationId: true,
+        },
+      })
+
+      const { scheduleQuoteFollowups } = await import('../followups/quoteFollowups')
+      await scheduleQuoteFollowups({
+        leadId,
+        conversationId: recentMessage?.conversationId,
+        sentAt: now,
+      })
+    } catch (error: any) {
+      // Don't fail quote marking if follow-up scheduling fails
+      console.error(`[INFO-SHARED] Failed to schedule quote follow-ups for lead ${leadId}:`, error.message)
+    }
+  }
+
   // Migration applied - fields now exist in schema
   // Add try-catch to handle case where migration hasn't been applied yet
   try {

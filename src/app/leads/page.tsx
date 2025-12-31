@@ -20,6 +20,7 @@ import {
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   getAiScoreCategory,
+  type PipelineStage,
 } from '@/lib/constants'
 import {
   Search,
@@ -38,9 +39,13 @@ import {
   Snowflake,
   Sparkles,
   Users,
+  KanbanSquare,
+  List,
+  Grid3x3,
 } from 'lucide-react'
 import { format } from 'date-fns'
 import { LeadCard } from './components/LeadCard'
+import { KanbanBoard } from '@/components/leads/KanbanBoard'
 
 type Contact = {
   id: number
@@ -95,6 +100,9 @@ function LeadsPageContent() {
   const [sourceFilter, setSourceFilter] = useState<string>('')
   const [aiScoreFilter, setAiScoreFilter] = useState<string>('')
   const [showCreateModal, setShowCreateModal] = useState(false)
+  
+  // PHASE 5F: View mode (list, grid, kanban)
+  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'kanban'>('grid')
 
   const [fullName, setFullName] = useState('')
   const [phone, setPhone] = useState('')
@@ -221,6 +229,33 @@ function LeadsPageContent() {
     }
   }, [loadLeads])
 
+  // PHASE 5F: Handle stage change for Kanban (with PipelineStage type)
+  const handleKanbanStageChange = useCallback(async (leadId: number, newStage: PipelineStage) => {
+    try {
+      const res = await fetch(`/api/leads/${leadId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pipelineStage: newStage }),
+      })
+
+      if (!res.ok) {
+        throw new Error('Failed to update stage')
+      }
+
+      // Optimistically update local state
+      setAllLeads((prev) =>
+        prev.map((lead) =>
+          lead.id === leadId ? { ...lead, pipelineStage: newStage } : lead
+        )
+      )
+    } catch (err) {
+      console.error('Error updating stage:', err)
+      // Reload on error
+      await loadLeads()
+      throw err
+    }
+  }, [loadLeads])
+
   async function handleSetFollowUp(leadId: number, days: number | 'custom') {
     try {
       let followUpDate: Date | null = null
@@ -326,14 +361,46 @@ function LeadsPageContent() {
               {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
             </p>
           </div>
-          <Button
-            onClick={() => setShowCreateModal(true)}
-            size="sm"
-            className="gap-2"
-          >
-            <Plus className="h-4 w-4" />
-            New Lead
-          </Button>
+          <div className="flex items-center gap-2">
+            {/* PHASE 5F: View Mode Toggle */}
+            <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-800 rounded-lg p-1">
+              <Button
+                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('list')}
+                className="h-7 px-2"
+                title="List view"
+              >
+                <List className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'grid' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('grid')}
+                className="h-7 px-2"
+                title="Grid view"
+              >
+                <Grid3x3 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant={viewMode === 'kanban' ? 'default' : 'ghost'}
+                size="sm"
+                onClick={() => setViewMode('kanban')}
+                className="h-7 px-2"
+                title="Kanban view"
+              >
+                <KanbanSquare className="h-4 w-4" />
+              </Button>
+            </div>
+            <Button
+              onClick={() => setShowCreateModal(true)}
+              size="sm"
+              className="gap-2"
+            >
+              <Plus className="h-4 w-4" />
+              New Lead
+            </Button>
+          </div>
         </div>
 
         {/* Compact Filters - Bento Box */}
@@ -433,17 +500,32 @@ function LeadsPageContent() {
           </div>
         </BentoCard>
 
-        {/* Leads Grid - Dense */}
+        {/* PHASE 5F: Leads View - List / Grid / Kanban */}
         {loading ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-3 w-full mb-2" />
-                <Skeleton className="h-3 w-2/3" />
-              </div>
-            ))}
-          </div>
+          viewMode === 'kanban' ? (
+            <div className="flex gap-4 overflow-x-auto pb-4">
+              {PIPELINE_STAGES.map((stage) => (
+                <div key={stage} className="flex-shrink-0 w-80 bg-card rounded-lg border p-4">
+                  <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded mb-4 animate-pulse" />
+                  <div className="space-y-3">
+                    {[1, 2, 3].map((i) => (
+                      <div key={i} className="h-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+          ) : (
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
+              {[1, 2, 3, 4, 5, 6].map((i) => (
+                <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                  <Skeleton className="h-4 w-24 mb-3" />
+                  <Skeleton className="h-3 w-full mb-2" />
+                  <Skeleton className="h-3 w-2/3" />
+                </div>
+              ))}
+            </div>
+          )
         ) : leads.length === 0 ? (
           <EmptyState
             icon={Users}
@@ -462,6 +544,32 @@ function LeadsPageContent() {
               )
             }
           />
+        ) : viewMode === 'kanban' ? (
+          <KanbanBoard
+            leads={leads}
+            onStageChange={handleKanbanStageChange}
+            filters={{
+              searchQuery,
+              pipelineStage: pipelineStageFilter,
+              source: sourceFilter,
+              aiScore: aiScoreFilter,
+            }}
+          />
+        ) : viewMode === 'list' ? (
+          <div className="space-y-2">
+            {leads.map((lead) => (
+              <LeadCard
+                key={lead.id}
+                lead={lead}
+                onUpdateStage={handleUpdateStage}
+                formatSource={formatSource}
+                getNearestExpiry={getNearestExpiry as any}
+                getScoreBadgeVariant={getScoreBadgeVariant}
+                formatDate={formatDate}
+                getWhatsAppLink={getWhatsAppLink}
+              />
+            ))}
+          </div>
         ) : (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {leads.map((lead) => (
