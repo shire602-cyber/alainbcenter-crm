@@ -165,37 +165,53 @@ export async function GET(
     }
 
     // Format messages for frontend - PHASE 5A: Include attachments
-    const formattedMessages = conversation.messages.map((msg: any) => ({
-      id: msg.id,
-      direction: msg.direction,
-      channel: msg.channel,
-      type: msg.type,
-      body: msg.body,
-      mediaUrl: msg.mediaUrl,
-      mediaMimeType: msg.mediaMimeType,
-      status: msg.status,
-      providerMessageId: msg.providerMessageId,
-      sentAt: msg.sentAt?.toISOString() || null,
-      createdBy: msg.createdByUser
-        ? {
-            id: msg.createdByUser.id,
-            name: msg.createdByUser.name,
-            email: msg.createdByUser.email,
-          }
-        : null,
-      createdAt: msg.createdAt.toISOString(),
-      // PHASE 5A: Include attachments
-      attachments: (msg.attachments || []).map((att: any) => ({
-        id: att.id,
-        type: att.type,
-        url: att.url,
-        mimeType: att.mimeType,
-        filename: att.filename,
-        sizeBytes: att.sizeBytes,
-        durationSec: att.durationSec,
-        thumbnailUrl: att.thumbnailUrl,
-      })),
-    }))
+    const formattedMessages = conversation.messages.map((msg: any) => {
+      const formatted = {
+        id: msg.id,
+        direction: msg.direction,
+        channel: msg.channel,
+        type: msg.type,
+        body: msg.body,
+        mediaUrl: msg.mediaUrl,
+        mediaMimeType: msg.mediaMimeType,
+        status: msg.status,
+        providerMessageId: msg.providerMessageId,
+        sentAt: msg.sentAt?.toISOString() || null,
+        createdBy: msg.createdByUser
+          ? {
+              id: msg.createdByUser.id,
+              name: msg.createdByUser.name,
+              email: msg.createdByUser.email,
+            }
+          : null,
+        createdAt: msg.createdAt.toISOString(),
+        // PHASE 5A: Include attachments
+        attachments: (msg.attachments || []).map((att: any) => ({
+          id: att.id,
+          type: att.type,
+          url: att.url,
+          mimeType: att.mimeType,
+          filename: att.filename,
+          sizeBytes: att.sizeBytes,
+          durationSec: att.durationSec,
+          thumbnailUrl: att.thumbnailUrl,
+        })),
+      }
+      
+      // PHASE 1 DEBUG: Log messages with media
+      if (msg.mediaUrl || (msg.attachments && msg.attachments.length > 0)) {
+        console.log('[INBOX-API-DEBUG] Message with media', {
+          messageId: msg.id,
+          type: msg.type,
+          mediaUrl: msg.mediaUrl,
+          mediaMimeType: msg.mediaMimeType,
+          attachmentsCount: msg.attachments?.length || 0,
+          attachments: msg.attachments?.map((a: any) => ({ type: a.type, url: a.url })) || [],
+        })
+      }
+      
+      return formatted
+    })
 
     // Get last message for preview
     const lastMessage = conversation.messages[conversation.messages.length - 1]
