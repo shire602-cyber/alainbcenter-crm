@@ -92,6 +92,18 @@ export async function GET(
                   email: true,
                 },
               },
+              attachments: {
+                select: {
+                  id: true,
+                  type: true,
+                  url: true,
+                  mimeType: true,
+                  filename: true,
+                  sizeBytes: true,
+                  durationSec: true,
+                  thumbnailUrl: true,
+                },
+              },
             },
           },
         },
@@ -123,8 +135,8 @@ export async function GET(
     // Safe property access - deletedAt may not be in select, but Prisma will include it if in schema
     const isArchived = (conversation as any).deletedAt !== null && (conversation as any).deletedAt !== undefined
 
-    // Format messages for frontend
-    const formattedMessages = conversation.messages.map((msg) => ({
+    // Format messages for frontend - PHASE 5A: Include attachments
+    const formattedMessages = conversation.messages.map((msg: any) => ({
       id: msg.id,
       direction: msg.direction,
       channel: msg.channel,
@@ -143,6 +155,17 @@ export async function GET(
           }
         : null,
       createdAt: msg.createdAt.toISOString(),
+      // PHASE 5A: Include attachments
+      attachments: (msg.attachments || []).map((att: any) => ({
+        id: att.id,
+        type: att.type,
+        url: att.url,
+        mimeType: att.mimeType,
+        filename: att.filename,
+        sizeBytes: att.sizeBytes,
+        durationSec: att.durationSec,
+        thumbnailUrl: att.thumbnailUrl,
+      })),
     }))
 
     // Get last message for preview

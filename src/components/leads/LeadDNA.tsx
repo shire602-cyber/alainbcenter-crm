@@ -593,12 +593,16 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
         </div>
 
         {/* PHASE 5E: Quote Cadence - Only show if quotation was sent */}
-        {(lead as any).quotationSentAt && (
-          <div>
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
-            <QuoteCadence leadId={lead.id} quotationSentAt={new Date((lead as any).quotationSentAt)} />
-          </div>
-        )}
+        {(() => {
+          const quotationSentAt = (lead as any)?.quotationSentAt
+          if (!quotationSentAt) return null
+          return (
+            <div>
+              <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
+              <QuoteCadence leadId={lead.id} quotationSentAt={new Date(quotationSentAt)} />
+            </div>
+          )
+        })()}
 
         {/* Sponsor Search */}
         <div>
