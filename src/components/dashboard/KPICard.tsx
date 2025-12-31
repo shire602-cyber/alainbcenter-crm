@@ -29,25 +29,26 @@ export function KPICard({
   const Content = (
     <div 
       className={cn(
-        "group relative bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 hover:-translate-y-0.5",
+        "group relative bg-gradient-to-br from-white to-blue-50/30 dark:from-slate-900 dark:to-blue-950/20 border-2 border-blue-100 dark:border-blue-900/50 rounded-2xl p-5 transition-all duration-300 hover:shadow-xl hover:border-blue-300 dark:hover:border-blue-700 hover:-translate-y-1 hover:scale-[1.02]",
+        "shadow-lg hover:shadow-2xl",
         className
       )}
     >
       {/* Header */}
-      <div className="flex items-start justify-between mb-2">
-        <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+      <div className="flex items-start justify-between mb-3">
+        <span className="text-xs font-bold text-blue-700 dark:text-blue-300 uppercase tracking-wider">
           {title}
         </span>
         {icon && (
-          <div className="text-slate-400 dark:text-slate-600 group-hover:text-slate-600 dark:group-hover:text-slate-400 transition-colors">
+          <div className="text-blue-500 dark:text-blue-400 group-hover:text-blue-600 dark:group-hover:text-blue-300 transition-colors p-2 rounded-lg bg-blue-100/50 dark:bg-blue-900/30">
             {icon}
           </div>
         )}
       </div>
 
       {/* Value */}
-      <div className="flex items-baseline justify-between gap-2 mb-1">
-        <span className="text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight">
+      <div className="flex items-baseline justify-between gap-2 mb-2">
+        <span className="text-3xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 dark:from-blue-400 dark:to-purple-400 bg-clip-text text-transparent tracking-tight">
           {typeof value === 'number' ? value.toLocaleString() : value}
         </span>
         
@@ -69,11 +70,11 @@ export function KPICard({
 
       {/* Sparkline */}
       {sparkline && sparkline.length > 0 && (
-        <div className="h-8 mt-2 flex items-end gap-px">
+        <div className="h-10 mt-3 flex items-end gap-1">
           {sparkline.map((height, idx) => (
             <div
               key={idx}
-              className="flex-1 bg-primary/60 dark:bg-primary/40 rounded-t transition-all duration-300 hover:bg-primary dark:hover:bg-primary/60"
+              className="flex-1 bg-gradient-to-t from-blue-500 to-purple-500 dark:from-blue-400 dark:to-purple-400 rounded-t-md transition-all duration-300 hover:from-blue-600 hover:to-purple-600 dark:hover:from-blue-300 dark:hover:to-purple-300 shadow-sm"
               style={{ height: `${Math.max(20, (height / Math.max(...sparkline)) * 100)}%` }}
             />
           ))}

@@ -305,7 +305,7 @@ export default async function DashboardPage() {
           {/* Header */}
           <div className="flex items-center justify-between mb-6">
             <div>
-              <h1 className="text-title text-slate-900 dark:text-slate-100">Dashboard</h1>
+              <h1 className="text-title bg-gradient-to-r from-blue-600 via-purple-600 to-blue-600 dark:from-blue-400 dark:via-purple-400 dark:to-blue-400 bg-clip-text text-transparent font-bold">Dashboard</h1>
               <p className="text-meta muted-text mt-1">Welcome back, {user?.name || 'User'}</p>
             </div>
           </div>

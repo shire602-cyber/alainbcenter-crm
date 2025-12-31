@@ -13,15 +13,20 @@
 :root {
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
-  /* Theme System - Consistent colors and spacing */
-  --bg-app: rgb(248 250 252); /* slate-50 */
+  /* Theme System - Vibrant, modern colors */
+  --bg-app: rgb(249 250 251); /* gray-50 - warmer */
   --bg-card: rgb(255 255 255); /* white */
-  --bg-card-muted: rgb(248 250 252); /* slate-50 */
-  --text: rgb(15 23 42); /* slate-900 */
-  --text-muted: rgb(100 116 139); /* slate-500 */
-  --border: rgb(226 232 240 / 0.6); /* slate-200/60 */
-  --shadow-soft: 0 1px 2px 0 rgb(0 0 0 / 0.05);
-  --shadow-premium: 0 1px 3px 0 rgb(0 0 0 / 0.1), 0 1px 2px -1px rgb(0 0 0 / 0.1);
+  --bg-card-muted: rgb(249 250 251); /* gray-50 */
+  --text: rgb(17 24 39); /* gray-900 - better contrast */
+  --text-muted: rgb(107 114 128); /* gray-500 */
+  --border: rgb(229 231 235 / 0.8); /* gray-200/80 */
+  --accent-blue: #3b82f6;
+  --accent-purple: #8b5cf6;
+  --accent-green: #10b981;
+  --accent-orange: #f59e0b;
+  --shadow-soft: 0 2px 4px 0 rgb(0 0 0 / 0.06);
+  --shadow-premium: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
   
   /* Spacing rhythm */
   --spacing-xs: 0.25rem; /* 4px */
@@ -129,9 +134,15 @@
   /* PREMIUM CARD STYLING */
   .card-premium {
     @apply bg-card border border-subtle;
-    @apply rounded-[16px] shadow-soft;
-    @apply transition-all duration-200 ease-out;
-    @apply hover:shadow-premium hover:border-slate-300 dark:hover:border-slate-700;
+    @apply rounded-[16px] shadow-premium;
+    @apply transition-all duration-300 ease-out;
+    @apply hover:shadow-glow hover:border-blue-300 dark:hover:border-blue-700;
+    @apply hover:-translate-y-0.5;
+    background: linear-gradient(to bottom, rgba(255, 255, 255, 0.95), rgba(255, 255, 255, 1));
+  }
+  
+  .dark .card-premium {
+    background: linear-gradient(to bottom, rgba(15, 23, 42, 0.95), rgba(15, 23, 42, 1));
   }
 
   .card-pressable {
@@ -167,8 +178,10 @@
 
   /* CHIPS & PILLS */
   .chip {
-    @apply inline-flex items-center px-2.5 py-1 rounded-full text-xs font-medium;
-    @apply bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300;
+    @apply inline-flex items-center px-3 py-1.5 rounded-full text-xs font-semibold;
+    @apply bg-gradient-to-r from-blue-50 to-purple-50 dark:from-blue-900/30 dark:to-purple-900/30;
+    @apply text-blue-700 dark:text-blue-300 border border-blue-200/50 dark:border-blue-700/50;
+    @apply shadow-sm hover:shadow-md transition-all duration-200;
   }
 
   .pill {
@@ -335,9 +348,19 @@
 
   /* Button improvements */
   .btn-modern {
+    @apply rounded-xl font-bold;
+    @apply transition-all duration-300;
+    @apply shadow-lg hover:shadow-xl hover:scale-105 active:scale-95;
+    @apply bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700;
+    @apply text-white border-0;
+  }
+  
+  .btn-modern-secondary {
     @apply rounded-xl font-semibold;
-    @apply transition-all duration-200;
-    @apply shadow-sm hover:shadow-md;
+    @apply transition-all duration-300;
+    @apply shadow-md hover:shadow-lg hover:scale-105;
+    @apply bg-white dark:bg-slate-800 border-2 border-blue-200 dark:border-blue-800;
+    @apply text-blue-700 dark:text-blue-300 hover:bg-blue-50 dark:hover:bg-blue-950/30;
   }
 
   /* Input improvements */
