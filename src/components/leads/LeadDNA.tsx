@@ -224,7 +224,9 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
 }
 
 // PHASE 5E: Quote Cadence wrapper - ensures stable rendering
+// CRITICAL: Always render wrapper div to maintain consistent component tree
 function QuoteCadenceSection({ leadId, quotationSentAtStr }: { leadId: number; quotationSentAtStr: string | null | undefined }) {
+  // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL LOGIC
   // Memoize date conversion to prevent unnecessary re-renders
   const quotationSentAt = useMemo(() => {
     if (!quotationSentAtStr) return null
@@ -235,14 +237,13 @@ function QuoteCadenceSection({ leadId, quotationSentAtStr }: { leadId: number; q
     }
   }, [quotationSentAtStr])
 
-  if (!quotationSentAt) {
-    return null
-  }
-
+  // Always return same structure - conditionally render content inside
   return (
     <div>
       <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
-      <QuoteCadence leadId={leadId} quotationSentAt={quotationSentAt} />
+      {quotationSentAt ? (
+        <QuoteCadence leadId={leadId} quotationSentAt={quotationSentAt} />
+      ) : null}
     </div>
   )
 }
