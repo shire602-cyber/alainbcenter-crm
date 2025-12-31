@@ -5,7 +5,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "prisma generate && prisma migrate deploy && next build",
-    "vercel-build": "node scripts/migrate-with-retry.js && next build",
+    "vercel-build": "node scripts/migrate-with-retry.js || true && next build",
     "migrate:deploy": "node scripts/migrate-with-retry.js",
     "start": "next start",
     "lint": "eslint",

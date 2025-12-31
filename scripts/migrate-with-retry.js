@@ -6,7 +6,6 @@
  */
 
 const { execSync } = require('child_process')
-const { setTimeout } = require('timers/promises')
 
 const MAX_RETRIES = 3
 const INITIAL_DELAY = 2000 // 2 seconds
@@ -17,7 +16,9 @@ function log(message) {
 }
 
 function sleep(ms) {
-  return new Promise(resolve => setTimeout(resolve, ms))
+  return new Promise(resolve => {
+    setTimeout(resolve, ms)
+  })
 }
 
 async function runWithRetry(command, retries = MAX_RETRIES) {
