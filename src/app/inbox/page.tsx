@@ -865,7 +865,7 @@ function InboxPageContent() {
                             <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
                               {msg.body || '[No content]'}
                             </p>
-                          ) : msg.type === 'audio' && msg.mediaUrl ? (
+                          ) : (msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/')) && (msg.mediaUrl || (msg.attachments && msg.attachments.some((a: any) => a.type === 'audio'))) ? (
                             <div className="space-y-2">
                               {/* PHASE 1 DEBUG: Log audio message rendering */}
                               {(() => {
@@ -875,18 +875,19 @@ function InboxPageContent() {
                                   mimeType: msg.mediaMimeType,
                                   type: msg.type,
                                   hasAttachments: !!(msg.attachments && msg.attachments.length > 0),
+                                  audioAttachments: msg.attachments?.filter((a: any) => a.type === 'audio') || [],
                                 })
                                 return null
                               })()}
                               <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                 <AudioMessagePlayer
-                                  mediaId={msg.mediaUrl}
-                                  mimeType={msg.mediaMimeType}
+                                  mediaId={msg.mediaUrl || msg.attachments?.find((a: any) => a.type === 'audio')?.url || ''}
+                                  mimeType={msg.mediaMimeType || msg.attachments?.find((a: any) => a.type === 'audio')?.mimeType}
                                   messageId={msg.id}
                                   className="w-full"
                                 />
                               </div>
-                              {msg.body && msg.body !== '[audio]' && (
+                              {msg.body && msg.body !== '[audio]' && msg.body !== '[Audio received]' && (
                                 <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
                               )}
                             </div>
