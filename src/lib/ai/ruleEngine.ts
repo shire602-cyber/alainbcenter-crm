@@ -538,7 +538,14 @@ export interface RuleEngineContext {
   memory: ConversationMemory
 }
 
-export interface RuleEngineResult {
+// CRITICAL FIX C: Structured rule engine output
+export type RuleEngineResult =
+  | { kind: 'QUESTION'; questionKey: string; text: string; needsHuman: false; memoryUpdates: Partial<ConversationMemory>; service?: string }
+  | { kind: 'REPLY'; text: string; needsHuman: boolean; handoverReason?: string; memoryUpdates: Partial<ConversationMemory>; service?: string }
+  | { kind: 'NO_MATCH'; needsHuman: false; memoryUpdates: Partial<ConversationMemory> }
+
+// Legacy interface for backward compatibility (will be removed)
+export interface RuleEngineResultLegacy {
   reply: string
   needsHuman: boolean
   handoverReason?: string
@@ -1084,9 +1091,8 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
   }
   
   // Step 3: Execute state actions
-  let reply = ''
-  let needsHuman = false
-  let handoverReason = ''
+  // CRITICAL FIX C: Use structured output
+  let result: RuleEngineResult | null = null
   
   const states = RULE_ENGINE_JSON.state_machine.states
   const currentStateDef = states.find(s => s.id === currentState)
@@ -1094,18 +1100,21 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
   if (currentState === 'S0_GREETING' && context.isFirstMessage) {
     const action = currentStateDef?.actions[0] as any
     if (action?.type === 'send_message' && action?.template) {
-      reply = renderTemplate(action.template, updatedMemory)
+      const text = renderTemplate(action.template, updatedMemory)
+      result = { kind: 'REPLY', text, needsHuman: false, memoryUpdates, service: updatedMemory.service }
     }
   } else if (currentState === 'S1_CAPTURE_NAME' && !updatedMemory.name) {
     // CRITICAL: Always ask for name if missing, even if service is detected
     const action = currentStateDef?.actions[0] as any
     if (action?.type === 'ask_question' && action?.template) {
-      reply = renderTemplate(action.template, updatedMemory)
+      const text = renderTemplate(action.template, updatedMemory)
+      result = { kind: 'QUESTION', questionKey: 'ASK_NAME', text, needsHuman: false, memoryUpdates, service: updatedMemory.service }
     }
   } else if (currentState === 'S2_IDENTIFY_SERVICE' && !updatedMemory.service) {
     const action = currentStateDef?.actions[0] as any
     if (action?.type === 'ask_question' && action?.template) {
-      reply = renderTemplate(action.template, updatedMemory)
+      const text = renderTemplate(action.template, updatedMemory)
+      result = { kind: 'QUESTION', questionKey: 'ASK_SERVICE', text, needsHuman: false, memoryUpdates, service: updatedMemory.service }
     }
   } else if (currentState === 'S3_SERVICE_FLOW' && updatedMemory.service) {
     // Route to service-specific flow
@@ -1116,12 +1125,11 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
       const handoverRules = (serviceFlow as any).handover_rules || []
       for (const handoverRule of handoverRules) {
         if (checkCondition(handoverRule.if, updatedMemory, context)) {
-          needsHuman = true
-          handoverReason = handoverRule.reason || 'Complex case'
-          reply = RULE_ENGINE_JSON.handover.templates.handover_soft
-          reply = renderTemplate(reply, updatedMemory)
+          const handoverReason = handoverRule.reason || 'Complex case'
+          const text = renderTemplate(RULE_ENGINE_JSON.handover.templates.handover_soft, updatedMemory)
           return {
-            reply,
+            kind: 'REPLY' as const,
+            text,
             needsHuman: true,
             handoverReason,
             memoryUpdates,
@@ -1153,7 +1161,7 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
               continue // Skip this step, try next
             }
             
-            reply = renderTemplate(step.ask, updatedMemory)
+            const text = renderTemplate(step.ask, updatedMemory)
             
             // CRITICAL FIX #3: Persist question asked to conversation state
             await recordQuestionAsked(context.conversationId, questionKey, `WAIT_${questionKey}`)
@@ -1182,15 +1190,21 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
               updatedMemory.has_asked_license_type = true
             }
             
+            // CRITICAL FIX C: Return structured QUESTION result
+            result = { kind: 'QUESTION', questionKey, text, needsHuman: false, memoryUpdates, service: updatedMemory.service }
             break
           } else if (step.respond) {
+            let text = ''
+            let needsHuman = false
+            let handoverReason: string | undefined = undefined
+            
             if (step.respond.type === 'price_quote' || step.respond.type === 'conditional_price_quote' || step.respond.type === 'fixed_price_quote') {
               const price = getPricing(updatedMemory.service, updatedMemory)
-              reply = renderTemplate(step.respond.template, updatedMemory, price || undefined)
+              text = renderTemplate(step.respond.template, updatedMemory, price || undefined)
             } else if (step.respond.type === 'price_directional') {
-              reply = renderTemplate(step.respond.template, updatedMemory)
+              text = renderTemplate(step.respond.template, updatedMemory)
             } else if (step.respond.type === 'next_step' || step.respond.type === 'handover_soft') {
-              reply = renderTemplate(step.respond.template, updatedMemory)
+              text = renderTemplate(step.respond.template, updatedMemory)
               // CRITICAL FIX: Don't escalate to human too early - only escalate if customer explicitly requests or complex case
               // For simple replies like "tomorrow", continue the conversation
               if (step.respond.type === 'handover_soft') {
@@ -1215,6 +1229,9 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
                 }
               }
             }
+            
+            // CRITICAL FIX C: Return structured REPLY result
+            result = { kind: 'REPLY', text, needsHuman, handoverReason, memoryUpdates, service: updatedMemory.service }
             break
           }
         }
@@ -1222,33 +1239,58 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
     }
   }
   
-  // Step 4: Check for loops (deduplication)
-  if (reply && isInLoop(reply, context.conversationHistory)) {
+  // Step 4: Check for loops (deduplication) - only for REPLY kind
+  if (result && result.kind === 'REPLY' && isInLoop(result.text, context.conversationHistory)) {
     console.log(`⚠️ [RULE-ENGINE] Loop detected! Reply is >80% similar to recent message. Generating clarification request.`)
-    reply = `Thanks for your message. I want to make sure I understand correctly - could you provide a bit more detail about what you need?`
-    needsHuman = false // Don't escalate, just ask for clarification
-  }
-  
-  // Step 5: Validate reply
-  const validation = validateReply(reply, updatedMemory, context)
-  if (!validation.valid) {
-    if (validation.blocked) {
-      // Use fallback
-      reply = RULE_ENGINE_JSON.global.guardrails.fallback_if_confused.template
-      reply = renderTemplate(reply, updatedMemory)
-      needsHuman = true
-      handoverReason = validation.reason || 'Reply blocked by validation'
-    } else if (validation.sanitized) {
-      reply = validation.sanitized
+    result = {
+      kind: 'REPLY',
+      text: `Thanks for your message. I want to make sure I understand correctly - could you provide a bit more detail about what you need?`,
+      needsHuman: false,
+      memoryUpdates: result.memoryUpdates,
+      service: result.service,
     }
   }
   
-  // Step 6: Check for discount request
-  if (updatedMemory.customer_requested_discount) {
-    needsHuman = true
-    handoverReason = 'Discount requested'
-    reply = RULE_ENGINE_JSON.message_templates.no_discount
-    reply = renderTemplate(reply, updatedMemory)
+  // Step 5: Validate reply - only for REPLY kind
+  if (result && result.kind === 'REPLY') {
+    const validation = validateReply(result.text, updatedMemory, context)
+    if (!validation.valid) {
+      if (validation.blocked) {
+        // Use fallback
+        const fallbackText = renderTemplate(RULE_ENGINE_JSON.global.guardrails.fallback_if_confused.template, updatedMemory)
+        result = {
+          kind: 'REPLY',
+          text: fallbackText,
+          needsHuman: true,
+          handoverReason: validation.reason || 'Reply blocked by validation',
+          memoryUpdates: result.memoryUpdates,
+          service: result.service,
+        }
+      } else if (validation.sanitized) {
+        result = {
+          ...result,
+          text: validation.sanitized,
+        }
+      }
+    }
+  }
+  
+  // Step 6: Check for discount request - only for REPLY kind
+  if (result && result.kind === 'REPLY' && updatedMemory.customer_requested_discount) {
+    const discountText = renderTemplate(RULE_ENGINE_JSON.message_templates.no_discount, updatedMemory)
+    result = {
+      kind: 'REPLY',
+      text: discountText,
+      needsHuman: true,
+      handoverReason: 'Discount requested',
+      memoryUpdates: result.memoryUpdates,
+      service: result.service,
+    }
+  }
+  
+  // If no result generated, return NO_MATCH
+  if (!result) {
+    result = { kind: 'NO_MATCH', needsHuman: false, memoryUpdates }
   }
   
   // Step 7: Persist memory to database and update flow state
@@ -1269,12 +1311,8 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
     }
   }
   
-  return {
-    reply,
-    needsHuman,
-    handoverReason,
-    memoryUpdates,
-    service: updatedMemory.service
-  }
+  // CRITICAL FIX C: Return structured result
+  // For backward compatibility, also support legacy format if needed
+  return result
 }
 

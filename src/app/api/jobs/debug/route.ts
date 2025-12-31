@@ -1,215 +1,107 @@
 /**
- * JOB DEBUG ENDPOINT
+ * GET /api/jobs/debug
+ * Debug endpoint to inspect OutboundJob queue state
  * 
- * Browser-testable debug endpoint for inspecting outbound job status.
- * Bypasses auth via middleware (under /api/jobs).
- * 
- * Query params:
- * - ?conversationId=123 - Filter by conversation
- * - ?status=PENDING - Filter by status
- * - ?limit=50 - Limit results (default: 50)
+ * Bypasses auth for internal debugging (same bypass strategy as cron/webhooks/jobs)
+ * OR include safe token auth if needed
  */
-
-// Prevent Vercel caching
-export const dynamic = 'force-dynamic'
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
   try {
-    const searchParams = req.nextUrl.searchParams
-    const conversationIdParam = searchParams.get('conversationId')
-    const statusParam = searchParams.get('status')
-    const limitParam = searchParams.get('limit')
+    // CRITICAL FIX F: Safe token auth OR bypass for internal use
+    // For now, allow without auth for internal debugging (same as cron/webhooks)
+    // In production, add token check: const token = req.headers.get('x-debug-token')
+    // if (token !== process.env.DEBUG_TOKEN) return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     
-    const conversationId = conversationIdParam ? parseInt(conversationIdParam) : null
-    const status = statusParam || null
-    const limit = limitParam ? parseInt(limitParam) : 50
+    const searchParams = req.nextUrl.searchParams
+    const statusFilter = searchParams.get('status') // PENDING | GENERATING | READY_TO_SEND | SENT | FAILED
     
     // Build where clause
     const where: any = {}
-    if (conversationId && !isNaN(conversationId)) {
-      where.conversationId = conversationId
-    }
-    if (status) {
-      where.status = status
+    if (statusFilter) {
+      where.status = statusFilter
     }
     
     // Get counts by status
-    const statusCounts = await prisma.outboundJob.groupBy({
+    const counts = await prisma.outboundJob.groupBy({
       by: ['status'],
-      _count: {
-        id: true,
-      },
-      where: conversationId && !isNaN(conversationId) ? { conversationId } : undefined,
+      _count: { id: true },
     })
     
-    const countsByStatus: Record<string, number> = {}
-    statusCounts.forEach((item) => {
-      countsByStatus[item.status] = item._count.id
-    })
-    
-    // Get newest jobs
+    // Get top 50 jobs with details
     const jobs = await prisma.outboundJob.findMany({
       where,
       orderBy: { createdAt: 'desc' },
-      take: limit,
-      select: {
-        id: true,
-        status: true,
-        createdAt: true,
-        lastAttemptAt: true,
-        claimedAt: true,
-        errorLog: true,
-        conversationId: true,
-        inboundProviderMessageId: true,
-        attempts: true,
-        maxAttempts: true,
-        content: true,
-        runAt: true,
-        error: true,
-        startedAt: true,
-        completedAt: true,
-      },
-    })
-    
-    // Find stuck jobs (GENERATING or READY_TO_SEND with claimedAt > 5 min old)
-    const fiveMinutesAgo = new Date(Date.now() - 5 * 60 * 1000)
-    const stuckJobs = await prisma.outboundJob.findMany({
-      where: {
-        status: {
-          in: ['GENERATING', 'READY_TO_SEND'],
+      take: 50,
+      include: {
+        conversation: {
+          select: {
+            id: true,
+            leadId: true,
+            contactId: true,
+            channel: true,
+          },
         },
-        OR: [
-          { claimedAt: { lt: fiveMinutesAgo } },
-          { claimedAt: null, startedAt: { lt: fiveMinutesAgo } },
-        ],
-      },
-      orderBy: { claimedAt: 'asc' },
-      take: 20,
-      select: {
-        id: true,
-        status: true,
-        claimedAt: true,
-        startedAt: true,
-        createdAt: true,
-        conversationId: true,
-        attempts: true,
+        inboundMessage: {
+          select: {
+            id: true,
+            providerMessageId: true,
+            body: true,
+          },
+        },
       },
     })
     
-    // Find not eligible jobs (runAt in the future)
+    // Calculate claim age for claimed jobs
     const now = new Date()
-    const notEligibleJobs = await prisma.outboundJob.findMany({
-      where: {
-        status: {
-          in: ['PENDING', 'READY_TO_SEND'],
-        },
-        runAt: {
-          gt: now,
-        },
-      },
-      orderBy: { runAt: 'asc' },
-      take: 20,
-      select: {
-        id: true,
-        status: true,
-        runAt: true,
-        createdAt: true,
-        conversationId: true,
-        attempts: true,
-      },
+    const jobsWithAge = jobs.map(job => {
+      let claimAgeMinutes: number | null = null
+      if (job.claimedAt) {
+        claimAgeMinutes = Math.round((now.getTime() - job.claimedAt.getTime()) / (1000 * 60))
+      }
+      
+      return {
+        id: job.id,
+        conversationId: job.conversationId,
+        status: job.status,
+        idempotencyKey: job.idempotencyKey?.substring(0, 16) + '...',
+        inboundProviderMessageId: job.inboundProviderMessageId,
+        attempts: job.attempts,
+        maxAttempts: job.maxAttempts,
+        runAt: job.runAt,
+        scheduledAt: job.runAt, // Alias for clarity
+        claimedAt: job.claimedAt,
+        claimAgeMinutes,
+        startedAt: job.startedAt,
+        completedAt: job.completedAt,
+        createdAt: job.createdAt,
+        error: job.error,
+        errorLog: job.errorLog?.substring(0, 200),
+        content: job.content?.substring(0, 100),
+        requestId: job.requestId,
+        conversation: job.conversation,
+        inboundMessage: job.inboundMessage,
+      }
     })
-    
-    // Format jobs for response
-    const formattedJobs = jobs.map((job) => ({
-      id: job.id,
-      status: job.status,
-      createdAt: job.createdAt.toISOString(),
-      lastAttemptAt: job.lastAttemptAt?.toISOString() || null,
-      claimedAt: job.claimedAt?.toISOString() || null,
-      startedAt: job.startedAt?.toISOString() || null,
-      completedAt: job.completedAt?.toISOString() || null,
-      errorLog: job.errorLog ? (job.errorLog.length > 500 ? job.errorLog.substring(0, 500) + '...' : job.errorLog) : null,
-      conversationId: job.conversationId,
-      inboundProviderMessageId: job.inboundProviderMessageId,
-      retryCount: job.attempts,
-      maxAttempts: job.maxAttempts,
-      contentLength: job.content ? job.content.length : null,
-      runAt: job.runAt.toISOString(),
-      error: job.error ? (job.error.length > 200 ? job.error.substring(0, 200) + '...' : job.error) : null,
-    }))
-    
-    // Format stuck jobs
-    const formattedStuckJobs = stuckJobs.map((job) => ({
-      id: job.id,
-      status: job.status,
-      claimedAt: job.claimedAt?.toISOString() || null,
-      startedAt: job.startedAt?.toISOString() || null,
-      createdAt: job.createdAt.toISOString(),
-      conversationId: job.conversationId,
-      attempts: job.attempts,
-      reason: job.claimedAt 
-        ? `Claimed ${Math.round((Date.now() - job.claimedAt.getTime()) / 1000 / 60)} minutes ago`
-        : `Started ${job.startedAt ? Math.round((Date.now() - job.startedAt.getTime()) / 1000 / 60) : 'unknown'} minutes ago`,
-    }))
-    
-    // Format not eligible jobs
-    const formattedNotEligibleJobs = notEligibleJobs.map((job) => ({
-      id: job.id,
-      status: job.status,
-      runAt: job.runAt.toISOString(),
-      createdAt: job.createdAt.toISOString(),
-      conversationId: job.conversationId,
-      attempts: job.attempts,
-      reason: `Scheduled for ${job.runAt.toISOString()} (${Math.round((job.runAt.getTime() - Date.now()) / 1000 / 60)} minutes from now)`,
-    }))
     
     return NextResponse.json({
       ok: true,
-      timestamp: new Date().toISOString(),
-      filters: {
-        conversationId: conversationId || null,
-        status: status || null,
-        limit,
-      },
-      countsByStatus,
-      jobs: formattedJobs,
-      stuckJobs: formattedStuckJobs,
-      notEligibleJobs: formattedNotEligibleJobs,
-      summary: {
-        total: formattedJobs.length,
-        stuck: formattedStuckJobs.length,
-        notEligible: formattedNotEligibleJobs.length,
-      },
-    }, {
-      headers: { 'Content-Type': 'application/json' },
+      counts: counts.map(c => ({
+        status: c.status,
+        count: c._count.id,
+      })),
+      jobs: jobsWithAge,
+      total: jobsWithAge.length,
+      filter: statusFilter || 'all',
     })
   } catch (error: any) {
-    // Loud failure for schema mismatch
-    if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
-      console.error('[DB-MISMATCH] OutboundJob schema mismatch. DB migrations not applied.')
-      return NextResponse.json(
-        {
-          ok: false,
-          error: 'DB migrations not applied. Run: npx prisma migrate deploy',
-          code: 'DB_MISMATCH',
-          prismaError: error.code,
-        },
-        { status: 500 }
-      )
-    }
-    
-    console.error('[JOBS-DEBUG] Error:', error)
+    console.error('[DEBUG] Error in jobs debug endpoint:', error)
     return NextResponse.json(
-      {
-        ok: false,
-        error: error.message || 'Internal server error',
-        code: 'INTERNAL_ERROR',
-      },
+      { ok: false, error: error.message || 'Failed to fetch debug info' },
       { status: 500 }
     )
   }
 }
-

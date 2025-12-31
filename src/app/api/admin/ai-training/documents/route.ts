@@ -50,11 +50,28 @@ export async function POST(req: NextRequest) {
     const user = await requireAdminApi()
 
     const body = await req.json()
-    const { title, content, type } = body
+    const { title, content, type, language, stage, serviceTypeId, serviceKey } = body
 
     if (!title || !content || !type) {
       return NextResponse.json(
         { ok: false, error: 'Title, content, and type are required' },
+        { status: 400 }
+      )
+    }
+
+    // CRITICAL FIX E: Validate stage enum
+    const validStages = ['GREETING', 'QUALIFICATION', 'PRICING', 'OBJECTIONS', 'CLOSING', 'POLICIES', 'GENERAL']
+    if (stage && !validStages.includes(stage)) {
+      return NextResponse.json(
+        { ok: false, error: `Invalid stage. Must be one of: ${validStages.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // CRITICAL FIX E: Validate language
+    if (language && !['en', 'ar'].includes(language)) {
+      return NextResponse.json(
+        { ok: false, error: 'Invalid language. Must be "en" or "ar"' },
         { status: 400 }
       )
     }
@@ -66,6 +83,10 @@ export async function POST(req: NextRequest) {
           title: title.trim(),
           content: content.trim(),
           type,
+          language: language || null, // CRITICAL FIX E: Store language tag
+          stage: stage || null, // CRITICAL FIX E: Store stage tag
+          serviceTypeId: serviceTypeId ? parseInt(serviceTypeId) : null, // CRITICAL FIX E: Store serviceTypeId
+          serviceKey: serviceKey || null, // CRITICAL FIX E: Store serviceKey
           createdByUserId: user.id,
         },
       })
@@ -102,11 +123,28 @@ export async function PUT(req: NextRequest) {
     await requireAdminApi()
 
     const body = await req.json()
-    const { id, title, content, type } = body
+    const { id, title, content, type, language, stage, serviceTypeId, serviceKey } = body
 
     if (!id || !title || !content || !type) {
       return NextResponse.json(
         { ok: false, error: 'ID, title, content, and type are required' },
+        { status: 400 }
+      )
+    }
+
+    // CRITICAL FIX E: Validate stage enum
+    const validStages = ['GREETING', 'QUALIFICATION', 'PRICING', 'OBJECTIONS', 'CLOSING', 'POLICIES', 'GENERAL']
+    if (stage && !validStages.includes(stage)) {
+      return NextResponse.json(
+        { ok: false, error: `Invalid stage. Must be one of: ${validStages.join(', ')}` },
+        { status: 400 }
+      )
+    }
+
+    // CRITICAL FIX E: Validate language
+    if (language && !['en', 'ar'].includes(language)) {
+      return NextResponse.json(
+        { ok: false, error: 'Invalid language. Must be "en" or "ar"' },
         { status: 400 }
       )
     }
@@ -119,6 +157,10 @@ export async function PUT(req: NextRequest) {
           title: title.trim(),
           content: content.trim(),
           type,
+          language: language || null, // CRITICAL FIX E: Update language tag
+          stage: stage || null, // CRITICAL FIX E: Update stage tag
+          serviceTypeId: serviceTypeId ? parseInt(serviceTypeId) : null, // CRITICAL FIX E: Update serviceTypeId
+          serviceKey: serviceKey || null, // CRITICAL FIX E: Update serviceKey
         },
       })
     } catch (error: any) {
