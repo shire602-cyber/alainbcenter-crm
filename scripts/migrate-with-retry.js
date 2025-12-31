@@ -19,13 +19,28 @@ function sleep(ms) {
 async function runMigrations() {
   console.log('🔄 Starting Prisma migrations...')
   
+  // CRITICAL: Use DIRECT_URL for migrations to avoid connection pool timeouts
+  // Neon pooled connections can cause advisory lock timeouts
+  const migrationEnv = { ...process.env }
+  if (process.env.DIRECT_URL) {
+    console.log('✅ Using DIRECT_URL for migrations (non-pooled connection)')
+    migrationEnv.DATABASE_URL = process.env.DIRECT_URL
+  } else if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('-pooler')) {
+    console.warn('⚠️  WARNING: Using pooled connection. Migrations may timeout.')
+    console.warn('⚠️  Set DIRECT_URL environment variable for better reliability.')
+  }
+  
+  // Increase timeout for advisory locks
+  migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT = '30000' // 30 seconds
+  
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(`📦 Attempt ${attempt}/${MAX_RETRIES}: Running prisma migrate deploy...`)
       
       execSync('npx prisma migrate deploy', {
         stdio: 'inherit',
-        env: process.env,
+        env: migrationEnv,
+        timeout: 120000, // 2 minute timeout per attempt
       })
       
       console.log('✅ Migrations completed successfully')
