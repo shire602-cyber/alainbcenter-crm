@@ -134,34 +134,6 @@ export function Sidebar() {
         </div>
           <nav className="flex flex-1 flex-col">
             <ul role="list" className="flex flex-1 flex-col gap-y-1">
-              {/* Logo + Brand */}
-              <div className="flex items-center gap-3 px-4 py-4 mb-4 border-b border-subtle">
-                <div className="flex-shrink-0 w-8 h-8 rounded-lg bg-blue-600 dark:bg-blue-500 flex items-center justify-center overflow-hidden">
-                  <img 
-                    src="/brand/alain-logo.webp" 
-                    alt="Alain CRM" 
-                    className="w-full h-full object-contain"
-                    onError={(e) => {
-                      // Fallback to text if image fails to load
-                      const target = e.target as HTMLImageElement
-                      target.style.display = 'none'
-                      const parent = target.parentElement
-                      if (parent && !parent.querySelector('.logo-fallback')) {
-                        const fallback = document.createElement('div')
-                        fallback.className = 'logo-fallback text-white font-bold text-sm'
-                        fallback.textContent = 'A'
-                        parent.appendChild(fallback)
-                      }
-                    }}
-                  />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">
-                    Alain CRM
-                  </h1>
-                </div>
-              </div>
-              
               {/* Main Navigation */}
               {mainNavigation.map((item) => {
                 // Filter based on adminOnly

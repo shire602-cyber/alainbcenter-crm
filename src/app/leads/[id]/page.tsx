@@ -21,6 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton'
 import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
+import { LeadCommandPalette } from '@/components/leads/LeadCommandPalette'
 
 export default function LeadDetailPage({ 
   params
@@ -35,6 +36,7 @@ export default function LeadDetailPage({
   const [infoSheetOpen, setInfoSheetOpen] = useState(false)
   const [actionSheetOpen, setActionSheetOpen] = useState(false)
   const [composerOpen, setComposerOpen] = useState(true)
+  const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [fallbackInfo, setFallbackInfo] = useState<{ conversationId?: string | null; contactId?: string | null } | null>(null)
   const router = useRouter()
 
@@ -228,9 +230,81 @@ export default function LeadDetailPage({
 
   const isFocusMode = typeof window !== 'undefined' && sessionStorage.getItem('focusMode') === 'true'
 
+  // Keyboard shortcuts - PHASE C
+  useEffect(() => {
+    if (!leadId) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Cmd+K or Ctrl+K: Open command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen(true)
+        return
+      }
+
+      // R: Focus reply composer
+      if (e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+        if (composer) {
+          composer.focus()
+          composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        setComposerOpen(true)
+        return
+      }
+
+      // A: Open action panel/sheet
+      if (e.key === 'a' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        setActionSheetOpen(true)
+        return
+      }
+
+      // T: Open create task dialog
+      if (e.key === 't' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        router.push(`/leads/${leadId}?action=task`)
+        return
+      }
+
+      // S: Open snooze menu
+      if (e.key === 's' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
+        e.preventDefault()
+        router.push(`/leads/${leadId}?action=snooze`)
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [leadId, router])
+
   return (
     <MainLayout>
       <FocusModeBanner />
+      
+      {/* Command Palette - PHASE C */}
+      <LeadCommandPalette
+        leadId={leadId}
+        lead={lead}
+        open={commandPaletteOpen}
+        onOpenChange={setCommandPaletteOpen}
+        onComposerFocus={() => {
+          setComposerOpen(true)
+          const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+          if (composer) {
+            composer.focus()
+            composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
+        }}
+      />
       {/* Mobile Layout (<1024px) */}
       <div className={cn(
         "lg:hidden h-screen flex flex-col transition-opacity duration-300",
@@ -305,6 +379,7 @@ export default function LeadDetailPage({
         <div className="flex-1 flex flex-col min-h-0 pb-20">
           <ConversationWorkspace
             leadId={leadId}
+            lead={lead}
             channel={channel}
             onSend={handleSendMessage}
             composerOpen={composerOpen}
@@ -426,6 +501,7 @@ export default function LeadDetailPage({
           )}>
             <ConversationWorkspace
               leadId={leadId}
+              lead={lead}
               channel={channel}
               onSend={handleSendMessage}
             />

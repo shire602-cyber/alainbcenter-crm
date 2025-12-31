@@ -25,6 +25,7 @@ import { ReplySuccessBanner } from './ReplySuccessBanner'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
+import { LeadHealthStrip } from './LeadHealthStrip'
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -44,6 +45,19 @@ interface Message {
 
 interface ConversationWorkspaceProps {
   leadId: number
+  lead?: {
+    id: number
+    stage?: string | null
+    serviceType?: {
+      name?: string
+    } | null
+    lastInboundAt?: Date | string | null
+    lastOutboundAt?: Date | string | null
+    assignedUser?: {
+      id: number
+      name: string | null
+    } | null
+  } | null
   channel?: string
   onSend?: (message: string) => Promise<void>
   composerOpen?: boolean
@@ -180,7 +194,8 @@ function DateSeparator({ date }: { date: string }) {
 }
 
 export const ConversationWorkspace = memo(function ConversationWorkspace({ 
-  leadId, 
+  leadId,
+  lead,
   channel = 'whatsapp', 
   onSend, 
   composerOpen, 
@@ -379,8 +394,62 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
     )
   }
 
+  // Fetch lead data if not provided
+  const [leadData, setLeadData] = useState<ConversationWorkspaceProps['lead']>(lead)
+  
+  useEffect(() => {
+    if (!lead && leadId) {
+      fetch(`/api/leads/${leadId}`)
+        .then(res => res.json())
+        .then(data => {
+          setLeadData({
+            id: data.id,
+            stage: data.stage,
+            serviceType: data.serviceType,
+            lastInboundAt: data.lastInboundAt,
+            lastOutboundAt: data.lastOutboundAt,
+            assignedUser: data.assignedUser,
+          })
+        })
+        .catch(() => {})
+    }
+  }, [lead, leadId])
+
   return (
     <div className="flex-1 flex flex-col h-full bg-app relative">
+      {/* Health Strip - PHASE A */}
+      {leadData && (
+        <LeadHealthStrip 
+          lead={leadData}
+          onStageClick={() => {
+            // Scroll to stage selector or open stage modal
+            const stageSelector = document.querySelector('[data-stage-selector]')
+            if (stageSelector) {
+              stageSelector.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+          }}
+          onOwnerClick={() => {
+            // Open assign dialog
+            window.location.href = `${window.location.pathname}?action=assign`
+          }}
+          onServiceClick={() => {
+            // Scroll to service section
+            const serviceSection = document.querySelector('[data-service-section]')
+            if (serviceSection) {
+              serviceSection.scrollIntoView({ behavior: 'smooth' })
+            }
+          }}
+          onSLAClick={() => {
+            // Focus composer to reply
+            const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+            if (composer) {
+              composer.focus()
+              composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
+          }}
+        />
+      )}
+      
       {/* Messages Area - Airy spacing */}
       <div 
         ref={messagesContainerRef}
