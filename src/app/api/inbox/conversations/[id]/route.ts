@@ -132,8 +132,14 @@ export async function GET(
     }
 
     // Check if conversation is archived (soft-deleted)
-    // Safe property access - deletedAt may not be in select, but Prisma will include it if in schema
-    const isArchived = (conversation as any).deletedAt !== null && (conversation as any).deletedAt !== undefined
+    // Safe property access - deletedAt may not exist if migration not applied
+    let isArchived = false
+    try {
+      isArchived = (conversation as any).deletedAt !== null && (conversation as any).deletedAt !== undefined
+    } catch (e) {
+      // deletedAt column may not exist - ignore
+      isArchived = false
+    }
 
     // Format messages for frontend - PHASE 5A: Include attachments
     const formattedMessages = conversation.messages.map((msg: any) => ({
