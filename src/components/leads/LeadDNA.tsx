@@ -224,13 +224,19 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
 }
 
 // PHASE 5E: Quote Cadence component
-// NOTE: This component is only rendered when quotationSentAt exists in parent
-function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date }) {
+// ALWAYS render this component - it handles null quotationSentAt internally
+function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date | null }) {
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
   const [quoteFollowup, setQuoteFollowup] = useState<{ task: { id: number; title: string; dueAt: Date; cadenceDays: number } | null; daysUntil: number | null } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // Only load if quotationSentAt exists
+    if (!quotationSentAt) {
+      setLoading(false)
+      return
+    }
+
     let mounted = true
 
     async function loadQuoteCadence() {
@@ -255,9 +261,14 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
     return () => {
       mounted = false
     }
-  }, [leadId])
+  }, [leadId, quotationSentAt])
 
   // NOW we can do conditional returns - all hooks have been called
+  // Return null if no quotationSentAt (this is safe because all hooks were called)
+  if (!quotationSentAt) {
+    return null
+  }
+
   if (loading) {
     return (
       <Card className="card-premium p-4">
@@ -592,17 +603,14 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
           <ExpiryTimeline lead={lead} />
         </div>
 
-        {/* PHASE 5E: Quote Cadence - Only show if quotation was sent */}
-        {(() => {
-          const quotationSentAt = (lead as any)?.quotationSentAt
-          if (!quotationSentAt) return null
-          return (
-            <div>
-              <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
-              <QuoteCadence leadId={lead.id} quotationSentAt={new Date(quotationSentAt)} />
-            </div>
-          )
-        })()}
+        {/* PHASE 5E: Quote Cadence - Always render component, it handles null internally */}
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
+          <QuoteCadence 
+            leadId={lead.id} 
+            quotationSentAt={(lead as any)?.quotationSentAt ? new Date((lead as any).quotationSentAt) : null} 
+          />
+        </div>
 
         {/* Sponsor Search */}
         <div>
