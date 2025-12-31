@@ -33,14 +33,33 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu'
 
+// PHASE 5A: Extended Message interface with media support
+interface MessageAttachment {
+  id: number
+  type: string // image | document | audio | video
+  url: string
+  mimeType?: string | null
+  filename?: string | null
+  sizeBytes?: number | null
+  thumbnailUrl?: string | null
+  durationSec?: number | null
+  createdAt: string
+}
+
 interface Message {
   id: number
   direction: 'INBOUND' | 'OUTBOUND'
   body: string | null
-  type?: string // CRITICAL FIX 3: Message type (text, audio, etc.)
+  type?: string // text | image | document | audio | video
   createdAt: string
   status?: string
   channel: string
+  // PHASE 5A: Media fields from Message model
+  mediaUrl?: string | null
+  mediaMimeType?: string | null
+  providerMessageId?: string | null
+  // PHASE 5B: Attachments
+  attachments?: MessageAttachment[]
 }
 
 interface ConversationWorkspaceProps {
