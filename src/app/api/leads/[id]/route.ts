@@ -76,12 +76,26 @@ export async function GET(
           }
         },
         conversations: {
-          where: { deletedAt: null }, // PHASE 1: Exclude soft-deleted conversations
+          where: { 
+            deletedAt: null, // PHASE 1: Exclude soft-deleted conversations
+          },
           orderBy: { createdAt: 'desc' },
-          include: {
+          take: 10, // Limit to 10 most recent conversations
+          select: {
+            id: true,
+            channel: true,
+            status: true,
+            lastMessageAt: true,
+            createdAt: true,
             messages: {
               orderBy: { createdAt: 'desc' },
-              take: 1, // Last message preview
+              take: 1, // Last message preview only
+              select: {
+                id: true,
+                direction: true,
+                body: true,
+                createdAt: true,
+              }
             }
           }
         },

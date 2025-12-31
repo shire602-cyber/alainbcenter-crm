@@ -29,7 +29,15 @@ export async function GET(
       conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
         include: {
-          contact: true,
+          contact: {
+            select: {
+              id: true,
+              fullName: true,
+              phone: true,
+              email: true,
+              nationality: true,
+            }
+          },
           lead: {
             select: {
               id: true,
@@ -84,6 +92,7 @@ export async function GET(
           },
           messages: {
             orderBy: { createdAt: 'asc' },
+            take: 500, // Limit to last 500 messages to prevent memory issues
             include: {
               createdByUser: {
                 select: {
@@ -103,6 +112,7 @@ export async function GET(
                   durationSec: true,
                   thumbnailUrl: true,
                 },
+                take: 10, // Limit attachments per message
               },
             },
           },
