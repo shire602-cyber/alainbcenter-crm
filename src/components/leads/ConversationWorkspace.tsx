@@ -15,7 +15,7 @@
  */
 
 import { useState, useEffect, useRef, memo, useCallback, useMemo } from 'react'
-import { MessageSquare, Send, Sparkles, CheckCircle2, Clock, AlertCircle, ChevronDown, ArrowDown } from 'lucide-react'
+import { MessageSquare, Send, Sparkles, CheckCircle2, Clock, AlertCircle, ChevronDown, ArrowDown, Image, FileText, Music, Video, Download, X } from 'lucide-react'
 import { format, isToday, isYesterday, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
@@ -118,13 +118,192 @@ function groupMessages(messages: Message[]): MessageGroup[] {
   return groups
 }
 
+// PHASE 5C: Media rendering components
+function MediaAttachment({ attachment, isOutbound }: { attachment: MessageAttachment; isOutbound: boolean }) {
+  const [imageError, setImageError] = useState(false)
+  const [showLightbox, setShowLightbox] = useState(false)
+
+  if (attachment.type === 'image') {
+    return (
+      <>
+        <div className="relative group">
+          <img
+            src={attachment.url}
+            alt={attachment.filename || 'Image'}
+            className={cn(
+              "rounded-lg max-w-[300px] max-h-[300px] object-cover cursor-pointer",
+              "hover:opacity-90 transition-opacity"
+            )}
+            onError={() => setImageError(true)}
+            onClick={() => setShowLightbox(true)}
+          />
+          {imageError && (
+            <div className={cn(
+              "flex items-center gap-2 p-2 rounded text-xs",
+              isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+            )}>
+              <Image className="h-4 w-4" />
+              <span>Image unavailable</span>
+            </div>
+          )}
+        </div>
+        {showLightbox && (
+          <div
+            className="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowLightbox(false)}
+          >
+            <div className="relative max-w-4xl max-h-[90vh]">
+              <img
+                src={attachment.url}
+                alt={attachment.filename || 'Image'}
+                className="max-w-full max-h-[90vh] object-contain rounded-lg"
+              />
+              <Button
+                variant="ghost"
+                size="icon"
+                className="absolute top-4 right-4 bg-black/50 hover:bg-black/70 text-white"
+                onClick={() => setShowLightbox(false)}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </>
+    )
+  }
+
+  if (attachment.type === 'audio') {
+    return (
+      <div className={cn(
+        "flex items-center gap-3 p-3 rounded-lg",
+        isOutbound ? "bg-primary/20" : "bg-slate-100 dark:bg-slate-800"
+      )}>
+        <Music className={cn(
+          "h-5 w-5 flex-shrink-0",
+          isOutbound ? "text-primary-foreground" : "text-slate-600 dark:text-slate-400"
+        )} />
+        <audio controls className="flex-1 max-w-[250px]">
+          <source src={attachment.url} type={attachment.mimeType || 'audio/mpeg'} />
+          Your browser does not support audio playback.
+        </audio>
+        {attachment.durationSec && (
+          <span className={cn(
+            "text-xs",
+            isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+          )}>
+            {Math.floor(attachment.durationSec / 60)}:{(attachment.durationSec % 60).toString().padStart(2, '0')}
+          </span>
+        )}
+      </div>
+    )
+  }
+
+  if (attachment.type === 'document') {
+    const isPdf = attachment.mimeType === 'application/pdf'
+    const sizeBytes = attachment.sizeBytes
+    const fileSize = sizeBytes
+      ? sizeBytes < 1024
+        ? `${sizeBytes} B`
+        : sizeBytes < 1024 * 1024
+        ? `${(sizeBytes / 1024).toFixed(1)} KB`
+        : `${(sizeBytes / (1024 * 1024)).toFixed(1)} MB`
+      : null
+
+    return (
+      <a
+        href={attachment.url}
+        download={attachment.filename}
+        className={cn(
+          "flex items-center gap-3 p-3 rounded-lg border transition-colors",
+          isOutbound
+            ? "bg-primary/10 border-primary/20 hover:bg-primary/20"
+            : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+        )}
+      >
+        {isPdf ? (
+          <FileText className={cn(
+            "h-5 w-5 flex-shrink-0",
+            isOutbound ? "text-primary-foreground" : "text-red-600"
+          )} />
+        ) : (
+          <FileText className={cn(
+            "h-5 w-5 flex-shrink-0",
+            isOutbound ? "text-primary-foreground" : "text-slate-600 dark:text-slate-400"
+          )} />
+        )}
+        <div className="flex-1 min-w-0">
+          <div className={cn(
+            "text-sm font-medium truncate",
+            isOutbound ? "text-primary-foreground" : "text-slate-900 dark:text-slate-100"
+          )}>
+            {attachment.filename || 'Document'}
+          </div>
+          {fileSize && (
+            <div className={cn(
+              "text-xs mt-0.5",
+              isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+            )}>
+              {fileSize}
+            </div>
+          )}
+        </div>
+        <Download className={cn(
+          "h-4 w-4 flex-shrink-0",
+          isOutbound ? "text-primary-foreground/70" : "text-muted-foreground"
+        )} />
+      </a>
+    )
+  }
+
+  if (attachment.type === 'video') {
+    return (
+      <div className="relative">
+        <video
+          src={attachment.url}
+          controls
+          className="rounded-lg max-w-[300px] max-h-[300px]"
+        >
+          Your browser does not support video playback.
+        </video>
+        {attachment.durationSec && (
+          <div className={cn(
+            "absolute bottom-2 right-2 px-2 py-1 rounded text-xs bg-black/70 text-white",
+          )}>
+            {Math.floor(attachment.durationSec / 60)}:{(attachment.durationSec % 60).toString().padStart(2, '0')}
+          </div>
+        )}
+      </div>
+    )
+  }
+
+  return null
+}
+
 function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: { 
   message: Message
   isOutbound: boolean
   showAvatar: boolean
   isLastInGroup: boolean
 }) {
-  const isAudio = message.type === 'audio'
+  const isAudio = message.type === 'audio' || message.mediaMimeType?.startsWith('audio/')
+  const hasMedia = message.mediaUrl || (message.attachments && message.attachments.length > 0)
+  const attachments = message.attachments || []
+  
+  // If message has mediaUrl but no attachments, create a virtual attachment
+  const mediaAttachments = message.mediaUrl && attachments.length === 0
+    ? [{
+        id: message.id,
+        type: message.type || (message.mediaMimeType?.startsWith('image/') ? 'image' : message.mediaMimeType?.startsWith('audio/') ? 'audio' : 'document'),
+        url: message.mediaUrl,
+        mimeType: message.mediaMimeType,
+        filename: null,
+        sizeBytes: null,
+        thumbnailUrl: null,
+        durationSec: null,
+        createdAt: message.createdAt,
+      }]
+    : attachments
   
   return (
     <div className={cn(
@@ -149,8 +328,17 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
           ? "bg-primary text-primary-foreground"
           : "bg-card border border-subtle"
       )}>
-        {/* CRITICAL FIX 3: Show audio label for audio messages */}
-        {isAudio && (
+        {/* PHASE 5C: Render media attachments */}
+        {hasMedia && mediaAttachments.length > 0 && (
+          <div className="space-y-2 mb-2">
+            {mediaAttachments.map((att) => (
+              <MediaAttachment key={att.id} attachment={att} isOutbound={isOutbound} />
+            ))}
+          </div>
+        )}
+        
+        {/* PHASE 5C: Show audio label for audio messages */}
+        {isAudio && !hasMedia && (
           <div className={cn(
             "mb-2 text-xs font-medium",
             isOutbound ? "text-primary-foreground/80" : "text-muted-foreground"
@@ -158,12 +346,17 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
             🎤 Audio Message
           </div>
         )}
-        <p className={cn(
-          "text-body leading-relaxed whitespace-pre-wrap break-words",
-          isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"
-        )}>
-          {message.body}
-        </p>
+        
+        {/* Text body - only show if not media-only message */}
+        {message.body && message.body !== '[Audio received]' && message.body !== '[audio]' && (
+          <p className={cn(
+            "text-body leading-relaxed whitespace-pre-wrap break-words",
+            isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"
+          )}>
+            {message.body}
+          </p>
+        )}
+        
         <div className={cn(
           "flex items-center gap-1.5 mt-1.5 text-meta",
           isOutbound ? "text-primary-foreground/70" : "muted-text"
@@ -232,9 +425,32 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
   const [smartReplies, setSmartReplies] = useState<string[]>([])
   const [showSmartReplies, setShowSmartReplies] = useState(false)
   const { showToast } = useToast()
-
+  
+  // PHASE 5C: Media filter state
+  const [mediaFilter, setMediaFilter] = useState<'all' | 'media' | 'docs' | 'audio'>('all')
+  
+  // PHASE 5C: Filter messages by media type
+  const filteredMessages = useMemo(() => {
+    if (mediaFilter === 'all') return messages
+    return messages.filter((msg) => {
+      const hasMedia = msg.mediaUrl || (msg.attachments && msg.attachments.length > 0)
+      if (!hasMedia) return false
+      
+      if (mediaFilter === 'media') {
+        return msg.attachments?.some(a => a.type === 'image' || a.type === 'video') || msg.type === 'image' || msg.type === 'video'
+      }
+      if (mediaFilter === 'docs') {
+        return msg.attachments?.some(a => a.type === 'document') || msg.type === 'document'
+      }
+      if (mediaFilter === 'audio') {
+        return msg.attachments?.some(a => a.type === 'audio') || msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/')
+      }
+      return true
+    })
+  }, [messages, mediaFilter])
+  
   // Memoize grouped messages to avoid recalculation
-  const messageGroups = useMemo(() => groupMessages(messages), [messages])
+  const messageGroups = useMemo(() => groupMessages(filteredMessages), [filteredMessages])
 
   // A) Define loadMessages FIRST (before useSmartPolling)
   const loadMessages = useCallback(async () => {
@@ -483,11 +699,15 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
         ref={messagesContainerRef}
         className="flex-1 overflow-y-auto px-6 py-6 space-y-2"
       >
-        {messages.length === 0 ? (
+        {messageGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <MessageSquare className="h-12 w-12 text-slate-300 dark:text-slate-700 mb-4" />
-            <p className="text-body muted-text">No messages yet</p>
-            <p className="text-meta muted-text mt-1">Start the conversation</p>
+            <p className="text-body muted-text">
+              {messages.length === 0 ? 'No messages yet' : `No ${mediaFilter === 'all' ? '' : mediaFilter} messages`}
+            </p>
+            <p className="text-meta muted-text mt-1">
+              {messages.length === 0 ? 'Start the conversation' : 'Try a different filter'}
+            </p>
           </div>
         ) : (
           messageGroups.map((group, groupIdx) => {

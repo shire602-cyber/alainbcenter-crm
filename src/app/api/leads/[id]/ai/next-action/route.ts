@@ -52,9 +52,26 @@ export async function POST(
       )
     }
 
+    // PHASE 5E: Check for quote follow-up tasks
+    const { getNextQuoteFollowup } = await import('@/lib/followups/quoteFollowups')
+    const quoteFollowup = await getNextQuoteFollowup(leadId)
+    
+    // Check if quotation was sent (using quotationSentAt or checking for quote-related tasks)
+    const quotationSentAt = (lead as any).quotationSentAt
+    const hasQuoteFollowups = quoteFollowup.task !== null
+
     // TODO: Implement actual AI next action generation
     // For now, return contextual suggestions
     const actions: string[] = []
+
+    // PHASE 5E: Recommend quote follow-up if quote was sent and next follow-up is due soon
+    if (quotationSentAt && hasQuoteFollowups && quoteFollowup.daysUntil !== null) {
+      if (quoteFollowup.daysUntil <= 1) {
+        actions.push(`Follow up on quote - next follow-up ${quoteFollowup.daysUntil === 0 ? 'due today' : 'due tomorrow'} (D+${quoteFollowup.task?.cadenceDays})`)
+      } else if (quoteFollowup.daysUntil <= 3) {
+        actions.push(`Follow up on quote - next follow-up in ${quoteFollowup.daysUntil} days (D+${quoteFollowup.task?.cadenceDays})`)
+      }
+    }
 
     if (!lead.nextFollowUpAt) {
       actions.push('Schedule a follow-up call or message')

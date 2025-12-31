@@ -223,6 +223,93 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
   )
 }
 
+// PHASE 5E: Quote Cadence component
+function QuoteCadence({ leadId }: { leadId: number }) {
+  const [quoteFollowup, setQuoteFollowup] = useState<{ task: { id: number; title: string; dueAt: Date; cadenceDays: number } | null; daysUntil: number | null } | null>(null)
+  const [quotationSentAt, setQuotationSentAt] = useState<Date | null>(null)
+  const [loading, setLoading] = useState(true)
+
+  useEffect(() => {
+    loadQuoteCadence()
+  }, [leadId])
+
+  async function loadQuoteCadence() {
+    try {
+      // Load lead to check quotationSentAt
+      const leadRes = await fetch(`/api/leads/${leadId}`)
+      if (leadRes.ok) {
+        const leadData = await leadRes.json()
+        if (leadData.quotationSentAt) {
+          setQuotationSentAt(new Date(leadData.quotationSentAt))
+        }
+      }
+
+      // Load next quote follow-up
+      const { getNextQuoteFollowup } = await import('@/lib/followups/quoteFollowups')
+      const followup = await getNextQuoteFollowup(leadId)
+      setQuoteFollowup(followup)
+    } catch (error) {
+      console.error('Failed to load quote cadence:', error)
+    } finally {
+      setLoading(false)
+    }
+  }
+
+  if (loading || !quotationSentAt) {
+    return null
+  }
+
+  if (!quoteFollowup || !quoteFollowup.task) {
+    return (
+      <Card className="card-premium p-4">
+        <div className="flex items-center gap-2 mb-3">
+          <Target className="h-4 w-4 text-slate-500" />
+          <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+            Quote Cadence
+          </h3>
+        </div>
+        <p className="text-meta muted-text">
+          Quote sent {format(quotationSentAt, 'MMM d, yyyy')}. All follow-ups completed.
+        </p>
+      </Card>
+    )
+  }
+
+  return (
+    <Card className="card-premium p-4">
+      <div className="flex items-center gap-2 mb-3">
+        <Target className="h-4 w-4 text-slate-500" />
+        <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+          Quote Cadence
+        </h3>
+      </div>
+      <div className="space-y-2">
+        <div className="flex items-center justify-between p-2 rounded-[10px] bg-slate-50 dark:bg-slate-900/50">
+          <div>
+            <p className="text-body font-medium text-slate-900 dark:text-slate-100">
+              Next follow-up: D+{quoteFollowup.task.cadenceDays}
+            </p>
+            <p className="text-meta muted-text">
+              {format(quoteFollowup.task.dueAt, 'MMM d, yyyy')}
+            </p>
+          </div>
+          <Badge className={cn(
+            "chip",
+            quoteFollowup.daysUntil !== null && quoteFollowup.daysUntil <= 1 ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" :
+            quoteFollowup.daysUntil !== null && quoteFollowup.daysUntil <= 3 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" :
+            "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+          )}>
+            {quoteFollowup.daysUntil !== null ? `${quoteFollowup.daysUntil}d` : 'Due'}
+          </Badge>
+        </div>
+        <p className="text-xs text-muted-foreground">
+          Quote sent {format(quotationSentAt, 'MMM d, yyyy')}
+        </p>
+      </div>
+    </Card>
+  )
+}
+
 function ExpiryTimeline({ lead }: { lead: LeadDNAProps['lead'] }) {
   const expiries = useMemo(() => {
     const items: Array<{ type: string; date: Date; daysUntil: number }> = []
@@ -496,6 +583,12 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
         <div>
           <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
           <ExpiryTimeline lead={lead} />
+        </div>
+
+        {/* PHASE 5E: Quote Cadence */}
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
+          <QuoteCadence leadId={lead.id} />
         </div>
 
         {/* Sponsor Search */}
