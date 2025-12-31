@@ -93,6 +93,17 @@ type Message = {
     email: string
   } | null
   createdAt: string
+  // PHASE 5A: Include attachments
+  attachments?: Array<{
+    id: number
+    type: string
+    url: string
+    mimeType: string | null
+    filename: string | null
+    sizeBytes: number | null
+    durationSec: number | null
+    thumbnailUrl: string | null
+  }>
 }
 
 type Lead = {
@@ -921,6 +932,70 @@ function InboxPageContent() {
                                 <FileText className="h-5 w-5" />
                                 <span className="text-sm font-medium">{msg.body || 'Document'}</span>
                               </a>
+                            </div>
+                          ) : msg.attachments && msg.attachments.length > 0 ? (
+                            // PHASE 5A: Render attachments
+                            <div className="space-y-2">
+                              {msg.attachments.map((att) => {
+                                if (att.type === 'image') {
+                                  return (
+                                    <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                                      <img
+                                        src={att.url}
+                                        alt={att.filename || 'Image'}
+                                        className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
+                                        loading="lazy"
+                                      />
+                                      <a
+                                        href={att.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Open image in new tab"
+                                      >
+                                        <ImageIcon className="h-8 w-8 text-white" />
+                                      </a>
+                                    </div>
+                                  )
+                                } else if (att.type === 'document') {
+                                  return (
+                                    <a
+                                      key={att.id}
+                                      href={att.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                      <FileText className="h-5 w-5" />
+                                      <span className="text-sm font-medium">{att.filename || 'Document'}</span>
+                                    </a>
+                                  )
+                                } else if (att.type === 'audio') {
+                                  return (
+                                    <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                      <AudioMessagePlayer
+                                        mediaId={att.url}
+                                        mimeType={att.mimeType}
+                                        messageId={msg.id}
+                                        className="w-full"
+                                      />
+                                    </div>
+                                  )
+                                } else {
+                                  return (
+                                    <a
+                                      key={att.id}
+                                      href={att.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                    >
+                                      <FileText className="h-5 w-5" />
+                                      <span className="text-sm font-medium">{att.filename || 'File'}</span>
+                                    </a>
+                                  )
+                                }
+                              })}
                             </div>
                           ) : msg.mediaUrl ? (
                             <div className="space-y-1">
