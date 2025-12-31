@@ -70,9 +70,8 @@ export default function LeadDetailPage({
   async function loadLead(id: number) {
     try {
       // Get conversationId or contactId from URL search params for fallback
-      const searchParams = new URLSearchParams(window.location.search)
-      const conversationId = searchParams.get('conversationId')
-      const contactId = searchParams.get('contactId')
+      const conversationId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('conversationId') : null
+      const contactId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('contactId') : null
       
       let url = `/api/leads/${id}`
       if (conversationId) url += `?conversationId=${conversationId}`
@@ -230,9 +229,9 @@ export default function LeadDetailPage({
 
   const isFocusMode = typeof window !== 'undefined' && sessionStorage.getItem('focusMode') === 'true'
 
-  // Keyboard shortcuts - PHASE C
+  // Keyboard shortcuts - PHASE C (client-only)
   useEffect(() => {
-    if (!leadId) return
+    if (typeof window === 'undefined' || !leadId) return
 
     const handleKeyDown = (e: KeyboardEvent) => {
       // Ignore if typing in input/textarea
@@ -298,10 +297,12 @@ export default function LeadDetailPage({
         onOpenChange={setCommandPaletteOpen}
         onComposerFocus={() => {
           setComposerOpen(true)
-          const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-          if (composer) {
-            composer.focus()
-            composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          if (typeof window !== 'undefined') {
+            const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+            if (composer) {
+              composer.focus()
+              composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            }
           }
         }}
       />

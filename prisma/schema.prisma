@@ -588,6 +588,34 @@ model Document {
   updatedAt        DateTime  @updatedAt
 }
 
+// PHASE 5: LeadAttachment for general file attachments (images, audio, documents) linked to leads/conversations/messages
+model LeadAttachment {
+  id             Int          @id @default(autoincrement())
+  lead           Lead         @relation(fields: [leadId], references: [id])
+  leadId         Int
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId Int?
+  message        Message?     @relation(fields: [messageId], references: [id])
+  messageId      Int?
+  type           String       // image | document | audio | video
+  url            String       // Public URL or storage path
+  mimeType       String?      // MIME type (e.g., image/jpeg, application/pdf, audio/mpeg)
+  filename       String       // Original filename
+  sizeBytes      Int?         // File size in bytes
+  thumbnailUrl   String?      // Thumbnail URL for images/videos
+  durationSec    Int?         // Duration in seconds (for audio/video)
+  storageProvider String      @default("local") // local | s3 | r2 | meta
+  storagePath    String?      // Server path or storage key
+  createdById    Int?
+  createdBy      User?        @relation("CreatedAttachments", fields: [createdById], references: [id])
+  createdAt      DateTime     @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([type])
+}
+
 model ChecklistItem {
   id          Int       @id @default(autoincrement())
   lead        Lead      @relation(fields: [leadId], references: [id])
