@@ -41,6 +41,7 @@ model User {
   createdTasks          Task[]               @relation("CreatedTasks")
   uploadedDocuments     Document[]           @relation("UploadedDocuments")
   createdAITrainingDocs AITrainingDocument[]
+  createdAttachments    LeadAttachment[]      @relation("CreatedAttachments")
   staffSettings         StaffSettings?
 }
 
@@ -218,6 +219,7 @@ model Lead {
   notifications      Notification[]
   reminders          Reminder[]
   autoReplyLogs      AutoReplyLog[]
+  attachments        LeadAttachment[]
 }
 
 model AIAgentProfile {
@@ -354,6 +356,7 @@ model Conversation {
   messages             Message[]
   communicationLogs    CommunicationLog[]
   aiDrafts             AIDraft[]
+  attachments          LeadAttachment[]
   aiActionLogs         AIActionLog[]
   statusEvents         MessageStatusEvent[]
   tasks                Task[]                @relation("ConversationTasks")
@@ -408,6 +411,7 @@ model Message {
   autoReplyLogs            AutoReplyLog[]
   replyEngineLogs          ReplyEngineLog[]
   replyEngineLogsAsInbound ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
+  attachments              LeadAttachment[]
   outboundJobs             OutboundJob[]        @relation("OutboundJobInboundMessage")
 
   @@unique([channel, providerMessageId]) // Prevent duplicate messages when webhooks retry (composite unique)

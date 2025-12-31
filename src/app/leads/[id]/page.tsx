@@ -250,10 +250,12 @@ export default function LeadDetailPage({
       // R: Focus reply composer
       if (e.key === 'r' && !e.metaKey && !e.ctrlKey && !e.altKey && !e.shiftKey) {
         e.preventDefault()
-        const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-        if (composer) {
-          composer.focus()
-          composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        if (typeof window !== 'undefined') {
+          const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+          if (composer) {
+            composer.focus()
+            composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+          }
         }
         setComposerOpen(true)
         return
@@ -297,7 +299,7 @@ export default function LeadDetailPage({
         onOpenChange={setCommandPaletteOpen}
         onComposerFocus={() => {
           setComposerOpen(true)
-          if (typeof window !== 'undefined') {
+          if (typeof window !== 'undefined' && typeof document !== 'undefined') {
             const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
             if (composer) {
               composer.focus()
@@ -519,10 +521,12 @@ export default function LeadDetailPage({
               tasks={lead.tasks || []}
               onActionPending={setActionPending}
               onComposerFocus={() => {
-                const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-                if (composer) {
-                  composer.focus()
-                  composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                if (typeof window !== 'undefined' && typeof document !== 'undefined') {
+                  const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+                  if (composer) {
+                    composer.focus()
+                    composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+                  }
                 }
               }}
             />
