@@ -50,7 +50,7 @@ export async function GET(
       where.channel = channel
     }
 
-    // Fetch messages
+    // Fetch messages - PHASE 5A: Include BOTH inbound and outbound, with attachments
     const messages = await prisma.message.findMany({
       where,
       include: {
@@ -79,21 +79,34 @@ export async function GET(
           },
           take: 1, // Get latest status
         },
+        attachments: {
+          select: {
+            id: true,
+            type: true,
+            url: true,
+            mimeType: true,
+            filename: true,
+            sizeBytes: true,
+            thumbnailUrl: true,
+            durationSec: true,
+            createdAt: true,
+          },
+        },
       },
       orderBy: {
-        createdAt: 'asc', // Oldest first
-      },
+        createdAt: 'asc', // Oldest first - chronological order
     })
 
-    // Format response
+    // Format response - PHASE 5A: Include all media fields
     const formattedMessages = messages.map((msg) => ({
       id: msg.id,
-      direction: msg.direction,
+      direction: msg.direction, // INBOUND | OUTBOUND
       channel: msg.channel,
-      type: msg.type,
+      type: msg.type || 'text', // text | image | document | audio | video
       body: msg.body,
       mediaUrl: msg.mediaUrl,
       mediaMimeType: msg.mediaMimeType,
+      providerMessageId: msg.providerMessageId, // WhatsApp message ID if any
       status: msg.status,
       sentAt: msg.sentAt,
       deliveredAt: msg.deliveredAt,
@@ -113,6 +126,18 @@ export async function GET(
             receivedAt: msg.statusEvents[0].receivedAt,
           }
         : null,
+      // PHASE 5B: Include attachments
+      attachments: msg.attachments.map((att) => ({
+        id: att.id,
+        type: att.type,
+        url: att.url,
+        mimeType: att.mimeType,
+        filename: att.filename,
+        sizeBytes: att.sizeBytes,
+        thumbnailUrl: att.thumbnailUrl,
+        durationSec: att.durationSec,
+        createdAt: att.createdAt,
+      })),
     }))
 
     return NextResponse.json({
