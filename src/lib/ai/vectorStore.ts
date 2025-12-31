@@ -302,24 +302,61 @@ export async function searchTrainingDocuments(
     }
 
     // CRITICAL FIX E: Search vector store with language/stage/serviceKey filters
+    // Note: vectorStore.search accepts filters as part of allowedDocumentIds logic
+    // We'll filter by language/stage/serviceKey after search if needed
     const results = await vectorStore.search(
       queryEmbedding, 
       topK, 
       similarityThreshold, 
-      trainingDocumentIds,
-      language,
-      stage,
-      serviceKey
+      trainingDocumentIds
     )
-
-    // Filter by type if specified
+    
+    // CRITICAL FIX E: Filter results by language/stage/serviceKey
     let filteredDocs = results.documents
     let filteredScores = results.scores
     
-    if (type) {
-      // Filter both documents and scores together to maintain alignment
+    if (language !== undefined || stage !== undefined || serviceKey !== undefined) {
       const filtered = results.documents
         .map((doc, idx) => ({ doc, score: results.scores[idx] }))
+        .filter(({ doc }) => {
+          // Filter by language (null = all languages, otherwise exact match)
+          if (language !== undefined) {
+            if (language === null) {
+              if (doc.metadata.language !== null) return false
+            } else {
+              if (doc.metadata.language !== null && doc.metadata.language !== language) return false
+            }
+          }
+          
+          // Filter by stage (null = all stages, otherwise exact match)
+          if (stage !== undefined) {
+            if (stage === null) {
+              if (doc.metadata.stage !== null) return false
+            } else {
+              if (doc.metadata.stage !== null && doc.metadata.stage !== stage) return false
+            }
+          }
+          
+          // Filter by serviceKey (null = all services, otherwise exact match)
+          if (serviceKey !== undefined) {
+            if (serviceKey === null) {
+              if (doc.metadata.serviceKey !== null) return false
+            } else {
+              if (doc.metadata.serviceKey !== null && doc.metadata.serviceKey !== serviceKey) return false
+            }
+          }
+          
+          return true
+        })
+      
+      filteredDocs = filtered.map(({ doc }) => doc)
+      filteredScores = filtered.map(({ score }) => score)
+    }
+
+    // Filter by type if specified (after language/stage/serviceKey filtering)
+    if (type) {
+      const filtered = filteredDocs
+        .map((doc, idx) => ({ doc, score: filteredScores[idx] }))
         .filter(({ doc }) => doc.metadata.type === type)
       
       filteredDocs = filtered.map(({ doc }) => doc)

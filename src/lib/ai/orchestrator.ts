@@ -208,7 +208,7 @@ export async function generateAIReply(
   try {
     // Step 0: Load conversation state (with optimistic locking)
     const conversationState = await loadConversationState(input.conversationId)
-    const expectedStateVersion = conversationState.stateVersion // Use actual state version for optimistic locking
+    let expectedStateVersion = conversationState.stateVersion // Use actual state version for optimistic locking
     
     // DIAGNOSTIC LOG: state loaded
     console.log(`[ORCHESTRATOR] STATE-LOADED`, JSON.stringify({
