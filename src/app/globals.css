@@ -298,9 +298,10 @@
 
   /* Card improvements */
   .card-modern {
-    @apply rounded-2xl border border-slate-200 dark:border-slate-800;
-    @apply bg-white dark:bg-slate-900;
-    @apply shadow-sm hover:shadow-md transition-shadow duration-200;
+    @apply rounded-2xl border-2 border-blue-100 dark:border-blue-900/50;
+    @apply bg-gradient-to-br from-white to-blue-50/20 dark:from-slate-900 dark:to-blue-950/10;
+    @apply shadow-lg hover:shadow-2xl transition-all duration-300;
+    @apply hover:-translate-y-1 hover:scale-[1.01] hover:border-blue-300 dark:hover:border-blue-700;
   }
 
   /* Reduced borders */
