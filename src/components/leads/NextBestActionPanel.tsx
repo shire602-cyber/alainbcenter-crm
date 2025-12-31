@@ -390,7 +390,115 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
             </AccordionItem>
           </Accordion>
           )}
+
+        {/* Playbooks Section - PHASE B (Collapsed by Default) */}
+        <PlaybooksSection leadId={leadId} lead={lead} onActionPending={onActionPending} />
       </div>
     </div>
   )
 })
+
+// Playbooks Section Component - PHASE B
+function PlaybooksSection({ 
+  leadId, 
+  lead, 
+  onActionPending 
+}: { 
+  leadId: number
+  lead?: NextBestActionPanelProps['lead']
+  onActionPending?: (isPending: boolean) => void
+}) {
+  const [playbooks, setPlaybooks] = useState<Array<{ key: string; label: string; description: string }>>([])
+  const [loading, setLoading] = useState(false)
+  const [executing, setExecuting] = useState<string | null>(null)
+  const { showToast } = useToast()
+  const router = useRouter()
+
+  useEffect(() => {
+    if (lead) {
+      const { getAvailablePlaybooks } = require('@/lib/leads/playbooks')
+      const available = getAvailablePlaybooks(lead.serviceType?.name, lead.stage)
+      
+      const playbookLabels: Record<string, { label: string; description: string }> = {
+        request_docs: { label: 'Request Documents', description: 'Send document request template' },
+        send_pricing: { label: 'Send Pricing', description: 'Send pricing information' },
+        renewal_reminder: { label: 'Renewal Reminder', description: 'Send renewal reminder' },
+        quote_followup: { label: 'Quote Follow-up', description: 'Follow up on sent quote' },
+      }
+      
+      setPlaybooks(
+        available.slice(0, 2).map((key: string) => ({
+          key,
+          ...(playbookLabels[key] || { label: key, description: '' }),
+        }))
+      )
+    }
+  }, [lead])
+
+  async function handleRunPlaybook(playbookKey: string) {
+    if (executing) return
+    
+    setExecuting(playbookKey)
+    if (onActionPending) onActionPending(true)
+    
+    try {
+      const res = await fetch(`/api/leads/${leadId}/playbooks/run`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          playbookKey,
+          channel: 'whatsapp',
+        }),
+      })
+      
+      const data = await res.json()
+      
+      if (data.ok) {
+        showToast(`Playbook "${playbookKey}" executed successfully`, 'success')
+        // Refresh page to show updated state
+        router.refresh()
+      } else {
+        throw new Error(data.error || 'Failed to execute playbook')
+      }
+    } catch (error: any) {
+      console.error('Failed to execute playbook:', error)
+      showToast(error.message || 'Failed to execute playbook', 'error')
+    } finally {
+      setExecuting(null)
+      if (onActionPending) onActionPending(false)
+    }
+  }
+
+  if (playbooks.length === 0) return null
+
+  return (
+    <Accordion type="single" className="w-full">
+      <AccordionItem value="playbooks" className="border-none">
+        <AccordionTrigger className="text-h2 font-semibold hover:no-underline py-3">
+          Playbooks ({playbooks.length})
+        </AccordionTrigger>
+        <AccordionContent className="pt-0 pb-0">
+          <div className="space-y-2">
+            {playbooks.map((playbook) => (
+              <Button
+                key={playbook.key}
+                variant="outline"
+                className="w-full justify-start text-left h-auto py-3 px-4"
+                onClick={() => handleRunPlaybook(playbook.key)}
+                disabled={executing === playbook.key}
+              >
+                <div className="flex-1 min-w-0">
+                  <div className="font-semibold text-sm">{playbook.label}</div>
+                  <div className="text-xs text-muted-foreground mt-0.5">{playbook.description}</div>
+                </div>
+                {executing === playbook.key && (
+                  <Clock className="h-4 w-4 animate-spin ml-2" />
+                )}
+              </Button>
+            ))}
+          </div>
+        </AccordionContent>
+      </AccordionItem>
+    </Accordion>
+  )
+}
