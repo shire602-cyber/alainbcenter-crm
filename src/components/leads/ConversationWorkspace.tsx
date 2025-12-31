@@ -310,6 +310,7 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
   }, [messageText, sending, onSend, leadId, channel, onComposerChange, loadMessages, showToast])
 
   const handleMarkComplete = useCallback(async () => {
+    if (typeof window === 'undefined') return
     const focusItemId = sessionStorage.getItem('focusItemId')
     if (focusItemId) {
       const parts = focusItemId.split('_')
@@ -423,28 +424,36 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
           lead={leadData}
           onStageClick={() => {
             // Scroll to stage selector or open stage modal
-            const stageSelector = document.querySelector('[data-stage-selector]')
-            if (stageSelector) {
-              stageSelector.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            if (typeof window !== 'undefined') {
+              const stageSelector = document.querySelector('[data-stage-selector]')
+              if (stageSelector) {
+                stageSelector.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
             }
           }}
           onOwnerClick={() => {
             // Open assign dialog
-            window.location.href = `${window.location.pathname}?action=assign`
+            if (typeof window !== 'undefined') {
+              window.location.href = `${window.location.pathname}?action=assign`
+            }
           }}
           onServiceClick={() => {
             // Scroll to service section
-            const serviceSection = document.querySelector('[data-service-section]')
-            if (serviceSection) {
-              serviceSection.scrollIntoView({ behavior: 'smooth' })
+            if (typeof window !== 'undefined') {
+              const serviceSection = document.querySelector('[data-service-section]')
+              if (serviceSection) {
+                serviceSection.scrollIntoView({ behavior: 'smooth' })
+              }
             }
           }}
           onSLAClick={() => {
             // Focus composer to reply
-            const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-            if (composer) {
-              composer.focus()
-              composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+            if (typeof window !== 'undefined') {
+              const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+              if (composer) {
+                composer.focus()
+                composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
             }
           }}
         />
