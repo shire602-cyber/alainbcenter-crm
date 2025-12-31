@@ -2,21 +2,31 @@
 
 ## VERCEL DEPLOYMENT NOTE (CRITICAL)
 
-**IMPORTANT**: Vercel deployments MUST run database migrations during build.
+**IMPORTANT**: Migrations are **NOT** run automatically during Vercel builds to prevent timeout issues.
 
-The `package.json` includes a `vercel-build` script that runs:
-```bash
-prisma generate && prisma migrate deploy && next build
-```
+**Why**: Database connections during build can timeout, causing deployment failures. Migrations should be run separately.
 
-**Vercel automatically uses `vercel-build` if present**, so migrations will run automatically.
+**How to Run Migrations**:
 
-If migrations fail:
-1. Check Vercel build logs for migration errors
-2. Ensure DATABASE_URL is set in Vercel environment variables
-3. Run `npx prisma migrate deploy` manually if needed
+1. **Manual (Recommended)**: After deployment, run:
+   ```bash
+   npx prisma migrate deploy
+   ```
+   Or use the retry script:
+   ```bash
+   npm run migrate:deploy
+   ```
 
-**DO NOT** add migration logic to app startup - migrations should ONLY run during build.
+2. **Vercel Post-Deploy Hook**: Set up a webhook that runs migrations after successful deployment
+
+3. **Migration Endpoint**: Create an API endpoint that can be called to run migrations (with proper auth)
+
+**Build Process**:
+- `vercel-build`: Only runs `prisma generate && next build` (no migrations)
+- `build`: Only runs `prisma generate && next build` (no migrations)
+- `migrate:deploy`: Separate script with retry logic for running migrations
+
+**See**: `docs/MIGRATION_DEPLOYMENT.md` for detailed migration deployment guide.
 
 ---
 
