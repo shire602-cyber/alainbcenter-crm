@@ -5,8 +5,7 @@ generator client {
 datasource db {
   provider  = "postgresql"
   url       = env("DATABASE_URL")
-  // Note: directUrl is optional - if DIRECT_URL env var is not set, Prisma will use url for migrations
-  // For Neon, set DIRECT_URL to non-pooled connection to avoid timeout issues
+  directUrl = env("DIRECT_URL") // Use non-pooled connection for migrations to avoid lock timeouts
 }
 
 // ============================================
