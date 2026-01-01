@@ -1154,17 +1154,39 @@ function InboxPageContent() {
                                 }
                               })}
                             </div>
-                          ) : msg.mediaUrl ? (
+                          ) : msg.mediaUrl || (msg.type && msg.type !== 'text' && msg.type !== 'location') ? (
+                            // CRITICAL FIX: Check for mediaUrl or non-text type BEFORE showing body text
+                            // This prevents "[Audio received]" or "[document: ...]" from showing as text when media exists
                             <div className="space-y-1">
                               <p className="text-xs opacity-75 flex items-center gap-1">
                                 {msg.type === 'location' && <MapPin className="h-3 w-3" />}
-                                {msg.body || `[${msg.type}]`}
+                                {msg.type === 'audio' && '🎵 Audio message'}
+                                {msg.type === 'document' && '📄 Document'}
+                                {msg.type === 'image' && '🖼️ Image'}
+                                {msg.type === 'video' && '🎥 Video'}
+                                {!['audio', 'document', 'image', 'video', 'location'].includes(msg.type) && (msg.body || `[${msg.type}]`)}
                               </p>
+                              {msg.mediaUrl && (
+                                <a
+                                  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="text-xs text-primary underline"
+                                >
+                                  {msg.type === 'document' ? 'Download' : 'Open'}
+                                </a>
+                              )}
                             </div>
                           ) : (() => {
                             // PART 2: Extract message text from various fields
+                            // CRITICAL: Only show text if it's NOT a media placeholder
                             const displayText = getMessageDisplayText(msg)
                             if (displayText && typeof displayText === 'string' && displayText.trim() !== '') {
+                              // Skip if body looks like a media placeholder
+                              const bodyLower = displayText.toLowerCase()
+                              if (bodyLower.includes('[audio') || bodyLower.includes('[document') || bodyLower.includes('[media') || bodyLower.includes('[image')) {
+                                return <p className="text-sm opacity-75">[Media message]</p>
+                              }
                               return <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
                             }
                             return <p className="text-sm opacity-75">[Media message]</p>
