@@ -183,10 +183,12 @@ export default function LeadDetailPage({
         }
         
         // #region agent log
-        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:156',message:'setting lead data',data:{leadId:data.lead?.id || data.id,hasContact:!!(data.lead?.contact || data.contact),usingFallback:!data.lead,hasDataLead:!!data.lead},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:156',message:'setting lead data',data:{leadId:data.lead?.id || data.id,hasContact:!!(data.lead?.contact || data.contact),usingFallback:!data.lead,hasDataLead:!!data.lead,dataKeys:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
-        // API returns { lead: {...} } structure
-        setLead(data.lead || data)
+        // API returns { lead: {...} } structure (user changed it)
+        // Handle both formats for backward compatibility
+        const leadData = data.lead || data
+        setLead(leadData)
         setLoading(false)
         // #region agent log
         fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:158',message:'loading set to false',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
