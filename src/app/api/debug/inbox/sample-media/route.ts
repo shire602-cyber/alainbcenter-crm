@@ -126,8 +126,12 @@ export async function GET(req: NextRequest) {
       },
     })
 
+    // Get build SHA from health endpoint or env
+    const buildId = process.env.NEXT_PUBLIC_BUILD_ID || process.env.VERCEL_GIT_COMMIT_SHA || 'unknown'
+
     const result: any = {
       ok: true,
+      build: buildId,
       audio: audioMessage ? {
         messageId: audioMessage.id,
         conversationId: audioMessage.conversationId,
