@@ -1043,17 +1043,31 @@ function InboxPageContent() {
                             // PHASE 5A: Render attachments
                             <div className="space-y-2">
                               {msg.attachments.map((att) => {
+                                // CRITICAL FIX: Use proxy for WhatsApp media IDs
+                                const getAttachmentUrl = (url: string) => {
+                                  return url.startsWith('http') || url.startsWith('/')
+                                    ? url
+                                    : `/api/whatsapp/media/${encodeURIComponent(url)}?messageId=${msg.id}`
+                                }
+                                
                                 if (att.type === 'image') {
+                                  const imageUrl = getAttachmentUrl(att.url)
                                   return (
                                     <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                                       <img
-                                        src={att.url}
+                                        src={imageUrl}
                                         alt={att.filename || 'Image'}
                                         className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
                                         loading="lazy"
+                                        crossOrigin="anonymous"
+                                        onError={(e) => {
+                                          const target = e.currentTarget
+                                          target.onerror = null
+                                          target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
+                                        }}
                                       />
                                       <a
-                                        href={att.url}
+                                        href={imageUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
@@ -1063,11 +1077,12 @@ function InboxPageContent() {
                                       </a>
                                     </div>
                                   )
-                                } else if (att.type === 'document') {
+                                } else if (att.type === 'document' || att.type === 'pdf') {
+                                  const docUrl = getAttachmentUrl(att.url)
                                   return (
                                       <a
                                         key={att.id}
-                                        href={att.url.startsWith('http') ? att.url : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`}
+                                        href={docUrl}
                                         target="_blank"
                                         rel="noopener noreferrer"
                                         className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
