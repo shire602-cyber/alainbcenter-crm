@@ -628,31 +628,25 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
         </div>
 
         {/* Qualification Progress */}
-        {lead && (
-          <div>
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
-            <QualificationProgress lead={lead} />
-          </div>
-        )}
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
+          {lead ? <QualificationProgress lead={lead} /> : <Card className="card-premium p-4"><p className="text-meta muted-text">Loading...</p></Card>}
+        </div>
 
         {/* Expiry Timeline */}
-        {lead && (
-          <div>
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
-            <ExpiryTimeline lead={lead} />
-          </div>
-        )}
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
+          {lead ? <ExpiryTimeline lead={lead} /> : <Card className="card-premium p-4"><p className="text-meta muted-text">Loading...</p></Card>}
+        </div>
 
         {/* PHASE 5E: Quote Cadence - Always render component, it handles null internally */}
         {lead?.id && <QuoteCadenceSection leadId={lead.id} quotationSentAtStr={(lead as any)?.quotationSentAt} />}
 
         {/* Sponsor Search */}
-        {lead && (
-          <div>
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
-            <SponsorSearch lead={lead} />
-          </div>
-        )}
+        <div>
+          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
+          {lead ? <SponsorSearch lead={lead} /> : <Card className="card-premium p-4"><p className="text-meta muted-text">Loading...</p></Card>}
+        </div>
 
         {/* Documents Placeholder */}
         <div>
