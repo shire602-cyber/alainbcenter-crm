@@ -1,0 +1,25 @@
+{
+  "cookies": [
+    {
+      "name": "alaincrm_session",
+      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI2MDUwOCwiZXhwIjoxNzY3ODY1MzA4fQ%3D%3D.cb1e120b7e6698338e01b4dbaf80a87c661b53c8ae2d08d8660a15b42cf2e23f",
+      "domain": "alainbcenter-5pmjkvvhq-abdurahmans-projects-66129df5.vercel.app",
+      "path": "/",
+      "expires": 1767865308.918919,
+      "httpOnly": true,
+      "secure": true,
+      "sameSite": "Strict"
+    }
+  ],
+  "origins": [
+    {
+      "origin": "https://alainbcenter-5pmjkvvhq-abdurahmans-projects-66129df5.vercel.app",
+      "localStorage": [
+        {
+          "name": "sidebar-open",
+          "value": "true"
+        }
+      ]
+    }
+  ]
+}

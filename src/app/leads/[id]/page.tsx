@@ -29,11 +29,6 @@ export default function LeadDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
-  // PHASE 1 DEBUG: Log component render to track hook order
-  useEffect(() => {
-    console.log('[LEAD-PAGE] Component mounted/updated')
-  })
-
   const [leadId, setLeadId] = useState<number | null>(null)
   const [lead, setLead] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -74,6 +69,66 @@ export default function LeadDetailPage({
     pauseWhenHidden: true,
     onErrorBackoff: true,
   })
+
+  // STEP 0: Build stamp for deployment verification
+  // CRITICAL: Must be called BEFORE any conditional returns
+  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
+  
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
+      .catch(() => {})
+  }, [])
+
+  // Keyboard shortcuts - PHASE C (client-only)
+  // CRITICAL: Hook must be called unconditionally - guard logic inside
+  useEffect(() => {
+    // Guard logic inside hook - this is safe
+    if (typeof window === 'undefined' || !leadId) return
+
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Ignore if typing in input/textarea
+      const target = e.target as HTMLElement
+      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
+        return
+      }
+
+      // Cmd+K or Ctrl+K: Open command palette
+      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
+        e.preventDefault()
+        setCommandPaletteOpen(true)
+        return
+      }
+
+      // Escape: Close command palette
+      if (e.key === 'Escape' && commandPaletteOpen) {
+        setCommandPaletteOpen(false)
+        return
+      }
+
+      // 'i' key: Toggle info sheet
+      if (e.key === 'i' && !commandPaletteOpen) {
+        e.preventDefault()
+        setInfoSheetOpen(!infoSheetOpen)
+        return
+      }
+
+      // 'c' key: Focus composer
+      if (e.key === 'c' && !commandPaletteOpen) {
+        e.preventDefault()
+        const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+        if (composer) {
+          composer.focus()
+          composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
+        }
+        return
+      }
+    }
+
+    window.addEventListener('keydown', handleKeyDown)
+    return () => window.removeEventListener('keydown', handleKeyDown)
+  }, [leadId, router, commandPaletteOpen, infoSheetOpen])
 
   async function loadLead(id: number) {
     try {
@@ -241,65 +296,6 @@ export default function LeadDetailPage({
   const serviceName = lead?.serviceType?.name || lead?.serviceTypeEnum || lead?.requestedServiceRaw || 'Not specified'
 
   const isFocusMode = typeof window !== 'undefined' && sessionStorage.getItem('focusMode') === 'true'
-
-  // Keyboard shortcuts - PHASE C (client-only)
-  // CRITICAL: Hook must be called unconditionally - guard logic inside
-  useEffect(() => {
-    // Guard logic inside hook - this is safe
-    if (typeof window === 'undefined' || !leadId) return
-
-    const handleKeyDown = (e: KeyboardEvent) => {
-      // Ignore if typing in input/textarea
-      const target = e.target as HTMLElement
-      if (target.tagName === 'INPUT' || target.tagName === 'TEXTAREA' || target.isContentEditable) {
-        return
-      }
-
-      // Cmd+K or Ctrl+K: Open command palette
-      if ((e.metaKey || e.ctrlKey) && e.key === 'k') {
-        e.preventDefault()
-        setCommandPaletteOpen(true)
-        return
-      }
-
-      // Escape: Close command palette
-      if (e.key === 'Escape' && commandPaletteOpen) {
-        setCommandPaletteOpen(false)
-        return
-      }
-
-      // 'i' key: Toggle info sheet
-      if (e.key === 'i' && !commandPaletteOpen) {
-        e.preventDefault()
-        setInfoSheetOpen(!infoSheetOpen)
-        return
-      }
-
-      // 'c' key: Focus composer
-      if (e.key === 'c' && !commandPaletteOpen) {
-        e.preventDefault()
-        const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
-        if (composer) {
-          composer.focus()
-          composer.scrollIntoView({ behavior: 'smooth', block: 'center' })
-        }
-        return
-      }
-    }
-
-    window.addEventListener('keydown', handleKeyDown)
-    return () => window.removeEventListener('keydown', handleKeyDown)
-  }, [leadId, router, commandPaletteOpen, infoSheetOpen])
-
-  // STEP 0: Build stamp for deployment verification
-  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
-  
-  useEffect(() => {
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
-      .catch(() => {})
-  }, [])
 
   return (
     <LeadErrorBoundary>
