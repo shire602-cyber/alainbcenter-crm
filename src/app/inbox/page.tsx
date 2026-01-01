@@ -1151,7 +1151,7 @@ function InboxPageContent() {
                           ) : (() => {
                             // PART 2: Extract message text from various fields
                             const displayText = getMessageDisplayText(msg)
-                            if (displayText && displayText.trim && displayText.trim() !== '') {
+                            if (displayText && displayText.trim() !== '') {
                               return <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
                             }
                             return <p className="text-sm opacity-75">[Media message]</p>
