@@ -796,7 +796,10 @@ export async function PATCH(
       }
     }
 
-    return NextResponse.json(lead)
+    // #region agent log
+    console.log(`[LEAD-API] PATCH response: returning lead.id=${lead.id}`)
+    // #endregion
+    return NextResponse.json({ lead })
   } catch (error: any) {
     if (error.code === 'P2025') {
       return NextResponse.json(

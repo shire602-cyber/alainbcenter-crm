@@ -39,6 +39,9 @@ export default function LeadDetailPage({
   const [composerOpen, setComposerOpen] = useState(true)
   const [commandPaletteOpen, setCommandPaletteOpen] = useState(false)
   const [fallbackInfo, setFallbackInfo] = useState<{ conversationId?: string | null; contactId?: string | null } | null>(null)
+  // CRITICAL: ALL useState hooks must be declared BEFORE any useEffect hooks
+  // STEP 0: Build stamp for deployment verification
+  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
   const router = useRouter()
 
   // CRITICAL: All hooks must be called before any conditional returns
@@ -53,6 +56,7 @@ export default function LeadDetailPage({
       // #endregion
       const id = parseInt(resolved.id)
       // #region agent log
+      console.log('[LEAD-PAGE] parsed id:', { rawId: resolved.id, parsedId: id, isNaN: isNaN(id) })
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:50',message:'parsed id',data:{rawId:resolved.id,parsedId:id,isNaN:isNaN(id)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
       if (isNaN(id)) {
@@ -71,10 +75,7 @@ export default function LeadDetailPage({
     init()
   }, [params, router])
 
-  // STEP 0: Build stamp for deployment verification
-  // CRITICAL: Must be called BEFORE any conditional returns AND before useSmartPolling
-  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
-  
+  // Build stamp useEffect - called after all useState hooks
   useEffect(() => {
     fetch('/api/health')
       .then(res => res.json())
@@ -148,6 +149,7 @@ export default function LeadDetailPage({
 
   async function loadLead(id: number) {
     // #region agent log
+    console.log('[LEAD-PAGE] loadLead() entry:', { leadId: id })
     fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:133',message:'loadLead() entry',data:{leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
     // #endregion
     try {
@@ -164,6 +166,7 @@ export default function LeadDetailPage({
       // #endregion
       const res = await fetch(url)
       // #region agent log
+      console.log('[LEAD-PAGE] API response received:', { status: res.status, statusText: res.statusText, ok: res.ok, url })
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:145',message:'API response received',data:{status:res.status,statusText:res.statusText,ok:res.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
       // #endregion
       if (res.ok) {
@@ -234,7 +237,8 @@ export default function LeadDetailPage({
       })
       if (res.ok) {
         const updated = await res.json()
-        setLead(updated)
+        console.log('[LEAD-PAGE] Stage update response:', { hasLead: !!updated.lead, hasId: !!updated.id, leadId: updated.lead?.id || updated.id })
+        setLead(updated.lead || updated)
       }
     } catch (error) {
       console.error('Failed to update stage:', error)
