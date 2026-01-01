@@ -1,0 +1,687 @@
+# Page snapshot
+
+```yaml
+- generic [active] [ref=e1]:
+  - generic [ref=e2]:
+    - generic [ref=e4]:
+      - generic [ref=e5]:
+        - generic [ref=e6]:
+          - img "Alain CRM" [ref=e8]
+          - generic [ref=e9]:
+            - heading "Alain CRM" [level=1] [ref=e10]
+            - paragraph [ref=e11]: Business Center
+        - button "Close sidebar" [ref=e12] [cursor=pointer]:
+          - img
+      - navigation [ref=e13]:
+        - list [ref=e14]:
+          - listitem [ref=e15]:
+            - link "Dashboard Today at a glance" [ref=e16] [cursor=pointer]:
+              - /url: /
+              - img [ref=e18]
+              - generic [ref=e23]:
+                - generic [ref=e24]: Dashboard
+                - generic [ref=e25]: Today at a glance
+          - listitem [ref=e26]:
+            - link "Inbox Omnichannel conversations" [ref=e27] [cursor=pointer]:
+              - /url: /inbox
+              - img [ref=e29]
+              - generic [ref=e32]:
+                - generic [ref=e33]: Inbox
+                - generic [ref=e34]: Omnichannel conversations
+          - listitem [ref=e35]:
+            - link "Leads All leads & contacts" [ref=e36] [cursor=pointer]:
+              - /url: /leads
+              - img [ref=e38]
+              - generic [ref=e43]:
+                - generic [ref=e44]: Leads
+                - generic [ref=e45]: All leads & contacts
+          - listitem [ref=e46]:
+            - link "Renewals Expiry & renewals" [ref=e47] [cursor=pointer]:
+              - /url: /renewals
+              - img [ref=e49]
+              - generic [ref=e54]:
+                - generic [ref=e55]: Renewals
+                - generic [ref=e56]: Expiry & renewals
+          - listitem [ref=e57]
+          - listitem [ref=e59]:
+            - link "Reports Analytics & KPIs" [ref=e60] [cursor=pointer]:
+              - /url: /reports
+              - img [ref=e61]
+              - generic [ref=e63]:
+                - generic [ref=e64]: Reports
+                - generic [ref=e65]: Analytics & KPIs
+          - listitem [ref=e66]
+          - listitem [ref=e68]:
+            - paragraph [ref=e69]: Administration
+          - listitem [ref=e70]:
+            - link "Integrations WhatsApp, Meta, Email" [ref=e71] [cursor=pointer]:
+              - /url: /admin/integrations
+              - img [ref=e72]
+              - generic [ref=e74]:
+                - generic [ref=e75]: Integrations
+                - generic [ref=e76]: WhatsApp, Meta, Email
+          - listitem [ref=e77]:
+            - link "Users & Roles Manage users" [ref=e78] [cursor=pointer]:
+              - /url: /admin/users
+              - img [ref=e79]
+              - generic [ref=e81]:
+                - generic [ref=e82]: Users & Roles
+                - generic [ref=e83]: Manage users
+          - listitem [ref=e84]:
+            - link "Services Service types" [ref=e85] [cursor=pointer]:
+              - /url: /admin/services
+              - img [ref=e86]
+              - generic [ref=e88]:
+                - generic [ref=e89]: Services
+                - generic [ref=e90]: Service types
+          - listitem [ref=e91]:
+            - link "AI Training Train AI autopilot" [ref=e92] [cursor=pointer]:
+              - /url: /admin/ai-training
+              - img [ref=e93]
+              - generic [ref=e96]:
+                - generic [ref=e97]: AI Training
+                - generic [ref=e98]: Train AI autopilot
+          - listitem [ref=e99]:
+            - link "Settings WhatsApp & AI" [ref=e100] [cursor=pointer]:
+              - /url: /settings/whatsapp
+              - img [ref=e101]
+              - generic [ref=e104]:
+                - generic [ref=e105]: Settings
+                - generic [ref=e106]: WhatsApp & AI
+    - generic [ref=e107]:
+      - generic [ref=e109]:
+        - generic [ref=e110]:
+          - img
+          - searchbox "Search leads, contacts, or anything... (Ctrl+K)" [ref=e111]
+          - generic [ref=e113]:
+            - generic [ref=e114]: ⌘
+            - text: K
+        - generic [ref=e115]:
+          - button "Switch to dark mode" [ref=e116] [cursor=pointer]:
+            - img
+            - generic [ref=e117]: Dark
+          - link [ref=e118] [cursor=pointer]:
+            - /url: /notifications
+            - button "Notifications" [ref=e119]:
+              - img
+          - link [ref=e120] [cursor=pointer]:
+            - /url: /inbox
+            - button "Inbox" [ref=e121]:
+              - img
+          - link "New Lead" [ref=e123] [cursor=pointer]:
+            - /url: /leads?action=create
+            - button "New Lead" [ref=e124]:
+              - img
+              - generic [ref=e125]: New Lead
+          - generic [ref=e127]:
+            - generic [ref=e128]:
+              - paragraph [ref=e129]: Admin User
+              - paragraph [ref=e130]: admin@alainbcenter.com
+              - paragraph [ref=e131]: ADMIN
+            - generic [ref=e133]: AU
+            - button "Logout" [ref=e134] [cursor=pointer]:
+              - img
+              - text: Logout
+      - main [ref=e135]:
+        - generic [ref=e136]:
+          - generic [ref=e137]:
+            - generic [ref=e138]:
+              - generic [ref=e139]:
+                - generic [ref=e140]:
+                  - img [ref=e142]
+                  - heading "Inbox" [level=1] [ref=e145]
+                - generic [ref=e147]:
+                  - button "All Channels" [ref=e148] [cursor=pointer]:
+                    - img [ref=e149]
+                    - generic [ref=e152]: All Channels
+                  - button "WhatsApp" [ref=e153] [cursor=pointer]:
+                    - img [ref=e154]
+                    - generic [ref=e156]: WhatsApp
+                  - button "Instagram" [ref=e157] [cursor=pointer]:
+                    - img [ref=e158]
+                    - generic [ref=e161]: Instagram
+                  - button "Facebook" [ref=e162] [cursor=pointer]:
+                    - img [ref=e163]
+                    - generic [ref=e165]: Facebook
+                  - button "Email" [ref=e166] [cursor=pointer]:
+                    - img [ref=e167]
+                    - generic [ref=e170]: Email
+                  - button "Web Chat" [ref=e171] [cursor=pointer]:
+                    - img [ref=e172]
+                    - generic [ref=e175]: Web Chat
+              - generic [ref=e177]:
+                - img [ref=e178]
+                - textbox "Search conversations..." [ref=e181]
+              - generic [ref=e183]:
+                - generic [ref=e184] [cursor=pointer]:
+                  - generic [ref=e186]: ET
+                  - generic [ref=e187]:
+                    - generic [ref=e188]:
+                      - paragraph [ref=e189]: Emmanuel Tawiah
+                      - generic [ref=e190]:
+                        - img [ref=e191]
+                        - generic [ref=e193]: "4"
+                    - generic [ref=e194]:
+                      - paragraph [ref=e195]: "Perfect, Emmanuel Tawiah! ✅ I've noted: • Service: I want to know how the visit visa range from • Nationality: Ghana Please share your email so I can send you the quotation, and let me know the best time for our consultant to call you."
+                      - generic [ref=e196]: 15:20
+                - generic [ref=e197] [cursor=pointer]:
+                  - generic [ref=e199]: BJ
+                  - generic [ref=e200]:
+                    - generic [ref=e201]:
+                      - paragraph [ref=e202]: bashir jamac
+                      - img [ref=e204]
+                    - generic [ref=e206]:
+                      - paragraph [ref=e207]: "[Audio received]"
+                      - generic [ref=e208]: 15:19
+                - generic [ref=e209] [cursor=pointer]:
+                  - generic [ref=e211]: C+
+                  - generic [ref=e212]:
+                    - generic [ref=e213]:
+                      - paragraph [ref=e214]: Contact +971569561762
+                      - generic [ref=e215]:
+                        - img [ref=e216]
+                        - generic [ref=e218]: "1"
+                    - generic [ref=e219]:
+                      - paragraph [ref=e220]: Hi 👋 I'm ABCai from Al Ain Business Center. How can I help you today?
+                      - generic [ref=e221]: 15:10
+                - generic [ref=e222] [cursor=pointer]:
+                  - generic [ref=e224]: T
+                  - generic [ref=e225]:
+                    - generic [ref=e226]:
+                      - paragraph [ref=e227]: Today
+                      - generic [ref=e228]:
+                        - img [ref=e229]
+                        - generic [ref=e231]: "8"
+                    - generic [ref=e232]:
+                      - paragraph [ref=e233]: Osei09698@gmail.com 0525849282
+                      - generic [ref=e234]: 14:02
+                - generic [ref=e235] [cursor=pointer]:
+                  - generic [ref=e237]: GD
+                  - generic [ref=e238]:
+                    - generic [ref=e239]:
+                      - paragraph [ref=e240]: Good day
+                      - generic [ref=e241]:
+                        - img [ref=e242]
+                        - generic [ref=e244]: "1"
+                    - generic [ref=e245]:
+                      - paragraph [ref=e246]: Ok thank you
+                      - generic [ref=e247]: 13:25
+                - generic [ref=e248] [cursor=pointer]:
+                  - generic [ref=e250]: C+
+                  - generic [ref=e251]:
+                    - generic [ref=e252]:
+                      - paragraph [ref=e253]: Contact +260765805696
+                      - img [ref=e255]
+                    - generic [ref=e257]:
+                      - paragraph [ref=e258]: Hi 👋 I'm ABCai from Al Ain Business Center. How can I help you today?
+                      - generic [ref=e259]: 13:08
+                - generic [ref=e260] [cursor=pointer]:
+                  - generic [ref=e262]: IN
+                  - generic [ref=e263]:
+                    - generic [ref=e264]:
+                      - paragraph [ref=e265]: I need a working visa
+                      - generic [ref=e266]:
+                        - img [ref=e267]
+                        - generic [ref=e269]: "1"
+                    - generic [ref=e270]:
+                      - paragraph [ref=e271]: No I'm not in Dubai yet
+                      - generic [ref=e272]: 13:05
+                - generic [ref=e273] [cursor=pointer]:
+                  - generic [ref=e275]: C+
+                  - generic [ref=e276]:
+                    - generic [ref=e277]:
+                      - paragraph [ref=e278]: Contact +254702832209
+                      - img [ref=e280]
+                    - generic [ref=e282]:
+                      - paragraph [ref=e283]: sure, visit visa AED 420 2 year residence visa AED 7500
+                      - generic [ref=e284]: 12:48
+                - generic [ref=e285] [cursor=pointer]:
+                  - generic [ref=e287]: C2
+                  - generic [ref=e288]:
+                    - generic [ref=e289]:
+                      - paragraph [ref=e290]: Contact 23777774195
+                      - img [ref=e292]
+                    - generic [ref=e294]:
+                      - paragraph [ref=e295]: Hello
+                      - generic [ref=e296]: 12:48
+                - generic [ref=e297] [cursor=pointer]:
+                  - generic [ref=e299]: CI
+                  - generic [ref=e300]:
+                    - generic [ref=e301]:
+                      - paragraph [ref=e302]: Can I get your location
+                      - generic [ref=e303]:
+                        - img [ref=e304]
+                        - generic [ref=e306]: "5"
+                    - generic [ref=e307]:
+                      - paragraph [ref=e308]: "Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation."
+                      - generic [ref=e309]: 12:19
+                - generic [ref=e310] [cursor=pointer]:
+                  - generic [ref=e312]: DV
+                  - generic [ref=e313]:
+                    - generic [ref=e314]:
+                      - paragraph [ref=e315]: Dubai visit visa
+                      - generic [ref=e316]:
+                        - img [ref=e317]
+                        - generic [ref=e319]: "3"
+                    - generic [ref=e320]:
+                      - paragraph [ref=e321]: Coas Bugasa Need UAE VISIT VISA 2 weeks Ugandan coasbugasa@gmail.com
+                      - generic [ref=e322]: 10:49
+                - generic [ref=e323] [cursor=pointer]:
+                  - generic [ref=e325]: ID
+                  - generic [ref=e326]:
+                    - generic [ref=e327]:
+                      - paragraph [ref=e328]: I’m Deon
+                      - generic [ref=e329]:
+                        - img [ref=e330]
+                        - generic [ref=e332]: "18"
+                    - generic [ref=e333]:
+                      - paragraph [ref=e334]: "Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation."
+                      - generic [ref=e335]: 10:46
+                - generic [ref=e336] [cursor=pointer]:
+                  - generic [ref=e338]: VV
+                  - generic [ref=e339]:
+                    - generic [ref=e340]:
+                      - paragraph [ref=e341]: Visit visa
+                      - generic [ref=e342]:
+                        - img [ref=e343]
+                        - generic [ref=e345]: "7"
+                    - generic [ref=e346]:
+                      - paragraph [ref=e347]: "Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation."
+                      - generic [ref=e348]: 10:24
+                - generic [ref=e349] [cursor=pointer]:
+                  - generic [ref=e351]: JK
+                  - generic [ref=e352]:
+                    - generic [ref=e353]:
+                      - paragraph [ref=e354]: Justice kwame Afevor from Ghana currently in Dubai sonapur
+                      - generic [ref=e355]:
+                        - img [ref=e356]
+                        - generic [ref=e358]: "4"
+                    - generic [ref=e359]:
+                      - paragraph [ref=e360]: Thanks! I'll send the visit visa quotation to afevorjustice8@gmail.com. Would you prefer a 30-day or 60-day visa?
+                      - generic [ref=e361]: 08:12
+                - generic [ref=e362] [cursor=pointer]:
+                  - generic [ref=e364]: C+
+                  - generic [ref=e365]:
+                    - generic [ref=e366]:
+                      - paragraph [ref=e367]: Contact +971501464531
+                      - generic [ref=e368]:
+                        - img [ref=e369]
+                        - generic [ref=e371]: "2"
+                    - generic [ref=e372]:
+                      - paragraph [ref=e373]: No messages
+                      - generic [ref=e374]: 07:52
+                - generic [ref=e375] [cursor=pointer]:
+                  - generic [ref=e377]: IA
+                  - generic [ref=e378]:
+                    - generic [ref=e379]:
+                      - paragraph [ref=e380]: Ibrahim abdul conteh
+                      - generic [ref=e381]:
+                        - img [ref=e382]
+                        - generic [ref=e384]: "23"
+                    - generic [ref=e385]:
+                      - paragraph [ref=e386]: Today
+                      - generic [ref=e387]: 06:40
+                - generic [ref=e388] [cursor=pointer]:
+                  - generic [ref=e390]: C+
+                  - generic [ref=e391]:
+                    - generic [ref=e392]:
+                      - paragraph [ref=e393]: Contact +971569008144
+                      - generic [ref=e394]:
+                        - img [ref=e395]
+                        - generic [ref=e397]: "1"
+                    - generic [ref=e398]:
+                      - paragraph [ref=e399]: Hi 👋 I'm ABCai from Al Ain Business Center. How can I help you today?
+                      - generic [ref=e400]: 06:29
+                - generic [ref=e401] [cursor=pointer]:
+                  - generic [ref=e403]: Z
+                  - generic [ref=e404]:
+                    - generic [ref=e405]:
+                      - paragraph [ref=e406]: Zimbabwean
+                      - generic [ref=e407]:
+                        - img [ref=e408]
+                        - generic [ref=e410]: "5"
+                    - generic [ref=e411]:
+                      - paragraph [ref=e412]: Freelance (self-sponsored) costs vary by nationality. For Zimbabwean, it's around AED 12,000-15,000. Please share your email for a detailed quotation.
+                      - generic [ref=e413]: 03:55
+                - generic [ref=e414] [cursor=pointer]:
+                  - generic [ref=e416]: C+
+                  - generic [ref=e417]:
+                    - generic [ref=e418]:
+                      - paragraph [ref=e419]: Contact +971522985218
+                      - img [ref=e421]
+                    - generic [ref=e423]:
+                      - paragraph [ref=e424]: Hi 👋 I'm ABCai from Al Ain Business Center. How can I help you today?
+                      - generic [ref=e425]: 03:41
+                - generic [ref=e426] [cursor=pointer]:
+                  - generic [ref=e428]: C+
+                  - generic [ref=e429]:
+                    - generic [ref=e430]:
+                      - paragraph [ref=e431]: Contact +971508201069
+                      - img [ref=e433]
+                    - generic [ref=e435]:
+                      - paragraph [ref=e436]: No messages
+                      - generic [ref=e437]: Yesterday 18:28
+                - generic [ref=e438] [cursor=pointer]:
+                  - generic [ref=e440]: "["
+                  - generic [ref=e441]:
+                    - generic [ref=e442]:
+                      - paragraph [ref=e443]: "[audio]"
+                      - img [ref=e445]
+                    - generic [ref=e447]:
+                      - paragraph [ref=e448]: "{ \"response\": \"Perfect! I'll arrange a callback to discuss the Freelance (self-sponsored) details. Our consultant will contact you soon.\" }"
+                      - generic [ref=e449]: Yesterday 11:35
+                - generic [ref=e450] [cursor=pointer]:
+                  - generic [ref=e452]: GM
+                  - generic [ref=e453]:
+                    - generic [ref=e454]:
+                      - paragraph [ref=e455]: Good morning
+                      - img [ref=e457]
+                    - generic [ref=e459]:
+                      - paragraph [ref=e460]: May I know your full name, please?
+                      - generic [ref=e461]: Yesterday 10:13
+                - generic [ref=e462] [cursor=pointer]:
+                  - generic [ref=e464]: A
+                  - generic [ref=e465]:
+                    - generic [ref=e466]:
+                      - paragraph [ref=e467]: Amjad
+                      - img [ref=e469]
+                    - generic [ref=e471]:
+                      - paragraph [ref=e472]: "Perfect, Amjad! ✅ I've noted: • Service: [image] • Nationality: Indian Please share your email so I can send you the quotation, and let me know the best time for our consultant to call you."
+                      - generic [ref=e473]: Yesterday 02:34
+                - generic [ref=e474] [cursor=pointer]:
+                  - generic [ref=e476]: H
+                  - generic [ref=e477]:
+                    - generic [ref=e478]:
+                      - paragraph [ref=e479]: Hi
+                      - img [ref=e481]
+                    - generic [ref=e483]:
+                      - paragraph [ref=e484]: "{ \"response\": \"Perfect, I've noted you need a family visa. Please share your email so I can send you the quotation.\" }"
+                      - generic [ref=e485]: Dec 30, 23:00
+                - generic [ref=e486] [cursor=pointer]:
+                  - generic [ref=e488]: H
+                  - generic [ref=e489]:
+                    - generic [ref=e490]:
+                      - paragraph [ref=e491]: Hamada
+                      - img [ref=e493]
+                    - generic [ref=e495]:
+                      - paragraph [ref=e496]: "Perfect, Hamada! ✅ I've noted: • Service: Hello • Nationality: India 🇮🇳 Please share your email so I can send you the quotation, and let me know the best time for our consultant to call you."
+                      - generic [ref=e497]: Dec 30, 22:54
+                - generic [ref=e498] [cursor=pointer]:
+                  - generic [ref=e500]: LF
+                  - generic [ref=e501]:
+                    - generic [ref=e502]:
+                      - paragraph [ref=e503]: looking for a residece visa
+                      - img [ref=e505]
+                    - generic [ref=e507]:
+                      - paragraph [ref=e508]: "Perfect, looking for! ✅ I've noted: • Service: FREELANCE_VISA • Nationality: Indian Please share your email so I can send you the quotation, and let me know the best time for our consultant to call you."
+                      - generic [ref=e509]: Dec 30, 22:47
+                - generic [ref=e510] [cursor=pointer]:
+                  - generic [ref=e512]: C+
+                  - generic [ref=e513]:
+                    - generic [ref=e514]:
+                      - paragraph [ref=e515]: Contact +971525811365
+                      - img [ref=e517]
+                    - generic [ref=e519]:
+                      - paragraph [ref=e520]: May I know your full name, please?
+                      - generic [ref=e521]: Dec 30, 22:41
+                - generic [ref=e522] [cursor=pointer]:
+                  - generic [ref=e524]: C+
+                  - generic [ref=e525]:
+                    - generic [ref=e526]:
+                      - paragraph [ref=e527]: Contact +971543654395
+                      - img [ref=e529]
+                    - generic [ref=e531]:
+                      - paragraph [ref=e532]: "{ \"response\": \"Hi! Could you please clarify which service you're interested in?\" }"
+                      - generic [ref=e533]: Dec 30, 20:13
+                - generic [ref=e534] [cursor=pointer]:
+                  - generic [ref=e536]: C+
+                  - generic [ref=e537]:
+                    - generic [ref=e538]:
+                      - paragraph [ref=e539]: Contact +971501638456
+                      - img [ref=e541]
+                    - generic [ref=e543]:
+                      - paragraph [ref=e544]: "Perfect, Lubaba! ✅ I've noted: • Service: MAINLAND_BUSINESS_SETUP • Nationality: You Please share your email so I can send you the quotation, and let me know the best time for our consultant to call you."
+                      - generic [ref=e545]: Dec 30, 20:13
+                - generic [ref=e546] [cursor=pointer]:
+                  - generic [ref=e548]: C+
+                  - generic [ref=e549]:
+                    - generic [ref=e550]:
+                      - paragraph [ref=e551]: Contact +971544090451
+                      - img [ref=e553]
+                    - generic [ref=e555]:
+                      - paragraph [ref=e556]: "{ \"response\": \"Hi Serah! For a 2-year UAE residence visa, we offer options like Freelance (self-sponsored) or investor visa. May I know your nationality to check eligibility?\" }"
+                      - generic [ref=e557]: Dec 30, 20:13
+                - generic [ref=e558] [cursor=pointer]:
+                  - generic [ref=e560]: C+
+                  - generic [ref=e561]:
+                    - generic [ref=e562]:
+                      - paragraph [ref=e563]: Contact +971564861311
+                      - img [ref=e565]
+                    - generic [ref=e567]:
+                      - paragraph [ref=e568]: "Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation."
+                      - generic [ref=e569]: Dec 30, 20:13
+                - generic [ref=e570] [cursor=pointer]:
+                  - generic [ref=e572]: C+
+                  - generic [ref=e573]:
+                    - generic [ref=e574]:
+                      - paragraph [ref=e575]: Contact +971543626105
+                      - img [ref=e577]
+                    - generic [ref=e579]:
+                      - paragraph [ref=e580]: No messages
+                      - generic [ref=e581]: Dec 30, 18:11
+                - generic [ref=e582] [cursor=pointer]:
+                  - generic [ref=e584]: C+
+                  - generic [ref=e585]:
+                    - generic [ref=e586]:
+                      - paragraph [ref=e587]: Contact +971508001525
+                      - generic [ref=e588]:
+                        - img [ref=e589]
+                        - generic [ref=e591]: "1"
+                    - generic [ref=e592]:
+                      - paragraph [ref=e593]: No messages
+                      - generic [ref=e594]: Dec 30, 08:22
+                - generic [ref=e595] [cursor=pointer]:
+                  - generic [ref=e597]: C+
+                  - generic [ref=e598]:
+                    - generic [ref=e599]:
+                      - paragraph [ref=e600]: Contact +97466148035
+                      - img [ref=e602]
+                    - generic [ref=e604]:
+                      - paragraph [ref=e605]: No messages
+                      - generic [ref=e606]: Dec 29, 20:39
+                - generic [ref=e607] [cursor=pointer]:
+                  - generic [ref=e609]: C+
+                  - generic [ref=e610]:
+                    - generic [ref=e611]:
+                      - paragraph [ref=e612]: Contact +917091235286
+                      - img [ref=e614]
+                    - generic [ref=e616]:
+                      - paragraph [ref=e617]: No messages
+                      - generic [ref=e618]: Dec 29, 20:18
+                - generic [ref=e619] [cursor=pointer]:
+                  - generic [ref=e621]: C2
+                  - generic [ref=e622]:
+                    - generic [ref=e623]:
+                      - paragraph [ref=e624]: Contact 260777711059
+                      - img [ref=e626]
+                    - generic [ref=e628]:
+                      - paragraph [ref=e629]: Hi
+                      - generic [ref=e630]: Dec 29, 18:49
+                - generic [ref=e631] [cursor=pointer]:
+                  - generic [ref=e633]: VI
+                  - generic [ref=e634]:
+                    - generic [ref=e635]:
+                      - paragraph [ref=e636]: Visa is about to expire
+                      - img [ref=e638]
+                    - generic [ref=e640]:
+                      - paragraph [ref=e641]: My visa will expire on the 6th on January but I have a trip to take on the 11th January. What can I do to leave
+                      - generic [ref=e642]: Dec 29, 16:19
+                - generic [ref=e643] [cursor=pointer]:
+                  - generic [ref=e645]: ST
+                  - generic [ref=e646]:
+                    - generic [ref=e647]:
+                      - paragraph [ref=e648]: Sync Test User
+                      - img [ref=e650]
+                    - generic [ref=e652]:
+                      - paragraph [ref=e653]: ok
+                      - generic [ref=e654]: Dec 29, 15:40
+                - generic [ref=e655] [cursor=pointer]:
+                  - generic [ref=e657]: S
+                  - generic [ref=e658]:
+                    - generic [ref=e659]:
+                      - paragraph [ref=e660]: Salam
+                      - img [ref=e662]
+                    - generic [ref=e664]:
+                      - paragraph [ref=e665]: "{ \"response\": \"We don't handle visa card machines. Could you please let me know what service you're interested in?\" }"
+                      - generic [ref=e666]: Dec 28, 20:23
+                - generic [ref=e667] [cursor=pointer]:
+                  - generic [ref=e669]: +
+                  - generic [ref=e670]:
+                    - generic [ref=e671]:
+                      - paragraph [ref=e672]: "+971501234567"
+                      - img [ref=e674]
+                    - generic [ref=e676]:
+                      - paragraph [ref=e677]: What documents do I need?
+                      - generic [ref=e678]: Dec 28, 12:39
+                - generic [ref=e679] [cursor=pointer]:
+                  - generic [ref=e681]: +
+                  - generic [ref=e682]:
+                    - generic [ref=e683]:
+                      - paragraph [ref=e684]: "+966544534091"
+                      - img [ref=e686]
+                    - generic [ref=e688]:
+                      - paragraph [ref=e689]: Thanks for your message. I want to make sure I understand correctly - could you provide a bit more detail about what you need?
+                      - generic [ref=e690]: Dec 27, 18:43
+                - generic [ref=e691] [cursor=pointer]:
+                  - generic [ref=e693]: +
+                  - generic [ref=e694]:
+                    - generic [ref=e695]:
+                      - paragraph [ref=e696]: "+971547309153"
+                      - img [ref=e698]
+                    - generic [ref=e700]:
+                      - paragraph [ref=e701]: Okay thanks
+                      - generic [ref=e702]: Dec 27, 15:14
+                - generic [ref=e703] [cursor=pointer]:
+                  - generic [ref=e705]: +
+                  - generic [ref=e706]:
+                    - generic [ref=e707]:
+                      - paragraph [ref=e708]: "+971529322069"
+                      - img [ref=e710]
+                    - generic [ref=e712]:
+                      - paragraph [ref=e713]: "You: Hi, how can i help?"
+                      - generic [ref=e714]: Dec 27, 15:10
+                - generic [ref=e715] [cursor=pointer]:
+                  - generic [ref=e717]: +
+                  - generic [ref=e718]:
+                    - generic [ref=e719]:
+                      - paragraph [ref=e720]: "+971565907828"
+                      - img [ref=e722]
+                    - generic [ref=e724]:
+                      - paragraph [ref=e725]: Thanks for your message. I want to make sure I understand correctly - could you provide a bit more detail about what you need?
+                      - generic [ref=e726]: Dec 26, 17:32
+                - generic [ref=e727] [cursor=pointer]:
+                  - generic [ref=e729]: +
+                  - generic [ref=e730]:
+                    - generic [ref=e731]:
+                      - paragraph [ref=e732]: "+971555321609"
+                      - img [ref=e734]
+                    - generic [ref=e736]:
+                      - paragraph [ref=e737]: What type of UAE visa do you currently hold? (Employment / Partner / Investor)
+                      - generic [ref=e738]: Dec 26, 17:22
+                - generic [ref=e739] [cursor=pointer]:
+                  - generic [ref=e741]: +
+                  - generic [ref=e742]:
+                    - generic [ref=e743]:
+                      - paragraph [ref=e744]: "+971509653610"
+                      - img [ref=e746]
+                    - generic [ref=e748]:
+                      - paragraph [ref=e749]: Hello! 👋 I'm Hamdi from Al Ain Business Center. I'm here to help with visas and business setup in the UAE.
+                      - generic [ref=e750]: Dec 26, 14:02
+                - generic [ref=e751] [cursor=pointer]:
+                  - generic [ref=e753]: +
+                  - generic [ref=e754]:
+                    - generic [ref=e755]:
+                      - paragraph [ref=e756]: "+971543206555"
+                      - img [ref=e758]
+                    - generic [ref=e760]:
+                      - paragraph [ref=e761]: Thanks, Valare mosham commets aanallo bro. Which service are you looking for today? (Family Visa / Visit Visa / Freelance Visa / Freelance Permit / Business Setup / Golden Visa / PRO Services)
+                      - generic [ref=e762]: Dec 26, 10:44
+                - generic [ref=e763] [cursor=pointer]:
+                  - generic [ref=e765]: AO
+                  - generic [ref=e766]:
+                    - generic [ref=e767]:
+                      - paragraph [ref=e768]: already overstay
+                      - img [ref=e770]
+                    - generic [ref=e772]:
+                      - paragraph [ref=e773]: Are you currently inside the UAE?
+                      - generic [ref=e774]: Dec 26, 10:04
+                - generic [ref=e775] [cursor=pointer]:
+                  - generic [ref=e777]: +
+                  - generic [ref=e778]:
+                    - generic [ref=e779]:
+                      - paragraph [ref=e780]: "+491774194272"
+                      - img [ref=e782]
+                    - generic [ref=e784]:
+                      - paragraph [ref=e785]: "Hi +491774194272, thank you for your interest in our services. To better assist you, could you please share: 1. What specific service are you looking for? 2. What is your timeline? Looking forward to helping you!"
+                      - generic [ref=e786]: Dec 25, 17:04
+                - generic [ref=e787] [cursor=pointer]:
+                  - generic [ref=e789]: SF
+                  - generic [ref=e790]:
+                    - generic [ref=e791]:
+                      - paragraph [ref=e792]: suhaib fh
+                      - img [ref=e794]
+                    - generic [ref=e796]:
+                      - paragraph [ref=e797]: NAE AABO Employment SOMALI
+                      - generic [ref=e798]: Dec 25, 16:05
+                - generic [ref=e799] [cursor=pointer]:
+                  - generic [ref=e801]: +
+                  - generic [ref=e802]:
+                    - generic [ref=e803]:
+                      - paragraph [ref=e804]: "+971586861994"
+                      - img [ref=e806]
+                    - generic [ref=e808]:
+                      - paragraph [ref=e809]: "[document: NI Brochure.pdf]"
+                      - generic [ref=e810]: Dec 24, 23:25
+                - generic [ref=e811] [cursor=pointer]:
+                  - generic [ref=e813]: +
+                  - generic [ref=e814]:
+                    - generic [ref=e815]:
+                      - paragraph [ref=e816]: "+971553591345"
+                      - img [ref=e818]
+                    - generic [ref=e820]:
+                      - paragraph [ref=e821]: "You: AED 950"
+                      - generic [ref=e822]: Dec 24, 18:59
+                - generic [ref=e823] [cursor=pointer]:
+                  - generic [ref=e825]: +
+                  - generic [ref=e826]:
+                    - generic [ref=e827]:
+                      - paragraph [ref=e828]: "+923100984201"
+                      - img [ref=e830]
+                    - generic [ref=e832]:
+                      - paragraph [ref=e833]: Instalment
+                      - generic [ref=e834]: Dec 24, 15:46
+                - generic [ref=e835] [cursor=pointer]:
+                  - generic [ref=e837]: +
+                  - generic [ref=e838]:
+                    - generic [ref=e839]:
+                      - paragraph [ref=e840]: "+971504843894"
+                      - img [ref=e842]
+                    - generic [ref=e844]:
+                      - paragraph [ref=e845]: Afghan
+                      - generic [ref=e846]: Dec 24, 11:22
+                - generic [ref=e847] [cursor=pointer]:
+                  - generic [ref=e849]: +
+                  - generic [ref=e850]:
+                    - generic [ref=e851]:
+                      - paragraph [ref=e852]: "+971569850137"
+                      - img [ref=e854]
+                    - generic [ref=e856]:
+                      - paragraph [ref=e857]: "You: HI"
+                      - generic [ref=e858]: Dec 23, 21:11
+            - generic [ref=e860]:
+              - img [ref=e862]
+              - heading "Select a conversation" [level=3] [ref=e864]
+              - paragraph [ref=e865]: Choose a conversation from the sidebar to view messages.
+          - generic [ref=e866]: "Build: 075c9b6"
+  - alert [ref=e867]
+```

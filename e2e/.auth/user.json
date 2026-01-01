@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "alaincrm_session",
-      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI2MzkzMywiZXhwIjoxNzY3ODY4NzMzfQ%3D%3D.32926860c6e182b92f129553f924a2611e2a883bd2f24a6693fc14092401fa47",
+      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI2OTM4NywiZXhwIjoxNzY3ODc0MTg3fQ%3D%3D.2cd00a5b09a5cd7889ce4247cefa5fdba6b52c631be791aa47918ce443b87d90",
       "domain": "alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app",
       "path": "/",
-      "expires": 1767868733.9731,
+      "expires": 1767874187.430624,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Strict"
