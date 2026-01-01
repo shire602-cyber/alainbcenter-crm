@@ -71,7 +71,19 @@ export default function LeadDetailPage({
     init()
   }, [params, router])
 
+  // STEP 0: Build stamp for deployment verification
+  // CRITICAL: Must be called BEFORE any conditional returns AND before useSmartPolling
+  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
+  
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
+      .catch(() => {})
+  }, [])
+
   // Smart polling for lead page (15s interval) - ALWAYS call hook
+  // CRITICAL: Must be called AFTER all other useState hooks to maintain consistent hook order
   useSmartPolling({
     fetcher: () => {
       if (leadId) {
@@ -84,17 +96,6 @@ export default function LeadDetailPage({
     pauseWhenHidden: true,
     onErrorBackoff: true,
   })
-
-  // STEP 0: Build stamp for deployment verification
-  // CRITICAL: Must be called BEFORE any conditional returns
-  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
-  
-  useEffect(() => {
-    fetch('/api/health')
-      .then(res => res.json())
-      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
-      .catch(() => {})
-  }, [])
 
   // Keyboard shortcuts - PHASE C (client-only)
   // CRITICAL: Hook must be called unconditionally - guard logic inside
@@ -146,6 +147,9 @@ export default function LeadDetailPage({
   }, [leadId, router, commandPaletteOpen, infoSheetOpen])
 
   async function loadLead(id: number) {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:133',message:'loadLead() entry',data:{leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // #endregion
     try {
       // Get conversationId or contactId from URL search params for fallback
       const conversationId = typeof window !== 'undefined' ? new URLSearchParams(window.location.search).get('conversationId') : null
@@ -155,21 +159,43 @@ export default function LeadDetailPage({
       if (conversationId) url += `?conversationId=${conversationId}`
       else if (contactId) url += `?contactId=${contactId}`
       
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:143',message:'fetching API',data:{url,leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       const res = await fetch(url)
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:145',message:'API response received',data:{status:res.status,statusText:res.statusText,ok:res.ok},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       if (res.ok) {
         const data = await res.json()
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:148',message:'API data parsed',data:{hasRedirect:!!data._redirect,redirectUrl:data._redirect,hasLead:!!data.lead,hasId:!!data.id,leadId:data.lead?.id || data.id,dataKeys:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+        // #endregion
         
         // Check if API returned a redirect hint (fallback resolution)
         if (data._redirect && data._redirect !== `/leads/${id}`) {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:151',message:'redirect triggered',data:{redirectUrl:data._redirect,reason:data._fallbackReason},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
+          // #endregion
           console.log(`[Lead Page] Redirecting to ${data._redirect} (${data._fallbackReason})`)
           router.replace(data._redirect)
           return
         }
         
-        setLead(data)
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:156',message:'setting lead data',data:{leadId:data.lead?.id || data.id,hasContact:!!(data.lead?.contact || data.contact),usingFallback:!data.lead,hasDataLead:!!data.lead},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
+        // API returns { lead: {...} } structure
+        setLead(data.lead || data)
         setLoading(false)
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:158',message:'loading set to false',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+        // #endregion
       } else if (res.status === 404) {
         const errorData = await res.json()
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:162',message:'404 error',data:{errorData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         setLead(null)
         setLoading(false)
         // Store fallback info for empty state
@@ -178,9 +204,15 @@ export default function LeadDetailPage({
           contactId: errorData._contactId,
         })
       } else {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:170',message:'non-404 error',data:{status:res.status},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+        // #endregion
         setLoading(false)
       }
     } catch (error) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:173',message:'loadLead() error',data:{errorMessage:error instanceof Error ? error.message : String(error)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // #endregion
       console.error('Failed to load lead:', error)
       setLoading(false)
     }
@@ -238,6 +270,11 @@ export default function LeadDetailPage({
 
   // PHASE 1 DEBUG: All hooks called before conditional returns
   // Loading state - render AFTER all hooks
+  // #region agent log
+  if (typeof window !== 'undefined') {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:226',message:'render check',data:{loading,leadId,hasLead:!!lead},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
+  }
+  // #endregion
   if (loading || !leadId) {
     return (
       <MainLayout>

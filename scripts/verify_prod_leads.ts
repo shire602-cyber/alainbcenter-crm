@@ -33,28 +33,52 @@ async function login(page: Page): Promise<string> {
   console.log(`[VERIFY] Logging in as ${EMAIL}...`)
   await page.goto(`${BASE_URL}/login`, { waitUntil: 'domcontentloaded', timeout: 60000 })
 
-  await page.fill('input[type="email"]', EMAIL)
-  await page.fill('input[type="password"]', PASSWORD)
+  // Wait for form to be ready
+  await page.waitForSelector('input#email, input[name="email"]', { timeout: 10000 })
+  
+  // Fill form using IDs (more reliable)
+  await page.fill('input#email', EMAIL)
+  await page.fill('input#password', PASSWORD)
+  
+  // Wait a bit for form state to update
+  await page.waitForTimeout(500)
+  
+  // Submit form
   await page.click('button[type="submit"]')
-
-  // PART 1: Wait for either URL change OR logged-in UI element (not waitForURL with "load")
+  
+  // PART 1: Wait for either navigation OR error message
   try {
-    await Promise.race([
-      page.waitForURL(url => /^\/(inbox|leads|dashboard|\?)/.test(url.pathname), { 
-        waitUntil: 'domcontentloaded',
-        timeout: 15000 
-      }),
-      page.waitForSelector('text=/Build:/i, [class*="navbar"], [data-testid="main-layout"]', { 
-        timeout: 15000 
-      })
-    ])
+    // Wait for URL to change (domcontentloaded, not load)
+    await page.waitForURL(url => !url.pathname.includes('/login'), { 
+      waitUntil: 'domcontentloaded',
+      timeout: 15000 
+    })
     console.log(`✅ Logged in (URL: ${page.url()})`)
-  } catch (error) {
-    console.error(`❌ Login timeout - capturing state`)
-    await page.screenshot({ path: `${DEBUG_DIR}/login-timeout.png`, fullPage: true })
-    const content = await page.content()
-    fs.writeFileSync(`${DEBUG_DIR}/login-timeout.html`, content)
-    throw error
+  } catch (error: any) {
+    // Check if there's an error message on the page
+    const errorElement = await page.locator('[class*="error"], [class*="destructive"], text=/invalid|error|failed/i').first().textContent({ timeout: 2000 }).catch(() => null)
+    if (errorElement) {
+      console.error(`❌ Login error: ${errorElement}`)
+      await page.screenshot({ path: `${DEBUG_DIR}/login-error.png`, fullPage: true })
+      throw new Error(`Login failed: ${errorElement}`)
+    }
+    
+    // Check if still on login page
+    const currentUrl = page.url()
+    if (currentUrl.includes('/login')) {
+      console.error(`❌ Login timeout - still on login page`)
+      console.error(`Current URL: ${currentUrl}`)
+      await page.screenshot({ path: `${DEBUG_DIR}/login-timeout.png`, fullPage: true })
+      const content = await page.content()
+      fs.writeFileSync(`${DEBUG_DIR}/login-timeout.html`, content.substring(0, 5000))
+      throw new Error('Login did not complete - still on login page')
+    }
+    
+    // URL changed but might not be fully loaded
+    console.log(`⚠️  URL changed but waitForURL timed out, checking page state...`)
+    await page.waitForTimeout(2000)
+    const finalUrl = page.url()
+    console.log(`Final URL: ${finalUrl}`)
   }
 
   // PART 1: Verify auth works

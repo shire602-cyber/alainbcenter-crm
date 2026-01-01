@@ -27,6 +27,9 @@ export async function GET(
     
     const resolvedParams = await params
     const numericId = parseInt(resolvedParams.id)
+    // #region agent log
+    console.log(`[LEAD-API] [${requestId}] Parsed ID: ${numericId} from ${resolvedParams.id}`)
+    // #endregion
     
     // Check for fallback parameters (conversationId or contactId)
     const searchParams = req.nextUrl.searchParams
@@ -127,6 +130,9 @@ export async function GET(
     })
 
     // PHASE 2: Enhanced fallback resolution if lead not found
+    // #region agent log
+    console.log(`[LEAD-API] [${requestId}] Lead query result: ${lead ? `FOUND (id=${lead.id})` : 'NOT FOUND'}`)
+    // #endregion
     if (!lead) {
       console.log(`[LEAD-API] [${requestId}] Lead ${numericId} not found, attempting fallback resolution...`)
       
@@ -450,12 +456,17 @@ export async function GET(
     const tasksSnoozed = tasks.filter((t: any) => t.status === 'SNOOZED')
 
     const responseStart = Date.now()
+    // #region agent log
+    console.log(`[LEAD-API] [${requestId}] Preparing response with lead.id=${lead.id}, lead.contact=${lead.contact?.fullName || 'null'}`)
+    // #endregion
     const response = NextResponse.json({
-      ...lead,
-      tasksGrouped: {
-        open: tasksOpen,
-        done: tasksDone,
-        snoozed: tasksSnoozed,
+      lead: {
+        ...lead,
+        tasksGrouped: {
+          open: tasksOpen,
+          done: tasksDone,
+          snoozed: tasksSnoozed,
+        }
       }
     })
     const responseDuration = Date.now() - responseStart
