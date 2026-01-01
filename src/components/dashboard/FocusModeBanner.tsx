@@ -34,7 +34,11 @@ export function FocusModeBanner({ onExit }: FocusModeBannerProps) {
     if (onExit) onExit()
   }
 
-  if (!visible) return null
+  // CRITICAL FIX: Always return same structure - conditionally render content inside
+  // This ensures hooks are always called in the same order (React rules)
+  if (!visible) {
+    return null // This is safe because it's after all hooks
+  }
 
   return (
     <div className="fixed inset-0 z-50 pointer-events-none">
