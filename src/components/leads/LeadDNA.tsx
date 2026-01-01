@@ -78,6 +78,10 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
   }, [lead.id])
 
   async function loadQualificationData() {
+    if (!lead?.id) {
+      setLoading(false)
+      return
+    }
     try {
       // Load conversation state to get knownFields
       const res = await fetch(`/api/leads/${lead.id}/conversation-state`)

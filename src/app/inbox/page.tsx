@@ -1154,27 +1154,74 @@ function InboxPageContent() {
                                 }
                               })}
                             </div>
-                          ) : msg.mediaUrl || (msg.type && msg.type !== 'text' && msg.type !== 'location') ? (
-                            // CRITICAL FIX: Check for mediaUrl or non-text type BEFORE showing body text
-                            // This prevents "[Audio received]" or "[document: ...]" from showing as text when media exists
-                            <div className="space-y-1">
-                              <p className="text-xs opacity-75 flex items-center gap-1">
-                                {msg.type === 'location' && <MapPin className="h-3 w-3" />}
-                                {msg.type === 'audio' && '🎵 Audio message'}
-                                {msg.type === 'document' && '📄 Document'}
-                                {msg.type === 'image' && '🖼️ Image'}
-                                {msg.type === 'video' && '🎥 Video'}
-                                {!['audio', 'document', 'image', 'video', 'location'].includes(msg.type) && (msg.body || `[${msg.type}]`)}
-                              </p>
-                              {msg.mediaUrl && (
+                          ) : msg.mediaUrl ? (
+                            // CRITICAL FIX: If mediaUrl exists, render media based on type
+                            <div className="space-y-2">
+                              {msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/') ? (
+                                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                  <AudioMessagePlayer
+                                    mediaId={msg.mediaUrl.startsWith('http') || msg.mediaUrl.startsWith('/')
+                                      ? msg.mediaUrl
+                                      : `/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+                                    mimeType={msg.mediaMimeType}
+                                    messageId={msg.id}
+                                    className="w-full"
+                                  />
+                                </div>
+                              ) : msg.type === 'image' || msg.mediaMimeType?.startsWith('image/') ? (
+                                <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                                  <img
+                                    src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+                                    alt={msg.body || 'Image message'}
+                                    className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
+                                    loading="lazy"
+                                    crossOrigin="anonymous"
+                                    onError={(e) => {
+                                      const target = e.currentTarget
+                                      target.onerror = null
+                                      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
+                                    }}
+                                  />
+                                  <a
+                                    href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+                                    target="_blank"
+                                    rel="noopener noreferrer"
+                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    title="Open image in new tab"
+                                  >
+                                    <ImageIcon className="h-8 w-8 text-white" />
+                                  </a>
+                                </div>
+                              ) : msg.type === 'document' || msg.mediaMimeType === 'application/pdf' || msg.mediaMimeType?.includes('pdf') ? (
                                 <a
                                   href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="text-xs text-primary underline"
+                                  className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                  download
                                 >
-                                  {msg.type === 'document' ? 'Download' : 'Open'}
+                                  <FileText className="h-5 w-5" />
+                                  <span className="text-sm font-medium">
+                                    {msg.body && msg.body.startsWith('[document:') 
+                                      ? msg.body.replace('[document:', '').replace(']', '').trim()
+                                      : (msg.body || 'Document')}
+                                  </span>
                                 </a>
+                              ) : (
+                                <a
+                                  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                  download
+                                >
+                                  <FileText className="h-5 w-5" />
+                                  <span className="text-sm font-medium">{msg.body || `[${msg.type}]`}</span>
+                                </a>
+                              )}
+                              {/* Show caption if present and not a placeholder */}
+                              {msg.body && !msg.body.match(/^\[(audio|document|image|video|media)/i) && (
+                                <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
                               )}
                             </div>
                           ) : (() => {
@@ -1184,7 +1231,7 @@ function InboxPageContent() {
                             if (displayText && typeof displayText === 'string' && displayText.trim() !== '') {
                               // Skip if body looks like a media placeholder
                               const bodyLower = displayText.toLowerCase()
-                              if (bodyLower.includes('[audio') || bodyLower.includes('[document') || bodyLower.includes('[media') || bodyLower.includes('[image')) {
+                              if (bodyLower.match(/^\[(audio|document|image|video|media)/i)) {
                                 return <p className="text-sm opacity-75">[Media message]</p>
                               }
                               return <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
