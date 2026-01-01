@@ -242,7 +242,9 @@ export default function LeadDetailPage({
   const isFocusMode = typeof window !== 'undefined' && sessionStorage.getItem('focusMode') === 'true'
 
   // Keyboard shortcuts - PHASE C (client-only)
+  // CRITICAL: Hook must be called unconditionally - guard logic inside
   useEffect(() => {
+    // Guard logic inside hook - this is safe
     if (typeof window === 'undefined' || !leadId) return
 
     const handleKeyDown = (e: KeyboardEvent) => {

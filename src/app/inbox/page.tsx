@@ -861,11 +861,102 @@ function InboxPageContent() {
                               : 'bg-green-500 dark:bg-green-600 text-white rounded-tr-none shadow-green-500/30'
                           )}
                         >
-                          {msg.type === 'text' ? (
-                            <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">
-                              {msg.body || '[No content]'}
-                            </p>
-                          ) : (msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/')) && (msg.mediaUrl || (msg.attachments && msg.attachments.some((a: any) => a.type === 'audio'))) ? (
+                          {/* CRITICAL FIX: Check attachments FIRST, then fall back to mediaUrl */}
+                          {msg.attachments && msg.attachments.length > 0 ? (
+                            // PHASE 5A: Render attachments (highest priority)
+                            <div className="space-y-2">
+                              {msg.attachments.map((att: any) => {
+                                // PHASE 1 DEBUG: Log each attachment
+                                console.log('[INBOX-DEBUG] Rendering attachment', {
+                                  attachmentId: att.id,
+                                  type: att.type,
+                                  url: att.url,
+                                  mimeType: att.mimeType,
+                                  filename: att.filename,
+                                })
+                                
+                                if (att.type === 'image') {
+                                  const imageUrl = att.url.startsWith('http') || att.url.startsWith('/') 
+                                    ? att.url 
+                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                  return (
+                                    <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                                      <img
+                                        src={imageUrl}
+                                        alt={att.filename || 'Image'}
+                                        className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
+                                        loading="lazy"
+                                        crossOrigin="anonymous"
+                                        onError={(e) => {
+                                          const target = e.currentTarget
+                                          target.onerror = null
+                                          target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
+                                        }}
+                                      />
+                                      <a
+                                        href={imageUrl}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
+                                        title="Open image in new tab"
+                                      >
+                                        <ImageIcon className="h-8 w-8 text-white" />
+                                      </a>
+                                    </div>
+                                  )
+                                } else if (att.type === 'document' || att.type === 'pdf') {
+                                  const docUrl = att.url.startsWith('http') || att.url.startsWith('/')
+                                    ? att.url
+                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                  return (
+                                    <a
+                                      key={att.id}
+                                      href={docUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      download={att.filename || undefined}
+                                    >
+                                      <FileText className="h-5 w-5" />
+                                      <span className="text-sm font-medium">{att.filename || 'Document'}</span>
+                                    </a>
+                                  )
+                                } else if (att.type === 'audio') {
+                                  return (
+                                    <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                      <AudioMessagePlayer
+                                        mediaId={att.url}
+                                        mimeType={att.mimeType}
+                                        messageId={msg.id}
+                                        className="w-full"
+                                      />
+                                    </div>
+                                  )
+                                } else {
+                                  const fileUrl = att.url.startsWith('http') || att.url.startsWith('/')
+                                    ? att.url
+                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                  return (
+                                    <a
+                                      key={att.id}
+                                      href={fileUrl}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      download={att.filename || undefined}
+                                    >
+                                      <FileText className="h-5 w-5" />
+                                      <span className="text-sm font-medium">{att.filename || 'File'}</span>
+                                    </a>
+                                  )
+                                }
+                              })}
+                              {/* Show body text if present */}
+                              {msg.body && msg.body !== '[audio]' && msg.body !== '[Audio received]' && msg.body !== '[image]' && msg.body !== '[document]' && (
+                                <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
+                              )}
+                            </div>
+                          ) : (msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/')) && msg.mediaUrl ? (
                             <div className="space-y-2">
                               {/* PHASE 1 DEBUG: Log audio message rendering */}
                               {(() => {
