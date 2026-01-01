@@ -231,48 +231,87 @@ async function verifyLeadPage(page: Page, leadId: number, cookieHeader: string):
   fs.writeFileSync(`${DEBUG_DIR}/console-log.txt`, consoleLogs.join('\n'))
   console.log(`[VERIFY] Console log saved`)
 
-  // STEP 1: Capture full stack traces
+  // STEP 1: Capture full stack traces and componentStack
   const fullStackTraces: string[] = []
   const componentStacks: string[] = []
   
-  // Extract full error info from console errors
+  // Extract full error info from console errors (capture ENTIRE error, not truncated)
   for (const error of consoleErrors) {
-    if (error.includes('React error #310') || error.includes('componentStack')) {
+    if (error.includes('React error #310') || error.includes('Rendered more hooks')) {
       fullStackTraces.push(error)
     }
-    // Extract componentStack from error boundary logs
+    // Extract FULL componentStack from error boundary logs (not just first line)
     if (error.includes('[LEAD-ERROR-BOUNDARY]')) {
-      const match = error.match(/componentStack:\s*([^\n]+)/)
-      if (match) {
-        componentStacks.push(match[1])
+      // Get the full error text including componentStack
+      fullStackTraces.push(error)
+      // Try to extract componentStack - it might span multiple lines
+      const lines = error.split('\n')
+      let inComponentStack = false
+      let stackLines: string[] = []
+      for (const line of lines) {
+        if (line.includes('componentStack:')) {
+          inComponentStack = true
+          stackLines.push(line)
+        } else if (inComponentStack) {
+          if (line.trim() && !line.includes('Error info:')) {
+            stackLines.push(line)
+          } else {
+            break
+          }
+        }
+      }
+      if (stackLines.length > 0) {
+        componentStacks.push(stackLines.join('\n'))
       }
     }
   }
   
-  // Also try to get componentStack from page evaluation
+  // Also try to get componentStack from page evaluation (full text)
   try {
     const errorBoundaryInfo = await page.evaluate(() => {
-      const errorBoundary = document.querySelector('[class*="error"], [class*="Error"]')
+      // Try multiple selectors to find error boundary
+      const errorBoundary = document.querySelector('[class*="error"], [class*="Error"], [class*="boundary"]')
       if (errorBoundary) {
-        return errorBoundary.textContent || ''
+        return {
+          text: errorBoundary.textContent || '',
+          innerHTML: errorBoundary.innerHTML || '',
+        }
       }
-      return ''
+      return null
     })
     if (errorBoundaryInfo) {
-      componentStacks.push(errorBoundaryInfo)
+      componentStacks.push(`Page Error Boundary:\n${errorBoundaryInfo.text}\n\nHTML:\n${errorBoundaryInfo.innerHTML}`)
+    }
+  } catch (e) {
+    // Ignore
+  }
+  
+  // Also capture React DevTools error info if available
+  try {
+    const reactError = await page.evaluate(() => {
+      // Check for React error in window.__REACT_DEVTOOLS_GLOBAL_HOOK__
+      if (typeof window !== 'undefined' && (window as any).__REACT_DEVTOOLS_GLOBAL_HOOK__) {
+        return 'React DevTools available'
+      }
+      return null
+    })
+    if (reactError) {
+      fullStackTraces.push(reactError)
     }
   } catch (e) {
     // Ignore
   }
   
   const stackInfo = {
+    timestamp: new Date().toISOString(),
     consoleErrors: consoleErrors,
     fullStackTraces: fullStackTraces,
     componentStacks: componentStacks,
     pageErrors: pageErrors,
+    url: page.url(),
   }
   fs.writeFileSync(`${DEBUG_DIR}/stack.txt`, JSON.stringify(stackInfo, null, 2))
-  console.log(`[VERIFY] Stack traces saved`)
+  console.log(`[VERIFY] Stack traces saved (${fullStackTraces.length} traces, ${componentStacks.length} component stacks)`)
 
   // PART 1: Check for React #310 error FIRST
   if (htmlContent.includes('Minified React error #310') || 

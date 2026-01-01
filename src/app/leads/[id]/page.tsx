@@ -169,6 +169,7 @@ export default function LeadDetailPage({
       if (res.ok) {
         const data = await res.json()
         // #region agent log
+        console.log('[LEAD-PAGE] API response data:', { hasRedirect: !!data._redirect, hasLead: !!data.lead, hasId: !!data.id, dataKeys: Object.keys(data), leadId: data.lead?.id || data.id })
         fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:148',message:'API data parsed',data:{hasRedirect:!!data._redirect,redirectUrl:data._redirect,hasLead:!!data.lead,hasId:!!data.id,leadId:data.lead?.id || data.id,dataKeys:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'D'})}).catch(()=>{});
         // #endregion
         
@@ -183,11 +184,13 @@ export default function LeadDetailPage({
         }
         
         // #region agent log
+        console.log('[LEAD-PAGE] Setting lead data:', { hasDataLead: !!data.lead, hasDataId: !!data.id, leadId: data.lead?.id || data.id })
         fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:156',message:'setting lead data',data:{leadId:data.lead?.id || data.id,hasContact:!!(data.lead?.contact || data.contact),usingFallback:!data.lead,hasDataLead:!!data.lead,dataKeys:Object.keys(data)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
         // #endregion
         // API returns { lead: {...} } structure (user changed it)
         // Handle both formats for backward compatibility
         const leadData = data.lead || data
+        console.log('[LEAD-PAGE] Lead data to set:', { leadId: leadData?.id, hasContact: !!leadData?.contact, contactName: leadData?.contact?.fullName })
         setLead(leadData)
         setLoading(false)
         // #region agent log

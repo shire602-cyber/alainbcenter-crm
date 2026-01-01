@@ -471,7 +471,11 @@ function PlaybooksSection({
     }
   }
 
-  if (playbooks.length === 0) return null
+  // CRITICAL FIX: Never return null after hooks - always render same structure
+  // Return empty fragment instead to maintain component tree consistency
+  if (playbooks.length === 0) {
+    return <></>
+  }
 
   return (
     <Accordion type="single" className="w-full">
