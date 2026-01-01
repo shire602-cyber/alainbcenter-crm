@@ -624,7 +624,33 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
     return () => container.removeEventListener('scroll', handleScroll)
   }, [])
 
-  // Skeleton loader (shows within 100ms)
+  // CRITICAL FIX: Move ALL hooks BEFORE conditional returns
+  // Fetch lead data if not provided
+  const [leadData, setLeadData] = useState<ConversationWorkspaceProps['lead']>(lead)
+  
+  useEffect(() => {
+    if (!lead && leadId) {
+      fetch(`/api/leads/${leadId}`)
+        .then(res => res.json())
+        .then(data => {
+          // Handle both {lead: {...}} and direct {...} response formats
+          const leadInfo = data.lead || data
+          setLeadData({
+            id: leadInfo.id,
+            stage: leadInfo.stage,
+            serviceType: leadInfo.serviceType,
+            lastInboundAt: leadInfo.lastInboundAt,
+            lastOutboundAt: leadInfo.lastOutboundAt,
+            assignedUser: leadInfo.assignedUser,
+          })
+        })
+        .catch(() => {})
+    } else if (lead) {
+      setLeadData(lead)
+    }
+  }, [lead, leadId])
+
+  // Skeleton loader (shows within 100ms) - render AFTER all hooks
   if (loading) {
     return (
       <div className="flex-1 flex flex-col bg-app p-6">
@@ -650,27 +676,6 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
       </div>
     )
   }
-
-  // Fetch lead data if not provided
-  const [leadData, setLeadData] = useState<ConversationWorkspaceProps['lead']>(lead)
-  
-  useEffect(() => {
-    if (!lead && leadId) {
-      fetch(`/api/leads/${leadId}`)
-        .then(res => res.json())
-        .then(data => {
-          setLeadData({
-            id: data.id,
-            stage: data.stage,
-            serviceType: data.serviceType,
-            lastInboundAt: data.lastInboundAt,
-            lastOutboundAt: data.lastOutboundAt,
-            assignedUser: data.assignedUser,
-          })
-        })
-        .catch(() => {})
-    }
-  }, [lead, leadId])
 
   return (
     <div className="flex-1 flex flex-col h-full bg-app relative">

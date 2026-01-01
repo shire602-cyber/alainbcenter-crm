@@ -231,6 +231,49 @@ async function verifyLeadPage(page: Page, leadId: number, cookieHeader: string):
   fs.writeFileSync(`${DEBUG_DIR}/console-log.txt`, consoleLogs.join('\n'))
   console.log(`[VERIFY] Console log saved`)
 
+  // STEP 1: Capture full stack traces
+  const fullStackTraces: string[] = []
+  const componentStacks: string[] = []
+  
+  // Extract full error info from console errors
+  for (const error of consoleErrors) {
+    if (error.includes('React error #310') || error.includes('componentStack')) {
+      fullStackTraces.push(error)
+    }
+    // Extract componentStack from error boundary logs
+    if (error.includes('[LEAD-ERROR-BOUNDARY]')) {
+      const match = error.match(/componentStack:\s*([^\n]+)/)
+      if (match) {
+        componentStacks.push(match[1])
+      }
+    }
+  }
+  
+  // Also try to get componentStack from page evaluation
+  try {
+    const errorBoundaryInfo = await page.evaluate(() => {
+      const errorBoundary = document.querySelector('[class*="error"], [class*="Error"]')
+      if (errorBoundary) {
+        return errorBoundary.textContent || ''
+      }
+      return ''
+    })
+    if (errorBoundaryInfo) {
+      componentStacks.push(errorBoundaryInfo)
+    }
+  } catch (e) {
+    // Ignore
+  }
+  
+  const stackInfo = {
+    consoleErrors: consoleErrors,
+    fullStackTraces: fullStackTraces,
+    componentStacks: componentStacks,
+    pageErrors: pageErrors,
+  }
+  fs.writeFileSync(`${DEBUG_DIR}/stack.txt`, JSON.stringify(stackInfo, null, 2))
+  console.log(`[VERIFY] Stack traces saved`)
+
   // PART 1: Check for React #310 error FIRST
   if (htmlContent.includes('Minified React error #310') || 
       htmlContent.includes('Rendered more hooks than during the previous render') ||
@@ -238,6 +281,7 @@ async function verifyLeadPage(page: Page, leadId: number, cookieHeader: string):
     console.error(`❌ React error #310 detected in page content`)
     console.error(`Console errors:`, consoleErrors)
     console.error(`Page errors:`, pageErrors)
+    console.error(`Full stack traces saved to: ${DEBUG_DIR}/stack.txt`)
     return false
   }
 
