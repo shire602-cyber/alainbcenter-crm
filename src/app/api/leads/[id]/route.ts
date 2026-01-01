@@ -14,8 +14,16 @@ export async function GET(
   req: NextRequest,
   { params }: { params: Promise<{ id: string }> }
 ) {
+  const requestStart = Date.now()
+  const requestId = `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  
   try {
+    console.log(`[LEAD-API] [${requestId}] Request start for lead detail`)
+    
+    const authStart = Date.now()
     await requireAuthApi()
+    const authDuration = Date.now() - authStart
+    console.log(`[LEAD-API] [${requestId}] Auth completed in ${authDuration}ms`)
     
     const resolvedParams = await params
     const numericId = parseInt(resolvedParams.id)
@@ -27,16 +35,20 @@ export async function GET(
     const action = searchParams.get('action') // Preserve action query param
     
     if (isNaN(numericId)) {
+      console.log(`[LEAD-API] [${requestId}] Invalid ID: ${resolvedParams.id}`)
       return NextResponse.json(
         { error: 'Invalid ID' },
         { status: 400 }
       )
     }
 
-    console.log(`[API] Fetching lead ${numericId} (with fallback resolution)`)
+    console.log(`[LEAD-API] [${requestId}] Fetching lead ${numericId} (with fallback resolution)`)
 
     // PHASE 2: Enhanced fallback resolution
     // First, try to fetch as leadId
+    const dbQueryStart = Date.now()
+    console.log(`[LEAD-API] [${requestId}] DB query start`)
+    
     let lead = await prisma.lead.findUnique({
       where: { id: numericId },
       include: {
@@ -116,7 +128,7 @@ export async function GET(
 
     // PHASE 2: Enhanced fallback resolution if lead not found
     if (!lead) {
-      console.log(`[API] Lead ${numericId} not found, attempting fallback resolution...`)
+      console.log(`[LEAD-API] [${requestId}] Lead ${numericId} not found, attempting fallback resolution...`)
       
       // Strategy A: If numericId might be a conversationId, try that first
       const conversationById = await prisma.conversation.findUnique({
@@ -415,7 +427,8 @@ export async function GET(
       }
       
       // No fallback found
-      console.log(`[API] Lead ${numericId} not found in database, no fallback available`)
+      const totalDuration = Date.now() - requestStart
+      console.log(`[LEAD-API] [${requestId}] Lead ${numericId} not found in database, no fallback available (${totalDuration}ms)`)
       return NextResponse.json(
         { 
           error: 'Lead not found', 
@@ -428,7 +441,7 @@ export async function GET(
       )
     }
 
-    console.log(`[API] Successfully fetched lead ${lead.id} (contact: ${lead.contact?.fullName || 'N/A'})`)
+    console.log(`[LEAD-API] [${requestId}] Successfully fetched lead ${lead.id} (contact: ${lead.contact?.fullName || 'N/A'})`)
 
     // Group tasks by status (handle case where tasks might not be included in fallback query)
     const tasks = (lead as any).tasks || []
@@ -436,7 +449,8 @@ export async function GET(
     const tasksDone = tasks.filter((t: any) => t.status === 'DONE')
     const tasksSnoozed = tasks.filter((t: any) => t.status === 'SNOOZED')
 
-    return NextResponse.json({
+    const responseStart = Date.now()
+    const response = NextResponse.json({
       ...lead,
       tasksGrouped: {
         open: tasksOpen,
@@ -444,9 +458,15 @@ export async function GET(
         snoozed: tasksSnoozed,
       }
     })
+    const responseDuration = Date.now() - responseStart
+    const totalDuration = Date.now() - requestStart
+    
+    console.log(`[LEAD-API] [${requestId}] Response prepared in ${responseDuration}ms, total: ${totalDuration}ms`)
+    return response
   } catch (error: any) {
-    console.error('GET /api/leads/[id] error:', error)
-    console.error('Error stack:', error.stack)
+    const totalDuration = Date.now() - requestStart
+    console.error(`[LEAD-API] [${requestId}] GET /api/leads/[id] error after ${totalDuration}ms:`, error.message)
+    console.error(`[LEAD-API] [${requestId}] Error stack:`, error.stack)
     
     // If it's an auth error, return 401
     if (error.statusCode === 401) {
