@@ -1226,11 +1226,18 @@ function InboxPageContent() {
                             </div>
                           ) : (() => {
                             // PART 2: Extract message text from various fields
-                            // CRITICAL: Only show text if it's NOT a media placeholder
+                            // CRITICAL: Check if message has media indicators but no mediaUrl/attachments
+                            // This handles cases where body contains "[Audio received]" but mediaUrl is missing
                             const displayText = getMessageDisplayText(msg)
+                            const bodyLower = displayText?.toLowerCase() || ''
+                            
+                            // If body contains media placeholder but no mediaUrl/attachments, show placeholder
+                            if (bodyLower.match(/\[(audio|document|image|video|media)/i) && !msg.mediaUrl && (!msg.attachments || msg.attachments.length === 0)) {
+                              return <p className="text-sm opacity-75">[Media message]</p>
+                            }
+                            
                             if (displayText && typeof displayText === 'string' && displayText.trim() !== '') {
                               // Skip if body looks like a media placeholder
-                              const bodyLower = displayText.toLowerCase()
                               if (bodyLower.match(/^\[(audio|document|image|video|media)/i)) {
                                 return <p className="text-sm opacity-75">[Media message]</p>
                               }

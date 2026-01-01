@@ -265,6 +265,8 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
     return sorted.slice(0, 3)
   }, [tasks])
 
+  // CRITICAL: Always render same structure to maintain hook order
+  // Don't return early - render loading/empty states instead
   if (loading) {
     return (
       <div className="h-full overflow-y-auto p-6">
