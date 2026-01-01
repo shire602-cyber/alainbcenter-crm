@@ -8,11 +8,15 @@ setup('authenticate', async ({ page }) => {
   const email = process.env.E2E_EMAIL || 'admin@alainbcenter.com';
   const password = process.env.E2E_PASSWORD || 'CHANGE_ME';
 
-  await page.goto('/login', { waitUntil: 'networkidle' });
+  const baseURL = process.env.E2E_BASE_URL || 'https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app';
+  await page.goto(`${baseURL}/login`, { waitUntil: 'domcontentloaded', timeout: 30000 });
+  
+  // Wait for page to load
+  await page.waitForLoadState('domcontentloaded');
   
   // Wait for login form - based on actual login page structure
   // Login page has: input#email, input#password, form with onSubmit
-  await page.waitForSelector('input#email, input[name="email"], input[type="email"]', { timeout: 15000 });
+  await page.waitForSelector('input#email, input[name="email"], input[type="email"]', { timeout: 20000 });
   
   // Fill email (id="email" or name="email")
   const emailInput = page.locator('input#email, input[name="email"]').first();
