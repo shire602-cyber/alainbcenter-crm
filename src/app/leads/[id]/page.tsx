@@ -42,6 +42,8 @@ export default function LeadDetailPage({
   // CRITICAL: ALL useState hooks must be declared BEFORE any useEffect hooks
   // STEP 0: Build stamp for deployment verification
   const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
+  
+  // CRITICAL: useRouter must be called after all useState hooks but before useEffect hooks
   const router = useRouter()
 
   // CRITICAL: All hooks must be called before any conditional returns
@@ -279,11 +281,7 @@ export default function LeadDetailPage({
 
   // PHASE 1 DEBUG: All hooks called before conditional returns
   // Loading state - render AFTER all hooks
-  // #region agent log
-  if (typeof window !== 'undefined') {
-    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:226',message:'render check',data:{loading,leadId,hasLead:!!lead},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  }
-  // #endregion
+  // CRITICAL: No hooks or conditional logic before early returns
   if (loading || !leadId) {
     return (
       <MainLayout>
@@ -355,8 +353,6 @@ export default function LeadDetailPage({
 
   const primaryAction = getPrimaryAction()
   const serviceName = lead?.serviceType?.name || lead?.serviceTypeEnum || lead?.requestedServiceRaw || 'Not specified'
-
-  const isFocusMode = typeof window !== 'undefined' && sessionStorage.getItem('focusMode') === 'true'
 
   return (
     <LeadErrorBoundary>

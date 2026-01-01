@@ -36,8 +36,9 @@ export function FocusModeBanner({ onExit }: FocusModeBannerProps) {
 
   // CRITICAL FIX: Always return same structure - conditionally render content inside
   // This ensures hooks are always called in the same order (React rules)
+  // Return empty fragment instead of null to maintain component tree consistency
   if (!visible) {
-    return null // This is safe because it's after all hooks
+    return <></>
   }
 
   return (
