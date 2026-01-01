@@ -1,0 +1,38 @@
+================================================================================
+DEBUG PROBE SCRIPT
+================================================================================
+Base URL: https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app
+Timestamp: 2026-01-01T12:30:45.741Z
+
+[1] Health Check
+
+[PROBE] GET https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app/api/health
+Status: 200
+Body: {
+  "ok": true,
+  "buildId": "075c9b6",
+  "buildTime": "2026-01-01T12:30:47.702Z",
+  "timestamp": "2026-01-01T12:30:47.703Z",
+  "environment": "production"
+}
+
+[2] Get Leads List
+
+[PROBE] GET https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app/api/leads
+Status: 401
+No leads found or unexpected format
+
+[4] Debug Sample Media Endpoint
+NOTE: This requires admin auth - may return 401
+
+[PROBE] GET https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app/api/debug/inbox/sample-media
+Status: 401
+Body: {
+  "error": "Unauthorized"
+}
+
+[5] Skipping media probes - no sample media available
+
+================================================================================
+PROBE COMPLETE
+================================================================================
