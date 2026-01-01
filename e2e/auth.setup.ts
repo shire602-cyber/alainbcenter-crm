@@ -8,18 +8,22 @@ setup('authenticate', async ({ page }) => {
   const email = process.env.E2E_EMAIL || 'admin@alainbcenter.com';
   const password = process.env.E2E_PASSWORD || 'CHANGE_ME';
 
-  await page.goto('/login');
+  await page.goto('/login', { waitUntil: 'networkidle' });
   
-  // Wait for login form
-  await page.waitForSelector('input[type="email"], input[name="email"]', { timeout: 10000 });
+  // Wait for login form - based on actual login page structure
+  // Login page has: input#email, input#password, form with onSubmit
+  await page.waitForSelector('input#email, input[name="email"], input[type="email"]', { timeout: 15000 });
   
-  // Fill and submit login form
-  const emailInput = page.locator('input[type="email"], input[name="email"]').first();
-  const passwordInput = page.locator('input[type="password"], input[name="password"]').first();
-  const submitButton = page.locator('button[type="submit"], button:has-text("Sign in"), button:has-text("Login")').first();
-
+  // Fill email (id="email" or name="email")
+  const emailInput = page.locator('input#email, input[name="email"]').first();
   await emailInput.fill(email);
+  
+  // Fill password (id="password" or name="password")
+  const passwordInput = page.locator('input#password, input[name="password"], input[type="password"]').first();
   await passwordInput.fill(password);
+  
+  // Submit form (button[type="submit"] or form submit)
+  const submitButton = page.locator('button[type="submit"], form button').first();
   await submitButton.click();
 
   // Wait for navigation away from login page (success) or error message
@@ -34,4 +38,3 @@ setup('authenticate', async ({ page }) => {
   // Save authenticated state
   await page.context().storageState({ path: 'e2e/.auth/user.json' });
 });
-
