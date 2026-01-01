@@ -1148,9 +1148,14 @@ function InboxPageContent() {
                                 {msg.body || `[${msg.type}]`}
                               </p>
                             </div>
-                          ) : (
-                            <p className="text-sm opacity-75">[Media message]</p>
-                          )}
+                          ) : (() => {
+                            // PART 2: Extract message text from various fields
+                            const displayText = getMessageDisplayText(msg)
+                            if (displayText && displayText.trim() !== '') {
+                              return <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
+                            }
+                            return <p className="text-sm opacity-75">[Media message]</p>
+                          })()}
                           <div className="flex items-center gap-1 mt-1">
                             <p
                               className={cn(
