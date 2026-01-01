@@ -17,7 +17,7 @@ export default defineConfig({
     ['json', { outputFile: 'test-results/results.json' }],
   ],
   use: {
-    baseURL: process.env.E2E_BASE_URL || 'https://alainbcenter-5pmjkvvhq-abdurahmans-projects-66129df5.vercel.app',
+    baseURL: process.env.E2E_BASE_URL || 'https://alainbcenter-5pmjkvwhq-abdurahmans-projects-66129df5.vercel.app',
     trace: 'on-first-retry',
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
