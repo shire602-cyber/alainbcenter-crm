@@ -75,7 +75,7 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
 
   useEffect(() => {
     loadQualificationData()
-  }, [lead.id])
+  }, [lead?.id])
 
   async function loadQualificationData() {
     if (!lead?.id) {
