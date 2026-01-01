@@ -2,24 +2,14 @@
   "cookies": [
     {
       "name": "alaincrm_session",
-      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI2OTc1MywiZXhwIjoxNzY3ODc0NTUzfQ%3D%3D.50c2de423f7c4359bcc64fd196ccf1db3471a6ff5889e44f97b4e98c5d05b1b0",
+      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI3MDY5NywiZXhwIjoxNzY3ODc1NDk3fQ%3D%3D.c5c14d75b0f8d82aa9d908685624e40a2233ca0381470901d83eb8762fb16f4d",
       "domain": "alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app",
       "path": "/",
-      "expires": 1767874553.093226,
+      "expires": 1767875497.823612,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Strict"
     }
   ],
-  "origins": [
-    {
-      "origin": "https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app",
-      "localStorage": [
-        {
-          "name": "sidebar-open",
-          "value": "true"
-        }
-      ]
-    }
-  ]
+  "origins": []
 }

@@ -18,7 +18,7 @@ export default defineConfig({
   ],
   use: {
     baseURL: process.env.E2E_BASE_URL || 'https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app',
-    trace: 'on-first-retry',
+    trace: 'on', // Enable traces for all tests
     screenshot: 'only-on-failure',
     video: 'retain-on-failure',
   },
