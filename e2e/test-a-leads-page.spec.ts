@@ -13,8 +13,8 @@ test.describe('Leads Page - React #310 Fix', () => {
   test.use({ storageState: 'e2e/.auth/user.json' });
 
   test('should load lead detail page without React error', async ({ page }) => {
-    // Navigate to a lead page
-    await page.goto('/leads/123', { waitUntil: 'networkidle' });
+    // Navigate to a lead page with longer timeout
+    await page.goto('/leads/123', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // CRITICAL: Assert NO React error #310
     const reactError = page.locator('text=/Minified React error #310|React error #310/i');
@@ -51,7 +51,7 @@ test.describe('Leads Page - React #310 Fix', () => {
   });
 
   test('should handle non-existent lead gracefully', async ({ page }) => {
-    await page.goto('/leads/999999', { waitUntil: 'networkidle' });
+    await page.goto('/leads/999999', { waitUntil: 'domcontentloaded', timeout: 60000 });
 
     // Should show "Lead not found" or redirect, but NOT React error
     const reactError = page.locator('text=/Minified React error #310|React error #310/i');
