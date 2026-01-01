@@ -627,25 +627,25 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
           </Card>
         </div>
 
-        {/* Qualification Progress */}
+        {/* Qualification Progress - ALWAYS render to maintain hook order */}
         <div>
           <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
-          {lead ? <QualificationProgress lead={lead} /> : <Card className="card-premium p-4"><p className="text-meta muted-text">Loading...</p></Card>}
+          <QualificationProgress lead={lead || { id: 0, contact: null, serviceTypeEnum: null, serviceType: null, requestedServiceRaw: null, conversations: [] } as any} />
         </div>
 
-        {/* Expiry Timeline */}
+        {/* Expiry Timeline - ALWAYS render to maintain hook order */}
         <div>
           <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
-          {lead ? <ExpiryTimeline lead={lead} /> : <Card className="card-premium p-4"><p className="text-meta muted-text">Loading...</p></Card>}
+          <ExpiryTimeline lead={lead || { expiryDate: null, visaExpiryDate: null, permitExpiryDate: null } as any} />
         </div>
 
-        {/* PHASE 5E: Quote Cadence - Always render component, it handles null internally */}
-        {lead?.id && <QuoteCadenceSection leadId={lead.id} quotationSentAtStr={(lead as any)?.quotationSentAt} />}
+        {/* PHASE 5E: Quote Cadence - ALWAYS render to maintain hook order */}
+        <QuoteCadenceSection leadId={lead?.id || 0} quotationSentAtStr={(lead as any)?.quotationSentAt} />
 
-        {/* Sponsor Search */}
+        {/* Sponsor Search - ALWAYS render to maintain hook order */}
         <div>
           <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
-          {lead ? <SponsorSearch lead={lead} /> : <Card className="card-premium p-4"><p className="text-meta muted-text">Loading...</p></Card>}
+          <SponsorSearch lead={lead || { id: 0, contact: null } as any} />
         </div>
 
         {/* Documents Placeholder */}
