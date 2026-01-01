@@ -2,6 +2,9 @@ const path = require('path');
 
 /** @type {import('next').NextConfig} */
 const nextConfig = {
+  // PART 1: Enable source maps for production debugging
+  productionBrowserSourceMaps: true,
+  
   // App Router is default in Next.js 13+ (using src/app directory)
   // No pages directory exists, so no _document.js should be generated
   
