@@ -14,12 +14,17 @@ export async function GET(req: NextRequest) {
       return NextResponse.json({ error: 'Unauthorized' }, { status: 401 })
     }
 
-    // Find audio messages
+    // Find audio messages (PART A FIX: Only return if mediaUrl is NOT NULL)
     const audioMessage = await prisma.message.findFirst({
       where: {
-        OR: [
-          { type: { in: ['audio', 'voice_note'] } },
-          { mediaMimeType: { startsWith: 'audio/' } },
+        AND: [
+          {
+            OR: [
+              { type: { in: ['audio', 'voice_note'] } },
+              { mediaMimeType: { startsWith: 'audio/' } },
+            ],
+          },
+          { mediaUrl: { not: null } }, // PART A FIX: Only return if mediaUrl exists
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -32,10 +37,13 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Find image messages
+    // Find image messages (PART A FIX: Only return if mediaUrl is NOT NULL)
     const imageMessage = await prisma.message.findFirst({
       where: {
-        mediaMimeType: { startsWith: 'image/' },
+        AND: [
+          { mediaMimeType: { startsWith: 'image/' } },
+          { mediaUrl: { not: null } }, // PART A FIX: Only return if mediaUrl exists
+        ],
       },
       orderBy: { createdAt: 'desc' },
       select: {
@@ -47,12 +55,17 @@ export async function GET(req: NextRequest) {
       },
     })
 
-    // Find PDF/document messages
+    // Find PDF/document messages (PART A FIX: Only return if mediaUrl is NOT NULL)
     const pdfMessage = await prisma.message.findFirst({
       where: {
-        OR: [
-          { mediaMimeType: 'application/pdf' },
-          { mediaMimeType: { contains: 'pdf' } },
+        AND: [
+          {
+            OR: [
+              { mediaMimeType: 'application/pdf' },
+              { mediaMimeType: { contains: 'pdf' } },
+            ],
+          },
+          { mediaUrl: { not: null } }, // PART A FIX: Only return if mediaUrl exists
         ],
       },
       orderBy: { createdAt: 'desc' },

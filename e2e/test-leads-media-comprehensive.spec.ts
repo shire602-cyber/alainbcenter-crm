@@ -26,9 +26,15 @@ test.describe('Leads + Media E2E Tests', () => {
   })
 
   test('Leads page opens without React error #310', async ({ page }) => {
+    // PART C FIX: Remove networkidle dependency, wait for stable selector
     // Navigate to leads page
     await page.goto(`${BASE_URL}/leads`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-    await page.waitForLoadState('networkidle', { timeout: 30000 })
+    
+    // Wait for leads list to load (any lead link or "No leads" message)
+    await page.waitForSelector('a[href^="/leads/"], text=No leads, text=Loading', { timeout: 15000 }).catch(() => {
+      // If selector doesn't appear, capture errors
+      console.log('[TEST] Leads list did not load - capturing errors')
+    })
 
     // Verify build stamp matches (optional - may not be visible on all pages)
     const buildStamp = page.locator('text=/Build:/i')
@@ -49,6 +55,20 @@ test.describe('Leads + Media E2E Tests', () => {
       const altLink = page.locator('[href*="/leads/"]').first()
       const altHref = await altLink.getAttribute('href', { timeout: 5000 }).catch(() => null)
       if (!altHref) {
+        // PART C FIX: Capture errors before skipping
+        const consoleErrors: string[] = []
+        page.on('console', (msg) => {
+          if (msg.type() === 'error') {
+            consoleErrors.push(msg.text())
+          }
+        })
+        const pageErrors: string[] = []
+        page.on('pageerror', (error) => {
+          pageErrors.push(error.message)
+        })
+        await page.waitForTimeout(2000) // Wait a bit to capture errors
+        console.log('[TEST] No leads found - console errors:', consoleErrors)
+        console.log('[TEST] No leads found - page errors:', pageErrors)
         test.skip(true, 'No leads found on page')
         return
       }
@@ -66,7 +86,42 @@ test.describe('Leads + Media E2E Tests', () => {
       await page.goto(`${BASE_URL}/leads/${leadId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
     }
 
-    await page.waitForLoadState('networkidle', { timeout: 30000 })
+    // PART C FIX: Wait for stable selector instead of networkidle
+    const leadDetail = page.locator('[data-testid="lead-detail"]')
+    try {
+      await expect(leadDetail).toBeVisible({ timeout: 20000 })
+    } catch (error) {
+      // PART C FIX: Capture errors if selector doesn't appear
+      const consoleErrors: string[] = []
+      page.on('console', (msg) => {
+        if (msg.type() === 'error') {
+          consoleErrors.push(msg.text())
+        }
+      })
+      const pageErrors: string[] = []
+      page.on('pageerror', (error) => {
+        pageErrors.push(error.message)
+      })
+      await page.waitForTimeout(2000) // Wait a bit to capture errors
+      
+      // Check for failed network requests
+      const failedRequests: string[] = []
+      page.on('response', (response) => {
+        if (response.status() >= 400) {
+          failedRequests.push(`${response.url()}: ${response.status()}`)
+        }
+      })
+      await page.waitForTimeout(1000)
+      
+      console.log('[TEST] Lead detail selector not found - console errors:', consoleErrors)
+      console.log('[TEST] Lead detail selector not found - page errors:', pageErrors)
+      console.log('[TEST] Lead detail selector not found - failed requests:', failedRequests)
+      
+      // Take screenshot for debugging
+      await page.screenshot({ path: 'test-results/leads-page-failure.png', fullPage: true })
+      
+      throw error
+    }
 
     // Verify build stamp (optional)
     const buildStamp2 = page.locator('text=/Build:/i')
@@ -84,10 +139,6 @@ test.describe('Leads + Media E2E Tests', () => {
     expect(pageContent).not.toContain('Minified React error #310')
     expect(pageContent).not.toContain('Rendered more hooks than during the previous render')
     expect(pageContent).not.toContain('Something went wrong')
-
-    // Assert lead detail selector exists
-    const leadDetail = page.locator('[data-testid="lead-detail"]')
-    await expect(leadDetail).toBeVisible({ timeout: 15000 })
 
     // Take screenshot
     await page.screenshot({ path: 'test-results/leads-page-success.png', fullPage: true })
@@ -117,38 +168,29 @@ test.describe('Leads + Media E2E Tests', () => {
       headers: { Cookie: cookieHeader },
     })
 
-    let hasAudio = false
-    if (debugRes.ok() && debugRes.status() !== 401) {
-      const mediaData = await debugRes.json()
-      console.log(`[TEST] Debug endpoint response:`, JSON.stringify(mediaData, null, 2))
-      if (mediaData.ok && mediaData.audio && mediaData.audio.conversationId) {
-        sampleMediaData = mediaData
-        const { conversationId } = mediaData.audio
-        console.log(`[TEST] Using audio from debug endpoint: conversationId=${conversationId}, messageId=${mediaData.audio.messageId}`)
-        await page.goto(`${BASE_URL}/inbox?conversationId=${conversationId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-        await page.waitForLoadState('networkidle', { timeout: 30000 })
-        hasAudio = true
-      } else {
-        console.log(`[TEST] No audio in debug response: ${mediaData.reason || 'unknown'}`)
-      }
-    } else {
-      console.log(`[TEST] Debug endpoint failed: ${debugRes.status()}`)
-    }
-
-    if (!hasAudio) {
-      // Fallback: try to find audio in UI
-      const audioConversation = page.locator('text=/\\[Audio|audio|Audio received/i').first()
-      const count = await audioConversation.count()
-      if (count === 0) {
-        // Take screenshot to see what's on the page
-        await page.screenshot({ path: 'test-results/audio-test-no-audio-found.png', fullPage: true })
-        test.skip(true, `No audio media found: debug endpoint returned ${debugRes.ok() ? 'no audio' : 'error'}, UI has no audio conversations`)
-        return
-      }
-      console.log(`[TEST] Found audio conversation in UI, clicking...`)
-      await audioConversation.first().click()
-      await page.waitForTimeout(3000) // Wait longer for conversation to load
-    }
+    // PART D FIX: Must not skip - fail if no media found
+    expect(debugRes.ok()).toBe(true)
+    expect(debugRes.status()).not.toBe(401)
+    
+    const mediaData = await debugRes.json()
+    console.log(`[TEST] Debug endpoint response:`, JSON.stringify(mediaData, null, 2))
+    
+    // PART D FIX: Fail if debug endpoint says no media
+    expect(mediaData.ok).toBe(true)
+    expect(mediaData.audio).toBeTruthy()
+    expect(mediaData.audio.conversationId).toBeTruthy()
+    expect(mediaData.audio.url || mediaData.audio.mediaUrl).toBeTruthy() // PART A FIX: mediaUrl must not be null
+    
+    sampleMediaData = mediaData
+    const { conversationId } = mediaData.audio
+    const mediaId = mediaData.audio.url || mediaData.audio.mediaUrl
+    console.log(`[TEST] Using audio from debug endpoint: conversationId=${conversationId}, messageId=${mediaData.audio.messageId}, mediaId=${mediaId}`)
+    
+    await page.goto(`${BASE_URL}/inbox?conversationId=${conversationId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    // PART C FIX: Remove networkidle, wait for conversation to load
+    await page.waitForSelector('[data-testid="conversation-messages"], .message, text=/Loading/i', { timeout: 15000 }).catch(() => {
+      console.log('[TEST] Conversation messages did not load')
+    })
 
     // Wait for messages to load
     await page.waitForTimeout(2000)
@@ -171,6 +213,7 @@ test.describe('Leads + Media E2E Tests', () => {
       audioCount = await audioElement.count()
     }
     
+    // PART D FIX: Fail if audio element not found (don't skip)
     if (audioCount === 0) {
       // Take screenshot for debugging
       await page.screenshot({ path: 'test-results/audio-test-no-element.png', fullPage: true })
@@ -179,8 +222,7 @@ test.describe('Leads + Media E2E Tests', () => {
       const hasAudioPlayer = html.includes('AudioMessagePlayer') || html.includes('audio-message')
       const hasMediaUrl = html.includes('mediaUrl') || html.includes('/api/whatsapp/media/')
       console.log(`[TEST] Audio element not found. Has AudioMessagePlayer: ${hasAudioPlayer}, Has mediaUrl: ${hasMediaUrl}`)
-      test.skip(true, 'Audio element not found in DOM - AudioMessagePlayer may not have rendered or conversation has no audio')
-      return
+      throw new Error('Audio element not found in DOM - AudioMessagePlayer may not have rendered or conversation has no audio')
     }
     
     console.log(`[TEST] Found ${audioCount} audio element(s)`)
@@ -197,8 +239,7 @@ test.describe('Leads + Media E2E Tests', () => {
         await page.waitForTimeout(3000)
         const audioSrc2 = await audioElement.getAttribute('src')
         if (!audioSrc2) {
-          test.skip(true, 'Audio element exists but has no src - may still be loading or media unavailable')
-          return
+          throw new Error('Audio element exists but has no src - may still be loading or media unavailable')
         }
       }
     }
@@ -308,26 +349,12 @@ test.describe('Leads + Media E2E Tests', () => {
         await page.goto(`${BASE_URL}/inbox?conversationId=${conversationId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
         await page.waitForLoadState('networkidle', { timeout: 30000 })
       } else {
-        // Fallback: try to find image in UI
-        const imageConversation = page.locator('text=/\\[image|Image/i').first()
-        const count = await imageConversation.count()
-        if (count === 0) {
-          test.skip(true, `No image media in DB: ${mediaData.reason || 'unknown'}`)
-          return
-        }
-        await imageConversation.first().click()
-        await page.waitForTimeout(2000)
+        // PART D FIX: Fail if no image media found
+        throw new Error(`No image media in DB: ${mediaData.reason || 'unknown'}`)
       }
     } else {
-      // Fallback: try to find image in UI
-      const imageConversation = page.locator('text=/\\[image|Image/i').first()
-      const count = await imageConversation.count()
-      if (count === 0) {
-        test.skip(true, 'Cannot access debug endpoint and no image conversations found')
-        return
-      }
-      await imageConversation.first().click()
-      await page.waitForTimeout(2000)
+      // PART D FIX: Fail if debug endpoint not accessible
+      throw new Error(`Cannot access debug endpoint: ${debugRes.status()}`)
     }
 
     // Find image element - try multiple selectors
@@ -342,9 +369,10 @@ test.describe('Leads + Media E2E Tests', () => {
       count = await imageElement.count()
     }
     
+    // PART D FIX: Fail if no image element found
     if (count === 0) {
-      test.skip(true, 'No image element found in conversation')
-      return
+      await page.screenshot({ path: 'test-results/image-test-no-element.png', fullPage: true })
+      throw new Error('No image element found in conversation')
     }
 
     await expect(imageElement).toBeVisible({ timeout: 15000 })
@@ -407,35 +435,23 @@ test.describe('Leads + Media E2E Tests', () => {
       headers: { Cookie: cookieHeader },
     })
 
-    if (debugRes.ok() && debugRes.status() !== 401) {
-      const mediaData = await debugRes.json()
-      if (mediaData.ok && mediaData.pdf) {
-        const { conversationId } = mediaData.pdf
-        console.log(`[TEST] Using PDF from debug endpoint: conversationId=${conversationId}`)
-        await page.goto(`${BASE_URL}/inbox?conversationId=${conversationId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
-        await page.waitForLoadState('networkidle', { timeout: 30000 })
-      } else {
-        // Fallback: try to find PDF in UI
-        const pdfConversation = page.locator('text=/\\[document|PDF|pdf/i').first()
-        const count = await pdfConversation.count()
-        if (count === 0) {
-          test.skip(true, `No PDF media in DB: ${mediaData.reason || 'unknown'}`)
-          return
-        }
-        await pdfConversation.first().click()
-        await page.waitForTimeout(2000)
-      }
-    } else {
-      // Fallback: try to find PDF in UI
-      const pdfConversation = page.locator('text=/\\[document|PDF|pdf/i').first()
-      const count = await pdfConversation.count()
-      if (count === 0) {
-        test.skip(true, 'Cannot access debug endpoint and no PDF conversations found')
-        return
-      }
-      await pdfConversation.first().click()
-      await page.waitForTimeout(2000)
-    }
+    // PART D FIX: Must not skip - fail if no media found
+    expect(debugRes.ok()).toBe(true)
+    expect(debugRes.status()).not.toBe(401)
+    
+    const mediaData = await debugRes.json()
+    expect(mediaData.ok).toBe(true)
+    expect(mediaData.pdf).toBeTruthy()
+    expect(mediaData.pdf.conversationId).toBeTruthy()
+    expect(mediaData.pdf.url || mediaData.pdf.mediaUrl).toBeTruthy() // PART A FIX: mediaUrl must not be null
+    
+    const { conversationId } = mediaData.pdf
+    console.log(`[TEST] Using PDF from debug endpoint: conversationId=${conversationId}`)
+    await page.goto(`${BASE_URL}/inbox?conversationId=${conversationId}`, { waitUntil: 'domcontentloaded', timeout: 60000 })
+    // PART C FIX: Remove networkidle, wait for conversation to load
+    await page.waitForSelector('[data-testid="conversation-messages"], .message, text=/Loading/i', { timeout: 15000 }).catch(() => {
+      console.log('[TEST] Conversation messages did not load')
+    })
 
     // Find PDF link - try multiple selectors
     let pdfLink = page.locator('a[href*="/api/whatsapp/media/"]').first()
@@ -455,9 +471,10 @@ test.describe('Leads + Media E2E Tests', () => {
       count = await pdfLink.count()
     }
     
+    // PART D FIX: Fail if no PDF link found
     if (count === 0) {
-      test.skip(true, 'No PDF link found in conversation')
-      return
+      await page.screenshot({ path: 'test-results/pdf-test-no-link.png', fullPage: true })
+      throw new Error('No PDF link found in conversation')
     }
 
     await expect(pdfLink).toBeVisible({ timeout: 15000 })

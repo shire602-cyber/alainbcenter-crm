@@ -110,28 +110,14 @@ export async function GET(
       )
     }
 
-    // Step 3: Get content type and file buffer
+    // Step 3: Get content type and handle Range requests properly
     const contentType = mediaFileResponse.headers.get('content-type') || 'application/octet-stream'
     const contentLength = mediaFileResponse.headers.get('content-length')
     const contentRange = mediaFileResponse.headers.get('content-range')
-    const arrayBuffer = await mediaFileResponse.arrayBuffer()
-    const buffer = Buffer.from(arrayBuffer)
+    const upstreamStatus = mediaFileResponse.status
 
-    // Step 4: Optionally store in database for permanent storage
-    if (messageIdParam) {
-      try {
-        const messageId = parseInt(messageIdParam)
-        const message = await prisma.message.findUnique({
-          where: { id: messageId },
-        })
-
-        // Update message with permanent media URL if needed
-        // For now, we'll just return the file
-        // In future, could store in cloud storage (S3, etc.)
-      } catch {}
-    }
-
-    // CRITICAL FIX: Add headers for media streaming (especially audio)
+    // CRITICAL FIX: For Range requests, stream the response body directly without buffering
+    // This allows seeking in audio/video without downloading the full file
     const responseHeaders: HeadersInit = {
       'Content-Type': contentType,
       'Content-Disposition': `inline; filename="media-${mediaId}"`,
@@ -145,13 +131,18 @@ export async function GET(
     }
 
     // Handle partial content (206) for Range requests
-    if (rangeHeader && contentRange && mediaFileResponse.status === 206) {
+    if (rangeHeader && contentRange && upstreamStatus === 206) {
       responseHeaders['Content-Range'] = contentRange
-      return new NextResponse(buffer, {
+      // Stream the response body directly (don't buffer)
+      return new NextResponse(mediaFileResponse.body, {
         status: 206,
         headers: responseHeaders,
       })
     }
+
+    // For non-Range requests, read the full buffer
+    const arrayBuffer = await mediaFileResponse.arrayBuffer()
+    const buffer = Buffer.from(arrayBuffer)
 
     // PHASE 1 DEBUG: Log media response details
     console.log('[MEDIA-DEBUG] Serving media', {
@@ -165,6 +156,7 @@ export async function GET(
 
     // Return media file
     return new NextResponse(buffer, {
+      status: upstreamStatus,
       headers: responseHeaders,
     })
   } catch (error: any) {

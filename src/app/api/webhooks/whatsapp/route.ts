@@ -444,14 +444,15 @@ export async function POST(req: NextRequest) {
         let messageText = message.text?.body || ''
         let mediaUrl: string | null = null
         let mediaMimeType: string | null = null
+        let filename: string | null = null
         
         if (messageType === 'image' && message.image) {
           messageText = message.image.caption || '[image]'
-          mediaUrl = message.image.id // Store media ID (can fetch URL later)
+          mediaUrl = message.image.id // Store media ID (WhatsApp media ID, not URL)
           mediaMimeType = message.image.mime_type || 'image/jpeg'
         } else if (messageType === 'audio' && message.audio) {
           // CRITICAL FIX 3: Transcribe audio messages
-          mediaUrl = message.audio.id
+          mediaUrl = message.audio.id // Store media ID (WhatsApp media ID, not URL)
           mediaMimeType = message.audio.mime_type || 'audio/ogg'
           
           try {
@@ -499,11 +500,12 @@ export async function POST(req: NextRequest) {
           }
         } else if (messageType === 'document' && message.document) {
           messageText = `[document: ${message.document.filename || 'file'}]`
-          mediaUrl = message.document.id
+          mediaUrl = message.document.id // Store media ID (WhatsApp media ID, not URL)
           mediaMimeType = message.document.mime_type || 'application/pdf'
+          filename = message.document.filename || null
         } else if (messageType === 'video' && message.video) {
           messageText = message.video.caption || '[video]'
-          mediaUrl = message.video.id
+          mediaUrl = message.video.id // Store media ID (WhatsApp media ID, not URL)
           mediaMimeType = message.video.mime_type || 'video/mp4'
         } else if (messageType === 'location' && message.location) {
           messageText = `[location: ${message.location.latitude}, ${message.location.longitude}]`
@@ -551,8 +553,9 @@ export async function POST(req: NextRequest) {
               rawPayload: message,
               webhookEntry: entry || body.entry?.[0], // Full entry for waId extraction
               webhookValue: value, // Full value for waId extraction
-              mediaUrl: mediaUrl,
-              mediaMimeType: mediaMimeType,
+              mediaUrl: mediaUrl, // PART A FIX: Pass WhatsApp media ID (not URL)
+              mediaMimeType: mediaMimeType, // PART A FIX: Pass MIME type
+              filename: filename, // PART A FIX: Pass filename for documents
             },
           })
 

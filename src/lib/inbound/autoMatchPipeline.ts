@@ -994,7 +994,8 @@ async function createCommunicationLog(input: {
   providerMessageId: string
   timestamp: Date
   metadata?: {
-    mediaMimeType?: string
+    mediaUrl?: string | null
+    mediaMimeType?: string | null
   }
 }): Promise<any> {
   // CRITICAL FIX: Include contactId to ensure proper linking
@@ -1011,6 +1012,24 @@ async function createCommunicationLog(input: {
   const isAudioTranscribed = input.metadata?.mediaMimeType?.startsWith('audio/') || false
   const messageType = isAudioTranscribed ? 'audio' : 'text'
   
+  // PART A FIX: Persist mediaUrl and mediaMimeType from metadata
+  const mediaUrl = input.metadata?.mediaUrl || null
+  const mediaMimeType = input.metadata?.mediaMimeType || null
+  
+  // Determine message type based on mediaMimeType if present
+  let finalMessageType = messageType
+  if (mediaMimeType) {
+    if (mediaMimeType.startsWith('audio/')) {
+      finalMessageType = 'audio'
+    } else if (mediaMimeType.startsWith('image/')) {
+      finalMessageType = 'image'
+    } else if (mediaMimeType.startsWith('video/')) {
+      finalMessageType = 'video'
+    } else if (mediaMimeType === 'application/pdf' || mediaMimeType.includes('pdf')) {
+      finalMessageType = 'document'
+    }
+  }
+  
   const message = await prisma.message.create({
     data: {
       conversationId: input.conversationId,
@@ -1018,9 +1037,11 @@ async function createCommunicationLog(input: {
       contactId: input.contactId, // CRITICAL: Link to contact
       direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
       channel: normalizedChannel, // Always lowercase for consistency
-      type: messageType, // CRITICAL FIX 3: Store as 'audio' if transcribed from audio
+      type: finalMessageType, // CRITICAL FIX 3: Store as 'audio' if transcribed from audio
       body: input.text, // CRITICAL FIX 3: Contains transcript if audio, or original text
       providerMessageId: input.providerMessageId,
+      mediaUrl: mediaUrl, // PART A FIX: Persist media ID from WhatsApp
+      mediaMimeType: mediaMimeType, // PART A FIX: Persist MIME type
       status: 'RECEIVED',
       createdAt: input.timestamp,
     },
