@@ -1103,10 +1103,11 @@ function InboxPageContent() {
                                       </a>
                                   )
                                 } else if (att.type === 'audio') {
+                                  const audioUrl = getAttachmentUrl(att.url)
                                   return (
                                     <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                       <AudioMessagePlayer
-                                        mediaId={att.url}
+                                        mediaId={audioUrl}
                                         mimeType={att.mimeType}
                                         messageId={msg.id}
                                         className="w-full"
@@ -1114,13 +1115,15 @@ function InboxPageContent() {
                                     </div>
                                   )
                                 } else {
+                                  const fileUrl = getAttachmentUrl(att.url)
                                   return (
                                     <a
                                       key={att.id}
-                                      href={att.url}
+                                      href={fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
                                       className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      download={att.filename || undefined}
                                     >
                                       <FileText className="h-5 w-5" />
                                       <span className="text-sm font-medium">{att.filename || 'File'}</span>
