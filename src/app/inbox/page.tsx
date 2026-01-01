@@ -922,10 +922,14 @@ function InboxPageContent() {
                                     </a>
                                   )
                                 } else if (att.type === 'audio') {
+                                  // CRITICAL FIX: Use proxy for WhatsApp media IDs
+                                  const audioUrl = att.url.startsWith('http') || att.url.startsWith('/')
+                                    ? att.url
+                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
                                   return (
                                     <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                       <AudioMessagePlayer
-                                        mediaId={att.url}
+                                        mediaId={audioUrl}
                                         mimeType={att.mimeType}
                                         messageId={msg.id}
                                         className="w-full"
@@ -956,7 +960,7 @@ function InboxPageContent() {
                                 <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
                               )}
                             </div>
-                          ) : (msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/')) && msg.mediaUrl ? (
+                          ) : (msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/') || msg.attachments?.some((a: any) => a.type === 'audio')) && (msg.mediaUrl || msg.attachments?.some((a: any) => a.type === 'audio')) ? (
                             <div className="space-y-2">
                               {/* PHASE 1 DEBUG: Log audio message rendering */}
                               {(() => {
@@ -972,7 +976,13 @@ function InboxPageContent() {
                               })()}
                               <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                 <AudioMessagePlayer
-                                  mediaId={msg.mediaUrl || msg.attachments?.find((a: any) => a.type === 'audio')?.url || ''}
+                                  mediaId={(() => {
+                                    // CRITICAL FIX: Use mediaUrl first, then check attachments, use proxy for WhatsApp IDs
+                                    const audioId = msg.mediaUrl || msg.attachments?.find((a: any) => a.type === 'audio')?.url || ''
+                                    return audioId.startsWith('http') || audioId.startsWith('/')
+                                      ? audioId
+                                      : `/api/whatsapp/media/${encodeURIComponent(audioId)}?messageId=${msg.id}`
+                                  })()}
                                   mimeType={msg.mediaMimeType || msg.attachments?.find((a: any) => a.type === 'audio')?.mimeType}
                                   messageId={msg.id}
                                   className="w-full"
