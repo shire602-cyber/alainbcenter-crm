@@ -220,11 +220,77 @@ ORDER BY createdAt DESC LIMIT 1
 
 ---
 
-## E) NEXT STEPS
+## E) TEST RESULTS
 
-1. Implement `/api/debug/inbox/sample-media` endpoint
-2. Create Playwright E2E tests
-3. Run tests against deployed URL
-4. Fix any failures
-5. Generate proof package
+### Test Execution Status
+**Date:** 2025-01-01  
+**Build SHA:** 075c9b6 (from `/api/health`)  
+**Deployment URL:** https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app
+
+**Results:**
+- ✅ **3 tests PASSED**: Image rendering, PDF document, Text rendering
+- ❌ **2 tests FAILED**: Leads page React #310, Audio message
+- ⏭️ **1 test SKIPPED**: (due to missing data)
+
+### Failure Analysis
+
+#### 1. Leads Page Test Failure
+**Error:** Timeout waiting for build stamp
+**Root Cause:** Build stamp may not be visible immediately or selector is incorrect
+**Status:** Needs investigation - page may actually be loading correctly but test is too strict
+
+#### 2. Audio Message Test Failure  
+**Error:** No audio element found in DOM
+**Root Cause:** 
+- AudioMessagePlayer component fetches audio via `fetch()` and creates blob URL
+- Audio element may not render if:
+  - `mediaUrl` is null/undefined
+  - Fetch fails (401, 404, etc.)
+  - Component hasn't finished loading
+- Conversation may not actually have audio messages
+
+**Next Steps:**
+1. Verify debug endpoint returns valid audio conversationId
+2. Check if AudioMessagePlayer is actually rendering (may show error state)
+3. Verify mediaUrl format in database matches what UI expects
+
+---
+
+## F) FIXES APPLIED
+
+### Leads #310
+✅ All hooks moved before conditional returns  
+✅ Child components always render (pass null/empty objects if needed)  
+✅ Guard logic moved inside hooks
+
+### Media Rendering
+✅ Same-origin proxy implemented (`/api/whatsapp/media/[mediaId]`)  
+✅ Range request support (206 Partial Content)  
+✅ Accept-Ranges header added  
+✅ UI checks `mediaUrl` before body text  
+✅ Placeholder detection improved
+
+### Test Framework
+✅ Debug endpoint implemented (`/api/debug/inbox/sample-media`)  
+✅ Playwright E2E tests created  
+✅ Build stamp verification  
+✅ Real data usage (no mocks)
+
+---
+
+## G) REMAINING ISSUES
+
+1. **Audio not rendering**: Need to verify why AudioMessagePlayer isn't rendering `<audio>` element
+2. **Leads page timeout**: Build stamp selector may need adjustment
+3. **Test robustness**: Tests need better handling of loading states
+
+---
+
+## H) NEXT STEPS
+
+1. ✅ Audit completed
+2. ✅ Debug endpoint implemented  
+3. ✅ E2E tests created
+4. ⚠️ **IN PROGRESS**: Fix remaining test failures
+5. ⏳ Generate proof package (E2E_PROOF.md)
 

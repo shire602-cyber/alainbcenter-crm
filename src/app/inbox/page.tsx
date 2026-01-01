@@ -996,20 +996,31 @@ function InboxPageContent() {
                                 })
                                 return null
                               })()}
-                              <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                <AudioMessagePlayer
-                                  mediaId={(() => {
-                                    // CRITICAL FIX: Use mediaUrl first, then check attachments, use proxy for WhatsApp IDs
-                                    const audioId = msg.mediaUrl || msg.attachments?.find((a: any) => a.type === 'audio')?.url || ''
-                                    return audioId.startsWith('http') || audioId.startsWith('/')
-                                      ? audioId
-                                      : `/api/whatsapp/media/${encodeURIComponent(audioId)}?messageId=${msg.id}`
-                                  })()}
-                                  mimeType={msg.mediaMimeType || msg.attachments?.find((a: any) => a.type === 'audio')?.mimeType}
-                                  messageId={msg.id}
-                                  className="w-full"
-                                />
-                              </div>
+                              {(() => {
+                                // CRITICAL FIX: Use mediaUrl first, then check attachments, use proxy for WhatsApp IDs
+                                const audioId = (msg.mediaUrl && msg.mediaUrl.trim()) || msg.attachments?.find((a: any) => a.type === 'audio')?.url || ''
+                                if (!audioId || audioId.trim() === '') {
+                                  // No valid audio ID - show placeholder
+                                  return (
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                      <p className="text-sm opacity-75">[Audio message - media unavailable]</p>
+                                    </div>
+                                  )
+                                }
+                                const mediaId = audioId.startsWith('http') || audioId.startsWith('/')
+                                  ? audioId
+                                  : `/api/whatsapp/media/${encodeURIComponent(audioId)}?messageId=${msg.id}`
+                                return (
+                                  <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                    <AudioMessagePlayer
+                                      mediaId={mediaId}
+                                      mimeType={msg.mediaMimeType || msg.attachments?.find((a: any) => a.type === 'audio')?.mimeType}
+                                      messageId={msg.id}
+                                      className="w-full"
+                                    />
+                                  </div>
+                                )
+                              })()}
                               {msg.body && msg.body !== '[audio]' && msg.body !== '[Audio received]' && (
                                 <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
                               )}
@@ -1158,16 +1169,29 @@ function InboxPageContent() {
                             // CRITICAL FIX: If mediaUrl exists, render media based on type
                             <div className="space-y-2">
                               {msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/') ? (
-                                <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                  <AudioMessagePlayer
-                                    mediaId={msg.mediaUrl.startsWith('http') || msg.mediaUrl.startsWith('/')
-                                      ? msg.mediaUrl
-                                      : `/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                    mimeType={msg.mediaMimeType}
-                                    messageId={msg.id}
-                                    className="w-full"
-                                  />
-                                </div>
+                                (() => {
+                                  // CRITICAL: Ensure mediaUrl is not empty
+                                  if (!msg.mediaUrl || msg.mediaUrl.trim() === '') {
+                                    return (
+                                      <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                        <p className="text-sm opacity-75">[Audio message - media unavailable]</p>
+                                      </div>
+                                    )
+                                  }
+                                  const mediaId = msg.mediaUrl.startsWith('http') || msg.mediaUrl.startsWith('/')
+                                    ? msg.mediaUrl
+                                    : `/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`
+                                  return (
+                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                      <AudioMessagePlayer
+                                        mediaId={mediaId}
+                                        mimeType={msg.mediaMimeType}
+                                        messageId={msg.id}
+                                        className="w-full"
+                                      />
+                                    </div>
+                                  )
+                                })()
                               ) : msg.type === 'image' || msg.mediaMimeType?.startsWith('image/') ? (
                                 <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                                   <img
