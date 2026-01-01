@@ -27,10 +27,11 @@ setup('authenticate', async ({ page }) => {
   await submitButton.click();
 
   // Wait for navigation away from login page (success) or error message
-  await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 15000 }).catch(() => {
+  await page.waitForURL(/^(?!.*\/login).*$/, { timeout: 15000 }).catch(async () => {
     // If still on login page, check for error
     const errorText = page.locator('text=/error|invalid|failed/i');
-    if (errorText.count() > 0) {
+    const errorCount = await errorText.count();
+    if (errorCount > 0) {
       throw new Error('Login failed - check credentials');
     }
   });
