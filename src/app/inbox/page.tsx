@@ -148,6 +148,15 @@ const CHANNELS = [
 ] as const
 
 function InboxPageContent() {
+  // STEP 0: Build stamp for deployment verification
+  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
+  
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
+      .catch(() => {})
+  }, [])
   const searchParams = useSearchParams()
   const phoneParam = searchParams?.get('phone')
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -1300,6 +1309,13 @@ function InboxPageContent() {
           )}
         </BentoCard>
       </div>
+      
+      {/* STEP 0: Build stamp for deployment verification */}
+      {buildInfo && (
+        <div className="fixed bottom-2 right-2 text-xs text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded z-50">
+          Build: {buildInfo.buildId || 'unknown'}
+        </div>
+      )}
     </MainLayout>
   )
 }

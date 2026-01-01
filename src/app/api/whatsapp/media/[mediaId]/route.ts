@@ -93,11 +93,12 @@ export async function GET(
       Authorization: `Bearer ${accessToken}`,
     }
     
-    // Forward Range header for audio/video streaming
+    // CRITICAL: Forward Range header for audio/video streaming (seeking support)
     if (rangeHeader) {
       fetchHeaders['Range'] = rangeHeader
     }
 
+    // STEP B: Fetch with Range support
     const mediaFileResponse = await fetch(mediaUrl, {
       headers: fetchHeaders,
     })

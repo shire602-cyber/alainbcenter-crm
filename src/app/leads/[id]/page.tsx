@@ -22,6 +22,7 @@ import { cn } from '@/lib/utils'
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
 import { LeadCommandPalette } from '@/components/leads/LeadCommandPalette'
+import { LeadErrorBoundary } from '@/components/leads/LeadErrorBoundary'
 
 export default function LeadDetailPage({ 
   params
@@ -290,9 +291,20 @@ export default function LeadDetailPage({
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [leadId, router, commandPaletteOpen, infoSheetOpen])
 
+  // STEP 0: Build stamp for deployment verification
+  const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
+  
+  useEffect(() => {
+    fetch('/api/health')
+      .then(res => res.json())
+      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
+      .catch(() => {})
+  }, [])
+
   return (
-    <MainLayout>
-      <FocusModeBanner />
+    <LeadErrorBoundary>
+      <MainLayout>
+        <FocusModeBanner />
       
       {/* Command Palette - PHASE C */}
       <LeadCommandPalette
@@ -456,6 +468,14 @@ export default function LeadDetailPage({
           </div>
         </div>
       </div>
-    </MainLayout>
+      
+      {/* STEP 0: Build stamp for deployment verification */}
+      {buildInfo && (
+        <div className="fixed bottom-2 right-2 text-xs text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded z-50">
+          Build: {buildInfo.buildId || 'unknown'}
+        </div>
+      )}
+      </MainLayout>
+    </LeadErrorBoundary>
   )
 }
