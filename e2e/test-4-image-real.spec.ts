@@ -9,7 +9,7 @@ test.describe('Inbox - Image Media (Real Data)', () => {
   test.use({ storageState: 'e2e/.auth/user.json' });
 
   test('should load and display images correctly', async ({ page, request }) => {
-    const baseURL = process.env.E2E_BASE_URL || 'https://alainbcenter-5pmjkvvhq-abdurahmans-projects-66129df5.vercel.app';
+    const baseURL = process.env.E2E_BASE_URL || 'https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app';
 
     // Step 1: Get real media data
     const mediaRes = await request.get(`${baseURL}/api/debug/inbox/sample-media`);

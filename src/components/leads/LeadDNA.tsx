@@ -237,25 +237,30 @@ function QuoteCadenceSection({ leadId, quotationSentAtStr }: { leadId: number; q
     }
   }, [quotationSentAtStr])
 
-  // Always return same structure - conditionally render content inside
+  // Always return same structure - ALWAYS render QuoteCadence to maintain hook order
   return (
     <div>
       <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
-      {quotationSentAt ? (
-        <QuoteCadence leadId={leadId} quotationSentAt={quotationSentAt} />
-      ) : null}
+      <QuoteCadence leadId={leadId} quotationSentAt={quotationSentAt} />
     </div>
   )
 }
 
 // PHASE 5E: Quote Cadence component
-// This component is only rendered when quotationSentAt exists (handled by wrapper)
-function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date }) {
+// CRITICAL: Always rendered (never conditionally) to maintain hook order
+function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSentAt: Date | null }) {
   // ALL HOOKS MUST BE CALLED BEFORE ANY CONDITIONAL RETURNS
+  // CRITICAL: Always call hooks, even if quotationSentAt is null
   const [quoteFollowup, setQuoteFollowup] = useState<{ task: { id: number; title: string; dueAt: Date; cadenceDays: number } | null; daysUntil: number | null } | null>(null)
   const [loading, setLoading] = useState(true)
 
   useEffect(() => {
+    // If no quotationSentAt, skip loading
+    if (!quotationSentAt) {
+      setLoading(false)
+      return
+    }
+
     let mounted = true
 
     async function loadQuoteCadence() {
@@ -280,9 +285,18 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
     return () => {
       mounted = false
     }
-  }, [leadId])
+  }, [leadId, quotationSentAt])
 
   // NOW we can do conditional returns - all hooks have been called
+  // CRITICAL: Always return same structure to maintain component tree
+  if (!quotationSentAt) {
+    return (
+      <Card className="card-premium p-4">
+        <p className="text-meta muted-text">No quote sent yet</p>
+      </Card>
+    )
+  }
+
   if (loading) {
     return (
       <Card className="card-premium p-4">
@@ -508,20 +522,22 @@ function SponsorSearch({ lead, onUpdate }: { lead: LeadDNAProps['lead']; onUpdat
 }
 
 export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
-  const contact = lead.contact
+  // CRITICAL: Handle null lead gracefully - always call hooks
+  const contact = lead?.contact
   
   // Use service label map for consistent display (even if serviceTypeId is null)
   const serviceName = useMemo(() => {
+    if (!lead) return 'Not specified'
     return getServiceDisplayLabel(
       lead.serviceTypeEnum,
       lead.serviceType?.name,
       lead.requestedServiceRaw
     )
-  }, [lead.serviceTypeEnum, lead.serviceType?.name, lead.requestedServiceRaw])
+  }, [lead?.serviceTypeEnum, lead?.serviceType?.name, lead?.requestedServiceRaw])
   
   const channels = useMemo(() => {
-    return lead.conversations?.map(c => c.channel) || []
-  }, [lead.conversations])
+    return lead?.conversations?.map(c => c.channel) || []
+  }, [lead?.conversations])
 
   return (
     <div className="h-full overflow-y-auto">
@@ -583,7 +599,7 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
             )}
 
             {/* Assigned Owner */}
-            {lead.assignedUser && (
+            {lead?.assignedUser && (
               <div className="flex items-center gap-2 text-meta muted-text pl-13">
                 <User className="h-3.5 w-3.5" />
                 <span>Assigned to: {lead.assignedUser.name}</span>
@@ -603,7 +619,7 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
                 {serviceName}
               </span>
             </div>
-            {lead.requestedServiceRaw && lead.requestedServiceRaw !== serviceName && (
+            {lead?.requestedServiceRaw && lead.requestedServiceRaw !== serviceName && (
               <p className="text-meta muted-text italic mt-1 pl-6">
                 "{lead.requestedServiceRaw}"
               </p>
@@ -612,25 +628,31 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
         </div>
 
         {/* Qualification Progress */}
-        <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
-          <QualificationProgress lead={lead} />
-        </div>
+        {lead && (
+          <div>
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
+            <QualificationProgress lead={lead} />
+          </div>
+        )}
 
         {/* Expiry Timeline */}
-        <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
-          <ExpiryTimeline lead={lead} />
-        </div>
+        {lead && (
+          <div>
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
+            <ExpiryTimeline lead={lead} />
+          </div>
+        )}
 
         {/* PHASE 5E: Quote Cadence - Always render component, it handles null internally */}
-        <QuoteCadenceSection leadId={lead.id} quotationSentAtStr={(lead as any)?.quotationSentAt} />
+        {lead?.id && <QuoteCadenceSection leadId={lead.id} quotationSentAtStr={(lead as any)?.quotationSentAt} />}
 
         {/* Sponsor Search */}
-        <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
-          <SponsorSearch lead={lead} />
-        </div>
+        {lead && (
+          <div>
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
+            <SponsorSearch lead={lead} />
+          </div>
+        )}
 
         {/* Documents Placeholder */}
         <div>

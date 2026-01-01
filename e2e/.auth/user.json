@@ -2,10 +2,10 @@
   "cookies": [
     {
       "name": "alaincrm_session",
-      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI2MDc1NiwiZXhwIjoxNzY3ODY1NTU2fQ%3D%3D.ef886f174459de378cd2d44f84fbcda04dce6febf31d5065246f85380924dd08",
-      "domain": "alainbcenter-5pmjkvvhq-abdurahmans-projects-66129df5.vercel.app",
+      "value": "eyJ1c2VySWQiOjEsImVtYWlsIjoiYWRtaW5AYWxhaW5iY2VudGVyLmNvbSIsInJvbGUiOiJBRE1JTiIsImlhdCI6MTc2NzI2MzkzMywiZXhwIjoxNzY3ODY4NzMzfQ%3D%3D.32926860c6e182b92f129553f924a2611e2a883bd2f24a6693fc14092401fa47",
+      "domain": "alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app",
       "path": "/",
-      "expires": 1767865556.760633,
+      "expires": 1767868733.9731,
       "httpOnly": true,
       "secure": true,
       "sameSite": "Strict"
@@ -13,7 +13,7 @@
   ],
   "origins": [
     {
-      "origin": "https://alainbcenter-5pmjkvvhq-abdurahmans-projects-66129df5.vercel.app",
+      "origin": "https://alainbcenter-3ke1it6ff-abdurahmans-projects-66129df5.vercel.app",
       "localStorage": [
         {
           "name": "sidebar-open",
