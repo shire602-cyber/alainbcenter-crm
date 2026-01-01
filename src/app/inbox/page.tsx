@@ -147,6 +147,19 @@ const CHANNELS = [
   { value: 'webchat', label: 'Web Chat', icon: Globe },
 ] as const
 
+// PART 2: Helper to extract message text from various fields
+function getMessageDisplayText(msg: any): string | null {
+  // Check all possible text fields
+  if (msg.text) return msg.text
+  if (msg.body) return msg.body
+  if (msg.content) return msg.content
+  if (msg.caption) return msg.caption
+  if (msg.payload?.text?.body) return msg.payload.text.body
+  if (msg.payload?.button?.text) return msg.payload.button.text
+  if (msg.payload?.interactive?.body?.text) return msg.payload.interactive.body.text
+  return null
+}
+
 function InboxPageContent() {
   // STEP 0: Build stamp for deployment verification
   const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
