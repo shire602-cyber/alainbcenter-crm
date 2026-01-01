@@ -53,7 +53,6 @@ export async function GET(req: NextRequest) {
         OR: [
           { mediaMimeType: 'application/pdf' },
           { mediaMimeType: { contains: 'pdf' } },
-          { filename: { endsWith: '.pdf' } },
         ],
       },
       orderBy: { createdAt: 'desc' },
@@ -63,7 +62,6 @@ export async function GET(req: NextRequest) {
         type: true,
         mediaMimeType: true,
         mediaUrl: true,
-        filename: true,
       },
     })
 
@@ -166,7 +164,6 @@ export async function GET(req: NextRequest) {
         type: pdfMessage.type,
         mimeType: pdfMessage.mediaMimeType,
         url: pdfMessage.mediaUrl,
-        filename: pdfMessage.filename,
       } : (pdfAttachment ? {
         attachmentId: pdfAttachment.id,
         messageId: pdfAttachment.messageId,
