@@ -311,7 +311,7 @@ export default function LeadDetailPage({
       />
 
       {/* Mobile: Chat-first layout */}
-      <div className="flex flex-col h-screen md:hidden">
+      <div className="flex flex-col h-screen md:hidden" data-testid="lead-detail">
         {/* Header */}
         <div className="h-16 border-b border-subtle bg-app flex items-center justify-between px-4 shrink-0">
           <div className="flex items-center gap-3">
@@ -402,7 +402,7 @@ export default function LeadDetailPage({
       </div>
 
       {/* Desktop: 3-column layout */}
-      <div className="hidden md:flex h-screen">
+      <div className="hidden md:flex h-screen" data-testid="lead-detail">
         {/* Left: Conversation */}
         <div className="flex-1 flex flex-col min-w-0 border-r border-subtle">
           <div className="h-16 border-b border-subtle bg-app flex items-center justify-between px-4 shrink-0">
