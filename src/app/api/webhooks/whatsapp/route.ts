@@ -1173,10 +1173,7 @@ export async function POST(req: NextRequest) {
           // DEBUG LOG #2: Always check what was saved (for ALL messages)
           const debugSaved = await prisma.message.findFirst({
             where: { providerMessageId: messageId },
-            select: {
-              mediaSize: true,
-            },
-          })
+          }) as any
           
           const debug2Data = {
             messageId,
