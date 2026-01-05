@@ -1136,8 +1136,7 @@ export async function POST(req: NextRequest) {
               // Final check: verify the update actually happened
               const finalCheck = await prisma.message.findFirst({
                 where: { providerMessageId },
-                select: { id: true, type: true, providerMediaId: true, mediaMimeType: true },
-              })
+              }) as any
 
               if (finalCheck) {
                 console.log('[WEBHOOK] Direct media persist final check', {
