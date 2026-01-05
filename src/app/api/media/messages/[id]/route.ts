@@ -82,7 +82,6 @@ export async function GET(
         id: true,
         type: true,
         body: true, // CRITICAL: Need body to check for media placeholders
-        providerMediaId: true as any,
         mediaUrl: true,
         mediaMimeType: true as any,
         mediaFilename: true as any,
@@ -93,7 +92,7 @@ export async function GET(
         channel: true,
         createdAt: true, // To check if message is old (before upsert was added)
       },
-    }) as any
+    }) as any & { providerMediaId?: string | null }
 
     if (!message) {
       console.error('[MEDIA-PROXY] Message not found', { messageId })
@@ -840,24 +839,23 @@ export async function HEAD(
       return new NextResponse(null, { status: 400 })
     }
 
-    // Fetch message
-    const message = await prisma.message.findUnique({
-      where: { id: messageId },
-      select: {
-        id: true,
-        type: true,
-        body: true, // Need body to check for placeholders
-        providerMediaId: true as any,
-        mediaUrl: true,
-        mediaMimeType: true as any,
-        mediaFilename: true as any,
-        mediaSize: true as any, // CRITICAL: Required for Content-Length header
-        rawPayload: true,
-        payload: true,
-        providerMessageId: true,
-        channel: true,
-      },
-    }) as any
+      // Fetch message
+      const message = await prisma.message.findUnique({
+        where: { id: messageId },
+        select: {
+          id: true,
+          type: true,
+          body: true, // Need body to check for placeholders
+          mediaUrl: true,
+          mediaMimeType: true as any,
+          mediaFilename: true as any,
+          mediaSize: true as any, // CRITICAL: Required for Content-Length header
+          rawPayload: true,
+          payload: true,
+          providerMessageId: true,
+          channel: true,
+        },
+      }) as any & { providerMediaId?: string | null }
 
     if (!message) {
       return new NextResponse(null, { status: 404 })
