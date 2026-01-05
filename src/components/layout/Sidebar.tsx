@@ -96,8 +96,8 @@ export function Sidebar() {
         <div className="hidden lg:fixed lg:inset-y-0 lg:z-50 lg:flex lg:w-72 lg:flex-col transition-all duration-300">
           <div className="flex grow flex-col gap-y-2 overflow-y-auto border-r border-border bg-card pb-4 px-4">
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-subtle mb-4">
-            <div className="flex items-center gap-3 flex-1">
-              <div className="flex h-10 w-10 items-center justify-center rounded-lg bg-blue-600 dark:bg-blue-500 overflow-hidden flex-shrink-0">
+            <Link href="/" className="flex items-center gap-3 flex-1 group">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 overflow-hidden flex-shrink-0 px-4 py-2 shadow-md transition-all duration-200 group-hover:shadow-lg group-hover:scale-[1.02]">
                 <img 
                   src="/brand/alain-logo.webp" 
                   alt="Alain CRM" 
@@ -118,9 +118,9 @@ export function Sidebar() {
               </div>
               <div className="flex-1 min-w-0">
                   <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">Alain CRM</h1>
-                  <p className="text-xs text-muted-foreground font-normal truncate">Business Center</p>
+                  <p className="text-xs text-muted-foreground font-normal truncate">AI Business CRM</p>
                 </div>
-              </div>
+              </Link>
           <Button
             variant="ghost"
             size="sm"
