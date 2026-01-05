@@ -32,7 +32,7 @@ export async function GET(req: NextRequest) {
         type: true, 
         body: true, 
         createdAt: true,
-        providerMediaId: true,
+        mediaUrl: true,
       },
     })
 
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         createdAt: msg.createdAt.toISOString(),
         createdAtMs: msg.createdAt.getTime(),
         ageSeconds: Math.round((serverNow.getTime() - msg.createdAt.getTime()) / 1000),
-        hasProviderMediaId: !!msg.providerMediaId,
+        hasMediaUrl: !!msg.mediaUrl,
       })),
       summary: {
         totalExternalEvents: latestExternalEvents.length,
