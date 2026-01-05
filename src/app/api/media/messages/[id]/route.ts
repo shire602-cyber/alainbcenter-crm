@@ -1000,7 +1000,7 @@ export async function HEAD(
       const contentType = message.mediaMimeType || mediaInfo.mimeType || 'application/octet-stream'
       const isDocument = contentType.includes('pdf') || contentType.includes('document') || message.type === 'document'
       const disposition = isDocument ? 'attachment' : 'inline'
-      const filename = sanitizeFilename(mediaInfo.fileName || message.mediaFilename || `media-${messageId}`)
+      const filename = sanitizeFilename(mediaInfo.fileName || (message as any).mediaFilename || `media-${messageId}`)
 
       const headers: HeadersInit = {
         'Content-Type': contentType,
