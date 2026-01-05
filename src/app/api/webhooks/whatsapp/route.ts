@@ -1174,12 +1174,6 @@ export async function POST(req: NextRequest) {
           const debugSaved = await prisma.message.findFirst({
             where: { providerMessageId: messageId },
             select: {
-              id: true,
-              type: true,
-              providerMediaId: true,
-              mediaUrl: true,
-              mediaMimeType: true,
-              mediaFilename: true,
               mediaSize: true,
             },
           })
