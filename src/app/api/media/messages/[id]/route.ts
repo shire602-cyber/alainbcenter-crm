@@ -991,7 +991,7 @@ export async function HEAD(
       return new NextResponse(null, { status: 503 }) // Service Unavailable
     }
 
-    const { accessToken } = credentials
+    const { accessToken } = credentials as { accessToken: string; phoneNumberId: string; tokenSource: 'env' | 'db' }
 
     // Verify media exists by calling Graph API
     try {
