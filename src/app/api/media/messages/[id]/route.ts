@@ -302,7 +302,7 @@ export async function GET(
         body: message.body,
         providerMediaId: (message as any).providerMediaId,
         mediaUrl: message.mediaUrl,
-        mediaMimeType: message.mediaMimeType,
+        mediaMimeType: (message as any).mediaMimeType,
         resolved: {
           isMedia: resolved.isMedia,
           finalType: resolved.finalType,
@@ -694,7 +694,7 @@ export async function GET(
     }
 
     // Prepare response headers
-    const contentType = message.mediaMimeType || mediaInfo.mimeType || 'application/octet-stream'
+    const contentType = (message as any).mediaMimeType || mediaInfo.mimeType || 'application/octet-stream'
     const contentLength = mediaResponse.headers.get('content-length')
     const contentRange = mediaResponse.headers.get('content-range')
     const upstreamStatus = mediaResponse.status
@@ -707,7 +707,7 @@ export async function GET(
     
     // Sanitize filename for security
     // Ensure proper file extension based on content type
-    let filename = sanitizeFilename(mediaInfo.fileName || message.mediaFilename || `media-${messageId}`)
+    let filename = sanitizeFilename(mediaInfo.fileName || (message as any).mediaFilename || `media-${messageId}`)
     
     // Add proper extension if missing
     if (!filename.includes('.')) {
@@ -735,8 +735,8 @@ export async function GET(
     }
 
     // Add Content-Length if available (prefer from message.mediaSize if available)
-    if (message.mediaSize && message.mediaSize > 0) {
-      responseHeaders['Content-Length'] = String(message.mediaSize)
+    if ((message as any).mediaSize && (message as any).mediaSize > 0) {
+      responseHeaders['Content-Length'] = String((message as any).mediaSize)
     } else if (contentLength) {
       responseHeaders['Content-Length'] = contentLength
     }
@@ -934,7 +934,7 @@ export async function HEAD(
         body: message.body,
         providerMediaId: (message as any).providerMediaId,
         mediaUrl: message.mediaUrl,
-        mediaMimeType: message.mediaMimeType,
+        mediaMimeType: (message as any).mediaMimeType,
         resolved: {
           isMedia: resolved.isMedia,
           finalType: resolved.finalType,
@@ -997,7 +997,7 @@ export async function HEAD(
     try {
       const mediaInfo = await getWhatsAppDownloadUrl(providerMediaId, accessToken)
       
-      const contentType = message.mediaMimeType || mediaInfo.mimeType || 'application/octet-stream'
+      const contentType = (message as any).mediaMimeType || mediaInfo.mimeType || 'application/octet-stream'
       const isDocument = contentType.includes('pdf') || contentType.includes('document') || message.type === 'document'
       const disposition = isDocument ? 'attachment' : 'inline'
       const filename = sanitizeFilename(mediaInfo.fileName || (message as any).mediaFilename || `media-${messageId}`)
