@@ -151,7 +151,7 @@ export async function GET(
               : externalEventLog.payload
           } catch (parseError: any) {
             console.error('[MEDIA-PROXY] Failed to parse ExternalEventLog payload', {
-              messageId: message.id,
+          messageId: message.id,
               error: parseError.message,
             })
             parsed = null
@@ -169,8 +169,8 @@ export async function GET(
               console.log('[MEDIA-PROXY] Recovered providerMediaId from minimal payload', {
                 messageId: message.id,
                 recoveredProviderMediaId,
-              })
-            } else {
+        })
+      } else {
               // Fallback: Try to extract from full message object (for legacy payloads)
               console.log('[MEDIA-PROXY] Parsed ExternalEventLog payload structure (legacy fallback)', {
                 messageId: message.id,
@@ -212,7 +212,7 @@ export async function GET(
 
               if (mediaObj) {
                 const extractedId = extractId(mediaObj)
-                  if (extractedId) {
+          if (extractedId) {
                   recoveredProviderMediaId = extractedId
                   console.log('[MEDIA-PROXY] Recovered providerMediaId from legacy payload structure', {
                     messageId: message.id,
@@ -291,7 +291,7 @@ export async function GET(
     if (new URL(req.url).searchParams.get("debug") === "1") {
       // Fetch recent ExternalEventLog entries for debugging
       const recentExternalEvents = await prisma.externalEventLog.findMany({
-        orderBy: { receivedAt: 'desc' },
+          orderBy: { receivedAt: 'desc' },
         take: 10,
         select: { id: true, provider: true, externalId: true, receivedAt: true },
       })
@@ -482,7 +482,7 @@ export async function GET(
       )
     }
 
-    const { accessToken, tokenSource } = credentials
+    const { accessToken, tokenSource } = credentials as { accessToken: string; phoneNumberId: string; tokenSource: 'env' | 'db' }
     
     // Structured log: configuration check (NO PII, NO TOKEN)
     console.log('[MEDIA-PROXY] Credentials retrieved', {
@@ -891,7 +891,7 @@ export async function HEAD(
 
               if (mediaObj) {
                 const extractedId = extractId(mediaObj)
-                if (extractedId) {
+        if (extractedId) {
                   recoveredProviderMediaId = extractedId
                 }
               }
@@ -912,8 +912,8 @@ export async function HEAD(
               },
             })
           }
-            }
-          } catch (e) {
+        }
+      } catch (e) {
         // swallow – proxy should continue to return 424 if not recoverable
       }
     }
@@ -923,8 +923,8 @@ export async function HEAD(
     if (new URL(req.url).searchParams.get("debug") === "1") {
       // Fetch recent ExternalEventLog entries for debugging
       const recentExternalEvents = await prisma.externalEventLog.findMany({
-        orderBy: { receivedAt: 'desc' },
-        take: 10,
+          orderBy: { receivedAt: 'desc' },
+          take: 10,
         select: { id: true, provider: true, externalId: true, receivedAt: true },
       })
 
@@ -987,7 +987,7 @@ export async function HEAD(
     let credentials
     try {
       credentials = await getWhatsAppCredentials()
-    } catch (e) {
+          } catch (e) {
       return new NextResponse(null, { status: 503 }) // Service Unavailable
     }
 
