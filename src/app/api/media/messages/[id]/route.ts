@@ -909,7 +909,7 @@ export async function HEAD(
                 type: ['image','document','audio','video','sticker'].includes(resolved.finalType as any)
                   ? resolved.finalType
                   : undefined,
-              },
+              } as any,
             })
           }
         }
