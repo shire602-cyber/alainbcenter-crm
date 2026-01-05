@@ -41,11 +41,15 @@ import {
   UserPlus,
   Trash2,
   AlertTriangle,
+  Music,
 } from 'lucide-react'
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
 import { AudioMessagePlayer } from '@/components/inbox/AudioMessagePlayer'
+import { MediaMessage } from '@/components/inbox/MediaMessage'
+import { hasMedia, detectMediaType } from '@/lib/media/mediaTypeDetection'
+import { MEDIA_TYPES } from '@/lib/media/extractMediaId'
 import { Select } from '@/components/ui/select'
 
 type Contact = {
@@ -82,8 +86,12 @@ type Message = {
   channel: string
   type: string
   body: string | null
-  mediaUrl: string | null
+  providerMediaId?: string | null // Canonical media ID
+  mediaUrl: string | null // Stores providerMediaId for WhatsApp (legacy)
   mediaMimeType: string | null
+  mediaProxyUrl?: string | null // Canonical proxy URL
+  hasMedia?: boolean // Canonical media flag
+  mediaFilename?: string | null // Media filename
   status: string
   providerMessageId: string | null
   sentAt: string | null
@@ -160,6 +168,10 @@ function getMessageDisplayText(msg: any): string | null {
   return null
 }
 
+// STEP 3: Removed renderPlaceholderMedia - always try proxy first
+// The proxy will return 404 if media is truly unavailable
+// This ensures we don't show "unavailable" for messages that might have media in metadata/rawPayload
+
 function InboxPageContent() {
   // STEP 0: Build stamp for deployment verification
   const [buildInfo, setBuildInfo] = useState<{ buildId?: string; buildTime?: string } | null>(null)
@@ -170,6 +182,46 @@ function InboxPageContent() {
       .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
       .catch(() => {})
   }, [])
+  
+  // Helper to get media URL - PRIORITY: Use mediaProxyUrl if available, otherwise construct from mediaUrl
+  // CRITICAL: Defined outside map to prevent Webpack bundling issues
+  const getMediaUrl = (msg: Message): string => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:getMediaUrl',message:'getMediaUrl called',data:{messageId:msg.id,hasMediaProxyUrl:!!msg.mediaProxyUrl,hasMedia:msg.hasMedia,mediaUrl:msg.mediaUrl,mediaUrlType:typeof msg.mediaUrl},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M1'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    
+    // CRITICAL FIX: ALWAYS use proxy URL for media messages, even if mediaUrl is null
+    // The proxy will try to recover from payload/rawPayload/ExternalEventLog
+    // Use canonical hasMedia flag
+    if (msg.hasMedia) {
+      // ALWAYS use proxy - it will try recovery
+      const proxyUrl = msg.mediaProxyUrl || `/api/media/messages/${msg.id}`
+      return proxyUrl
+    }
+    
+    // PRIORITY 1: Use mediaProxyUrl if available
+    if (msg.mediaProxyUrl) {
+      return msg.mediaProxyUrl
+    }
+    
+    // PRIORITY 2: Fallback to constructing URL from mediaUrl (WhatsApp media ID)
+    const mediaUrl = typeof msg.mediaUrl === 'string' ? msg.mediaUrl : null
+    if (!mediaUrl || mediaUrl.trim() === '') {
+      return ''
+    }
+    const result = mediaUrl.startsWith('http') || mediaUrl.startsWith('/')
+      ? mediaUrl
+      : `/api/media/messages/${msg.id}` // Use main media proxy endpoint
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:getMediaUrl',message:'getMediaUrl returning constructed URL',data:{messageId:msg.id,result,isProxy:!mediaUrl.startsWith('http')&&!mediaUrl.startsWith('/')},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M1'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    return result
+  }
+  
   const searchParams = useSearchParams()
   const phoneParam = searchParams?.get('phone')
   const [conversations, setConversations] = useState<Conversation[]>([])
@@ -307,6 +359,13 @@ function InboxPageContent() {
 
       const res = await fetch(`/api/inbox/conversations/${conversationId}`)
       const data = await res.json()
+      
+      // #region agent log
+      try {
+        const messagesWithMedia = (data.conversation?.messages || []).filter((m: any) => m.mediaUrl || (m.attachments && m.attachments.length > 0))
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:loadMessages',message:'API response received',data:{conversationId,ok:data.ok,hasConversation:!!data.conversation,messagesCount:data.conversation?.messages?.length||0,messagesWithMediaCount:messagesWithMedia.length,messagesWithMedia:messagesWithMedia.map((m:any)=>({id:m.id,type:m.type,mediaUrl:m.mediaUrl,attachmentsCount:m.attachments?.length||0}))},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M4'})}).catch(()=>{});
+      } catch (e) {}
+      // #endregion
 
       if (data.ok && data.conversation) {
         // Smooth transition - preserve existing messages and fade in new ones
@@ -642,7 +701,7 @@ function InboxPageContent() {
                     <div
                       key={conv.id}
                       className={cn(
-                        'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-all hover:bg-slate-100 dark:hover:bg-slate-800/50',
+                        'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-800',
                         selectedConversation?.id === conv.id && 'bg-primary/5 border border-primary/20'
                       )}
                       onClick={() => handleSelectConversation(conv)}
@@ -650,11 +709,19 @@ function InboxPageContent() {
                       <Avatar fallback={conv.contact.fullName && !conv.contact.fullName.includes('Unknown') ? conv.contact.fullName : conv.contact.phone} size="sm" />
                         <div className="flex-1 min-w-0">
                         <div className="flex items-center justify-between gap-1">
-                          <p className="font-medium text-xs truncate text-slate-900 dark:text-slate-100">
+                          <div className="flex items-center gap-1.5 flex-1 min-w-0">
+                            <p className={cn(
+                              "text-xs truncate text-slate-900 dark:text-slate-100",
+                              conv.unreadCount > 0 ? "font-semibold" : "font-medium"
+                            )}>
                               {conv.contact.fullName && !conv.contact.fullName.includes('Unknown') 
                                 ? conv.contact.fullName 
                                 : conv.contact.phone}
                             </p>
+                            {conv.unreadCount > 0 && (
+                              <div className="h-2 w-2 rounded-full bg-indigo-500 flex-shrink-0"></div>
+                            )}
+                          </div>
                           <div className="flex items-center gap-1 shrink-0">
                             <ChannelIcon className="h-3 w-3 text-slate-400" />
                               {conv.unreadCount > 0 && (
@@ -665,7 +732,10 @@ function InboxPageContent() {
                             </div>
                           </div>
                         <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-0.5">
-                          <p className="truncate flex-1">
+                          <p className={cn(
+                            "truncate flex-1",
+                            conv.unreadCount > 0 && "font-medium"
+                          )}>
                             {conv.lastMessage?.direction === 'outbound' ? 'You: ' : ''}
                             {conv.lastMessage?.body || 'No messages'}
                             </p>
@@ -865,6 +935,9 @@ function InboxPageContent() {
                   </div>
                 ) : (
                   messages.map((msg, index) => {
+                    // #region agent log
+                    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:867',message:'Message rendering entry',data:{messageId:msg.id,type:msg.type,mediaUrl:msg.mediaUrl,mediaMimeType:msg.mediaMimeType,hasAttachments:!!(msg.attachments&&msg.attachments.length>0),attachmentsCount:msg.attachments?.length||0,body:msg.body?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+                    // #endregion
                     const isInbound = msg.direction === 'inbound' || msg.direction === 'INBOUND' || msg.direction === 'IN'
                     return (
                       <div
@@ -877,15 +950,38 @@ function InboxPageContent() {
                       >
                         <div
                           className={cn(
-                            'max-w-[75%] p-4 rounded-2xl text-sm shadow-md transition-all hover:shadow-lg',
+                            'max-w-[75%] p-4 rounded-xl text-sm transition-all',
                             isInbound
                               ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-100 border-2 border-blue-200 dark:border-blue-800 rounded-tl-none'
-                              : 'bg-green-500 dark:bg-green-600 text-white rounded-tr-none shadow-green-500/30'
+                              : 'bg-green-500 dark:bg-green-600 text-white rounded-tr-none shadow-green-500/30',
+                            msg.hasMedia || !!msg.mediaProxyUrl || !!msg.providerMediaId
+                              ? 'shadow-md hover:shadow-lg'
+                              : ''
                           )}
                         >
-                          {/* CRITICAL FIX: Check attachments FIRST, then fall back to mediaUrl */}
-                          {msg.attachments && msg.attachments.length > 0 ? (
+                          {/* CANONICAL: Use hasMedia flag or mediaProxyUrl/providerMediaId from API */}
+                          {(() => {
+                            // PRIORITY 0: Use canonical hasMedia flag OR mediaProxyUrl OR providerMediaId
+                            const shouldRenderMedia = msg.hasMedia || !!msg.mediaProxyUrl || !!msg.providerMediaId
+                            
+                            if (shouldRenderMedia) {
+                              const proxyUrl = msg.mediaProxyUrl || `/api/media/messages/${msg.id}`
+                              return (
+                                <MediaMessage message={{
+                                  id: msg.id,
+                                  type: msg.type || 'text',
+                                  mediaProxyUrl: proxyUrl,
+                                  mediaMimeType: msg.mediaMimeType,
+                                  mediaFilename: msg.mediaFilename,
+                                  body: msg.body,
+                                }} />
+                              )
+                            }
+                            
+                            // PRIORITY 1: Check attachments
+                            if (msg.attachments && msg.attachments.length > 0) {
                             // PHASE 5A: Render attachments (highest priority)
+                              return (
                             <div className="space-y-2">
                               {msg.attachments.map((att: any) => {
                                 // PHASE 1 DEBUG: Log each attachment
@@ -900,7 +996,7 @@ function InboxPageContent() {
                                 if (att.type === 'image') {
                                   const imageUrl = att.url.startsWith('http') || att.url.startsWith('/') 
                                     ? att.url 
-                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                    : `/api/media/messages/${msg.id}` // Use main media proxy endpoint
                                   return (
                                     <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
                                       <img
@@ -927,9 +1023,12 @@ function InboxPageContent() {
                                     </div>
                                   )
                                 } else if (att.type === 'document' || att.type === 'pdf') {
-                                  const docUrl = att.url.startsWith('http') || att.url.startsWith('/')
-                                    ? att.url
-                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                  // Use mediaProxyUrl if available, otherwise construct from attachment URL
+                                  const docUrl = msg.mediaProxyUrl && msg.hasMedia
+                                    ? msg.mediaProxyUrl
+                                    : (att.url.startsWith('http') || att.url.startsWith('/')
+                                        ? att.url
+                                        : `/api/media/messages/${msg.id}`) // Use main media proxy endpoint
                                   return (
                                     <a
                                       key={att.id}
@@ -944,10 +1043,12 @@ function InboxPageContent() {
                                     </a>
                                   )
                                 } else if (att.type === 'audio') {
-                                  // CRITICAL FIX: Use proxy for WhatsApp media IDs
-                                  const audioUrl = att.url.startsWith('http') || att.url.startsWith('/')
-                                    ? att.url
-                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                  // Use mediaProxyUrl if available, otherwise construct from attachment URL
+                                  const audioUrl = msg.mediaProxyUrl && msg.hasMedia
+                                    ? msg.mediaProxyUrl
+                                    : (att.url.startsWith('http') || att.url.startsWith('/')
+                                        ? att.url
+                                        : `/api/media/messages/${msg.id}`) // Use main media proxy endpoint
                                   return (
                                     <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
                                       <AudioMessagePlayer
@@ -961,7 +1062,7 @@ function InboxPageContent() {
                                 } else {
                                   const fileUrl = att.url.startsWith('http') || att.url.startsWith('/')
                                     ? att.url
-                                    : `/api/whatsapp/media/${encodeURIComponent(att.url)}?messageId=${msg.id}`
+                                    : `/api/media/messages/${msg.id}` // Use main media proxy endpoint
                                   return (
                                     <a
                                       key={att.id}
@@ -982,286 +1083,62 @@ function InboxPageContent() {
                                 <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
                               )}
                             </div>
-                          ) : (msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/') || msg.attachments?.some((a: any) => a.type === 'audio')) && (msg.mediaUrl || msg.attachments?.some((a: any) => a.type === 'audio')) ? (
-                            <div className="space-y-2">
-                              {/* PHASE 1 DEBUG: Log audio message rendering */}
-                              {(() => {
-                                console.log('[INBOX-DEBUG] Rendering audio message', {
-                                  messageId: msg.id,
-                                  mediaUrl: msg.mediaUrl,
-                                  mimeType: msg.mediaMimeType,
-                                  type: msg.type,
-                                  hasAttachments: !!(msg.attachments && msg.attachments.length > 0),
-                                  audioAttachments: msg.attachments?.filter((a: any) => a.type === 'audio') || [],
-                                })
-                                return null
-                              })()}
-                              {(() => {
-                                // CRITICAL FIX: Use mediaUrl first, then check attachments, use proxy for WhatsApp IDs
-                                const audioId = (msg.mediaUrl && msg.mediaUrl.trim()) || msg.attachments?.find((a: any) => a.type === 'audio')?.url || ''
-                                if (!audioId || audioId.trim() === '') {
-                                  // No valid audio ID - show placeholder
-                                  return (
-                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                      <p className="text-sm opacity-75">[Audio message - media unavailable]</p>
-                                    </div>
-                                  )
-                                }
-                                const mediaId = audioId.startsWith('http') || audioId.startsWith('/')
-                                  ? audioId
-                                  : `/api/whatsapp/media/${encodeURIComponent(audioId)}?messageId=${msg.id}`
-                                return (
-                                  <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                    <AudioMessagePlayer
-                                      mediaId={mediaId}
-                                      mimeType={msg.mediaMimeType || msg.attachments?.find((a: any) => a.type === 'audio')?.mimeType}
-                                      messageId={msg.id}
-                                      className="w-full"
-                                    />
-                                  </div>
-                                )
-                              })()}
-                              {msg.body && msg.body !== '[audio]' && msg.body !== '[Audio received]' && (
-                                <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
-                              )}
-                            </div>
-                          ) : msg.type === 'image' && msg.mediaUrl ? (
-                            <div className="space-y-2">
-                              <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                                <img
-                                  src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                  alt={msg.body || 'Image message'}
-                                  className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
-                                  loading="lazy"
-                                  crossOrigin="anonymous"
-                                  onError={(e) => {
-                                    const target = e.currentTarget
-                                    target.onerror = null
-                                    target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
-                                  }}
-                                />
-                                <a
-                                  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
-                                  title="Open image in new tab"
-                                >
-                                  <ImageIcon className="h-8 w-8 text-white" />
-                                </a>
-                              </div>
-                              {msg.body && msg.body !== '[image]' && (
-                                <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                              )}
-                            </div>
-                          ) : msg.type === 'video' && msg.mediaUrl ? (
-                            <div className="space-y-2">
-                              <div className="relative group">
-                                <video
-                                  src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                  controls
-                                  className="max-w-full h-auto rounded-lg"
-                                  preload="metadata"
-                                  crossOrigin="anonymous"
-                                />
-                              </div>
-                              {msg.body && msg.body !== '[video]' && (
-                                <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                              )}
-                            </div>
-                          ) : msg.type === 'document' && msg.mediaUrl ? (
-                            <div className="space-y-2">
-                              <a
-                                href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                download
-                              >
-                                <FileText className="h-5 w-5" />
-                                <span className="text-sm font-medium">{msg.body || 'Document'}</span>
-                              </a>
-                            </div>
-                          ) : msg.attachments && msg.attachments.length > 0 ? (
-                            // PHASE 5A: Render attachments
-                            <div className="space-y-2">
-                              {msg.attachments.map((att) => {
-                                // CRITICAL FIX: Use proxy for WhatsApp media IDs
-                                const getAttachmentUrl = (url: string) => {
-                                  return url.startsWith('http') || url.startsWith('/')
-                                    ? url
-                                    : `/api/whatsapp/media/${encodeURIComponent(url)}?messageId=${msg.id}`
-                                }
-                                
-                                if (att.type === 'image') {
-                                  const imageUrl = getAttachmentUrl(att.url)
-                                  return (
-                                    <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                                      <img
-                                        src={imageUrl}
-                                        alt={att.filename || 'Image'}
-                                        className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
-                                        loading="lazy"
-                                        crossOrigin="anonymous"
-                                        onError={(e) => {
-                                          const target = e.currentTarget
-                                          target.onerror = null
-                                          target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
-                                        }}
-                                      />
-                                      <a
-                                        href={imageUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
-                                        title="Open image in new tab"
-                                      >
-                                        <ImageIcon className="h-8 w-8 text-white" />
-                                      </a>
-                                    </div>
-                                  )
-                                } else if (att.type === 'document' || att.type === 'pdf') {
-                                  const docUrl = getAttachmentUrl(att.url)
-                                  return (
-                                      <a
-                                        key={att.id}
-                                        href={docUrl}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                        download={att.filename || undefined}
-                                      >
-                                        <FileText className="h-5 w-5" />
-                                        <span className="text-sm font-medium">{att.filename || 'Document'}</span>
-                                      </a>
-                                  )
-                                } else if (att.type === 'audio') {
-                                  const audioUrl = getAttachmentUrl(att.url)
-                                  return (
-                                    <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                      <AudioMessagePlayer
-                                        mediaId={audioUrl}
-                                        mimeType={att.mimeType}
-                                        messageId={msg.id}
-                                        className="w-full"
-                                      />
-                                    </div>
-                                  )
-                                } else {
-                                  const fileUrl = getAttachmentUrl(att.url)
-                                  return (
-                                    <a
-                                      key={att.id}
-                                      href={fileUrl}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                      download={att.filename || undefined}
-                                    >
-                                      <FileText className="h-5 w-5" />
-                                      <span className="text-sm font-medium">{att.filename || 'File'}</span>
-                                    </a>
-                                  )
-                                }
-                              })}
-                            </div>
-                          ) : msg.mediaUrl ? (
-                            // CRITICAL FIX: If mediaUrl exists, render media based on type
-                            <div className="space-y-2">
-                              {msg.type === 'audio' || msg.mediaMimeType?.startsWith('audio/') ? (
-                                (() => {
-                                  // CRITICAL: Ensure mediaUrl is not empty
-                                  if (!msg.mediaUrl || msg.mediaUrl.trim() === '') {
-                                    return (
-                                      <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                        <p className="text-sm opacity-75">[Audio message - media unavailable]</p>
-                                      </div>
-                                    )
-                                  }
-                                  const mediaId = msg.mediaUrl.startsWith('http') || msg.mediaUrl.startsWith('/')
-                                    ? msg.mediaUrl
-                                    : `/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`
-                                  return (
-                                    <div className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
-                                      <AudioMessagePlayer
-                                        mediaId={mediaId}
-                                        mimeType={msg.mediaMimeType}
-                                        messageId={msg.id}
-                                        className="w-full"
-                                      />
-                                    </div>
-                                  )
-                                })()
-                              ) : msg.type === 'image' || msg.mediaMimeType?.startsWith('image/') ? (
-                                <div className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
-                                  <img
-                                    src={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                    alt={msg.body || 'Image message'}
-                                    className="max-w-full h-auto max-h-96 object-contain w-full cursor-pointer hover:opacity-90 transition-opacity"
-                                    loading="lazy"
-                                    crossOrigin="anonymous"
-                                    onError={(e) => {
-                                      const target = e.currentTarget
-                                      target.onerror = null
-                                      target.src = 'data:image/svg+xml,%3Csvg xmlns="http://www.w3.org/2000/svg" width="200" height="200"%3E%3Crect fill="%23ddd" width="200" height="200"/%3E%3Ctext fill="%23999" x="50%25" y="50%25" text-anchor="middle" dy=".3em"%3EImage not available%3C/text%3E%3C/svg%3E'
+                              )
+                            }
+                            
+                            // SIMPLIFIED: Use MediaMessage component for all media types
+                            // This provides consistent error handling, loading states, and retry functionality
+                            
+                            // Use centralized media detection logic
+                            const hasMediaResult = hasMedia(msg.type, msg.mediaMimeType)
+                            
+                            // Check if message has media URL or proxy URL (indicates media message)
+                            const hasMediaUrl = !!(msg.mediaUrl || msg.mediaProxyUrl)
+                            
+                            // Check body for media placeholders
+                            const hasMediaPlaceholder = msg.body && /\[(audio|image|video|document|Audio received)\]/i.test(msg.body)
+                            
+                            // CRITICAL FIX: ALWAYS try to render MediaMessage for media types
+                            // The proxy will attempt recovery from rawPayload/payload/ExternalEventLog
+                            // Only show error if proxy returns 424 after all recovery attempts
+                            // FIX: Also check if type is a media type directly (in case hasMedia fails)
+                            const isMediaTypeDirect = msg.type && MEDIA_TYPES.has(msg.type.toLowerCase())
+                            
+                            // CRITICAL: If there's a media placeholder in body, ALWAYS try to render MediaMessage
+                            // This ensures we attempt recovery even if type/mediaUrl are missing
+                            if (hasMediaResult || isMediaTypeDirect || msg.mediaProxyUrl || hasMediaPlaceholder) {
+                              // Determine message type from MIME type if type field is missing/incorrect
+                              const inferredType = detectMediaType(msg.type, msg.mediaMimeType)
+                              
+                              return (
+                                <div className="space-y-2">
+                                  <MediaMessage
+                                    message={{
+                                      id: msg.id,
+                                      type: msg.type || inferredType,
+                                      mediaProxyUrl: msg.mediaProxyUrl || `/api/media/messages/${msg.id}`,
+                                      mediaMimeType: msg.mediaMimeType,
+                                      mediaFilename: (msg as any).mediaFilename,
+                                      body: msg.body,
                                     }}
                                   />
-                                  <a
-                                    href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="absolute inset-0 flex items-center justify-center bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity"
-                                    title="Open image in new tab"
-                                  >
-                                    <ImageIcon className="h-8 w-8 text-white" />
-                                  </a>
-                                </div>
-                              ) : msg.type === 'document' || msg.mediaMimeType === 'application/pdf' || msg.mediaMimeType?.includes('pdf') ? (
-                                <a
-                                  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                  download
-                                >
-                                  <FileText className="h-5 w-5" />
-                                  <span className="text-sm font-medium">
-                                    {msg.body && msg.body.startsWith('[document:') 
-                                      ? msg.body.replace('[document:', '').replace(']', '').trim()
-                                      : (msg.body || 'Document')}
-                                  </span>
-                                </a>
-                              ) : (
-                                <a
-                                  href={`/api/whatsapp/media/${encodeURIComponent(msg.mediaUrl)}?messageId=${msg.id}`}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
-                                  download
-                                >
-                                  <FileText className="h-5 w-5" />
-                                  <span className="text-sm font-medium">{msg.body || `[${msg.type}]`}</span>
-                                </a>
-                              )}
-                              {/* Show caption if present and not a placeholder */}
-                              {msg.body && !msg.body.match(/^\[(audio|document|image|video|media)/i) && (
-                                <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
-                              )}
-                            </div>
-                          ) : (() => {
+                                  {msg.body && !['[audio]', '[Audio received]', '[image]', '[video]', '[document:', '[document: file]'].some(placeholder => msg.body?.includes(placeholder)) && (
+                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                  )}
+                                  </div>
+                                )
+                            }
+                            
                             // PART 2: Extract message text from various fields
-                            // CRITICAL: Check if message has media indicators but no mediaUrl/attachments
-                            // This handles cases where body contains "[Audio received]" but mediaUrl is missing
                             const displayText = getMessageDisplayText(msg)
                             const bodyLower = displayText?.toLowerCase() || ''
                             
-                            // If body contains media placeholder but no mediaUrl/attachments, show placeholder
-                            if (bodyLower.match(/\[(audio|document|image|video|media)/i) && !msg.mediaUrl && (!msg.attachments || msg.attachments.length === 0)) {
-                              return <p className="text-sm opacity-75">[Media message]</p>
-                            }
+                            // #region agent log
+                            fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:1300',message:'Fallback text rendering',data:{messageId:msg.id,type:msg.type,mediaUrl:msg.mediaUrl,mediaMimeType:msg.mediaMimeType,hasAttachments:!!(msg.attachments&&msg.attachments.length>0),body:msg.body,bodyLower:bodyLower.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H'})}).catch(()=>{});
+                            // #endregion
                             
                             if (displayText && typeof displayText === 'string' && displayText.trim() !== '') {
-                              // Skip if body looks like a media placeholder
+                              // Skip if body looks like a media placeholder (already handled by placeholder check above)
                               if (bodyLower.match(/^\[(audio|document|image|video|media)/i)) {
                                 return <p className="text-sm opacity-75">[Media message]</p>
                               }
@@ -1269,6 +1146,25 @@ function InboxPageContent() {
                             }
                             return <p className="text-sm opacity-75">[Media message]</p>
                           })()}
+                          {/* #region agent log */}
+                          {(() => {
+                            const iifeResult = (() => {
+                              const bodyHasDocumentPattern = msg.body?.match(/\[document:\s*(.+?)\]/i)
+                              const bodyHasImagePattern = msg.body?.match(/\[image\]/i)
+                              const bodyHasAudioPattern = msg.body?.match(/\[(audio|Audio received)\]/i)
+                              const bodyHasVideoPattern = msg.body?.match(/\[video\]/i)
+                              const hasMediaPlaceholder = !!(bodyHasDocumentPattern || bodyHasImagePattern || bodyHasAudioPattern || bodyHasVideoPattern)
+                              if (hasMediaPlaceholder && !msg.mediaUrl && (!msg.attachments || msg.attachments.length === 0)) {
+                                return 'HAS_PLACEHOLDER_JSX'
+                              }
+                              return 'NO_PLACEHOLDER'
+                            })()
+                            if (iifeResult === 'HAS_PLACEHOLDER_JSX') {
+                              fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:1336',message:'IIFE should have returned placeholder JSX',data:{messageId:msg.id,body:msg.body?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'AY'})}).catch(()=>{});
+                            }
+                            return null
+                          })()}
+                          {/* #endregion */}
                           <div className="flex items-center gap-1 mt-1">
                             <p
                               className={cn(
