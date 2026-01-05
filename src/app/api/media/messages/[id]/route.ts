@@ -248,7 +248,7 @@ export async function GET(
                 type: ['image','document','audio','video','sticker'].includes(resolved.finalType as any)
                   ? resolved.finalType
                   : undefined,
-              },
+              } as any,
             })
           } else {
             console.warn('[MEDIA-PROXY] Could not recover providerMediaId from ExternalEventLog', {
