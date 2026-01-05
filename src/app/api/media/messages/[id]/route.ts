@@ -300,7 +300,7 @@ export async function GET(
           messageId: message.id,
         type: message.type,
         body: message.body,
-        providerMediaId: message.providerMediaId,
+        providerMediaId: (message as any).providerMediaId,
         mediaUrl: message.mediaUrl,
         mediaMimeType: message.mediaMimeType,
         resolved: {
@@ -932,7 +932,7 @@ export async function HEAD(
         messageId: message.id,
         type: message.type,
         body: message.body,
-        providerMediaId: message.providerMediaId,
+        providerMediaId: (message as any).providerMediaId,
         mediaUrl: message.mediaUrl,
         mediaMimeType: message.mediaMimeType,
         resolved: {
