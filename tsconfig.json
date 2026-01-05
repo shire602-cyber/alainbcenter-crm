@@ -44,6 +44,8 @@
     "vitest.config.ts",
     "tests/**/*",
     "**/*.test.ts",
-    "**/__tests__/**"
+    "**/__tests__/**",
+    "media-code-audit/**/*",
+    "media_audit/**/*"
   ]
 }

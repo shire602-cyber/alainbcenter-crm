@@ -3,6 +3,7 @@ import { prisma } from '@/lib/prisma'
 import { requireAuthApi } from '@/lib/authApi'
 import { sendTextMessage, sendTemplateMessage, sendMediaMessage } from '@/lib/whatsapp'
 import { sendMediaMessageById } from '@/lib/whatsapp-media-upload'
+import { MEDIA_TYPES } from '@/lib/media/extractMediaId'
 
 /**
  * POST /api/inbox/conversations/[id]/messages
@@ -27,7 +28,7 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { text, templateName, templateParams, mediaUrl, mediaId, mediaType, mediaCaption, mediaFilename } = body
+    const { text, templateName, templateParams, mediaUrl, mediaId, mediaType, mediaCaption, mediaFilename, mediaMimeType, mediaSize } = body
 
     // Validate: either text, template, or media
     if (!text && !templateName && !mediaUrl && !mediaId) {
@@ -39,10 +40,9 @@ export async function POST(
 
     // Validate media type if media provided
     if ((mediaUrl || mediaId) && mediaType) {
-      const allowedMediaTypes = ['image', 'document', 'video', 'audio']
-      if (!allowedMediaTypes.includes(mediaType)) {
+      if (!MEDIA_TYPES.has(mediaType)) {
         return NextResponse.json(
-          { ok: false, error: `Invalid media type. Must be one of: ${allowedMediaTypes.join(', ')}` },
+          { ok: false, error: `Invalid media type. Must be one of: ${Array.from(MEDIA_TYPES).join(', ')}` },
           { status: 400 }
         )
       }
@@ -164,6 +164,13 @@ export async function POST(
         // Use media ID if provided (preferred - from Meta upload), otherwise use URL
         let result
         if (mediaId) {
+          // Filter out 'sticker' as it's not supported for sending
+          if (mediaType === 'sticker') {
+            return NextResponse.json(
+              { error: 'Stickers cannot be sent via API' },
+              { status: 400 }
+            )
+          }
           result = await sendMediaMessageById(
             normalizedPhone,
             mediaType as 'image' | 'document' | 'video' | 'audio',
@@ -174,6 +181,13 @@ export async function POST(
             }
           )
         } else if (mediaUrl) {
+          // Filter out 'sticker' as it's not supported for sending
+          if (mediaType === 'sticker') {
+            return NextResponse.json(
+              { error: 'Stickers cannot be sent via API' },
+              { status: 400 }
+            )
+          }
           result = await sendMediaMessage(
             normalizedPhone,
             mediaType as 'image' | 'document' | 'video' | 'audio',
@@ -310,6 +324,48 @@ export async function POST(
     // Create outbound Message(OUT) record (only for template/media messages, not text)
     // Text messages are handled above via sendOutboundWithIdempotency
     const messageStatus = whatsappMessageId ? 'SENT' : 'FAILED'
+    
+    // FIX #1, #8: Validate and store providerMediaId (mediaId from request - this is the providerMediaId)
+    let providerMediaId: string | null = null
+    if (mediaId && typeof mediaId === 'string') {
+      const sanitized = mediaId.trim()
+      // Validate format: non-empty, reasonable length, no spaces
+      if (sanitized.length > 0 && sanitized.length < 500 && !sanitized.includes(' ')) {
+        providerMediaId = sanitized
+      }
+    }
+    
+    // Ensure mediaType is in MEDIA_TYPES (validation)
+    const validatedMediaType = mediaType && MEDIA_TYPES.has(mediaType) ? mediaType : null
+    
+    // FIX #6: Use actual MIME type from request if available, otherwise infer from mediaType
+    let actualMimeType: string | null = null
+    if (mediaMimeType && typeof mediaMimeType === 'string') {
+      actualMimeType = mediaMimeType.trim()
+    } else if (mediaType) {
+      // Fallback to inferred MIME type
+      actualMimeType = mediaType === 'image' ? 'image/jpeg' 
+        : mediaType === 'video' ? 'video/mp4' 
+        : mediaType === 'audio' ? 'audio/ogg' 
+        : 'application/octet-stream'
+    }
+    
+    // FIX #7: Parse mediaSize if provided (can be number or string)
+    let parsedMediaSize: number | null = null
+    if (mediaSize !== undefined && mediaSize !== null) {
+      if (typeof mediaSize === 'number' && mediaSize > 0) {
+        parsedMediaSize = mediaSize
+      } else if (typeof mediaSize === 'string') {
+        const parsed = parseInt(mediaSize)
+        if (!isNaN(parsed) && parsed > 0) {
+          parsedMediaSize = parsed
+        }
+      }
+    }
+    
+    // CRITICAL: Store type in MEDIA_TYPES (validatedMediaType) for media messages
+    const messageType = validatedMediaType || (templateName ? 'template' : 'text')
+    
     const message = await prisma.message.create({
       data: {
         conversationId: conversation.id,
@@ -317,10 +373,16 @@ export async function POST(
         contactId: conversation.contactId,
         direction: 'OUTBOUND', // Direction: OUTBOUND for outbound
         channel: 'whatsapp',
-        type: mediaType || (templateName ? 'template' : 'text'),
+        type: messageType, // CRITICAL: Use validatedMediaType (in MEDIA_TYPES) for media messages
         body: messageContent,
-        mediaUrl: mediaId || mediaUrl || null, // Store media ID or URL
-        mediaMimeType: mediaType ? (mediaType === 'image' ? 'image/jpeg' : mediaType === 'video' ? 'video/mp4' : mediaType === 'audio' ? 'audio/ogg' : 'application/octet-stream') : null,
+        // CRITICAL: Store providerMediaId (Meta media ID from upload/send) for media proxy retrieval
+        providerMediaId: providerMediaId || null,
+        mediaUrl: mediaId || mediaUrl || null, // Backward compatibility
+        // Store media metadata
+        mediaMimeType: actualMimeType,
+        mediaFilename: mediaFilename || null,
+        mediaSize: parsedMediaSize,
+        // Note: mediaCaption is not in schema - captions can be stored in body or payload
         providerMessageId: whatsappMessageId || null,
         status: messageStatus,
         sentAt: sentAt,
@@ -328,7 +390,7 @@ export async function POST(
         rawPayload: sendError
           ? JSON.stringify({ error: sendError.message })
           : null,
-      },
+      } as any, // Type assertion needed for fields that may not be in Prisma types
     })
 
     // Create initial status event

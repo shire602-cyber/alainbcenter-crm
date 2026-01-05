@@ -67,7 +67,10 @@ export async function uploadMediaToMeta(
   
   // Add file field
   formData += `--${boundary}${CRLF}`
-  formData += `Content-Disposition: form-data; name="file"; filename="media.${getExtensionFromMime(mimeType)}"${CRLF}`
+  // FIX: Sanitize filename in Content-Disposition header
+  const { sanitizeFilename } = await import('@/lib/media/storage')
+  const sanitizedFilename = sanitizeFilename(`media.${getExtensionFromMime(mimeType)}`)
+  formData += `Content-Disposition: form-data; name="file"; filename="${sanitizedFilename}"${CRLF}`
   formData += `Content-Type: ${mimeType}${CRLF}${CRLF}`
   
   // Combine text parts with binary buffer
@@ -75,37 +78,98 @@ export async function uploadMediaToMeta(
   const endBoundary = Buffer.from(`${CRLF}--${boundary}--${CRLF}`, 'utf-8')
   const fullBody = Buffer.concat([textPart, buffer, endBoundary])
 
-  try {
-    const response = await fetch(uploadUrl, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${accessToken}`,
-        'Content-Type': `multipart/form-data; boundary=${boundary}`,
-      },
-      body: fullBody,
-    })
+  // FIX: Add retry logic with exponential backoff (similar to getWhatsAppDownloadUrl)
+  const retries = 3
+  for (let attempt = 1; attempt <= retries; attempt++) {
+    try {
+      // FIX: Add timeout handling (60 seconds for uploads - larger files)
+      const controller = new AbortController()
+      const timeoutId = setTimeout(() => controller.abort(), 60000)
+      
+      const response = await fetch(uploadUrl, {
+        method: 'POST',
+        headers: {
+          Authorization: `Bearer ${accessToken}`,
+          'Content-Type': `multipart/form-data; boundary=${boundary}`,
+        },
+        body: fullBody,
+        signal: controller.signal,
+      })
+      
+      clearTimeout(timeoutId)
 
-    const data = await response.json()
+      // FIX: Handle rate limiting (429) - retry with backoff
+      if (response.status === 429) {
+        if (attempt < retries) {
+          const backoffDelay = 1000 * attempt // Exponential backoff: 1s, 2s, 3s
+          console.warn(`[MEDIA-UPLOAD] Rate limited, retrying in ${backoffDelay}ms (attempt ${attempt}/${retries})`)
+          await new Promise(resolve => setTimeout(resolve, backoffDelay))
+          continue
+        }
+        throw new Error('Rate limited by Meta API after retries. Please try again later.')
+      }
 
-    if (!response.ok) {
-      const error = data as WhatsAppError
-      throw new Error(
-        error.error?.message || `Meta upload error: ${response.status} ${response.statusText}`
-      )
+      const data = await response.json()
+
+      // Retry on 5xx errors (server errors)
+      if (response.status >= 500 && attempt < retries) {
+        const backoffDelay = 1000 * attempt
+        console.warn(`[MEDIA-UPLOAD] Server error ${response.status}, retrying in ${backoffDelay}ms (attempt ${attempt}/${retries})`)
+        await new Promise(resolve => setTimeout(resolve, backoffDelay))
+        continue
+      }
+
+      if (!response.ok) {
+        const error = data as WhatsAppError
+        throw new Error(
+          error.error?.message || `Meta upload error: ${response.status} ${response.statusText}`
+        )
+      }
+
+      const result = data as MediaUploadResponse
+      if (!result.id) {
+        throw new Error('Meta did not return a media ID')
+      }
+
+      return result.id
+    } catch (error: any) {
+      // Handle timeout/abort errors - retry if not last attempt
+      if (error.name === 'AbortError') {
+        if (attempt < retries) {
+          const backoffDelay = 1000 * attempt
+          console.warn(`[MEDIA-UPLOAD] Timeout, retrying in ${backoffDelay}ms (attempt ${attempt}/${retries})`)
+          await new Promise(resolve => setTimeout(resolve, backoffDelay))
+          continue
+        }
+        throw new Error('Media upload timeout - file may be too large or network too slow')
+      }
+      
+      // Retry on network errors (TypeError, ECONNRESET, ETIMEDOUT)
+      if (attempt < retries && (
+        error.name === 'TypeError' || 
+        error.code === 'ECONNRESET' || 
+        error.code === 'ETIMEDOUT'
+      )) {
+        const backoffDelay = 1000 * attempt
+        console.warn(`[MEDIA-UPLOAD] Network error: ${error.message}, retrying in ${backoffDelay}ms (attempt ${attempt}/${retries})`)
+        await new Promise(resolve => setTimeout(resolve, backoffDelay))
+        continue
+      }
+      
+      // Handle rate limiting (429) - already handled above, but catch here too
+      if (error.message?.includes('429') || error.message?.includes('rate limit')) {
+        throw new Error('Rate limited by Meta API. Please try again later.')
+      }
+      
+      // Last attempt or non-retryable error
+      if (error.message.includes('Meta') || error.message.includes('WhatsApp')) {
+        throw error
+      }
+      throw new Error(`Failed to upload media to Meta: ${error.message}`)
     }
-
-    const result = data as MediaUploadResponse
-    if (!result.id) {
-      throw new Error('Meta did not return a media ID')
-    }
-
-    return result.id
-  } catch (error: any) {
-    if (error.message.includes('Meta') || error.message.includes('WhatsApp')) {
-      throw error
-    }
-    throw new Error(`Failed to upload media to Meta: ${error.message}`)
   }
+  
+  throw new Error('Max retries exceeded for media upload')
 }
 
 /**
@@ -146,7 +210,7 @@ function getExtensionFromMime(mimeType: string): string {
  */
 export async function sendMediaMessageById(
   toE164: string,
-  mediaType: 'image' | 'document' | 'video' | 'audio',
+  mediaType: 'image' | 'document' | 'video' | 'audio' | 'sticker',
   mediaId: string,
   options?: {
     caption?: string
