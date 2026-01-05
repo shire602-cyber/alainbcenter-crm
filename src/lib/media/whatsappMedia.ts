@@ -282,7 +282,7 @@ export async function getWhatsAppAccessTokenSource(): Promise<{ found: boolean; 
     const credentials = await getWhatsAppCredentials()
     return {
       found: true,
-      source: credentials.tokenSource === 'db' ? 'DB' : credentials.tokenSource === 'env' ? 'ENV' : null,
+      source: (credentials as any).tokenSource === 'db' ? 'DB' : (credentials as any).tokenSource === 'env' ? 'ENV' : null,
     }
   } catch (e) {
     return {
