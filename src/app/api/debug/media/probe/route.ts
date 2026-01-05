@@ -52,9 +52,8 @@ export async function GET(req: NextRequest) {
       })
     }
 
-    // Compute proxy URL
-    const mediaId = message.mediaUrl
-    const proxyUrl = `/api/whatsapp/media/${encodeURIComponent(mediaId)}?messageId=${messageId}`
+    // Compute proxy URL (use main media proxy endpoint)
+    const proxyUrl = `/api/media/messages/${messageId}`
 
     // Probe HEAD request
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || process.env.VERCEL_URL || 'http://localhost:3000'

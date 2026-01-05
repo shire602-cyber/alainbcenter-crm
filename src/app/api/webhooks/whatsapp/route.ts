@@ -5,6 +5,8 @@ import { normalizeInboundPhone, findContactByPhone } from '@/lib/phone-inbound'
 import { prepareInboundContext, buildWhatsAppExternalId } from '@/lib/whatsappInbound'
 import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 import { markInboundProcessed } from '@/lib/webhook/idempotency'
+import { resolveWhatsAppMedia } from '@/lib/media/resolveWhatsAppMedia'
+import { detectMediaType, extractMediaInfo, MEDIA_TYPES } from '@/lib/media/extractMediaId'
 
 // Ensure this runs in Node.js runtime (not Edge) for Prisma compatibility
 export const runtime = 'nodejs'
@@ -190,22 +192,96 @@ export async function GET(req: NextRequest) {
  * - statuses: sent, delivered, read, failed
  * - messages: inbound messages from users
  */
+// File-based logging for webhook debugging
+import fs from 'fs'
+import path from 'path'
+
+const WEBHOOK_LOG_FILE = path.join(process.cwd(), '.next', 'webhook-debug.log')
+
+function logToFile(message: string, data?: any) {
+  try {
+    const logEntry = {
+      timestamp: new Date().toISOString(),
+      message,
+      data,
+    }
+    fs.appendFileSync(WEBHOOK_LOG_FILE, JSON.stringify(logEntry) + '\n')
+  } catch (e) {
+    // Silently fail if file write doesn't work
+  }
+}
+
 export async function POST(req: NextRequest) {
+  // CRITICAL DEBUG: Log webhook entry immediately (both console and file)
+  const entryMsg = `🚨🚨🚨 [WEBHOOK-ENTRY] POST /api/webhooks/whatsapp called at ${new Date().toISOString()}`
+  console.error(entryMsg)
+  logToFile('WEBHOOK-ENTRY', { timestamp: new Date().toISOString() })
+  
   // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:191',message:'Webhook POST entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:POST-entry',message:'Webhook POST entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W0'})}).catch((e)=>{console.error('[DEBUG-LOG] Failed to send log:',e)});
+  } catch (e) {}
   // #endregion
   console.log(`📥 [WEBHOOK] WhatsApp webhook received at ${new Date().toISOString()}`)
-  let rawBody: string = ''
+  
+  // ===== CRITICAL: READ BODY ONCE AT THE VERY TOP =====
+  // Read the body ONCE - after this, req.text() and req.json() will be empty
+  const rawText = await req.text()
+  const rawBody = rawText // Keep for error handling
+  
+  // Immediately write webhook record to DB (BEFORE any parsing or processing)
+  try {
+    await prisma.externalEventLog.create({
+      data: {
+        provider: 'whatsapp',
+        externalId: `webhook-${Date.now()}`,
+        payload: rawText.slice(0, 5000), // Store first 5000 chars to avoid huge payloads
+        receivedAt: new Date(),
+      },
+    })
+    console.log('[WEBHOOK] ✅ Webhook recorded to ExternalEventLog')
+  } catch (e: any) {
+    console.error('[WEBHOOK] ❌ Failed to store webhook record', {
+      error: e.message,
+      errorCode: e.code,
+    })
+    // Continue - don't break webhook delivery
+  }
+  
+  // Now parse the body (use the variable, NOT req.json() - body is already consumed)
   let body: any = null
+  try {
+    body = JSON.parse(rawText)
+  } catch (e) {
+    console.error('[WEBHOOK] Failed to parse webhook JSON', e)
+    body = { rawText }
+  }
+  // ===== END CRITICAL BLOCK =====
+  
+  // Debug: Record raw webhook to debug endpoint (browser-visible) - optional
+  try {
+    // Construct base URL from request URL or environment
+    let baseUrl = process.env.NEXT_PUBLIC_BASE_URL
+    if (!baseUrl) {
+      const url = new URL(req.url)
+      baseUrl = `${url.protocol}//${url.host}`
+    }
+    
+    await fetch(`${baseUrl}/api/debug/wa-last-webhook`, {
+      method: 'POST',
+      headers: { 'Content-Type': 'text/plain' },
+      body: rawText,
+    }).catch((e) => {
+      console.warn('[WEBHOOK] Failed to record to debug endpoint', e.message)
+    })
+  } catch (e) {
+    // Don't break webhook if debug recording fails
+    console.warn('[WEBHOOK] Debug recording error', e)
+  }
 
   try {
     console.log('📥 WhatsApp webhook POST received')
     
-    // Get raw body for signature verification
-    rawBody = await req.text()
-    
-    try {
-      body = JSON.parse(rawBody)
       console.log('✅ Parsed webhook body:', {
         hasEntry: !!body.entry,
         entryCount: body.entry?.length || 0,
@@ -214,10 +290,6 @@ export async function POST(req: NextRequest) {
         hasMessages: !!body.entry?.[0]?.changes?.[0]?.value?.messages,
         hasStatuses: !!body.entry?.[0]?.changes?.[0]?.value?.statuses,
       })
-    } catch {
-      console.error('❌ Failed to parse webhook JSON')
-      return NextResponse.json({ error: 'Invalid JSON' }, { status: 400 })
-    }
 
     // Verify webhook signature (optional but recommended)
     const signature = req.headers.get('x-hub-signature-256')
@@ -292,23 +364,123 @@ export async function POST(req: NextRequest) {
     const changes = entry?.changes?.[0]
     const value = changes?.value
 
-    // A) HARD-IGNORE STATUS-ONLY WEBHOOK EVENTS
-    // If payload has no messages OR messages.length===0 => return 200 immediately
-    // Do NOT call orchestrator, do NOT create tasks, do NOT send outbound for statuses-only events
-    const hasMessages = value?.messages && Array.isArray(value.messages) && value.messages.length > 0
-    const hasStatuses = value?.statuses && Array.isArray(value.statuses) && value.statuses.length > 0
-    
-    if (!hasMessages && hasStatuses) {
-      // Status-only webhook - process statuses and return immediately
-      console.log(`📊 [WEBHOOK] Status-only webhook (${value.statuses.length} statuses, 0 messages) - processing statuses only`)
-    } else if (!hasMessages) {
-      // No messages and no statuses - invalid webhook
-      console.log(`⚠️ [WEBHOOK] Webhook has no messages and no statuses - returning 200`)
-      return NextResponse.json({ success: true, message: 'No messages or statuses to process' })
+    // ===== PROCESS MESSAGES FIRST (before statuses) =====
+    // 1) Process messages FIRST if present
+    if (value?.messages && Array.isArray(value.messages) && value.messages.length > 0) {
+      console.log(`📨 Processing ${value.messages.length} incoming message(s)`)
+      
+      // Step 1: Create ExternalEventLog for ALL messages (before filtering)
+      console.log('[WEBHOOK] Starting ExternalEventLog upsert for ALL messages', {
+        messageCount: value.messages.length,
+        messageIds: value.messages.map((m: any) => m.id),
+      })
+
+      for (const message of value.messages) {
+        const providerMessageId = message.id
+
+        if (!providerMessageId) {
+          console.warn('[WEBHOOK] Message missing id, skipping ExternalEventLog upsert', {
+            messageKeys: Object.keys(message),
+            messageType: message.type,
+          })
+          continue
+        }
+
+        // Upsert per-message ExternalEventLog keyed by wamid... (BEFORE filtering)
+        try {
+          const payload = JSON.stringify({
+            providerMessageId,
+            type: message.type,
+            image: !!message.image,
+            document: !!message.document,
+            audio: !!message.audio,
+            video: !!message.video,
+            sticker: !!message.sticker,
+            // store media id directly if present
+            providerMediaId:
+              message?.image?.id ||
+              message?.document?.id ||
+              message?.audio?.id ||
+              message?.video?.id ||
+              message?.sticker?.id ||
+              null,
+          })
+
+          const result = await prisma.externalEventLog.upsert({
+            where: {
+              provider_externalId: {
+                provider: 'whatsapp',
+                externalId: providerMessageId,
+              },
+            },
+            update: {
+              payload,
+              receivedAt: new Date(),
+            },
+            create: {
+              provider: 'whatsapp',
+              externalId: providerMessageId,
+              payload,
+              receivedAt: new Date(),
+            },
+          })
+
+          console.log('[WEBHOOK] ✅ ExternalEventLog upserted for message', {
+            providerMessageId,
+            externalEventLogId: result.id,
+            type: message.type,
+            hasMediaId: !!(message?.image?.id || message?.document?.id || message?.audio?.id || message?.video?.id || message?.sticker?.id),
+            providerMediaId: message?.image?.id || message?.document?.id || message?.audio?.id || message?.video?.id || message?.sticker?.id || null,
+          })
+        } catch (e: any) {
+          console.error('[WEBHOOK] ❌ Failed to upsert ExternalEventLog for message', {
+            providerMessageId,
+            error: e.message,
+            errorCode: e.code,
+            errorStack: e.stack?.substring(0, 500),
+            providerMessageIdType: typeof providerMessageId,
+            providerMessageIdLength: providerMessageId?.length,
+          })
+          // Continue processing - don't break webhook delivery
+        }
+      }
+
+      console.log('[WEBHOOK] Completed ExternalEventLog upsert for all messages')
+
+      // Step 2: Filter and process actual customer messages
+      // CRITICAL: Ignore status updates and echo messages (from our own number)
+      const actualMessages = value.messages.filter((msg: any) => {
+        // Ignore if it's a status update
+        if (msg.type === 'status' || msg.status) {
+          console.log(`⏭️ [WEBHOOK] Ignoring status update message: ${msg.id}`)
+          return false
+        }
+        // Ignore echo messages (messages we sent)
+        if (msg.context?.from === value.metadata?.phone_number_id) {
+          console.log(`⏭️ [WEBHOOK] Ignoring echo message (from our number): ${msg.id}`)
+          return false
+        }
+        return true
+      })
+      
+      console.log(`📨 Filtered to ${actualMessages.length} actual customer messages (ignored ${value.messages.length - actualMessages.length} status/echo)`)
+      
+      // Step 3: Process each actual message (continue with existing handleInboundMessageAutoMatch logic)
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:messages-detected',message:'Messages detected in webhook',data:{messagesCount:value.messages.length,messageIds:value.messages.map((m:any)=>m.id),messageTypes:value.messages.map((m:any)=>m.type)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W0'})}).catch((e)=>{console.error('[DEBUG-LOG] Failed to send log:',e)});
+      } catch (e) {}
+      // #endregion
+      
+      // Process each actual message - the loop continues below (existing code)
     }
 
+    // ===== THEN PROCESS STATUSES (but DO NOT return early) =====
+    // 2) Process statuses if present (but DO NOT return early)
+    if (value?.statuses && Array.isArray(value.statuses) && value.statuses.length > 0) {
+      console.log(`📊 [WEBHOOK] Processing ${value.statuses.length} status update(s)`)
+
     // Handle status updates (delivery receipts) - update both CommunicationLog and Message models
-    if (value?.statuses) {
       for (const status of value.statuses) {
         const messageId = status.id
         const statusType = status.status // 'sent' | 'delivered' | 'read' | 'failed'
@@ -409,9 +581,16 @@ export async function POST(req: NextRequest) {
       } catch {}
     }
 
-    // Handle incoming messages (IMPROVED - create contacts/leads if needed)
-    if (value?.messages) {
-      console.log(`📨 Processing ${value.messages.length} incoming message(s)`)
+    // ===== PROCESS ACTUAL CUSTOMER MESSAGES (after ExternalEventLog upsert) =====
+    // Continue with existing message processing logic (filter and process actual customer messages)
+    // NOTE: ExternalEventLog was already upserted for ALL messages above (line ~360)
+    // Now we filter and process only actual customer messages
+    if (value?.messages && Array.isArray(value.messages) && value.messages.length > 0) {
+      // #region agent log
+      try {
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:messages-detected',message:'Messages detected in webhook',data:{messagesCount:value.messages.length,messageIds:value.messages.map((m:any)=>m.id),messageTypes:value.messages.map((m:any)=>m.type)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W0'})}).catch((e)=>{console.error('[DEBUG-LOG] Failed to send log:',e)});
+      } catch (e) {}
+      // #endregion
       
       // CRITICAL: Ignore status updates and echo messages (from our own number)
       const actualMessages = value.messages.filter((msg: any) => {
@@ -433,34 +612,288 @@ export async function POST(req: NextRequest) {
       for (const message of actualMessages) {
         const from = message.from // Phone number without + (e.g., "971501234567")
         const messageId = message.id
-        const messageType = message.type // 'text', 'image', 'audio', 'document', etc.
+        let messageType = message.type // 'text', 'image', 'audio', 'document', etc. - MUST be let, not const, so we can override for media
         const timestamp = message.timestamp
           ? new Date(parseInt(message.timestamp) * 1000)
           : new Date()
         
+        // ===== CRITICAL: Store ExternalEventLog per message with externalId = providerMessageId =====
+        // NOTE: This will be updated AFTER providerMediaId is computed (see below)
+        // ===== END CRITICAL BLOCK =====
+        
+        const debug0Data = {
+          messageId,
+          from,
+          messageType,
+          timestamp: timestamp.toISOString(),
+          hasAudio: !!message.audio,
+          hasImage: !!message.image,
+          hasDocument: !!message.document,
+          hasVideo: !!message.video,
+          hasSticker: !!message.sticker,
+        }
+        console.error("🚨🚨🚨 [DEBUG-0] WEBHOOK MESSAGE LOOP ENTRY", JSON.stringify(debug0Data, null, 2))
+        logToFile('DEBUG-0', debug0Data)
+        
         console.log(`📨 [WEBHOOK] Processing message ${messageId} from ${from}, type: ${messageType}`)
+        
+        // #region agent log
+        try {
+          // CRITICAL: Log the ENTIRE message object to see the actual webhook structure
+          const fullMessageStr = JSON.stringify(message)
+          console.log(`🔍 [WEBHOOK-FULL] Full message object for ${messageId}:`, fullMessageStr)
+          fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:processing-message',message:'Processing message - FULL PAYLOAD',data:{messageId,from,messageType,hasAudio:!!message.audio,hasImage:!!message.image,hasDocument:!!message.document,hasVideo:!!message.video,fullMessageObject:fullMessageStr,messageKeys:Object.keys(message)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W1'})}).catch((e)=>{console.error('[DEBUG-LOG] Failed to send log:',e)});
+        } catch (e) {
+          console.error('[WEBHOOK] Failed to log full message:', e)
+        }
+        // #endregion
+        
+        // CRITICAL DEBUG: Log full message structure for media messages to understand payload
+        // Use MEDIA_TYPES set for consistent checking
+        if (MEDIA_TYPES.has(messageType)) {
+          const mediaDebug = {
+            messageId,
+            type: messageType,
+            hasAudio: !!message.audio,
+            hasImage: !!message.image,
+            hasDocument: !!message.document,
+            hasVideo: !!message.video,
+            audioKeys: message.audio ? Object.keys(message.audio) : [],
+            imageKeys: message.image ? Object.keys(message.image) : [],
+            documentKeys: message.document ? Object.keys(message.document) : [],
+            videoKeys: message.video ? Object.keys(message.video) : [],
+            messageKeys: Object.keys(message),
+            audioObject: message.audio || null,
+            imageObject: message.image || null,
+            documentObject: message.document || null,
+            videoObject: message.video || null,
+            stickerObject: message.sticker || null,
+          }
+          console.log(`🔍 [WEBHOOK-DEBUG] Media message ${messageId} full structure:`, JSON.stringify(mediaDebug, null, 2))
+          
+          // #region agent log
+          try {
+            fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:media-debug',message:'Media message debug structure',data:mediaDebug,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W2'})}).catch((e)=>{console.error('[DEBUG-LOG] Failed to send log:',e)});
+          } catch (e) {}
+          // #endregion
+        }
         
         // Extract message text/content and media info
         let messageText = message.text?.body || ''
-        let mediaUrl: string | null = null
-        let mediaMimeType: string | null = null
-        let filename: string | null = null
         
-        if (messageType === 'image' && message.image) {
-          messageText = message.image.caption || '[image]'
-          mediaUrl = message.image.id // Store media ID (WhatsApp media ID, not URL)
-          mediaMimeType = message.image.mime_type || 'image/jpeg'
-        } else if (messageType === 'audio' && message.audio) {
-          // CRITICAL FIX 3: Transcribe audio messages
-          mediaUrl = message.audio.id // Store media ID (WhatsApp media ID, not URL)
-          mediaMimeType = message.audio.mime_type || 'audio/ogg'
+        // PRIMARY EXTRACTION PATH: Use proven extractor (detectMediaType + extractMediaInfo)
+        // This is authoritative for WhatsApp webhook messages
+        const detected = detectMediaType(message)
+        const isMediaByDetected = MEDIA_TYPES.has(detected)
+        
+        // Primary extraction (authoritative for WhatsApp webhook messages)
+        const extracted = isMediaByDetected ? extractMediaInfo(message, detected) : null
+        
+        // Fallback to resolver only if extractor can't find id
+        const resolver = resolveWhatsAppMedia(message, undefined, undefined, { messageId, from, timestamp })
+        
+        // Determine final type: prefer detected type if it's media, otherwise use resolver
+        const finalType = (isMediaByDetected ? detected : resolver.finalType)
+        
+        // Determine providerMediaId: prefer extracted, then resolver, then null
+        const providerMediaId =
+          extracted?.providerMediaId ||
+          resolver.providerMediaId ||
+          null
+        
+        // Extract all media metadata with priority: extracted > resolver > null
+        const mediaMimeType =
+          extracted?.mediaMimeType ||
+          resolver.mediaMimeType ||
+          null
+        
+        const filename =
+          extracted?.filename ||
+          resolver.filename ||
+          null
+        
+        const mediaSize =
+          extracted?.mediaSize ||
+          resolver.size ||
+          null
+        
+        const mediaSha256 =
+          extracted?.mediaSha256 ||
+          resolver.sha256 ||
+          null
+        
+        const caption =
+          extracted?.caption ||
+          resolver.caption ||
+          null
+        
+        const mediaUrl = providerMediaId // Legacy compatibility
+        
+        // Determine if this is a media message
+        const isMediaMessage = MEDIA_TYPES.has(finalType)
+        
+        // ===== CRITICAL: Store minimal ExternalEventLog per message AFTER providerMediaId is computed =====
+        // This upsert uses externalId = providerMessageId (wamid...) for both media and non-media messages
+        // MUST run for ALL messages (text and media) to enable recovery
+        const providerMessageId = messageId
+        try {
+          const minimalPayload = JSON.stringify({
+            providerMessageId,
+            type: finalType ?? messageType ?? message?.type ?? null,
+            providerMediaId: providerMediaId ?? null,
+            ts: message.timestamp ?? null,
+            // optional small hints for recovery:
+            hasImage: !!message.image,
+            hasDocument: !!message.document,
+            hasAudio: !!message.audio,
+            hasVideo: !!message.video,
+            hasSticker: !!message.sticker,
+          }).substring(0, 50000)
+
+          const result = await prisma.externalEventLog.upsert({
+            where: {
+              provider_externalId: {
+                provider: 'whatsapp',
+                externalId: providerMessageId,
+              },
+            },
+            update: {
+              payload: minimalPayload,
+              receivedAt: new Date(),
+            },
+            create: {
+              provider: 'whatsapp',
+              externalId: providerMessageId,
+              payload: minimalPayload,
+              receivedAt: new Date(),
+            },
+          })
+
+          console.log('[WEBHOOK] ExternalEventLog upserted (minimal)', {
+            messageId: providerMessageId,
+            externalEventLogId: result.id,
+            providerMediaId: providerMediaId ?? null,
+            finalType: finalType ?? messageType ?? message?.type ?? null,
+            payloadLength: minimalPayload.length,
+            payloadPreview: minimalPayload.substring(0, 100),
+          })
+        } catch (e: any) {
+          console.error('[WEBHOOK] Failed to upsert ExternalEventLog (minimal)', {
+            messageId: providerMessageId,
+            error: e.message,
+            errorCode: e.code,
+            errorStack: e.stack,
+            providerMessageIdValue: providerMessageId,
+            providerMessageIdType: typeof providerMessageId,
+            providerMessageIdLength: providerMessageId?.length,
+          })
+          // do not break webhook delivery
+        }
+        // ===== END CRITICAL BLOCK =====
+        
+        // Create ingest-debug payload for browser debugging
+        const ingestDebug = {
+          detectedType: detected,
+          extracted: extracted ?? null,
+          resolver: {
+            isMedia: resolver?.isMedia ?? null,
+            finalType: resolver?.finalType ?? null,
+            providerMediaId: resolver?.providerMediaId ?? null,
+            source: resolver?.debug?.source ?? null,
+          },
+          finalType,
+          finalProviderMediaId: providerMediaId,
+          originalMessageType: message?.type ?? null,
+          hasImage: !!message?.image,
+          hasDocument: !!message?.document,
+          hasAudio: !!message?.audio,
+          hasVideo: !!message?.video,
+          hasSticker: !!message?.sticker,
+        }
+        
+        // DEBUG LOG #1: Always log extraction result (for ALL messages, not just media)
+        const debug1Data = {
+          messageId,
+          detectedType: detected,
+          isMediaByDetected,
+          extractedKeys: extracted ? Object.keys(extracted) : null,
+          extracted: extracted ? {
+            providerMediaId: extracted.providerMediaId,
+            mediaMimeType: extracted.mediaMimeType,
+            filename: extracted.filename,
+            mediaSize: extracted.mediaSize,
+            mediaSha256: extracted.mediaSha256,
+            caption: extracted.caption,
+          } : null,
+          resolverProviderMediaId: resolver?.providerMediaId ?? null,
+          resolverFinalType: resolver?.finalType ?? null,
+          resolverIsMedia: resolver?.isMedia ?? null,
+          finalProviderMediaId: providerMediaId,
+          finalType,
+          isMediaMessage,
+        }
+        console.error("🚨🚨🚨 [DEBUG-1] INBOUND EXTRACTION RESULT", JSON.stringify(debug1Data, null, 2))
+        logToFile('DEBUG-1', debug1Data)
+        
+        // Override messageType with finalType for media messages
+        if (isMediaMessage) {
+          messageType = finalType
+        }
+        
+        // CRITICAL: Log error if media message but providerMediaId is still null
+        if (isMediaMessage && !providerMediaId) {
+          console.error('[INBOUND-MEDIA] providerMediaId missing after extraction', {
+            messageId,
+            finalType,
+            originalType: message.type,
+            hasKeys: Object.keys(message || {}),
+            extractedProviderMediaId: extracted?.providerMediaId,
+            resolverProviderMediaId: resolver.providerMediaId,
+            detected,
+            isMediaByDetected,
+          })
+        }
+        
+        // Set message text placeholders based on finalType
+        if (isMediaMessage) {
+          if (finalType === 'image') {
+            messageText = '[Image]'
+          } else if (finalType === 'audio') {
+            messageText = '[Audio]' // Will be replaced with transcript if transcription succeeds
+          } else if (finalType === 'document') {
+            messageText = '[Document]'
+          } else if (finalType === 'video') {
+            messageText = '[Video]'
+          } else if (finalType === 'sticker') {
+            messageText = '[Sticker]'
+          }
           
+          // Log media extraction
+          console.log(`[INGEST-MEDIA]`, {
+            messageId,
+            providerMessageId: messageId,
+            type: finalType,
+            providerMediaId,
+            mime: mediaMimeType,
+            filename,
+            hasSha256: !!mediaSha256,
+            hasCaption: !!caption,
+            resolverSource: resolver.debug?.source,
+            resolverTypeSource: resolver.debug?.typeSource,
+          })
+          
+          // Log success if providerMediaId was found
+          if (providerMediaId) {
+            console.log(`✅ [WEBHOOK] ${finalType} message ${messageId} has providerMediaId: ${providerMediaId}`)
+          }
+          
+          // CRITICAL: Audio transcription (keep existing logic)
+          if (finalType === 'audio' && providerMediaId) {
           try {
-            // Fetch media URL from Meta API
             const accessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN
-            if (accessToken && mediaUrl) {
+              if (accessToken) {
               // Get media URL from Meta API
-              const mediaResponse = await fetch(`https://graph.facebook.com/v18.0/${mediaUrl}`, {
+                const mediaResponse = await fetch(`https://graph.facebook.com/v18.0/${providerMediaId}`, {
                 headers: {
                   'Authorization': `Bearer ${accessToken}`,
                 },
@@ -479,34 +912,26 @@ export async function POST(req: NextRequest) {
                     messageText = transcriptResult.transcript
                     console.log(`✅ [WEBHOOK] Audio transcribed: ${transcriptResult.transcript.substring(0, 100)}...`)
                   } else {
-                    messageText = '[Audio received]'
+                      messageText = '[Audio]'
                     console.warn(`⚠️ [WEBHOOK] Audio transcription failed: ${transcriptResult.error}`)
                   }
                 } else {
-                  messageText = '[Audio received]'
+                    messageText = '[Audio]'
                   console.warn(`⚠️ [WEBHOOK] Could not get audio URL from Meta API`)
                 }
               } else {
-                messageText = '[Audio received]'
+                  messageText = '[Audio]'
                 console.warn(`⚠️ [WEBHOOK] Failed to fetch audio media: ${mediaResponse.statusText}`)
               }
             } else {
-              messageText = '[Audio received]'
+                messageText = '[Audio]'
               console.warn(`⚠️ [WEBHOOK] No access token configured for audio transcription`)
             }
           } catch (audioError: any) {
-            messageText = '[Audio received]'
+              messageText = '[Audio]'
             console.error(`❌ [WEBHOOK] Audio transcription error:`, audioError.message)
           }
-        } else if (messageType === 'document' && message.document) {
-          messageText = `[document: ${message.document.filename || 'file'}]`
-          mediaUrl = message.document.id // Store media ID (WhatsApp media ID, not URL)
-          mediaMimeType = message.document.mime_type || 'application/pdf'
-          filename = message.document.filename || null
-        } else if (messageType === 'video' && message.video) {
-          messageText = message.video.caption || '[video]'
-          mediaUrl = message.video.id // Store media ID (WhatsApp media ID, not URL)
-          mediaMimeType = message.video.mime_type || 'video/mp4'
+          }
         } else if (messageType === 'location' && message.location) {
           messageText = `[location: ${message.location.latitude}, ${message.location.longitude}]`
         }
@@ -532,6 +957,10 @@ export async function POST(req: NextRequest) {
           channelLower: 'whatsapp',
           externalThreadId: waId,
           messageTextLength: messageText?.length || 0,
+          messageType,
+          hasMediaUrl: !!mediaUrl,
+          mediaUrl,
+          mediaMimeType,
           timestamp: timestamp.toISOString(),
         }))
         
@@ -541,6 +970,33 @@ export async function POST(req: NextRequest) {
           // Use new AUTO-MATCH pipeline (handles deduplication internally)
           // Pass full webhook entry for waId extraction
           const waId = value.contacts?.[0]?.wa_id || message.from
+          // #region agent log
+          try {
+            fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:handleInboundMessageAutoMatch',message:'Calling handleInboundMessageAutoMatch with media',data:{messageId,messageType,mediaUrl,mediaUrlType:typeof mediaUrl,mediaMimeType,filename,hasMediaUrl:!!mediaUrl,hasMediaMimeType:!!mediaMimeType,messageKeys:Object.keys(message||{}),hasMessageAudio:!!message.audio,hasMessageImage:!!message.image,hasMessageDocument:!!message.document},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W1'})}).catch(()=>{});
+          } catch (e) {}
+          // #endregion
+          
+          // CRITICAL: ALWAYS store rawPayload for ALL messages (text and media)
+          // Persist canonical wrapper so recovery/backfill can always work
+          const rawPayloadToPass = JSON.stringify({
+            message,        // value.messages[i]
+            rawWebhook: body, // whole webhook payload
+            value,          // entry.changes[0].value
+            entry: entry || body.entry?.[0] || null,
+            receivedAt: new Date().toISOString(),
+          })
+          
+          console.log(`📤 [WEBHOOK] Passing to pipeline with rawPayload:`, {
+            messageId,
+            hasRawPayload: !!rawPayloadToPass,
+            rawPayloadType: typeof rawPayloadToPass,
+            rawPayloadLength: typeof rawPayloadToPass === 'string' ? rawPayloadToPass.length : 0,
+            providerMediaId: providerMediaId || 'NULL',
+          })
+          
+          // CRITICAL: Log final values before pipeline call
+          console.log('[INBOUND-MEDIA-FINAL]', { messageId, finalType, providerMediaId, isMedia: isMediaMessage, originalType: message.type })
+          
           const result = await handleInboundMessageAutoMatch({
             channel: 'WHATSAPP',
             providerMessageId: messageId,
@@ -548,16 +1004,206 @@ export async function POST(req: NextRequest) {
             fromName: null, // WhatsApp doesn't provide name in webhook
             text: messageText,
             timestamp: timestamp,
+            // TOP-LEVEL fields (pipeline may ignore metadata.*, so duplicate here)
+            rawPayload: rawPayloadToPass,
+            payload: ingestDebug ? JSON.stringify(ingestDebug) : null,
+            messageType: finalType,          // duplicate of metadata.messageType
+            providerMediaId: providerMediaId, // duplicate of metadata.providerMediaId
+            mediaUrl: providerMediaId,        // legacy compatibility
+            mediaMimeType: mediaMimeType,
+            mediaFilename: filename,
+            mediaSize: mediaSize,
+            mediaSha256: mediaSha256,
+            mediaCaption: caption,
             metadata: {
               externalId: externalId,
-              rawPayload: message,
+              rawPayload: rawPayloadToPass, // CRITICAL: Always pass rawPayload for recovery (canonical wrapper)
+              payload: JSON.stringify(ingestDebug), // Ingest-debug payload for browser debugging
               webhookEntry: entry || body.entry?.[0], // Full entry for waId extraction
               webhookValue: value, // Full value for waId extraction
-              mediaUrl: mediaUrl, // PART A FIX: Pass WhatsApp media ID (not URL)
-              mediaMimeType: mediaMimeType, // PART A FIX: Pass MIME type
-              filename: filename, // PART A FIX: Pass filename for documents
+              // CRITICAL: Pass messageType so pipeline knows it's a media message (use finalType)
+              messageType: finalType, // This is the detected/corrected type (audio, image, etc.)
+              // CRITICAL: Pass providerMediaId (REQUIRED) - Meta Graph API media ID
+              providerMediaId: providerMediaId,
+              mediaUrl: providerMediaId, // Legacy compatibility - same as providerMediaId
+              mediaMimeType: mediaMimeType,
+              mediaFilename: filename,
+              mediaSize: mediaSize,
+              mediaSha256: mediaSha256,
+              mediaCaption: caption, // Store caption for images/videos
+            },
+          } as any) // Type assertion: pipeline may accept top-level fields even if TypeScript doesn't know about them
+          
+          // ===== DIRECT MEDIA PERSIST (KEYED BY providerMessageId) =====
+          try {
+            const providerMessageId = message.id
+
+            // Extract media id DIRECTLY from WhatsApp message object (no resolver)
+            const directMediaId =
+              message?.image?.id ||
+              message?.document?.id ||
+              message?.audio?.id ||
+              message?.video?.id ||
+              message?.sticker?.id ||
+              null
+
+            const directMime =
+              message?.image?.mime_type ||
+              message?.document?.mime_type ||
+              message?.audio?.mime_type ||
+              message?.video?.mime_type ||
+              message?.sticker?.mime_type ||
+              null
+
+            // Infer type directly from object presence
+            const directType =
+              message?.image ? 'image' :
+              message?.document ? 'document' :
+              message?.audio ? 'audio' :
+              message?.video ? 'video' :
+              message?.sticker ? 'sticker' :
+              null
+
+            // Only run for media-ish messages
+            const isMediaPlaceholder =
+              typeof messageText === 'string' && /\[(image|document|audio|video|sticker)/i.test(messageText)
+
+            console.log('[WEBHOOK] Direct media persist check', {
+              messageId: providerMessageId,
+              directType,
+              directMediaId,
+              directMime,
+              isMediaPlaceholder,
+              messageText,
+              hasImage: !!message.image,
+              hasDocument: !!message.document,
+              hasAudio: !!message.audio,
+              hasVideo: !!message.video,
+              hasSticker: !!message.sticker,
+              willRun: !!(directType && (directMediaId || isMediaPlaceholder)),
+            })
+
+            if (directType && (directMediaId || isMediaPlaceholder)) {
+              const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+              console.log('[WEBHOOK] Starting direct media persist retry loop', {
+                messageId: providerMessageId,
+                directType,
+                directMediaId,
+                directMime,
+              })
+
+              // Wait up to 30 seconds total for the pipeline to create the Message row
+              for (let i = 0; i < 60; i++) {
+                const updated = await prisma.message.updateMany({
+                  where: { providerMessageId },
+                  data: {
+                    // write definitive media fields (DIRECT behavior)
+                    type: directType,
+                    providerMediaId: directMediaId ?? undefined,
+                    mediaUrl: directMediaId ?? undefined,          // legacy
+                    mediaMimeType: directMime ?? undefined,
+                    // optional: keep body as placeholder
+                    body: messageText ?? undefined,
+                  },
+                })
+
+                // updateMany returns { count }
+                if (updated.count && updated.count > 0) {
+                  console.log('[WEBHOOK] Direct media persist succeeded', {
+                    messageId: providerMessageId,
+                    directType,
+                    directMediaId,
+                    directMime,
+                    attempt: i + 1,
+                    updatedCount: updated.count,
+                  })
+                  break
+                }
+
+                if (i === 0 || i % 10 === 0) {
+                  // Log every 10th attempt or first attempt
+                  console.log('[WEBHOOK] Direct media persist waiting for Message row', {
+                    messageId: providerMessageId,
+                    attempt: i + 1,
+                    providerMessageId,
+                  })
+                }
+
+                await sleep(500)
+              }
+
+              // Final check: verify the update actually happened
+              const finalCheck = await prisma.message.findFirst({
+                where: { providerMessageId },
+                select: { id: true, type: true, providerMediaId: true, mediaMimeType: true },
+              })
+
+              if (finalCheck) {
+                console.log('[WEBHOOK] Direct media persist final check', {
+                  messageId: providerMessageId,
+                  finalType: finalCheck.type,
+                  finalProviderMediaId: finalCheck.providerMediaId,
+                  finalMediaMimeType: finalCheck.mediaMimeType,
+                  success: finalCheck.type === directType && finalCheck.providerMediaId === directMediaId,
+                })
+              } else {
+                console.error('[WEBHOOK] Direct media persist failed - Message row not found after retries', {
+                  messageId: providerMessageId,
+                  providerMessageId,
+                })
+              }
+            } else {
+              console.log('[WEBHOOK] Direct media persist skipped (condition not met)', {
+                messageId: providerMessageId,
+                directType,
+                directMediaId,
+                isMediaPlaceholder,
+              })
+            }
+          } catch (e) {
+            // never break webhook delivery
+            console.error('[WEBHOOK] Direct media persist failed', {
+              messageId: message.id,
+              error: e instanceof Error ? e.message : String(e),
+              stack: e instanceof Error ? e.stack : undefined,
+            })
+          }
+          // ===== END DIRECT MEDIA PERSIST =====
+          
+          // DEBUG LOG #2: Always check what was saved (for ALL messages)
+          const debugSaved = await prisma.message.findFirst({
+            where: { providerMessageId: messageId },
+            select: {
+              id: true,
+              type: true,
+              providerMediaId: true,
+              mediaUrl: true,
+              mediaMimeType: true,
+              mediaFilename: true,
+              mediaSize: true,
             },
           })
+          
+          const debug2Data = {
+            messageId,
+            webhookProviderMediaId: providerMediaId,
+            webhookMediaMimeType: mediaMimeType,
+            webhookMediaFilename: filename,
+            webhookMediaSize: mediaSize,
+            webhookFinalType: finalType,
+            savedMessage: debugSaved,
+            providerMediaIdMatch: debugSaved?.providerMediaId === providerMediaId,
+            providerMediaIdLost: providerMediaId && !debugSaved?.providerMediaId,
+          }
+          console.error("🚨🚨🚨 [DEBUG-2] SAVED MESSAGE AFTER PIPELINE", JSON.stringify(debug2Data, null, 2))
+          logToFile('DEBUG-2', debug2Data)
+          
+          // #region agent log
+          try {
+            fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'webhooks/whatsapp/route.ts:handleInboundMessageAutoMatch',message:'handleInboundMessageAutoMatch completed',data:{messageId,passedMediaUrl:mediaUrl,resultMessageId:result?.message?.id,resultLeadId:result?.lead?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'W3'})}).catch(()=>{});
+          } catch (e) {}
+          // #endregion
 
           const autoMatchElapsed = Date.now() - webhookStartTime
           console.log(`✅ [WEBHOOK] AUTO-MATCH pipeline completed requestId=${requestId}`, {
