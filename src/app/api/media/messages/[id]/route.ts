@@ -75,24 +75,10 @@ export async function GET(
       )
     }
 
-    // Fetch message
+    // Fetch message - use findUnique without select to get all fields including providerMediaId
     const message = await prisma.message.findUnique({
       where: { id: messageId },
-      select: {
-        id: true,
-        type: true,
-        body: true, // CRITICAL: Need body to check for media placeholders
-        mediaUrl: true,
-        mediaMimeType: true as any,
-        mediaFilename: true as any,
-        mediaSize: true as any, // CRITICAL: Required for Content-Length header
-        rawPayload: true, // CRITICAL: Required for PRIORITY C recovery
-        payload: true, // CRITICAL: Required for PRIORITY D recovery
-        providerMessageId: true, // CRITICAL: Required for PRIORITY E recovery
-        channel: true,
-        createdAt: true, // To check if message is old (before upsert was added)
-      },
-    }) as any & { providerMediaId?: string | null }
+    })
 
     if (!message) {
       console.error('[MEDIA-PROXY] Message not found', { messageId })
@@ -839,23 +825,10 @@ export async function HEAD(
       return new NextResponse(null, { status: 400 })
     }
 
-      // Fetch message
-      const message = await prisma.message.findUnique({
-        where: { id: messageId },
-        select: {
-          id: true,
-          type: true,
-          body: true, // Need body to check for placeholders
-          mediaUrl: true,
-          mediaMimeType: true as any,
-          mediaFilename: true as any,
-          mediaSize: true as any, // CRITICAL: Required for Content-Length header
-          rawPayload: true,
-          payload: true,
-          providerMessageId: true,
-          channel: true,
-        },
-      }) as any & { providerMediaId?: string | null }
+    // Fetch message - use findUnique without select to get all fields including providerMediaId
+    const message = await prisma.message.findUnique({
+      where: { id: messageId },
+    })
 
     if (!message) {
       return new NextResponse(null, { status: 404 })
