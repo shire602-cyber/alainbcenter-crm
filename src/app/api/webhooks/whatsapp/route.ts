@@ -1104,9 +1104,8 @@ export async function POST(req: NextRequest) {
                     mediaUrl: directMediaId ?? undefined,          // legacy
                     mediaMimeType: directMime ?? undefined,
                     // optional: keep body as placeholder
-                  } as any,
                     body: messageText ?? undefined,
-                  },
+                  } as any,
                 })
 
                 // updateMany returns { count }
