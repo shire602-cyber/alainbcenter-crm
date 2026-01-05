@@ -640,8 +640,8 @@ function InboxPageContent() {
           {/* Header */}
           <div className="p-3 border-b border-slate-200 dark:border-slate-800">
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-primary/10">
-                <InboxIcon className="h-4 w-4 text-primary" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
+                <InboxIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
               </div>
               <h1 className="text-lg font-semibold tracking-tight">Inbox</h1>
             </div>
@@ -684,7 +684,7 @@ function InboxPageContent() {
             {loading ? (
               <div className="space-y-2">
                 {[1, 2, 3].map((i) => (
-                  <Skeleton key={i} className="h-16 w-full rounded-lg" />
+                  <Skeleton key={i} className="h-16 w-full rounded-xl" />
                 ))}
               </div>
             ) : filteredConversations.length === 0 ? (
@@ -701,8 +701,8 @@ function InboxPageContent() {
                     <div
                       key={conv.id}
                       className={cn(
-                        'flex items-center gap-2 p-2 rounded-lg cursor-pointer transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-800',
-                        selectedConversation?.id === conv.id && 'bg-primary/5 border border-primary/20'
+                        'flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-800',
+                        selectedConversation?.id === conv.id && 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800'
                       )}
                       onClick={() => handleSelectConversation(conv)}
                     >
@@ -900,7 +900,7 @@ function InboxPageContent() {
 
               {/* Error/Success Messages */}
               {error && (
-                <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+                <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
                   <div className="flex items-start gap-2">
                     <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
                     <p className="text-sm text-red-700 dark:text-red-300 whitespace-pre-line">
@@ -911,7 +911,7 @@ function InboxPageContent() {
               )}
 
               {success && (
-                <div className="mx-4 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+                <div className="mx-4 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
                     <p className="text-sm text-green-700 dark:text-green-300">{success}</p>
@@ -1035,7 +1035,7 @@ function InboxPageContent() {
                                       href={docUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                                       download={att.filename || undefined}
                                     >
                                       <FileText className="h-5 w-5" />
@@ -1069,7 +1069,7 @@ function InboxPageContent() {
                                       href={fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
                                       download={att.filename || undefined}
                                     >
                                       <FileText className="h-5 w-5" />
@@ -1212,7 +1212,7 @@ function InboxPageContent() {
               <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
                 {/* File Preview */}
                 {selectedFile && (
-                  <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-lg flex items-center justify-between">
+                  <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
                       <Paperclip className="h-4 w-4 text-slate-500 flex-shrink-0" />
                       <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
