@@ -78,7 +78,7 @@ export async function GET(
     // Fetch message - use findUnique without select to get all fields including providerMediaId
     const message = await prisma.message.findUnique({
       where: { id: messageId },
-    })
+    }) as any
 
     if (!message) {
       console.error('[MEDIA-PROXY] Message not found', { messageId })
@@ -92,7 +92,7 @@ export async function GET(
     console.log('[MEDIA-PROXY] Message fetched', {
       messageId: message.id,
       messageType: message.type,
-      hasProviderMediaId: !!message.providerMediaId,
+      hasProviderMediaId: !!(message as any).providerMediaId,
       hasMediaUrl: !!message.mediaUrl,
       hasRawPayload: !!message.rawPayload,
       hasPayload: !!message.payload,
