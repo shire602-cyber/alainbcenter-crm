@@ -568,12 +568,26 @@ export async function POST(req: NextRequest) {
 
         if (message) {
           // Update Message status
-          await prisma.message.update({
-            where: { id: message.id },
-            data: {
-              status: messageStatus,
-            },
-          })
+          // HOTFIX: Wrap in try/catch to prevent webhook failure from Prisma mismatch
+          try {
+            await prisma.message.update({
+              where: { id: message.id },
+              data: {
+                status: messageStatus,
+              },
+            })
+          } catch (err: any) {
+            const msg = String(err?.message ?? err)
+            if (msg.includes("Unknown argument `providerMediaId`") || msg.includes("Unknown argument providerMediaId")) {
+              console.warn('[WEBHOOK] Prisma schema mismatch in message.update, continuing without update', {
+                messageId: message.id,
+                messageStatus,
+              })
+              // Continue execution - don't break webhook
+            } else {
+              throw err
+            }
+          }
 
           // Create MessageStatusEvent for audit trail
           try {
@@ -1183,40 +1197,78 @@ export async function POST(req: NextRequest) {
               })
 
               // Wait up to 30 seconds total for the pipeline to create the Message row
+              // HOTFIX: Wrap in try/catch to prevent webhook failure from Prisma mismatch
+              const dataFull = {
+                // write definitive media fields (DIRECT behavior)
+                type: directType,
+                providerMediaId: directMediaId ?? undefined,
+                mediaUrl: directMediaId ?? undefined,          // legacy
+                mediaMimeType: directMime ?? undefined,
+                // optional: keep body as placeholder
+                body: messageText ?? undefined,
+              } as any
+
               for (let i = 0; i < 60; i++) {
-                const updated = await prisma.message.updateMany({
-                  where: { providerMessageId },
-                  data: {
-                    // write definitive media fields (DIRECT behavior)
-                    type: directType,
-                    providerMediaId: directMediaId ?? undefined,
-                    mediaUrl: directMediaId ?? undefined,          // legacy
-                    mediaMimeType: directMime ?? undefined,
-                    // optional: keep body as placeholder
-                    body: messageText ?? undefined,
-                  } as any,
-                })
-
-                // updateMany returns { count }
-                if (updated.count && updated.count > 0) {
-                  console.log('[WEBHOOK] Direct media persist succeeded', {
-                    messageId: providerMessageId,
-                    directType,
-                    directMediaId,
-                    directMime,
-                    attempt: i + 1,
-                    updatedCount: updated.count,
+                try {
+                  const updated = await prisma.message.updateMany({
+                    where: { providerMessageId },
+                    data: dataFull,
                   })
-                  break
-                }
 
-                if (i === 0 || i % 10 === 0) {
-                  // Log every 10th attempt or first attempt
-                  console.log('[WEBHOOK] Direct media persist waiting for Message row', {
-                    messageId: providerMessageId,
-                    attempt: i + 1,
-                    providerMessageId,
-                  })
+                  // updateMany returns { count }
+                  if (updated.count && updated.count > 0) {
+                    console.log('[WEBHOOK] Direct media persist succeeded', {
+                      messageId: providerMessageId,
+                      directType,
+                      directMediaId,
+                      directMime,
+                      attempt: i + 1,
+                      updatedCount: updated.count,
+                    })
+                    break
+                  }
+
+                  if (i === 0 || i % 10 === 0) {
+                    // Log every 10th attempt or first attempt
+                    console.log('[WEBHOOK] Direct media persist waiting for Message row', {
+                      messageId: providerMessageId,
+                      attempt: i + 1,
+                      providerMessageId,
+                    })
+                  }
+                } catch (err: any) {
+                  const msg = String(err?.message ?? err)
+                  if (msg.includes("Unknown argument `providerMediaId`") || msg.includes("Unknown argument providerMediaId")) {
+                    // Fallback: Strip media fields and retry
+                    const {
+                      providerMediaId: _providerMediaId,
+                      mediaUrl: _mediaUrl,
+                      mediaMimeType: _mediaMimeType,
+                      ...dataFallback
+                    } = dataFull
+                    try {
+                      const updated = await prisma.message.updateMany({
+                        where: { providerMessageId },
+                        data: dataFallback,
+                      })
+                      if (updated.count && updated.count > 0) {
+                        console.warn('[WEBHOOK] Direct media persist succeeded (fallback, no media fields)', {
+                          messageId: providerMessageId,
+                          directType,
+                        })
+                        break
+                      }
+                    } catch (fallbackErr: any) {
+                      console.warn('[WEBHOOK] Direct media persist fallback also failed, continuing', {
+                        messageId: providerMessageId,
+                        error: fallbackErr.message,
+                      })
+                      // Continue loop - don't break webhook
+                    }
+                  } else {
+                    // Re-throw non-mismatch errors
+                    throw err
+                  }
                 }
 
                 await sleep(500)

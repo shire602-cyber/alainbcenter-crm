@@ -1276,32 +1276,58 @@ async function createCommunicationLog(input: {
         : JSON.stringify(input.metadata.payload))
     : null
 
-  const message = await prisma.message.create({
-    data: {
-      conversationId: input.conversationId,
-      leadId: input.leadId,
-      contactId: input.contactId, // CRITICAL: Link to contact
-      direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
-      channel: normalizedChannel, // Always lowercase for consistency
-      type: input.metadata?.messageType ?? finalType, // Prefer metadata.messageType
-      body: input.text, // CRITICAL FIX 3: Contains transcript if audio, or original text
-      providerMessageId: input.providerMessageId,
-      // Persist rawPayload and payload from metadata (required for debugging)
-      rawPayload: finalRawPayload,
-      payload: finalPayload,
-      // IMPORTANT: persist providerMediaId if provided in metadata
-      providerMediaId: input.metadata?.providerMediaId ?? null,
-      // keep legacy compatibility
-      mediaUrl: input.metadata?.mediaUrl ?? null,
-      mediaMimeType: input.metadata?.mediaMimeType ?? null,
-      mediaFilename: input.metadata?.mediaFilename ?? null,
-      mediaSize: input.metadata?.mediaSize ?? null,
-      mediaSha256: input.metadata?.mediaSha256 ?? null,
-      mediaCaption: input.metadata?.mediaCaption ?? null,
-      status: 'RECEIVED',
-      createdAt: input.timestamp,
-    } as any, // Type assertion needed for fields that may not be in Prisma types
-  })
+  // HOTFIX: Production safety for Prisma schema/client mismatch during Vercel deploys
+  // If Prisma Client doesn't recognize providerMediaId, retry without media fields
+  const dataFull = {
+    conversationId: input.conversationId,
+    leadId: input.leadId,
+    contactId: input.contactId, // CRITICAL: Link to contact
+    direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
+    channel: normalizedChannel, // Always lowercase for consistency
+    type: input.metadata?.messageType ?? finalType, // Prefer metadata.messageType
+    body: input.text, // CRITICAL FIX 3: Contains transcript if audio, or original text
+    providerMessageId: input.providerMessageId,
+    // Persist rawPayload and payload from metadata (required for debugging)
+    rawPayload: finalRawPayload,
+    payload: finalPayload,
+    // IMPORTANT: persist providerMediaId if provided in metadata
+    providerMediaId: input.metadata?.providerMediaId ?? null,
+    // keep legacy compatibility
+    mediaUrl: input.metadata?.mediaUrl ?? null,
+    mediaMimeType: input.metadata?.mediaMimeType ?? null,
+    mediaFilename: input.metadata?.mediaFilename ?? null,
+    mediaSize: input.metadata?.mediaSize ?? null,
+    mediaSha256: input.metadata?.mediaSha256 ?? null,
+    mediaCaption: input.metadata?.mediaCaption ?? null,
+    status: 'RECEIVED',
+    createdAt: input.timestamp,
+  } as any // Type assertion needed for fields that may not be in Prisma types
+
+  let message
+  try {
+    message = await prisma.message.create({ data: dataFull })
+  } catch (err: any) {
+    const msg = String(err?.message ?? err)
+    if (msg.includes("Unknown argument `providerMediaId`") || msg.includes("Unknown argument providerMediaId")) {
+      // Fallback: Strip all media-related fields and retry
+      const {
+        providerMediaId,
+        mediaUrl,
+        mediaMimeType,
+        mediaFilename,
+        mediaSize,
+        mediaSha256,
+        ...dataFallback
+      } = dataFull
+      console.warn('[AUTO-MATCH] Prisma schema mismatch detected, retrying without media fields', {
+        providerMessageId: input.providerMessageId,
+        type: input.metadata?.messageType ?? finalType,
+      })
+      message = await prisma.message.create({ data: dataFallback })
+    } else {
+      throw err
+    }
+  }
   
   // TEMP DEBUG: Verification logging after save
   const verifyMessage = await prisma.message.findUnique({
