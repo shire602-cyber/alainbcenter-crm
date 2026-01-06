@@ -874,9 +874,14 @@ export async function GET(
       }
     }
 
+    // Sanitize filename for Content-Disposition header (replace non-ASCII with '_')
+    // This prevents ByteString errors in HTTP headers
+    const safeAscii = (s: string) => s.replace(/[^\x20-\x7E]/g, '_')
+    const safeFilename = safeAscii(filename)
+
     const responseHeaders: HeadersInit = {
       'Content-Type': contentType,
-      'Content-Disposition': `${disposition}; filename="${filename}"`,
+      'Content-Disposition': `${disposition}; filename="${safeFilename}"`,
       'Accept-Ranges': 'bytes',
       'Cache-Control': 'private, max-age=300',
       'Access-Control-Allow-Origin': '*',
@@ -1177,11 +1182,15 @@ export async function HEAD(
       const contentType = (message as any).mediaMimeType || mediaInfo.mimeType || 'application/octet-stream'
       const isDocument = contentType.includes('pdf') || contentType.includes('document') || message.type === 'document'
       const disposition = isDocument ? 'attachment' : 'inline'
-      const filename = sanitizeFilename(mediaInfo.fileName || (message as any).mediaFilename || `media-${messageId}`)
+      let filename = sanitizeFilename(mediaInfo.fileName || (message as any).mediaFilename || `media-${messageId}`)
+      
+      // Sanitize filename for Content-Disposition header (replace non-ASCII with '_')
+      const safeAscii = (s: string) => s.replace(/[^\x20-\x7E]/g, '_')
+      const safeFilename = safeAscii(filename)
 
       const headers: HeadersInit = {
         'Content-Type': contentType,
-        'Content-Disposition': `${disposition}; filename="${filename}"`,
+        'Content-Disposition': `${disposition}; filename="${safeFilename}"`,
         'Accept-Ranges': 'bytes',
         'Cache-Control': 'private, max-age=300',
         'Access-Control-Allow-Origin': '*',

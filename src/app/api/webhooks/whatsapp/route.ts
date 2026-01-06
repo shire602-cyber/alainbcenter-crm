@@ -212,6 +212,70 @@ function logToFile(message: string, data?: any) {
 }
 
 export async function POST(req: NextRequest) {
+  // ===== WEBHOOK TAP: Record ALL deliveries at the VERY TOP =====
+  const requestId = `wa_${Date.now()}_${Math.random().toString(16).slice(2)}`
+  
+  // Read body first (before any processing)
+  const rawText = await req.text()
+  const rawBody = rawText // Keep for error handling
+  
+  // Parse body for tap recording (but don't fail if parsing fails)
+  let body: any = null
+  try {
+    body = JSON.parse(rawText)
+  } catch (e) {
+    body = { rawText: rawText.slice(0, 100) } // Store first 100 chars if parse fails
+  }
+  
+  const entry = body?.entry?.[0]
+  const changes = entry?.changes?.[0]
+  const value = changes?.value
+  
+  // Top-level log
+  console.log('[WA-WEBHOOK-IN]', {
+    requestId,
+    hasBody: !!body,
+    entryCount: body?.entry?.length || 0,
+  })
+  
+  // ALWAYS store minimal ExternalEventLog row for debugging (even for text)
+  try {
+    const tapPayload = JSON.stringify({
+      requestId,
+      hasMessages: !!(value?.messages?.length),
+      hasStatuses: !!(value?.statuses?.length),
+      messagesSample: (value?.messages || []).slice(0, 2).map((m: any) => ({
+        id: m.id,
+        type: m.type,
+        from: m.from,
+        hasContext: !!m.context,
+      })),
+      statusesSample: (value?.statuses || []).slice(0, 2).map((s: any) => ({
+        id: s.id,
+        status: s.status,
+        timestamp: s.timestamp,
+      })),
+    })
+    
+    await prisma.externalEventLog.create({
+      data: {
+        provider: 'whatsapp',
+        externalId: requestId, // Use requestId, not messageId
+        payload: tapPayload,
+        receivedAt: new Date(),
+      },
+    })
+    console.log('[WA-WEBHOOK-TAP] ✅ Webhook tap recorded', { requestId })
+  } catch (e: any) {
+    // Never break webhook delivery - log and continue
+    console.error('[WA-WEBHOOK-TAP] ❌ Failed to record tap', {
+      requestId,
+      error: e.message,
+      errorCode: e.code,
+    })
+  }
+  // ===== END WEBHOOK TAP =====
+  
   // CRITICAL DEBUG: Log webhook entry immediately (both console and file)
   const entryMsg = `🚨🚨🚨 [WEBHOOK-ENTRY] POST /api/webhooks/whatsapp called at ${new Date().toISOString()}`
   console.error(entryMsg)
@@ -224,39 +288,7 @@ export async function POST(req: NextRequest) {
   // #endregion
   console.log(`📥 [WEBHOOK] WhatsApp webhook received at ${new Date().toISOString()}`)
   
-  // ===== CRITICAL: READ BODY ONCE AT THE VERY TOP =====
-  // Read the body ONCE - after this, req.text() and req.json() will be empty
-  const rawText = await req.text()
-  const rawBody = rawText // Keep for error handling
-  
-  // Immediately write webhook record to DB (BEFORE any parsing or processing)
-  try {
-    await prisma.externalEventLog.create({
-      data: {
-        provider: 'whatsapp',
-        externalId: `webhook-${Date.now()}`,
-        payload: rawText.slice(0, 5000), // Store first 5000 chars to avoid huge payloads
-        receivedAt: new Date(),
-      },
-    })
-    console.log('[WEBHOOK] ✅ Webhook recorded to ExternalEventLog')
-  } catch (e: any) {
-    console.error('[WEBHOOK] ❌ Failed to store webhook record', {
-      error: e.message,
-      errorCode: e.code,
-    })
-    // Continue - don't break webhook delivery
-  }
-  
-  // Now parse the body (use the variable, NOT req.json() - body is already consumed)
-  let body: any = null
-  try {
-    body = JSON.parse(rawText)
-  } catch (e) {
-    console.error('[WEBHOOK] Failed to parse webhook JSON', e)
-    body = { rawText }
-  }
-  // ===== END CRITICAL BLOCK =====
+  // Body is already read and parsed above, continue with existing logic
   
   // Debug: Record raw webhook to debug endpoint (browser-visible) - optional
   try {
@@ -360,9 +392,8 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    const entry = body.entry?.[0]
-    const changes = entry?.changes?.[0]
-    const value = changes?.value
+    // entry, changes, value already extracted in webhook tap above (lines 230-232)
+    // Reuse those variables - no need to extract again
 
     // ===== PROCESS MESSAGES FIRST (before statuses) =====
     // 1) Process messages FIRST if present
