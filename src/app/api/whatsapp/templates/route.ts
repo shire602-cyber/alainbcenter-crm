@@ -46,26 +46,58 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    const { accessToken, wabaId } = credentials
+    const { accessToken, wabaId, phoneNumberId } = credentials
 
-    if (!wabaId) {
+    // CRITICAL: Try to get WABA ID from phone_number_id if wabaId not provided
+    // Meta API: We can query phone_number_id to get its WABA ID
+    let effectiveWabaId = wabaId
+    
+    if (!effectiveWabaId && phoneNumberId) {
+      try {
+        // Try to get WABA ID from phone_number_id
+        const phoneInfoUrl = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=whatsapp_business_account`
+        const phoneInfoResponse = await fetch(phoneInfoUrl, {
+          method: 'GET',
+          headers: {
+            Authorization: `Bearer ${accessToken}`,
+            'Content-Type': 'application/json',
+          },
+        })
+        
+        if (phoneInfoResponse.ok) {
+          const phoneInfo = await phoneInfoResponse.json()
+          effectiveWabaId = phoneInfo.whatsapp_business_account?.id || phoneInfo.whatsapp_business_account
+        }
+      } catch (e) {
+        console.warn('[WHATSAPP-TEMPLATES] Failed to get WABA ID from phone_number_id:', e)
+      }
+    }
+
+    if (!effectiveWabaId) {
       return NextResponse.json(
         {
           ok: false,
           error: 'missing_waba_id',
-          message: 'WABA ID not configured. Set it in Integrations (preferred) or env WHATSAPP_BUSINESS_ACCOUNT_ID / META_WABA_ID / WHATSAPP_WABA_ID',
-          hint: 'WABA ID is required to fetch templates from Meta Graph API',
+          message: 'WABA ID not configured and could not be derived from phone_number_id. Set it in Integrations (preferred) or env WHATSAPP_BUSINESS_ACCOUNT_ID / META_WABA_ID / WHATSAPP_WABA_ID',
+          hint: 'WABA ID is required to fetch templates from Meta Graph API. You can find it in Meta Business Manager → WhatsApp → Settings',
         },
         { status: 500 }
       )
     }
 
     // Get last 4 chars for debug (never return full ID)
-    const wabaIdLast4 = wabaId.length >= 4 ? wabaId.slice(-4) : '****'
+    const wabaIdLast4 = effectiveWabaId.length >= 4 ? effectiveWabaId.slice(-4) : '****'
+
+    // CRITICAL: Validate WABA ID format (should be numeric, not an Application ID)
+    // Application IDs are usually longer and different format
+    // WABA IDs are typically numeric strings
+    if (effectiveWabaId.includes('-') || effectiveWabaId.length > 20) {
+      console.warn(`[WHATSAPP-TEMPLATES] WABA ID format suspicious: ${wabaIdLast4}... (might be Application ID)`)
+    }
 
     // Fetch templates with pagination
     const allTemplates: any[] = []
-    let nextUrl: string | null = `https://graph.facebook.com/${graphVersion}/${wabaId}/message_templates?fields=name,language,status,category,components&limit=250`
+    let nextUrl: string | null = `https://graph.facebook.com/${graphVersion}/${effectiveWabaId}/message_templates?fields=name,language,status,category,components&limit=250`
     let pageCount = 0
     const maxPages = 4 // Max 1000 templates (4 * 250)
 
@@ -82,6 +114,27 @@ export async function GET(req: NextRequest) {
         if (!response.ok) {
           // Graph API returned an error
           const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
+          const errorMessage = errorData.error?.message || `Graph API returned ${response.status}`
+          const errorCode = errorData.error?.code
+          
+          // CRITICAL: Handle "Application" node type error - means we're using wrong ID
+          if (errorCode === 100 && errorMessage.includes('Application') && errorMessage.includes('message_templates')) {
+            console.error('[WHATSAPP-TEMPLATES] Error: Using Application ID instead of WABA ID')
+            return NextResponse.json(
+              {
+                ok: false,
+                error: 'invalid_waba_id',
+                message: 'The provided ID appears to be an Application ID, not a WABA ID. Templates must be fetched using the WhatsApp Business Account ID (WABA ID).',
+                hint: 'Find your WABA ID in Meta Business Manager → WhatsApp → Settings → WhatsApp Business Account ID',
+                details: {
+                  errorCode: 100,
+                  providedIdLast4: wabaIdLast4,
+                  suggestion: 'Use the WABA ID (WhatsApp Business Account ID), not the Application ID or Phone Number ID',
+                },
+              },
+              { status: 400 }
+            )
+          }
           
           return NextResponse.json(
             {
@@ -89,7 +142,7 @@ export async function GET(req: NextRequest) {
               error: 'graph_error',
               details: errorData,
               status: response.status,
-              message: errorData.error?.message || `Graph API returned ${response.status}`,
+              message: errorMessage,
             },
             { status: response.status }
           )
