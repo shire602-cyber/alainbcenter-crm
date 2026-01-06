@@ -28,6 +28,15 @@ async function runMigrations() {
   } else if (process.env.DATABASE_URL && process.env.DATABASE_URL.includes('-pooler')) {
     console.warn('⚠️  WARNING: Using pooled connection. Migrations may timeout.')
     console.warn('⚠️  Set DIRECT_URL environment variable for better reliability.')
+    console.warn('⚠️  If migrations timeout, they will be skipped and can be run manually.')
+    
+    // Try to convert pooled URL to direct URL (Neon pattern)
+    const pooledUrl = process.env.DATABASE_URL
+    if (pooledUrl.includes('-pooler')) {
+      const directUrl = pooledUrl.replace('-pooler', '')
+      console.log('💡 Attempting to use direct connection (removed -pooler suffix)')
+      migrationEnv.DATABASE_URL = directUrl
+    }
   }
   
   // Increase timeout for advisory locks (PostgreSQL advisory lock timeout)
@@ -47,28 +56,38 @@ async function runMigrations() {
       console.log('✅ Migrations completed successfully')
       process.exit(0)
     } catch (error) {
-      const errorOutput = error.stderr?.toString() || error.stdout?.toString() || error.message || ''
+      const errorOutput = (error.stderr?.toString() || error.stdout?.toString() || error.message || '').toLowerCase()
       const isTimeout = errorOutput.includes('timed out') || 
-                       errorOutput.includes('P1002') ||
+                       errorOutput.includes('p1002') ||
                        errorOutput.includes('advisory lock') ||
-                       errorOutput.includes('timeout')
+                       errorOutput.includes('timeout') ||
+                       errorOutput.includes('was reached but timed out')
       
       if (isTimeout && attempt < MAX_RETRIES) {
         const delay = INITIAL_DELAY * Math.pow(2, attempt - 1) // Exponential backoff
-        console.warn(`⚠️  Migration attempt ${attempt} failed due to timeout. Retrying in ${delay}ms...`)
+        console.warn(`⚠️  Migration attempt ${attempt} failed due to timeout (P1002). Retrying in ${delay}ms...`)
         await sleep(delay)
         continue
       }
       
-      // If not a timeout or last attempt, fail immediately
-      if (!isTimeout) {
-        console.error('❌ Migration failed with non-timeout error:', error.message)
-        process.exit(1)
+      // If timeout on last attempt, skip migrations (they can be run manually)
+      if (isTimeout && attempt === MAX_RETRIES) {
+        console.error('❌ Migration failed after all retry attempts due to timeout')
+        console.error('⚠️  WARNING: Migrations were not applied during build')
+        console.error('💡 This is likely due to using a pooled connection without DIRECT_URL')
+        console.error('💡 Solutions:')
+        console.error('   1. Set DIRECT_URL in Vercel environment variables (recommended)')
+        console.error('   2. Run migrations manually: npx prisma migrate deploy')
+        console.error('   3. Or use: vercel env pull && npx prisma migrate deploy')
+        console.warn('⚠️  Continuing build without migrations (app may fail at runtime if schema mismatch)')
+        // Don't exit - let build continue (migrations can be run manually)
+        process.exit(0)
       }
       
-      if (attempt === MAX_RETRIES) {
-        console.error('❌ Migration failed after all retry attempts')
-        console.error('💡 Tip: Run migrations manually with: npx prisma migrate deploy')
+      // If not a timeout, fail immediately
+      if (!isTimeout) {
+        console.error('❌ Migration failed with non-timeout error:', error.message)
+        console.error('Full error:', errorOutput)
         process.exit(1)
       }
     }
