@@ -1197,22 +1197,30 @@ export async function POST(req: NextRequest) {
               })
 
               // Wait up to 30 seconds total for the pipeline to create the Message row
-              // HOTFIX: Wrap in try/catch to prevent webhook failure from Prisma mismatch
-              const dataFull = {
-                // write definitive media fields (DIRECT behavior)
+              // HOTFIX: Only include media fields when they exist (never null/undefined)
+              const dataUpdate: any = {
                 type: directType,
-                providerMediaId: directMediaId ?? undefined,
-                mediaUrl: directMediaId ?? undefined,          // legacy
-                mediaMimeType: directMime ?? undefined,
-                // optional: keep body as placeholder
-                body: messageText ?? undefined,
-              } as any
+              }
+              
+              // ONLY ADD MEDIA FIELDS WHEN THEY EXIST
+              if (directMediaId) {
+                dataUpdate.providerMediaId = directMediaId
+                dataUpdate.mediaUrl = directMediaId // legacy compatibility
+              }
+              
+              if (directMime) {
+                dataUpdate.mediaMimeType = directMime
+              }
+              
+              if (messageText) {
+                dataUpdate.body = messageText
+              }
 
               for (let i = 0; i < 60; i++) {
                 try {
                   const updated = await prisma.message.updateMany({
                     where: { providerMessageId },
-                    data: dataFull,
+                    data: dataUpdate,
                   })
 
                   // updateMany returns { count }
@@ -1245,7 +1253,7 @@ export async function POST(req: NextRequest) {
                       mediaUrl: _mediaUrl,
                       mediaMimeType: _mediaMimeType,
                       ...dataFallback
-                    } = dataFull
+                    } = dataUpdate
                     try {
                       const updated = await prisma.message.updateMany({
                         where: { providerMessageId },

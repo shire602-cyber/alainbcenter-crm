@@ -1276,54 +1276,88 @@ async function createCommunicationLog(input: {
         : JSON.stringify(input.metadata.payload))
     : null
 
-  // HOTFIX: Production safety for Prisma schema/client mismatch during Vercel deploys
-  // If Prisma Client doesn't recognize providerMediaId, retry without media fields
-  const dataFull = {
+  // Build message data - ONLY include media fields when they exist (never null/undefined)
+  // This prevents Prisma from rejecting the create call due to unknown fields
+  const data: any = {
     conversationId: input.conversationId,
     leadId: input.leadId,
     contactId: input.contactId, // CRITICAL: Link to contact
     direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
     channel: normalizedChannel, // Always lowercase for consistency
     type: input.metadata?.messageType ?? finalType, // Prefer metadata.messageType
-    body: input.text, // CRITICAL FIX 3: Contains transcript if audio, or original text
+    body: input.text ?? null, // CRITICAL FIX 3: Contains transcript if audio, or original text
     providerMessageId: input.providerMessageId,
-    // Persist rawPayload and payload from metadata (required for debugging)
-    rawPayload: finalRawPayload,
-    payload: finalPayload,
-    // IMPORTANT: persist providerMediaId if provided in metadata
-    providerMediaId: input.metadata?.providerMediaId ?? null,
-    // keep legacy compatibility
-    mediaUrl: input.metadata?.mediaUrl ?? null,
-    mediaMimeType: input.metadata?.mediaMimeType ?? null,
-    mediaFilename: input.metadata?.mediaFilename ?? null,
-    mediaSize: input.metadata?.mediaSize ?? null,
-    mediaSha256: input.metadata?.mediaSha256 ?? null,
-    mediaCaption: input.metadata?.mediaCaption ?? null,
     status: 'RECEIVED',
     createdAt: input.timestamp,
-  } as any // Type assertion needed for fields that may not be in Prisma types
+  }
 
+  // ONLY ADD MEDIA FIELDS WHEN THEY EXIST (do not set null unless required)
+  // Use existing variables declared above (providerMediaId, mediaMimeType, etc.)
+  if (providerMediaId) {
+    data.providerMediaId = providerMediaId
+    data.mediaUrl = providerMediaId // legacy compatibility
+  }
+  
+  if (mediaMimeType) {
+    data.mediaMimeType = mediaMimeType
+  }
+  
+  if (mediaFilename) {
+    data.mediaFilename = mediaFilename
+  }
+  
+  if (typeof mediaSize === "number") {
+    data.mediaSize = mediaSize
+  }
+  
+  if (mediaSha256) {
+    data.mediaSha256 = mediaSha256
+  }
+  
+  if (mediaCaption) {
+    data.mediaCaption = mediaCaption
+  }
+
+  // ONLY ADD PAYLOAD FIELDS WHEN THEY EXIST
+  if (finalRawPayload) {
+    data.rawPayload = typeof finalRawPayload === "string" ? finalRawPayload : JSON.stringify(finalRawPayload)
+  }
+  
+  if (finalPayload) {
+    data.payload = typeof finalPayload === "string" ? finalPayload : JSON.stringify(finalPayload)
+  }
+
+  // HOTFIX: Fallback retry for Prisma schema mismatch (temporary safety during Vercel deploys)
+  // If Prisma Client doesn't recognize providerMediaId/media fields, retry without them
   let message
   try {
-    message = await prisma.message.create({ data: dataFull })
+    message = await prisma.message.create({ data })
   } catch (err: any) {
     const msg = String(err?.message ?? err)
+    
+    // If prod Prisma client is stale and rejects providerMediaId/media fields:
     if (msg.includes("Unknown argument `providerMediaId`") || msg.includes("Unknown argument providerMediaId")) {
       // Fallback: Strip all media-related fields and retry
       const {
-        providerMediaId,
-        mediaUrl,
-        mediaMimeType,
-        mediaFilename,
-        mediaSize,
-        mediaSha256,
-        ...dataFallback
-      } = dataFull
+        providerMediaId: _providerMediaId,
+        mediaUrl: _mediaUrl,
+        mediaMimeType: _mediaMimeType,
+        mediaFilename: _mediaFilename,
+        mediaSize: _mediaSize,
+        mediaSha256: _mediaSha256,
+        mediaCaption: _mediaCaption,
+        rawPayload: _rawPayload,
+        payload: _payload,
+        ...fallback
+      } = data
+
       console.warn('[AUTO-MATCH] Prisma schema mismatch detected, retrying without media fields', {
         providerMessageId: input.providerMessageId,
         type: input.metadata?.messageType ?? finalType,
       })
-      message = await prisma.message.create({ data: dataFallback })
+      
+      // Still save the TEXT message row
+      message = await prisma.message.create({ data: fallback })
     } else {
       throw err
     }
