@@ -48,14 +48,19 @@ export async function GET(req: NextRequest) {
 
     const { accessToken, wabaId, phoneNumberId } = credentials
 
-    // CRITICAL: Try to get WABA ID from phone_number_id if wabaId not provided
+    // CRITICAL: Try to get WABA ID from phone_number_id if wabaId not provided or invalid
     // Meta API: We can query phone_number_id to get its WABA ID
     let effectiveWabaId = wabaId
     
-    if (!effectiveWabaId && phoneNumberId) {
+    // If wabaId looks suspicious (contains dashes, too long, or empty), try to fetch it
+    const looksLikeApplicationId = effectiveWabaId && (effectiveWabaId.includes('-') || effectiveWabaId.length > 20)
+    
+    if ((!effectiveWabaId || looksLikeApplicationId) && phoneNumberId) {
       try {
-        // Try to get WABA ID from phone_number_id
-        const phoneInfoUrl = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=whatsapp_business_account`
+        console.log(`[WHATSAPP-TEMPLATES] Attempting to fetch WABA ID from phone_number_id: ${phoneNumberId.substring(0, 10)}...`)
+        
+        // Method 1: Query phone_number_id directly for whatsapp_business_account
+        const phoneInfoUrl = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=whatsapp_business_account{id}`
         const phoneInfoResponse = await fetch(phoneInfoUrl, {
           method: 'GET',
           headers: {
@@ -66,7 +71,35 @@ export async function GET(req: NextRequest) {
         
         if (phoneInfoResponse.ok) {
           const phoneInfo = await phoneInfoResponse.json()
-          effectiveWabaId = phoneInfo.whatsapp_business_account?.id || phoneInfo.whatsapp_business_account
+          const fetchedWabaId = phoneInfo.whatsapp_business_account?.id || phoneInfo.whatsapp_business_account
+          
+          if (fetchedWabaId) {
+            console.log(`[WHATSAPP-TEMPLATES] Successfully fetched WABA ID from phone_number_id: ${fetchedWabaId.substring(0, 10)}...`)
+            effectiveWabaId = fetchedWabaId
+          }
+        } else {
+          // Method 2: Try alternative field name or simpler query
+          const altUrl = `https://graph.facebook.com/${graphVersion}/${phoneNumberId}?fields=whatsapp_business_account`
+          const altResponse = await fetch(altUrl, {
+            method: 'GET',
+            headers: {
+              Authorization: `Bearer ${accessToken}`,
+              'Content-Type': 'application/json',
+            },
+          })
+          
+          if (altResponse.ok) {
+            const altData = await altResponse.json()
+            if (altData.whatsapp_business_account) {
+              const fetchedId = typeof altData.whatsapp_business_account === 'string' 
+                ? altData.whatsapp_business_account 
+                : altData.whatsapp_business_account.id
+              if (fetchedId) {
+                console.log(`[WHATSAPP-TEMPLATES] Successfully fetched WABA ID via alternative method: ${fetchedId.substring(0, 10)}...`)
+                effectiveWabaId = fetchedId
+              }
+            }
+          }
         }
       } catch (e) {
         console.warn('[WHATSAPP-TEMPLATES] Failed to get WABA ID from phone_number_id:', e)
