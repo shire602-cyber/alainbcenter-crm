@@ -449,23 +449,32 @@ export async function POST(req: NextRequest) {
 
       // Step 2: Filter and process actual customer messages
       // CRITICAL: Only process actual user messages (not status updates, not echo messages, not system messages)
+      const businessPhoneNumberId = value.metadata?.phone_number_id
+      const businessDisplay = (value.metadata?.display_phone_number || '').replace(/\D/g, '') // digits only
+
       const actualMessages = value.messages.filter((msg: any) => {
-        // Ignore if it's a status update
-        if (msg.type === 'status' || msg.status) {
-          console.log(`⏭️ [WEBHOOK] Ignoring status update message: ${msg.id}`)
+        // Ignore status objects accidentally inside messages
+        if (msg.type === 'status' || msg.status) return false
+
+        // Must have sender
+        if (!msg.from) return false
+
+        // Echo messages are when the sender IS us (NOT msg.context.from)
+        const fromDigits = String(msg.from).replace(/\D/g, '')
+        const isEcho =
+          (businessPhoneNumberId && msg.from === businessPhoneNumberId) ||
+          (businessDisplay && fromDigits === businessDisplay)
+
+        if (isEcho) {
+          console.log(`⏭️ [WEBHOOK] Ignoring echo message (sender is us): ${msg.id}`, {
+            msgFrom: msg.from,
+            businessPhoneNumberId,
+            businessDisplay,
+            hasContext: !!msg.context,
+          })
           return false
         }
-        // Ignore echo messages (messages we sent)
-        if (msg.context?.from === value.metadata?.phone_number_id) {
-          console.log(`⏭️ [WEBHOOK] Ignoring echo message (from our number): ${msg.id}`)
-          return false
-        }
-        // CRITICAL: Only process messages from users (direction === 'inbound' or from === 'user')
-        // Meta webhook: messages from users have 'from' field with phone number, not system
-        if (!msg.from || msg.from === value.metadata?.phone_number_id) {
-          console.log(`⏭️ [WEBHOOK] Ignoring system message: ${msg.id}`)
-          return false
-        }
+
         return true
       })
       
@@ -599,23 +608,32 @@ export async function POST(req: NextRequest) {
       // #endregion
       
       // CRITICAL: Only process actual user messages (not status updates, not echo messages, not system messages)
+      const businessPhoneNumberId = value.metadata?.phone_number_id
+      const businessDisplay = (value.metadata?.display_phone_number || '').replace(/\D/g, '') // digits only
+
       const actualMessages = value.messages.filter((msg: any) => {
-        // Ignore if it's a status update
-        if (msg.type === 'status' || msg.status) {
-          console.log(`⏭️ [WEBHOOK] Ignoring status update message: ${msg.id}`)
+        // Ignore status objects accidentally inside messages
+        if (msg.type === 'status' || msg.status) return false
+
+        // Must have sender
+        if (!msg.from) return false
+
+        // Echo messages are when the sender IS us (NOT msg.context.from)
+        const fromDigits = String(msg.from).replace(/\D/g, '')
+        const isEcho =
+          (businessPhoneNumberId && msg.from === businessPhoneNumberId) ||
+          (businessDisplay && fromDigits === businessDisplay)
+
+        if (isEcho) {
+          console.log(`⏭️ [WEBHOOK] Ignoring echo message (sender is us): ${msg.id}`, {
+            msgFrom: msg.from,
+            businessPhoneNumberId,
+            businessDisplay,
+            hasContext: !!msg.context,
+          })
           return false
         }
-        // Ignore echo messages (messages we sent)
-        if (msg.context?.from === value.metadata?.phone_number_id) {
-          console.log(`⏭️ [WEBHOOK] Ignoring echo message (from our number): ${msg.id}`)
-          return false
-        }
-        // CRITICAL: Only process messages from users (direction === 'inbound' or from === 'user')
-        // Meta webhook: messages from users have 'from' field with phone number, not system
-        if (!msg.from || msg.from === value.metadata?.phone_number_id) {
-          console.log(`⏭️ [WEBHOOK] Ignoring system message: ${msg.id}`)
-          return false
-        }
+
         return true
       })
       
