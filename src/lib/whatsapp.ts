@@ -158,24 +158,40 @@ export async function checkWhatsAppConfiguration(): Promise<{
 }
 
 /**
+ * Helper function to pick first non-empty value
+ */
+function pickFirst(...vals: Array<string | undefined | null>): string | undefined {
+  for (const v of vals) {
+    if (typeof v === 'string' && v.trim()) {
+      return v.trim()
+    }
+  }
+  return undefined
+}
+
+/**
  * Unified WhatsApp credentials function
+ * DB-first: Reads from Integration table (Integrations page), falls back to env vars
  * Single source of truth for both upload/sending and media proxy
- * @returns { accessToken, phoneNumberId, tokenSource }
+ * @returns { accessToken, phoneNumberId, wabaId?, tokenSource }
  * where tokenSource is 'env' | 'db'
  */
 export async function getWhatsAppCredentials(): Promise<{
   accessToken: string
   phoneNumberId: string
+  wabaId?: string
   tokenSource: 'env' | 'db'
 }> {
-  let accessToken: string | null = null
-  let phoneNumberId: string | null = null
+  let accessToken: string | undefined = undefined
+  let phoneNumberId: string | undefined = undefined
+  let wabaId: string | undefined = undefined
   let tokenSource: 'env' | 'db' = 'db'
 
-  // Try database first (Integration model)
+  // 1) DB-first: read from Integrations config (your UI stores it here)
   try {
-    const integration = await prisma.integration.findUnique({
-      where: { name: 'whatsapp' },
+    // Try provider + isEnabled first (new way)
+    let integration = await prisma.integration.findFirst({
+      where: { provider: 'whatsapp', isEnabled: true },
       select: {
         config: true,
         accessToken: true,
@@ -183,59 +199,100 @@ export async function getWhatsAppCredentials(): Promise<{
       },
     })
 
+    // Fallback to name='whatsapp' (legacy)
+    if (!integration) {
+      integration = await prisma.integration.findUnique({
+        where: { name: 'whatsapp' },
+        select: {
+          config: true,
+          accessToken: true,
+          apiKey: true,
+        },
+      })
+    }
+
     if (integration) {
-      // Get from config JSON (canonical location)
+      // Parse config JSON (canonical location)
+      let cfg: Record<string, any> = {}
       if (integration.config) {
         try {
-          const config = typeof integration.config === 'string'
+          cfg = typeof integration.config === 'string'
             ? JSON.parse(integration.config)
             : integration.config
-          
-          // Canonical keys: config.accessToken, config.phoneNumberId
-          // Legacy keys supported: integration.accessToken, integration.apiKey
-          accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
-          phoneNumberId = config.phoneNumberId || null
-          
-          if (accessToken) {
-            tokenSource = 'db'
-          }
         } catch (e) {
           console.warn('[WHATSAPP-CREDENTIALS] Failed to parse integration config:', e)
         }
-      } else {
-        // Fallback to direct fields (legacy)
-        accessToken = integration.accessToken || integration.apiKey || null
-        if (accessToken) {
-          tokenSource = 'db'
-        }
+      }
+
+      // Get credentials from config (multiple key variations supported)
+      accessToken = pickFirst(
+        cfg.accessToken,
+        cfg.whatsappAccessToken,
+        cfg.metaAccessToken,
+        integration.accessToken,
+        integration.apiKey
+      )
+
+      phoneNumberId = pickFirst(
+        cfg.phoneNumberId,
+        cfg.whatsappPhoneNumberId,
+        cfg.phone_number_id
+      )
+
+      wabaId = pickFirst(
+        cfg.wabaId,
+        cfg.whatsappWabaId,
+        cfg.whatsappBusinessAccountId,
+        cfg.waba_id,
+        cfg.businessAccountId
+      )
+
+      if (accessToken) {
+        tokenSource = 'db'
       }
     }
   } catch (e) {
     console.warn('[WHATSAPP-CREDENTIALS] Could not fetch integration from DB:', e)
   }
 
-  // Fallback to environment variables if not found in database
+  // 2) Fallback to environment variables if not found in database
   if (!accessToken) {
-    // Preferred: WHATSAPP_ACCESS_TOKEN, fallback: META_ACCESS_TOKEN
-    accessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || null
+    accessToken = pickFirst(
+      process.env.WHATSAPP_ACCESS_TOKEN,
+      process.env.META_ACCESS_TOKEN
+    )
     if (accessToken) {
       tokenSource = 'env'
     }
   }
 
-  // Get phoneNumberId from environment if not found in database
   if (!phoneNumberId) {
-    phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
+    phoneNumberId = pickFirst(
+      process.env.WHATSAPP_PHONE_NUMBER_ID,
+      process.env.META_PHONE_NUMBER_ID
+    )
   }
 
-  if (!accessToken || !phoneNumberId) {
-    const errorMsg = 'WhatsApp not configured. Please configure it in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables'
+  if (!wabaId) {
+    wabaId = pickFirst(
+      process.env.WHATSAPP_BUSINESS_ACCOUNT_ID,
+      process.env.META_WABA_ID,
+      process.env.WHATSAPP_WABA_ID
+    )
+  }
+
+  // Validate required fields
+  if (!accessToken) {
+    const errorMsg = 'WhatsApp Access Token not configured. Set it in Integrations (preferred) or env WHATSAPP_ACCESS_TOKEN / META_ACCESS_TOKEN.'
     console.error(`❌ [WHATSAPP-CREDENTIALS] ${errorMsg}`)
-    console.error(`❌ [WHATSAPP-CREDENTIALS] Debug: accessToken=${!!accessToken}, phoneNumberId=${!!phoneNumberId}, tokenSource=${tokenSource}`)
     throw new Error(errorMsg)
   }
 
-  return { accessToken, phoneNumberId, tokenSource }
+  if (!phoneNumberId) {
+    console.warn('⚠️ [WHATSAPP-CREDENTIALS] phoneNumberId not configured (may be optional for some operations)')
+  }
+
+  return { accessToken, phoneNumberId: phoneNumberId || '', wabaId, tokenSource }
 }
 
 /**

@@ -29,31 +29,32 @@ export async function GET(req: NextRequest) {
     // Get Graph API version (optional, default v24.0)
     const graphVersion = process.env.META_GRAPH_VERSION || 'v24.0'
 
-    // Get access token - try multiple env var names
-    const accessToken = process.env.META_ACCESS_TOKEN || process.env.WHATSAPP_ACCESS_TOKEN || null
-    if (!accessToken) {
+    // CRITICAL: Use DB-first credentials (from Integration table)
+    const { getWhatsAppCredentials } = await import('@/lib/whatsapp')
+    let credentials
+    try {
+      credentials = await getWhatsAppCredentials()
+    } catch (error: any) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'missing_token',
-          message: 'META_ACCESS_TOKEN or WHATSAPP_ACCESS_TOKEN environment variable not set',
+          error: 'missing_credentials',
+          message: error.message || 'WhatsApp credentials not configured',
+          hint: 'Configure WhatsApp in /admin/integrations or set environment variables',
         },
         { status: 500 }
       )
     }
 
-    // Get WABA ID - try multiple env var names (WABA ID, not phone_number_id)
-    const wabaId = process.env.WHATSAPP_BUSINESS_ACCOUNT_ID || 
-                   process.env.META_WABA_ID || 
-                   process.env.WHATSAPP_WABA_ID || 
-                   null
+    const { accessToken, wabaId } = credentials
 
     if (!wabaId) {
       return NextResponse.json(
         {
           ok: false,
           error: 'missing_waba_id',
-          message: 'WHATSAPP_BUSINESS_ACCOUNT_ID, META_WABA_ID, or WHATSAPP_WABA_ID environment variable not set',
+          message: 'WABA ID not configured. Set it in Integrations (preferred) or env WHATSAPP_BUSINESS_ACCOUNT_ID / META_WABA_ID / WHATSAPP_WABA_ID',
+          hint: 'WABA ID is required to fetch templates from Meta Graph API',
         },
         { status: 500 }
       )
@@ -150,7 +151,9 @@ export async function GET(req: NextRequest) {
         graphVersion,
         usedWabaIdLast4: wabaIdLast4,
         tokenPresent: !!accessToken,
+        tokenSource: credentials.tokenSource,
         pagesFetched: pageCount,
+        credentialsFrom: credentials.tokenSource === 'db' ? 'Integration table' : 'Environment variables',
       }
     }
 
