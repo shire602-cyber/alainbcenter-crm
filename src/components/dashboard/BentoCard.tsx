@@ -27,7 +27,7 @@ export function BentoCard({
   const Content = (
     <div 
       className={cn(
-        "group relative bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4 transition-all duration-200 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700",
+        "group relative bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-5 transition-all duration-300 hover:shadow-2xl hover:border-primary/20 hover:-translate-y-1",
         colSpan === 2 && "md:col-span-2",
         colSpan === 3 && "md:col-span-3",
         colSpan === 4 && "md:col-span-4",

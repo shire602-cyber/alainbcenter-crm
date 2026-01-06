@@ -10,10 +10,11 @@ import { cn } from '@/lib/utils'
 interface InlineEditableFieldProps {
   value: string | null | undefined
   onSave: (value: string) => Promise<void>
-  type?: 'text' | 'select'
+  type?: 'text' | 'select' | 'date'
   options?: Array<{ value: string; label: string }>
   placeholder?: string
   className?: string
+  displayValue?: string // Optional formatted display value (e.g., for dates)
 }
 
 export function InlineEditableField({
@@ -22,7 +23,8 @@ export function InlineEditableField({
   type = 'text',
   options = [],
   placeholder = 'Click to edit',
-  className
+  className,
+  displayValue
 }: InlineEditableFieldProps) {
   const [isEditing, setIsEditing] = useState(false)
   const [editValue, setEditValue] = useState(value || '')
@@ -67,6 +69,24 @@ export function InlineEditableField({
               </option>
             ))}
           </Select>
+        ) : type === 'date' ? (
+          <Input
+            ref={inputRef}
+            type="date"
+            value={editValue}
+            onChange={(e) => setEditValue(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') {
+                e.preventDefault()
+                handleSave()
+              } else if (e.key === 'Escape') {
+                handleCancel()
+              }
+            }}
+            className="flex-1"
+            disabled={saving}
+            onBlur={handleSave}
+          />
         ) : (
           <Input
             ref={inputRef}
@@ -110,7 +130,7 @@ export function InlineEditableField({
       className={cn('flex items-center gap-2 group cursor-pointer', className)}
       onClick={() => setIsEditing(true)}
     >
-      <span className="text-sm">{value || <span className="text-muted-foreground">{placeholder}</span>}</span>
+      <span className="text-sm">{displayValue || value || <span className="text-muted-foreground">{placeholder}</span>}</span>
       <Edit2 className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
     </div>
   )

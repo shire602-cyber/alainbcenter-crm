@@ -286,13 +286,14 @@ export function DocumentsCardEnhanced({
               </div>
             )}
             <Button
-              variant="ghost"
+              variant="default"
               size="sm"
               onClick={() => setShowUploadModal(true)}
-              className="h-7 px-2"
-              title="Upload Document"
+              className="h-8 px-3 rounded-full shadow-md hover:shadow-lg transition-all gap-1.5"
+              title="Upload Document or Media"
             >
               <Upload className="h-3.5 w-3.5" />
+              <span className="text-xs font-medium">Upload</span>
             </Button>
           </div>
         </div>
@@ -382,11 +383,12 @@ export function DocumentsCardEnhanced({
                       )}
                       {!matchingDoc && (
                         <Button
-                          variant="ghost"
+                          variant="outline"
                           size="sm"
-                          className="h-5 px-2 text-[10px]"
+                          className="h-6 px-2.5 text-[10px] rounded-full shadow-sm hover:shadow-md transition-all"
                           onClick={() => setShowUploadModal(true)}
                         >
+                          <Upload className="h-3 w-3 mr-1" />
                           Upload
                         </Button>
                       )}
@@ -531,9 +533,9 @@ export function DocumentsCardEnhanced({
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
+            <DialogTitle>Upload Document or Media</DialogTitle>
             <DialogDescription>
-              Select a file and specify document type
+              Upload documents, images, PDFs, or other media files
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">

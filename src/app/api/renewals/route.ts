@@ -20,8 +20,32 @@ export async function GET(req: NextRequest) {
       )
     }
 
-    // Fetch all expiry items with optimized selects
+    // Add pagination support (backward compatible - defaults to all if not specified)
+    const { searchParams } = new URL(req.url)
+    const page = parseInt(searchParams.get('page') || '1')
+    const limitParam = searchParams.get('limit')
+    const limit = limitParam ? parseInt(limitParam) : undefined // undefined = no limit (backward compatible)
+    const skip = limit ? (page - 1) * limit : undefined
+
+    // Filter by date range to only get relevant items (120 days past to 180 days future) for better performance
+    const now = new Date()
+    const futureDate = new Date(now)
+    futureDate.setDate(futureDate.getDate() + 180)
+    
+    const pastDate = new Date(now)
+    pastDate.setDate(pastDate.getDate() - 120)
+
+    // Build where clause with date filtering
+    const whereClause: any = {
+      expiryDate: {
+        gte: pastDate,
+        lte: futureDate,
+      },
+    }
+
+    // Fetch expiry items with optimized selects and optional pagination
     const expiryItems = await prisma.expiryItem.findMany({
+      where: whereClause,
       select: {
         id: true,
         type: true,
@@ -60,10 +84,24 @@ export async function GET(req: NextRequest) {
       orderBy: {
         expiryDate: 'asc',
       },
+      ...(skip !== undefined && { skip }),
+      ...(limit !== undefined && { take: limit }),
     })
 
-    // Calculate KPIs directly from fetched data (avoid duplicate query)
-    const now = new Date()
+    // Calculate KPIs from ALL items (separate lightweight query for accurate stats)
+    const allItemsForStats = await prisma.expiryItem.findMany({
+      select: {
+        expiryDate: true,
+        renewalStatus: true,
+        lead: {
+          select: {
+            estimatedRenewalValue: true,
+            renewalProbability: true,
+          },
+        },
+      },
+    })
+
     const ninetyDaysFromNow = new Date(now.getTime() + 90 * 24 * 60 * 60 * 1000)
     
     let expiring90Days = 0
@@ -73,7 +111,7 @@ export async function GET(req: NextRequest) {
     let renewed = 0
     let pending = 0
 
-    expiryItems.forEach((item) => {
+    allItemsForStats.forEach((item) => {
       const days = differenceInDays(item.expiryDate, now)
       
       if (days <= 90 && days > 0) {
@@ -128,7 +166,10 @@ export async function GET(req: NextRequest) {
       }
     })
 
-    return NextResponse.json({
+    // Get total count for pagination info (only if pagination is enabled)
+    const totalCount = limit ? await prisma.expiryItem.count({ where: whereClause }) : undefined
+
+    const response: any = {
       expiryItems: enrichedItems,
       kpis: {
         ...stats,
@@ -138,7 +179,19 @@ export async function GET(req: NextRequest) {
         renewalConversionRate: stats.renewalConversionRate,
         projectedRevenue: stats.projectedRevenue,
       },
-    })
+    }
+
+    // Add pagination info only if pagination is enabled
+    if (limit && totalCount !== undefined) {
+      response.pagination = {
+        page,
+        limit,
+        total: totalCount,
+        totalPages: Math.ceil(totalCount / limit),
+      }
+    }
+
+    return NextResponse.json(response)
   } catch (error: any) {
     console.error('GET /api/renewals error:', error)
     return NextResponse.json(

@@ -379,7 +379,7 @@ export default function RenewalsDashboard() {
                     <Link
                       key={item.id}
                       href={`/leads/${item.lead?.id || item.contact.id}`}
-                      className="block p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+                      className="block p-3 rounded-2xl border-2 border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-primary/20 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex-1 min-w-0">

@@ -52,6 +52,7 @@ export function IntegrationSettings({
   const [whatsappConfig, setWhatsappConfig] = useState({
     phoneNumberId: '',
     businessAccountId: '',
+    wabaId: '', // WhatsApp Business Account ID (for templates)
     accessToken: '',
     webhookVerifyToken: '',
   })
@@ -68,6 +69,7 @@ export function IntegrationSettings({
           setWhatsappConfig({
             phoneNumberId: config.phoneNumberId || '',
             businessAccountId: config.businessAccountId || '',
+            wabaId: config.wabaId || config.whatsappWabaId || config.whatsappBusinessAccountId || '',
             accessToken: config.accessToken || integration.accessToken || integration.apiKey || '',
             webhookVerifyToken: config.webhookVerifyToken || '',
           })
@@ -157,6 +159,7 @@ export function IntegrationSettings({
           phoneNumberId: whatsappConfig.phoneNumberId || null,
           businessAccountId: whatsappConfig.businessAccountId || null, // App ID
           appId: whatsappConfig.businessAccountId || null, // Also as appId for clarity
+          wabaId: whatsappConfig.wabaId || null, // WhatsApp Business Account ID (for templates)
           appSecret: formData.apiSecret || null, // App Secret stored in config
           accessToken: whatsappConfig.accessToken || formData.accessToken || formData.apiKey || null,
           webhookVerifyToken: whatsappConfig.webhookVerifyToken || null,
@@ -444,6 +447,24 @@ export function IntegrationSettings({
                 />
                 <p className="text-xs text-muted-foreground">
                   Found in Meta Business Manager → WhatsApp → API Setup
+                </p>
+              </div>
+
+              <div className="space-y-1.5">
+                <label className="block text-sm font-medium">
+                  WhatsApp Business Account ID (WABA ID) <span className="text-blue-500">*</span>
+                </label>
+                <Input
+                  type="text"
+                  value={whatsappConfig.wabaId || ''}
+                  onChange={(e) => setWhatsappConfig({ ...whatsappConfig, wabaId: e.target.value })}
+                  placeholder="123456789012345"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Required for fetching approved templates. Found in Meta Business Manager → WhatsApp → Settings → WhatsApp Business Account ID (numeric ID, no dashes)
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                  💡 This is different from App ID. WABA ID is used to fetch message templates.
                 </p>
               </div>
 

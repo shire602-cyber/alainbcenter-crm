@@ -31,6 +31,17 @@ export async function PATCH(
     if (body.renewalStatus !== undefined) {
       updateData.renewalStatus = body.renewalStatus
     }
+    if (body.expiryDate !== undefined) {
+      // Support both ISO string and date string formats
+      const expiryDate = new Date(body.expiryDate)
+      if (isNaN(expiryDate.getTime())) {
+        return NextResponse.json(
+          { error: 'Invalid date format for expiryDate' },
+          { status: 400 }
+        )
+      }
+      updateData.expiryDate = expiryDate
+    }
     if (body.renewalLeadId !== undefined) {
       updateData.renewalLeadId = body.renewalLeadId ? parseInt(body.renewalLeadId) : null
     }

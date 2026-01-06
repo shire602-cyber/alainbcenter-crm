@@ -1463,36 +1463,70 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       <div
                         key={expiry.id}
                         className={cn(
-                          'group p-4 rounded-lg border text-sm hover:shadow-md transition-all cursor-pointer',
+                          'group p-4 rounded-2xl border-2 text-sm hover:shadow-lg transition-all cursor-pointer',
                           isOverdue && 'border-red-200 bg-red-50/50 dark:bg-red-900/10 dark:border-red-800/50',
                           isUrgent && 'border-orange-200 bg-orange-50/50 dark:bg-orange-900/10 dark:border-orange-800/50',
                           isWarning && 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-800/50',
                           !isOverdue && !isUrgent && !isWarning && 'border-border bg-card hover:bg-muted/50'
                         )}
                       >
-                        <div className="flex items-center justify-between mb-2">
-                          <Badge variant="outline" className="text-sm px-2.5 py-1">
+                        <div className="flex items-center justify-between mb-3">
+                          <Badge variant="outline" className="text-sm px-2.5 py-1 rounded-full">
                             {expiry.type.replace(/_/g, ' ')}
                           </Badge>
                           <ExpiryCountdown expiryDate={expiry.expiryDate} type={expiry.type} />
                         </div>
-                        <p className="text-sm text-muted-foreground">
-                          {format(parseISO(expiry.expiryDate), 'MMM dd, yyyy')}
-                        </p>
-                        <QuickActionsMenu 
-                          type="expiry" 
-                          value={expiry.type}
-                          expiryDate={expiry.expiryDate}
-                          onAction={(action) => {
-                            if (action === 'add-task') {
-                              setTaskTitle(`Renewal: ${expiry.type.replace(/_/g, ' ')}`)
-                              setTaskType('RENEWAL')
-                              setShowTaskModal(true)
-                            } else if (action === 'renew') {
-                              handleGenerateAIDraft('renewal')
-                            }
-                          }}
-                        />
+                        <div className="space-y-2">
+                          <div>
+                            <Label className="text-xs font-medium text-muted-foreground mb-1 block">Expiry Date</Label>
+                            <InlineEditableField
+                              value={format(parseISO(expiry.expiryDate), 'yyyy-MM-dd')}
+                              type="date"
+                              onSave={async (newDate) => {
+                                try {
+                                  const res = await fetch(`/api/expiry-items/${expiry.id}`, {
+                                    method: 'PATCH',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                      expiryDate: newDate,
+                                    }),
+                                  })
+                                  if (!res.ok) {
+                                    const errorData = await res.json().catch(() => ({ error: 'Failed to update expiry date' }))
+                                    throw new Error(errorData.error || 'Failed to update expiry date')
+                                  }
+                                  showToast('Expiry date updated successfully', 'success')
+                                  await loadLead()
+                                  return Promise.resolve()
+                                } catch (err: any) {
+                                  showToast(err.message || 'Failed to update expiry date', 'error')
+                                  return Promise.reject(err)
+                                }
+                              }}
+                              className="text-sm font-medium"
+                              displayValue={format(parseISO(expiry.expiryDate), 'MMM dd, yyyy')}
+                            />
+                          </div>
+                          {expiry.notes && (
+                            <p className="text-xs text-muted-foreground">{expiry.notes}</p>
+                          )}
+                        </div>
+                        <div className="mt-3">
+                          <QuickActionsMenu 
+                            type="expiry" 
+                            value={expiry.type}
+                            expiryDate={expiry.expiryDate}
+                            onAction={(action) => {
+                              if (action === 'add-task') {
+                                setTaskTitle(`Renewal: ${expiry.type.replace(/_/g, ' ')}`)
+                                setTaskType('RENEWAL')
+                                setShowTaskModal(true)
+                              } else if (action === 'renew') {
+                                handleGenerateAIDraft('renewal')
+                              }
+                            }}
+                          />
+                        </div>
                       </div>
                     )
                   })
