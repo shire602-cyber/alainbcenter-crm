@@ -107,26 +107,39 @@ export async function GET(req: NextRequest) {
     }
 
     if (!effectiveWabaId) {
+      const storedIdPreview = wabaId ? `${wabaId.substring(0, 20)}...` : 'not set'
       return NextResponse.json(
         {
           ok: false,
           error: 'missing_waba_id',
-          message: 'WABA ID not configured and could not be derived from phone_number_id. Set it in Integrations (preferred) or env WHATSAPP_BUSINESS_ACCOUNT_ID / META_WABA_ID / WHATSAPP_WABA_ID',
-          hint: 'WABA ID is required to fetch templates from Meta Graph API. You can find it in Meta Business Manager → WhatsApp → Settings',
+          message: 'WABA ID not configured and could not be auto-fetched from phone_number_id.',
+          hint: 'WABA ID is required to fetch templates. Find it in Meta Business Manager → WhatsApp → Settings → WhatsApp Business Account ID (numeric ID, no dashes)',
+          details: {
+            storedIdPreview: wabaId ? storedIdPreview : null,
+            looksLikeApplicationId: looksLikeApplicationId,
+            phoneNumberIdPresent: !!phoneNumberId,
+            suggestion: 'Update your Integration config with the correct WABA ID (numeric, typically 15-18 digits)',
+          },
         },
         { status: 500 }
       )
     }
 
+    // Final validation: WABA ID should be numeric
+    if (!/^\d+$/.test(effectiveWabaId)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'invalid_waba_id_format',
+          message: `WABA ID format is invalid: ${effectiveWabaId.substring(0, 20)}... (should be numeric only)`,
+          hint: 'WABA ID must be a numeric string. Check Meta Business Manager → WhatsApp → Settings',
+        },
+        { status: 400 }
+      )
+    }
+
     // Get last 4 chars for debug (never return full ID)
     const wabaIdLast4 = effectiveWabaId.length >= 4 ? effectiveWabaId.slice(-4) : '****'
-
-    // CRITICAL: Validate WABA ID format (should be numeric, not an Application ID)
-    // Application IDs are usually longer and different format
-    // WABA IDs are typically numeric strings
-    if (effectiveWabaId.includes('-') || effectiveWabaId.length > 20) {
-      console.warn(`[WHATSAPP-TEMPLATES] WABA ID format suspicious: ${wabaIdLast4}... (might be Application ID)`)
-    }
 
     // Fetch templates with pagination
     const allTemplates: any[] = []
