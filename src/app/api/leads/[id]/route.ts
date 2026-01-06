@@ -749,6 +749,18 @@ export async function PATCH(
 
     // Trigger STAGE_CHANGE automation if stage changed
     if (updateData.stage && currentLead.stage !== updateData.stage) {
+      // Trigger lead scoring for stage change (fire-and-forget)
+      try {
+        const { triggerLeadScoring } = await import('@/lib/ai/scoreTrigger')
+        // Fire-and-forget - don't await, runs in background
+        triggerLeadScoring(leadId, 'stage_change').catch((err) => {
+          console.warn(`[LEAD-API] Failed to trigger scoring for lead ${leadId}:`, err.message)
+        })
+      } catch (error: any) {
+        // Silent fail - don't block request
+        console.warn(`[LEAD-API] Error importing scoreTrigger:`, error.message)
+      }
+
       try {
         // Load lead with all relations for automation
         const leadForAutomation = await prisma.lead.findUnique({

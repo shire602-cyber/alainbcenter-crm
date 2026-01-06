@@ -17,6 +17,7 @@
     "verify-llm": "tsx scripts/verify-llm-setup.ts",
     "e2e:media": "playwright test e2e/media.spec.ts",
     "backfill:wa-media": "tsx scripts/backfillWhatsappMediaIds.ts",
+    "populate-renewals": "tsx scripts/populate-renewals.ts",
     "postinstall": "prisma generate",
     "deploy": "bash scripts/deploy.sh"
   },

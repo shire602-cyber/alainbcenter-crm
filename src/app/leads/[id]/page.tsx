@@ -12,6 +12,7 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { LeadDNA } from '@/components/leads/LeadDNA'
 import { ConversationWorkspace } from '@/components/leads/ConversationWorkspace'
 import { NextBestActionPanel } from '@/components/leads/NextBestActionPanel'
+import { AIRecommendationsCard } from '@/components/leads/AIRecommendationsCard'
 import { LeadProgressBar } from '@/components/leads/LeadProgressBar'
 import { FocusModeBanner } from '@/components/dashboard/FocusModeBanner'
 import { ArrowLeft, Info, MessageSquare, Phone, Send, Zap } from 'lucide-react'
@@ -511,7 +512,25 @@ export default function LeadDetailPage({
             <SheetHeader>
               <SheetTitle>Quick Actions</SheetTitle>
             </SheetHeader>
-            <div className="mt-4">
+            <div className="mt-4 space-y-4">
+              {/* AI Recommendations Card */}
+              {lead && (
+                <AIRecommendationsCard
+                  leadId={leadId!}
+                  lead={{
+                    aiScore: lead.aiScore,
+                    aiNotes: lead.aiNotes,
+                    stage: lead.stage,
+                  }}
+                  task={memoizedTasks?.find((t: any) => t.aiSuggested && t.status === 'OPEN') || null}
+                  onRescore={async () => {
+                    await loadLead(leadId!)
+                  }}
+                  onTaskDone={async () => {
+                    await loadLead(leadId!)
+                  }}
+                />
+              )}
               <NextBestActionPanel leadId={leadId!} lead={lead} tasks={memoizedTasks} />
             </div>
           </SheetContent>
@@ -576,7 +595,25 @@ export default function LeadDetailPage({
               Next Actions
             </h2>
           </div>
-          <div className="p-4">
+          <div className="p-4 space-y-4">
+            {/* AI Recommendations Card */}
+            {lead && (
+              <AIRecommendationsCard
+                leadId={leadId!}
+                lead={{
+                  aiScore: lead.aiScore,
+                  aiNotes: lead.aiNotes,
+                  stage: lead.stage,
+                }}
+                task={memoizedTasks?.find((t: any) => t.aiSuggested && t.status === 'OPEN') || null}
+                onRescore={async () => {
+                  await loadLead(leadId!)
+                }}
+                onTaskDone={async () => {
+                  await loadLead(leadId!)
+                }}
+              />
+            )}
             <NextBestActionPanel leadId={leadId!} lead={lead} />
           </div>
         </div>

@@ -53,7 +53,8 @@ import { MEDIA_TYPES } from '@/lib/media/extractMediaId'
 import { Select } from '@/components/ui/select'
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
 import { Label } from '@/components/ui/label'
-import { Languages } from 'lucide-react'
+import { Languages, Flame, TrendingUp, Snowflake } from 'lucide-react'
+import { getAiScoreCategory } from '@/lib/constants'
 
 type Contact = {
   id: number
@@ -895,12 +896,26 @@ function InboxPageContent() {
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Avatar fallback={selectedConversation.contact.fullName || selectedConversation.contact.phone} size="md" />
                     <div className="flex-1 min-w-0">
-                    <h3 className="text-sm font-semibold tracking-tight truncate">
-                      {selectedConversation.contact.fullName && 
-                       !selectedConversation.contact.fullName.includes('Unknown') 
-                        ? selectedConversation.contact.fullName 
-                        : selectedConversation.contact.phone}
-                    </h3>
+                    <div className="flex items-center gap-2">
+                      <h3 className="text-sm font-semibold tracking-tight truncate">
+                        {selectedConversation.contact.fullName && 
+                         !selectedConversation.contact.fullName.includes('Unknown') 
+                          ? selectedConversation.contact.fullName 
+                          : selectedConversation.contact.phone}
+                      </h3>
+                      {selectedLead?.aiScore !== null && selectedLead?.aiScore !== undefined && (
+                        <Badge
+                          variant={getAiScoreCategory(selectedLead.aiScore)}
+                          className="flex items-center gap-1 text-xs font-medium shrink-0"
+                        >
+                          {getAiScoreCategory(selectedLead.aiScore) === 'hot' && <Flame className="h-3 w-3" />}
+                          {getAiScoreCategory(selectedLead.aiScore) === 'warm' && <TrendingUp className="h-3 w-3" />}
+                          {getAiScoreCategory(selectedLead.aiScore) === 'cold' && <Snowflake className="h-3 w-3" />}
+                          <span className="capitalize">{getAiScoreCategory(selectedLead.aiScore)}</span>
+                          <span className="text-xs opacity-75">({selectedLead.aiScore})</span>
+                        </Badge>
+                      )}
+                    </div>
                     {selectedConversation.contact.fullName && 
                      !selectedConversation.contact.fullName.includes('Unknown') && (
                       <p className="text-xs text-slate-500 dark:text-400 truncate">

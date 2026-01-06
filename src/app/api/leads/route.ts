@@ -177,12 +177,12 @@ export async function GET(req: NextRequest) {
     if (aiScoreCategory === 'hot' || filter === 'hot_only') {
       andConditions.push({
         aiScore: {
-          gte: 70,
+          gte: 75,
         },
       })
     } else if (aiScoreCategory === 'warm') {
       andConditions.push({
-        aiScore: { gte: 40, lt: 70 },
+        aiScore: { gte: 40, lt: 75 },
       })
     } else if (aiScoreCategory === 'cold') {
       // For cold filter, we need OR condition (aiScore < 40 OR aiScore IS NULL)

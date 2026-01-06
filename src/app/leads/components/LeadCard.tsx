@@ -83,12 +83,13 @@ export const LeadCard = memo(function LeadCard({
           {lead.aiScore !== null && (
             <Badge
               variant={getScoreBadgeVariant(lead.aiScore)}
-              className="shrink-0 flex items-center gap-1 text-xs"
+              className="shrink-0 flex items-center gap-1 text-xs font-medium"
             >
               {scoreCategory === 'hot' && <Flame className="h-3 w-3" />}
               {scoreCategory === 'warm' && <TrendingUp className="h-3 w-3" />}
               {scoreCategory === 'cold' && <Snowflake className="h-3 w-3" />}
-              {lead.aiScore}
+              <span className="capitalize">{scoreCategory}</span>
+              <span className="text-xs opacity-75">({lead.aiScore})</span>
             </Badge>
           )}
         </div>

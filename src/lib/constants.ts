@@ -54,7 +54,7 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
 // AI Score categories (returns lowercase to match Badge component variants)
 export const getAiScoreCategory = (score: number | null): 'hot' | 'warm' | 'cold' => {
   if (score === null) return 'cold'
-  if (score >= 70) return 'hot'
+  if (score >= 75) return 'hot'
   if (score >= 40) return 'warm'
   return 'cold'
 }

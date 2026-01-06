@@ -87,6 +87,7 @@ type Lead = {
 }
 
 type FilterType = 'all' | 'followups_today' | 'expiring_90' | 'overdue' | 'hot_only'
+type SortType = 'recent' | 'name' | 'stage' | 'ai_priority'
 
 function LeadsPageContent() {
   const searchParams = useSearchParams()
@@ -101,6 +102,7 @@ function LeadsPageContent() {
   const [sourceFilter, setSourceFilter] = useState<string>('')
   const [aiScoreFilter, setAiScoreFilter] = useState<string>('')
   const [serviceFilter, setServiceFilter] = useState<string>('')
+  const [sortBy, setSortBy] = useState<SortType>('recent')
   const [showCreateModal, setShowCreateModal] = useState(false)
   
   // PHASE 5F: View mode (list, grid, kanban)
@@ -118,7 +120,13 @@ function LeadsPageContent() {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (filter !== 'all') params.set('filter', filter)
+      if (filter !== 'all') {
+        if (filter === 'hot_only') {
+          params.set('aiScoreCategory', 'hot')
+        } else {
+          params.set('filter', filter)
+        }
+      }
       if (pipelineStageFilter) params.set('pipelineStage', pipelineStageFilter)
       if (sourceFilter) params.set('source', sourceFilter)
       if (aiScoreFilter) params.set('aiScoreCategory', aiScoreFilter)
@@ -168,15 +176,40 @@ function LeadsPageContent() {
   }, [searchQuery])
 
   const leads = useMemo(() => {
-    if (!debouncedSearch.trim()) return allLeads
-    const query = debouncedSearch.toLowerCase()
-    return allLeads.filter((lead) => {
-      const name = lead.contact?.fullName?.toLowerCase() || ''
-      const phone = lead.contact?.phone?.toLowerCase() || ''
-      const email = lead.contact?.email?.toLowerCase() || ''
-      return name.includes(query) || phone.includes(query) || email.includes(query)
+    let filtered = allLeads
+    
+    // Apply search filter
+    if (debouncedSearch.trim()) {
+      const query = debouncedSearch.toLowerCase()
+      filtered = filtered.filter((lead) => {
+        const name = lead.contact?.fullName?.toLowerCase() || ''
+        const phone = lead.contact?.phone?.toLowerCase() || ''
+        const email = lead.contact?.email?.toLowerCase() || ''
+        return name.includes(query) || phone.includes(query) || email.includes(query)
+      })
+    }
+    
+    // Apply sorting
+    const sorted = [...filtered].sort((a, b) => {
+      switch (sortBy) {
+        case 'ai_priority':
+          // Sort by aiScore descending (null scores go to end)
+          if (a.aiScore === null && b.aiScore === null) return 0
+          if (a.aiScore === null) return 1
+          if (b.aiScore === null) return -1
+          return (b.aiScore || 0) - (a.aiScore || 0)
+        case 'name':
+          return (a.contact?.fullName || '').localeCompare(b.contact?.fullName || '')
+        case 'stage':
+          return (a.pipelineStage || '').localeCompare(b.pipelineStage || '')
+        case 'recent':
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+      }
     })
-  }, [allLeads, debouncedSearch])
+    
+    return sorted
+  }, [allLeads, debouncedSearch, sortBy])
 
   async function handleSubmit(e: FormEvent) {
     e.preventDefault()
@@ -431,7 +464,21 @@ function LeadsPageContent() {
                   <option value="followups_today">📅 Today</option>
                   <option value="expiring_90">⏰ 90d</option>
                   <option value="overdue">🚨 Overdue</option>
-                  <option value="hot_only">🔥 Hot</option>
+                  <option value="hot_only">🔥 Hot Only</option>
+                </Select>
+              </div>
+
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Sort</label>
+                <Select
+                  value={sortBy}
+                  onChange={(e) => setSortBy(e.target.value as SortType)}
+                  className="h-8 text-xs"
+                >
+                  <option value="recent">Recent</option>
+                  <option value="ai_priority">AI Priority</option>
+                  <option value="name">Name</option>
+                  <option value="stage">Stage</option>
                 </Select>
               </div>
 
@@ -475,8 +522,8 @@ function LeadsPageContent() {
                   className="h-8 text-xs"
                 >
                   <option value="">All</option>
-                  <option value="hot">🔥 Hot (70+)</option>
-                  <option value="warm">🌡️ Warm (40-69)</option>
+                  <option value="hot">🔥 Hot (75+)</option>
+                  <option value="warm">🌡️ Warm (40-74)</option>
                   <option value="cold">❄️ Cold (&lt;40)</option>
                 </Select>
               </div>

@@ -823,6 +823,22 @@ export async function handleInboundMessageAutoMatch(
     elapsed: `${Date.now() - startTime}ms`,
   })
 
+  // Trigger lead scoring for inbound messages (fire-and-forget)
+  // Only trigger if message is inbound and linked to a lead
+  // Note: message.direction is normalized to 'INBOUND' or 'OUTBOUND' in createCommunicationLog
+  if (message && lead && lead.id && message.direction === 'INBOUND') {
+    try {
+      const { triggerLeadScoring } = await import('@/lib/ai/scoreTrigger')
+      // Fire-and-forget - don't await, runs in background
+      triggerLeadScoring(lead.id, 'inbound_message', conversation?.id).catch((err) => {
+        console.warn(`[AUTO-MATCH] Failed to trigger scoring for lead ${lead.id}:`, err.message)
+      })
+    } catch (error: any) {
+      // Silent fail - don't block pipeline
+      console.warn(`[AUTO-MATCH] Error importing scoreTrigger:`, error.message)
+    }
+  }
+
   return {
     contact,
     conversation,
