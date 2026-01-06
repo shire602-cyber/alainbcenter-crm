@@ -1,11 +1,11 @@
 import { notFound } from 'next/navigation'
 import { requireAdminOrManager } from '@/lib/auth-server'
-import RenewalsDashboard from './RenewalsDashboard'
+import RenewalCommandCenter from './RenewalCommandCenter'
 
 export default async function RenewalsPage() {
   try {
     await requireAdminOrManager()
-    return <RenewalsDashboard />
+    return <RenewalCommandCenter />
   } catch {
     notFound()
   }

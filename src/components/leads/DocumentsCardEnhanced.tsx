@@ -23,6 +23,8 @@ import {
   Sparkles,
   Mail,
   X,
+  Calendar,
+  Loader2,
 } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { format, differenceInDays, parseISO } from 'date-fns'
@@ -531,32 +533,75 @@ export function DocumentsCardEnhanced({
 
       {/* Upload Modal */}
       <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Upload Document or Media</DialogTitle>
-            <DialogDescription>
+            <DialogTitle className="text-2xl font-semibold">Upload Document or Media</DialogTitle>
+            <DialogDescription className="text-base">
               Upload documents, images, PDFs, or other media files
             </DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
+          <div className="px-6 pb-6 pt-4 space-y-6">
+            {/* File Upload Area */}
             <div>
-              <Label>File *</Label>
-              <Input
-                type="file"
-                onChange={(e) => {
-                  const file = e.target.files?.[0]
-                  setSelectedFile(file || null)
-                }}
-                accept="image/*,application/pdf,.doc,.docx"
-                disabled={uploading}
-              />
+              <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+                File <span className="text-red-500">*</span>
+              </Label>
+              <div className="relative">
+                <input
+                  type="file"
+                  id="file-upload"
+                  onChange={(e) => {
+                    const file = e.target.files?.[0]
+                    setSelectedFile(file || null)
+                  }}
+                  accept="image/*,application/pdf,.doc,.docx"
+                  disabled={uploading}
+                  className="hidden"
+                />
+                <label
+                  htmlFor="file-upload"
+                  className={cn(
+                    "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200",
+                    selectedFile
+                      ? "border-primary bg-primary/5 hover:bg-primary/10"
+                      : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50",
+                    uploading && "opacity-50 cursor-not-allowed"
+                  )}
+                >
+                  {selectedFile ? (
+                    <>
+                      <FileText className="h-8 w-8 text-primary mb-2" />
+                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                        {selectedFile.name}
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        {(selectedFile.size / 1024).toFixed(1)} KB
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <Upload className="h-8 w-8 text-slate-400 dark:text-slate-500 mb-2" />
+                      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                        Click to browse or drag and drop
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                        PDF, Images, Word documents
+                      </p>
+                    </>
+                  )}
+                </label>
+              </div>
             </div>
+
+            {/* Document Type */}
             <div>
-              <Label>Document Type *</Label>
+              <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+                Document Type <span className="text-red-500">*</span>
+              </Label>
               <select
                 value={selectedDocType}
                 onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDocType(e.target.value)}
-                className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm"
+                className="flex h-11 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-background px-4 py-2 text-sm font-medium transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none hover:border-slate-300 dark:hover:border-slate-600"
               >
                 <option value="PASSPORT">Passport</option>
                 <option value="EID">Emirates ID</option>
@@ -569,18 +614,26 @@ export function DocumentsCardEnhanced({
                 <option value="OTHER">Other</option>
               </select>
             </div>
+
+            {/* Expiry Date */}
             <div>
-              <Label>Expiry Date (Optional)</Label>
+              <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+                Expiry Date <span className="text-slate-400 text-xs font-normal">(Optional)</span>
+              </Label>
               <Input
                 type="date"
                 value={selectedExpiryDate}
                 onChange={(e) => setSelectedExpiryDate(e.target.value)}
+                className="h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all hover:border-slate-300 dark:hover:border-slate-600"
               />
-              <p className="text-xs text-muted-foreground mt-1">
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+                <Calendar className="h-3 w-3" />
                 Set if this document expires (e.g., EID, Visa)
               </p>
             </div>
-            <div className="flex justify-end gap-2">
+
+            {/* Action Buttons */}
+            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
               <Button
                 variant="outline"
                 onClick={() => {
@@ -589,14 +642,27 @@ export function DocumentsCardEnhanced({
                   setSelectedDocType('OTHER')
                   setSelectedExpiryDate('')
                 }}
+                className="px-6 h-11 rounded-xl font-medium"
+                disabled={uploading}
               >
                 Cancel
               </Button>
               <Button
                 onClick={() => handleFileUpload()}
                 disabled={!selectedFile || uploading}
+                className="px-6 h-11 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all"
               >
-                {uploading ? 'Uploading...' : 'Upload'}
+                {uploading ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload
+                  </>
+                )}
               </Button>
             </div>
           </div>

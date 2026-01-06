@@ -76,18 +76,20 @@ export function DialogContent({ children, className }: DialogContentProps) {
       />
       {/* Content */}
       <div className={cn(
-        "relative z-50 bg-white dark:bg-slate-900 rounded-2xl shadow-2xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto",
+        "relative z-50 bg-white dark:bg-slate-900 rounded-3xl shadow-2xl border border-slate-200/50 dark:border-slate-800/50 max-w-lg w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col",
         className
       )}>
         <Button
           variant="ghost"
           size="sm"
-          className="absolute top-4 right-4 rounded-lg"
+          className="absolute top-4 right-4 rounded-xl h-8 w-8 p-0 hover:bg-slate-100 dark:hover:bg-slate-800 z-10"
           onClick={() => context.onOpenChange(false)}
         >
           <X className="h-4 w-4" />
         </Button>
-        {children}
+        <div className="overflow-y-auto">
+          {children}
+        </div>
       </div>
     </div>
   )
@@ -100,7 +102,7 @@ interface DialogHeaderProps {
 
 export function DialogHeader({ children, className }: DialogHeaderProps) {
   return (
-    <div className={cn("p-6 pb-4", className)}>
+    <div className={cn("px-6 pt-6 pb-4 border-b border-slate-100 dark:border-slate-800", className)}>
       {children}
     </div>
   )
@@ -113,7 +115,7 @@ interface DialogTitleProps {
 
 export function DialogTitle({ children, className }: DialogTitleProps) {
   return (
-    <h2 className={cn("text-xl font-semibold text-slate-900 dark:text-slate-100", className)}>
+    <h2 className={cn("text-2xl font-semibold text-slate-900 dark:text-slate-100 tracking-tight", className)}>
       {children}
     </h2>
   )
@@ -126,7 +128,7 @@ interface DialogDescriptionProps {
 
 export function DialogDescription({ children, className }: DialogDescriptionProps) {
   return (
-    <p className={cn("text-sm text-slate-600 dark:text-slate-400 mt-1", className)}>
+    <p className={cn("text-sm text-slate-600 dark:text-slate-400 mt-2 leading-relaxed", className)}>
       {children}
     </p>
   )

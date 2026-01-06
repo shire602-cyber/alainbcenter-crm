@@ -28,6 +28,7 @@ import { Card } from '@/components/ui/card'
 import { useRouter } from 'next/navigation'
 import { useToast } from '@/components/ui/toast'
 import { getServiceDisplayLabel } from '@/lib/services/labels'
+import { DocumentsCardEnhanced } from '@/components/leads/DocumentsCardEnhanced'
 
 interface LeadDNAProps {
   lead: {
@@ -652,21 +653,30 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
           <SponsorSearch lead={lead || { id: 0, contact: null } as any} />
         </div>
 
-        {/* Documents Placeholder */}
-        <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Documents</h2>
-          <Card className="card-premium inset-card">
-            <div className="flex items-center gap-2 mb-3">
-              <FileText className="h-4 w-4 text-slate-500" />
-              <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
-                Documents
-              </h3>
-            </div>
-            <p className="text-meta muted-text">
-              Document upload coming soon
-            </p>
-          </Card>
-        </div>
+        {/* Documents Card with Upload */}
+        {lead?.id ? (
+          <div>
+            <DocumentsCardEnhanced 
+              leadId={lead.id}
+              serviceType={lead?.serviceTypeEnum || lead?.serviceType?.name}
+            />
+          </div>
+        ) : (
+          <div>
+            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Documents</h2>
+            <Card className="card-premium inset-card">
+              <div className="flex items-center gap-2 mb-3">
+                <FileText className="h-4 w-4 text-slate-500" />
+                <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+                  Documents
+                </h3>
+              </div>
+              <p className="text-meta muted-text">
+                Lead must be saved before uploading documents
+              </p>
+            </Card>
+          </div>
+        )}
       </div>
     </div>
   )

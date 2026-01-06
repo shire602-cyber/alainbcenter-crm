@@ -45,6 +45,8 @@ model User {
   createdAITrainingDocs AITrainingDocument[]
   createdAttachments    LeadAttachment[]     @relation("CreatedAttachments")
   staffSettings         StaffSettings?
+  assignedRenewalItems  RenewalItem[]        @relation("AssignedRenewalItems")
+  createdRenewalEvents  RenewalEventLog[]    @relation("CreatedRenewalEvents")
 }
 
 model ServiceType {
@@ -224,6 +226,7 @@ model Lead {
   reminders          Reminder[]
   autoReplyLogs      AutoReplyLog[]
   attachments        LeadAttachment[]
+  renewalItems       RenewalItem[]      @relation("RenewalItems")
 }
 
 model AIAgentProfile {
@@ -315,27 +318,105 @@ model ExpiryItem {
   @@index([leadId, expiryDate])
 }
 
-model Renewal {
-  id                Int       @id @default(autoincrement())
-  contact           Contact   @relation(fields: [contactId], references: [id])
-  contactId         Int
-  lead              Lead?     @relation(fields: [leadId], references: [id])
-  leadId            Int?
-  conversation      Conversation? @relation(fields: [conversationId], references: [id])
-  conversationId    Int?
-  serviceType       String    // Service type name (e.g., "VISA_RENEWAL", "EMIRATES_ID_RENEWAL")
-  expiryDate        DateTime
-  status            String    @default("ACTIVE") // ACTIVE | RENEWED | CANCELLED | EXPIRED
-  reminderStage     Int       @default(0) // 0=none sent yet, 1=R1 sent, 2=R2, 3=R3 done
-  lastNotifiedAt    DateTime?
-  lastRemindedAt    DateTime? // Last reminder timestamp
-  nextReminderAt    DateTime? // Next reminder due date (computed from reminder schedule)
-  reminderSchedule  String    @default("[30,14,7]") // JSON array as string: days before expiry [R1, R2, R3]
-  remindersEnabled  Boolean   @default(true)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+// Renewal V2: Revenue-first renewal items
+enum RenewalServiceType {
+  TRADE_LICENSE
+  EMIRATES_ID
+  RESIDENCY
+  VISIT_VISA
+  CHANGE_STATUS
+}
 
-  notifications     RenewalNotification[]
+enum RenewalStatus {
+  UPCOMING
+  ACTION_REQUIRED
+  URGENT
+  EXPIRED
+  CONTACTED
+  QUOTED
+  IN_PROGRESS
+  RENEWED
+  LOST
+}
+
+enum RenewalEventType {
+  CONTACTED
+  TEMPLATE_SENT
+  QUOTED
+  PAID
+  RENEWED
+  LOST
+  NOTE
+  AUTO_RULE_RUN
+}
+
+model RenewalItem {
+  id               Int                @id @default(autoincrement())
+  leadId           Int
+  contactId        Int?
+  serviceType      RenewalServiceType
+  serviceName      String?
+  expiresAt        DateTime
+  status           RenewalStatus      @default(UPCOMING)
+  expectedValue    Int? // Expected revenue in AED
+  probability      Int                @default(70) // 0-100 probability of renewal
+  assignedToUserId Int?
+  lastContactedAt  DateTime?
+  nextActionAt     DateTime?
+  lastTemplateName String?
+  notes            String?
+  metadata         Json? // Flexible JSON for additional data
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  lead       Lead  @relation("RenewalItems", fields: [leadId], references: [id])
+  assignedTo User? @relation("AssignedRenewalItems", fields: [assignedToUserId], references: [id])
+
+  events RenewalEventLog[]
+
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+  @@index([leadId])
+  @@index([assignedToUserId, status, expiresAt])
+}
+
+model RenewalEventLog {
+  id              Int              @id @default(autoincrement())
+  renewalItemId   Int
+  type            RenewalEventType
+  channel         String? // WHATSAPP | EMAIL | PHONE | INTERNAL
+  messageId       Int? // Reference to Message.id if applicable
+  payload         Json? // Flexible JSON for event-specific data
+  createdByUserId Int?
+  createdAt       DateTime         @default(now())
+
+  renewalItem RenewalItem @relation(fields: [renewalItemId], references: [id])
+  createdBy   User?       @relation("CreatedRenewalEvents", fields: [createdByUserId], references: [id])
+
+  @@index([renewalItemId, createdAt])
+}
+
+model Renewal {
+  id               Int           @id @default(autoincrement())
+  contact          Contact       @relation(fields: [contactId], references: [id])
+  contactId        Int
+  lead             Lead?         @relation(fields: [leadId], references: [id])
+  leadId           Int?
+  conversation     Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId   Int?
+  serviceType      String // Service type name (e.g., "VISA_RENEWAL", "EMIRATES_ID_RENEWAL")
+  expiryDate       DateTime
+  status           String        @default("ACTIVE") // ACTIVE | RENEWED | CANCELLED | EXPIRED
+  reminderStage    Int           @default(0) // 0=none sent yet, 1=R1 sent, 2=R2, 3=R3 done
+  lastNotifiedAt   DateTime?
+  lastRemindedAt   DateTime? // Last reminder timestamp
+  nextReminderAt   DateTime? // Next reminder due date (computed from reminder schedule)
+  reminderSchedule String        @default("[30,14,7]") // JSON array as string: days before expiry [R1, R2, R3]
+  remindersEnabled Boolean       @default(true)
+  createdAt        DateTime      @default(now())
+  updatedAt        DateTime      @updatedAt
+
+  notifications RenewalNotification[]
 
   @@index([contactId, expiryDate])
   @@index([nextReminderAt])
@@ -344,19 +425,19 @@ model Renewal {
 }
 
 model RenewalNotification {
-  id                Int       @id @default(autoincrement())
-  renewal           Renewal   @relation(fields: [renewalId], references: [id])
-  renewalId         Int
-  channel           String    @default("whatsapp") // whatsapp | facebook
-  stage             Int       // Reminder stage: 1, 2, or 3
-  templateName      String    // Template name used (e.g., "renewal_notification_r1")
-  reminderDate      DateTime  // Date when reminder was sent (YYYY-MM-DD)
-  idempotencyKey    String    @unique // Format: renewal:{channel}:{renewalId}:stage:{stage}
-  sentAt            DateTime  @default(now())
-  status            String    @default("SENT") // SENT | FAILED
-  error             String?
-  messageId         String?   // WhatsApp/Facebook message ID if successful
-  createdAt         DateTime  @default(now())
+  id             Int      @id @default(autoincrement())
+  renewal        Renewal  @relation(fields: [renewalId], references: [id])
+  renewalId      Int
+  channel        String   @default("whatsapp") // whatsapp | facebook
+  stage          Int // Reminder stage: 1, 2, or 3
+  templateName   String // Template name used (e.g., "renewal_notification_r1")
+  reminderDate   DateTime // Date when reminder was sent (YYYY-MM-DD)
+  idempotencyKey String   @unique // Format: renewal:{channel}:{renewalId}:stage:{stage}
+  sentAt         DateTime @default(now())
+  status         String   @default("SENT") // SENT | FAILED
+  error          String?
+  messageId      String? // WhatsApp/Facebook message ID if successful
+  createdAt      DateTime @default(now())
 
   @@index([renewalId, reminderDate])
   @@index([idempotencyKey])
@@ -467,13 +548,13 @@ model Message {
   createdByUser     User?        @relation(fields: [createdByUserId], references: [id])
   createdAt         DateTime     @default(now())
 
-  statusEvents             MessageStatusEvent[]
-  autoReplyLogs            AutoReplyLog[]
-  replyEngineLogs          ReplyEngineLog[]
-  replyEngineLogsAsInbound ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
-  attachments              LeadAttachment[]
-  outboundJobs             OutboundJob[]        @relation("OutboundJobInboundMessage")
-  aiReplyDedupInboundMessage AiReplyDedup[]      @relation("AiReplyDedupInboundMessage")
+  statusEvents               MessageStatusEvent[]
+  autoReplyLogs              AutoReplyLog[]
+  replyEngineLogs            ReplyEngineLog[]
+  replyEngineLogsAsInbound   ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
+  attachments                LeadAttachment[]
+  outboundJobs               OutboundJob[]        @relation("OutboundJobInboundMessage")
+  aiReplyDedupInboundMessage AiReplyDedup[]       @relation("AiReplyDedupInboundMessage")
 
   @@unique([channel, providerMessageId]) // Prevent duplicate messages when webhooks retry (composite unique)
   @@index([conversationId, createdAt])
