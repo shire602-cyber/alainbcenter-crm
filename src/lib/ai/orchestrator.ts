@@ -1,9 +1,9 @@
 /**
  * AI ORCHESTRATOR - SINGLE SOURCE OF TRUTH FOR AI REPLIES
- *
+ * 
  * This is the ONLY module allowed to call the LLM.
  * All other AI modules must use this orchestrator.
- *
+ * 
  * Responsibilities:
  * 1. Load AI Rules + AI Training content from DB
  * 2. Build ONE system prompt (strict; no hallucinations; follow ruleEngine)
@@ -269,14 +269,14 @@ export interface OrchestratorOutput {
 async function loadTrainingDocuments(agentProfileId?: number): Promise<string> {
   try {
     let documentIds: number[] = [];
-
+    
     // If agent profile specified, get its training document IDs
     if (agentProfileId) {
       const agent = await prisma.aIAgentProfile.findUnique({
         where: { id: agentProfileId },
         select: { trainingDocumentIds: true },
       });
-
+      
       if (agent?.trainingDocumentIds) {
         try {
           documentIds = JSON.parse(agent.trainingDocumentIds);
@@ -289,7 +289,7 @@ async function loadTrainingDocuments(agentProfileId?: number): Promise<string> {
         }
       }
     }
-
+    
     // If no agent profile or no documents specified, load all active documents
     if (documentIds.length === 0) {
       const allDocs = await prisma.aITrainingDocument.findMany({
@@ -298,18 +298,18 @@ async function loadTrainingDocuments(agentProfileId?: number): Promise<string> {
       });
       documentIds = allDocs.map((doc) => doc.id);
     }
-
+    
     // Load documents
     const documents = await prisma.aITrainingDocument.findMany({
       where: { id: { in: documentIds } },
       orderBy: { updatedAt: "desc" },
     });
-
+    
     // Combine into training text
     const trainingText = documents
       .map((doc) => `[${doc.type.toUpperCase()}] ${doc.title}\n${doc.content}`)
       .join("\n\n---\n\n");
-
+    
     return trainingText;
   } catch (error: any) {
     console.warn(
@@ -329,7 +329,7 @@ async function buildSystemPrompt(
 ): Promise<string> {
   // Load training documents
   const trainingContent = await loadTrainingDocuments(agentProfileId);
-
+  
   // Get agent profile if specified
   let agentPrompt = "";
   if (agentProfileId) {
@@ -337,12 +337,12 @@ async function buildSystemPrompt(
       where: { id: agentProfileId },
       select: { systemPrompt: true, tone: true, maxMessageLength: true },
     });
-
+    
     if (agent?.systemPrompt) {
       agentPrompt = agent.systemPrompt;
     }
   }
-
+  
   // Build base system prompt
   const basePrompt =
     agentPrompt ||
@@ -354,7 +354,7 @@ You must follow the rules and training documents exactly.`;
   const trainingSection = trainingContent
     ? `\n\n## TRAINING DOCUMENTS (FOLLOW THESE EXACTLY):\n${trainingContent}`
     : "";
-
+  
   // Add rule engine constraints
   const rulesSection = `\n\n## CRITICAL RULES (MUST FOLLOW):
 1. NEVER promise approvals, guarantees, or 100% success rates
@@ -388,7 +388,7 @@ function extractFieldsFromReply(
   } = require("../inbound/fieldExtractors");
 
   const combinedText = `${inboundText} ${replyText}`.toLowerCase();
-
+  
   return {
     service: extractService(combinedText),
     nationality: extractNationality(combinedText),
@@ -406,34 +406,34 @@ export async function generateAIReply(
   console.log(
     `[ORCHESTRATOR] ENTRY`,
     JSON.stringify({
-      conversationId: input.conversationId,
-      leadId: input.leadId,
-      contactId: input.contactId,
-      channel: input.channel,
-      inboundMessageId: input.inboundMessageId,
-      inboundTextLength: input.inboundText.length,
+    conversationId: input.conversationId,
+    leadId: input.leadId,
+    contactId: input.contactId,
+    channel: input.channel,
+    inboundMessageId: input.inboundMessageId,
+    inboundTextLength: input.inboundText.length,
     }),
   );
-
+  
   try {
     // Step 0: Load conversation state (with optimistic locking)
     const conversationState = await loadConversationState(input.conversationId);
     let expectedStateVersion = conversationState.stateVersion; // Use actual state version for optimistic locking
-
+    
     // DIAGNOSTIC LOG: state loaded
     console.log(
       `[ORCHESTRATOR] STATE-LOADED`,
       JSON.stringify({
-        conversationId: input.conversationId,
-        stateVersion: expectedStateVersion,
-        qualificationStage: conversationState.qualificationStage,
-        questionsAskedCount: conversationState.questionsAskedCount,
-        lastQuestionKey: conversationState.lastQuestionKey,
-        serviceKey: conversationState.serviceKey,
-        knownFields: Object.keys(conversationState.knownFields),
+      conversationId: input.conversationId,
+      stateVersion: expectedStateVersion,
+      qualificationStage: conversationState.qualificationStage,
+      questionsAskedCount: conversationState.questionsAskedCount,
+      lastQuestionKey: conversationState.lastQuestionKey,
+      serviceKey: conversationState.serviceKey,
+      knownFields: Object.keys(conversationState.knownFields),
       }),
     );
-
+    
     // Step 1: Load conversation and lead context
     const conversation = await prisma.conversation.findUnique({
       where: { id: input.conversationId },
@@ -451,18 +451,18 @@ export async function generateAIReply(
         },
       },
     });
-
+    
     if (!conversation) {
       throw new Error(`Conversation ${input.conversationId} not found`);
     }
-
+    
     const lead = conversation.lead;
     if (!lead) {
       throw new Error(
         `Lead not found for conversation ${input.conversationId}`,
       );
     }
-
+    
     // CRITICAL FIX A: Extract fields from inbound message BEFORE gating
     // This ensures we don't ask for information that was just provided
     const stateExtractedFields = extractFieldsToState(
@@ -473,7 +473,7 @@ export async function generateAIReply(
       ...conversationState.knownFields,
       ...stateExtractedFields,
     };
-
+    
     // Detect service if not already known
     if (!updatedKnownFields.service) {
       const { extractService } = require("../inbound/fieldExtractors");
@@ -482,7 +482,7 @@ export async function generateAIReply(
         updatedKnownFields.service = detectedService;
       }
     }
-
+    
     // Detect "cheapest" keyword
     const lowerText = input.inboundText.toLowerCase();
     if (lowerText.includes("cheapest") || lowerText.includes("cheap")) {
@@ -490,7 +490,7 @@ export async function generateAIReply(
       updatedKnownFields.recommendedOffer =
         "Professional Mainland License + Investor Visa for AED 12,999";
     }
-
+    
     // Detect "marketing license"
     if (
       lowerText.includes("marketing license") ||
@@ -499,7 +499,7 @@ export async function generateAIReply(
       updatedKnownFields.businessActivity = "Marketing License";
       updatedKnownFields.customServiceLabel = "Marketing License";
     }
-
+    
     // Write extracted fields to DB immediately (before gating)
     if (
       Object.keys(stateExtractedFields).length > 0 ||
@@ -517,36 +517,36 @@ export async function generateAIReply(
       conversationState.knownFields = reloadedState.knownFields;
       expectedStateVersion = reloadedState.stateVersion || expectedStateVersion;
     }
-
+    
     // Structured log: extracted fields
     console.log(
       `[ORCH] extracted fields`,
       JSON.stringify({
-        conversationId: input.conversationId,
-        extractedKeys: Object.keys(stateExtractedFields),
-        extractedValues: Object.fromEntries(
+      conversationId: input.conversationId,
+      extractedKeys: Object.keys(stateExtractedFields),
+      extractedValues: Object.fromEntries(
           Object.entries(stateExtractedFields).map(([k, v]) => [
             k,
             typeof v === "string" ? v.substring(0, 50) : v,
           ]),
-        ),
-        updatedKnownFieldsKeys: Object.keys(updatedKnownFields),
+      ),
+      updatedKnownFieldsKeys: Object.keys(updatedKnownFields),
       }),
     );
-
+    
     // Step 1.5: Check question budget (max 6 questions)
     if (conversationState.questionsAskedCount >= 6) {
       console.log(
         `[ORCHESTRATOR] Question budget reached (${conversationState.questionsAskedCount} questions) - triggering handoff`,
       );
-
+      
       // Check if handoff was already triggered
       const handoffTriggered = conversationState.knownFields.handoffTriggeredAt;
       if (!handoffTriggered) {
         // Send handoff message (greeting will be added globally)
         const handoffMessage = `Perfect ✅ I have enough to proceed.
 Please share your email for the quotation and the best time for our consultant to call you (today or tomorrow).`;
-
+        
         // Mark handoff as triggered
         await updateConversationState(
           input.conversationId,
@@ -558,7 +558,7 @@ Please share your email for the quotation and the best time for our consultant t
           },
           expectedStateVersion,
         );
-
+        
         return {
           replyText: handoffMessage,
           extractedFields: {},
@@ -568,7 +568,7 @@ Please share your email for the quotation and the best time for our consultant t
             {
               type: "FOLLOW_UP",
               title: "Follow up with customer for email and call time",
-              dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
+            dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
             },
           ],
           shouldEscalate: false,
@@ -586,14 +586,14 @@ Please share your email for the quotation and the best time for our consultant t
         };
       }
     }
-
+    
     // Step 1.6: Check for qualification complete (name + service + nationality)
     // CRITICAL FIX B: Use state flag only, no substring matching
-    const hasCoreQualification =
-      updatedKnownFields.name &&
-      updatedKnownFields.service &&
+    const hasCoreQualification = 
+      updatedKnownFields.name && 
+      updatedKnownFields.service && 
       updatedKnownFields.nationality;
-
+    
     if (hasCoreQualification && !updatedKnownFields.qualificationConfirmedAt) {
       // CRITICAL FIX B: Use qualificationConfirmedAt flag only (no substring check)
       // If flag exists, confirmation already sent
@@ -606,7 +606,7 @@ Please share your email for the quotation and the best time for our consultant t
           updatedKnownFields.nationality ||
           lead.contact.nationality ||
           "nationality";
-
+        
         // Confirmation message (greeting will be added globally)
         const confirmationMessage = `Perfect, ${name}! ✅ I've noted:
 • Service: ${service}
@@ -614,7 +614,7 @@ Please share your email for the quotation and the best time for our consultant t
 
 Please share your email so I can send you the quotation,
 and let me know the best time for our consultant to call you.`;
-
+        
         // Mark confirmation as sent using state flag
         const confirmedFields = {
           ...updatedKnownFields,
@@ -627,7 +627,7 @@ and let me know the best time for our consultant to call you.`;
           },
           expectedStateVersion,
         );
-
+        
         return {
           replyText: confirmationMessage,
           extractedFields: {
@@ -642,15 +642,15 @@ and let me know the best time for our consultant to call you.`;
         };
       }
     }
-
+    
     // Step 1.7: STAGE 1 QUALIFICATION GATE
     // CRITICAL FIX A: Use updatedKnownFields (after extraction) for gate check
     // Priority order: 1) service, 2) name, 3) nationality
-    const hasCoreQualificationCheck =
-      updatedKnownFields.name &&
-      updatedKnownFields.service &&
+    const hasCoreQualificationCheck = 
+      updatedKnownFields.name && 
+      updatedKnownFields.service && 
       updatedKnownFields.nationality;
-
+    
     // Structured log: gate decision
     const missingFields: string[] = [];
     if (!updatedKnownFields.service) missingFields.push("service");
@@ -660,20 +660,20 @@ and let me know the best time for our consultant to call you.`;
     console.log(
       `[ORCH] gate decision`,
       JSON.stringify({
-        conversationId: input.conversationId,
-        missing: missingFields,
-        asked: conversationState.lastQuestionKey,
-        questionsAskedCount: conversationState.questionsAskedCount,
-        hasCoreQualification: hasCoreQualificationCheck,
+      conversationId: input.conversationId,
+      missing: missingFields,
+      asked: conversationState.lastQuestionKey,
+      questionsAskedCount: conversationState.questionsAskedCount,
+      hasCoreQualification: hasCoreQualificationCheck,
       }),
     );
-
+    
     // If Stage 1 not complete, enforce strict gate with NEW priority order
     if (!hasCoreQualificationCheck) {
       // Determine which core field to ask for (NEW priority order: service first)
       let nextCoreQuestion: { questionKey: string; question: string } | null =
         null;
-
+      
       // 1) SERVICE FIRST (unless user already stated service in first message)
       if (!updatedKnownFields.service) {
         // First question: "How can I help you today?" (no service list, no examples)
@@ -681,14 +681,14 @@ and let me know the best time for our consultant to call you.`;
           questionKey: "ASK_SERVICE",
           question: "How can I help you today?",
         };
-      }
+      } 
       // 2) NAME SECOND (only after service is known)
       else if (!updatedKnownFields.name) {
         nextCoreQuestion = {
           questionKey: "ASK_NAME",
           question: "May I know your full name, please?",
         };
-      }
+      } 
       // 3) NATIONALITY THIRD (only after service and name are known)
       else if (!updatedKnownFields.nationality) {
         nextCoreQuestion = {
@@ -696,7 +696,7 @@ and let me know the best time for our consultant to call you.`;
           question: "What is your nationality?",
         };
       }
-
+      
       // If we have a core question to ask, check no-repeat guard
       if (nextCoreQuestion) {
         // Check if this question was asked recently
@@ -704,7 +704,7 @@ and let me know the best time for our consultant to call you.`;
           conversationState,
           nextCoreQuestion.questionKey,
         );
-
+        
         if (
           !wasAsked &&
           !BANNED_QUESTION_KEYS.has(nextCoreQuestion.questionKey)
@@ -717,7 +717,7 @@ and let me know the best time for our consultant to call you.`;
             nextCoreQuestion.questionKey,
             `WAIT_${nextCoreQuestion.questionKey}`,
           );
-
+          
           // Increment question count
           const newQuestionsCount = conversationState.questionsAskedCount + 1;
           await updateConversationState(
@@ -729,7 +729,7 @@ and let me know the best time for our consultant to call you.`;
             },
             expectedStateVersion,
           );
-
+          
           return {
             replyText: nextCoreQuestion.question,
             extractedFields: {},
@@ -741,14 +741,14 @@ and let me know the best time for our consultant to call you.`;
         }
       }
     }
-
+    
     // Step 2: Check if this is first message (CRITICAL: First message bypasses retriever)
     // Note: Field extraction already done above (Step 1.4)
     const outboundCount = conversation.messages.filter(
       (m) => m.direction === "OUTBOUND",
     ).length;
     const isFirstMessage = outboundCount === 0;
-
+    
     // CRITICAL FIX: First message ALWAYS gets a reply - bypass retriever/training checks
     // This ensures first inbound message never gets blocked by training document checks
     if (isFirstMessage) {
@@ -756,13 +756,13 @@ and let me know the best time for our consultant to call you.`;
         `[ORCHESTRATOR] First message detected - bypassing retriever/training checks`,
       );
     }
-
+    
     // Step 3: Try rule engine first (deterministic, no LLM)
     try {
       // Load conversation memory
       const { loadConversationMemory } = await import("./ruleEngine");
       const memory = await loadConversationMemory(input.conversationId);
-
+      
       const ruleEngineResult = await executeRuleEngine({
         conversationId: input.conversationId,
         leadId: lead.id,
@@ -776,13 +776,13 @@ and let me know the best time for our consultant to call you.`;
         isFirstMessage,
         memory,
       });
-
+      
       // CRITICAL FIX C: Handle structured rule engine output
       if (ruleEngineResult.kind === "QUESTION") {
         console.log(
           `[ORCHESTRATOR] Rule engine generated QUESTION: ${ruleEngineResult.questionKey}`,
         );
-
+        
         // Step 3.1: HARD BAN - Check if questionKey is banned (NOT substring matching)
         if (BANNED_QUESTION_KEYS.has(ruleEngineResult.questionKey)) {
           console.error(
@@ -809,7 +809,7 @@ and let me know the best time for our consultant to call you.`;
               ruleEngineResult.questionKey,
               `WAIT_${ruleEngineResult.questionKey}`,
             );
-
+            
             // Increment question count
             const newQuestionsCount = conversationState.questionsAskedCount + 1;
             await updateConversationState(
@@ -821,13 +821,13 @@ and let me know the best time for our consultant to call you.`;
               },
               expectedStateVersion,
             );
-
+            
             // Validate with strictQualification
             const validation = await validateQualificationRules(
               input.conversationId,
               ruleEngineResult.text,
             );
-
+            
             if (validation.isValid && validation.sanitizedReply) {
               return {
                 replyText: validation.sanitizedReply,
@@ -850,14 +850,14 @@ and let me know the best time for our consultant to call you.`;
         console.log(
           `[ORCHESTRATOR] Rule engine generated REPLY (deterministic)`,
         );
-
+        
         // CRITICAL FIX C: For REPLY kind, banned question keys don't apply (only for QUESTION kind)
         // Validate with strictQualification
         const validation = await validateQualificationRules(
           input.conversationId,
           ruleEngineResult.text,
         );
-
+        
         if (validation.isValid && validation.sanitizedReply) {
           // Update known fields
           await updateConversationState(
@@ -867,7 +867,7 @@ and let me know the best time for our consultant to call you.`;
             },
             expectedStateVersion,
           );
-
+          
           return {
             replyText: validation.sanitizedReply,
             extractedFields: extractFieldsFromReply(
@@ -900,7 +900,7 @@ and let me know the best time for our consultant to call you.`;
         ruleEngineError.message,
       );
     }
-
+    
     // CRITICAL FIX 4: Determine reply language from conversation or agent profile
     let replyLanguage: "en" | "ar" = input.language || "en";
     if (!replyLanguage && (conversation as any).language) {
@@ -926,14 +926,14 @@ and let me know the best time for our consultant to call you.`;
         );
       }
     }
-
+    
     // Step 4: Build system prompt from rules + training
     // NOTE: For first messages, we still build the prompt but don't block if training is missing
     const systemPrompt = await buildSystemPrompt(
       input.agentProfileId || lead.aiAgentProfileId || undefined,
       replyLanguage, // CRITICAL FIX 4: Use determined language
     );
-
+    
     // Step 4: Build conversation context
     const recentMessages = conversation.messages
       .slice()
@@ -943,7 +943,7 @@ and let me know the best time for our consultant to call you.`;
           `${m.direction === "INBOUND" ? "User" : "Assistant"}: ${m.body || ""}`,
       )
       .join("\n");
-
+    
     const userPrompt = `Conversation context:
 ${recentMessages}
 
@@ -962,31 +962,31 @@ Generate a short, helpful reply that:
 5. Keeps it under 300 characters
 
 Reply:`;
-
+    
     // Step 5: Call LLM
     const messages: LLMMessage[] = [
       { role: "system", content: systemPrompt },
       { role: "user", content: userPrompt },
     ];
-
+    
     const llmResult = await generateCompletion(messages, {
       temperature: 0.7,
       maxTokens: 300,
     });
-
+    
     let replyText = llmResult.text.trim();
-
+    
     // Step 6: Validate with strictQualification
     const validation = await validateQualificationRules(
       input.conversationId,
       replyText,
     );
-
+    
     if (!validation.isValid) {
       console.warn(
         `[ORCHESTRATOR] LLM output failed validation: ${validation.error}`,
       );
-
+      
       if (validation.sanitizedReply) {
         replyText = validation.sanitizedReply;
       } else {
@@ -994,19 +994,19 @@ Reply:`;
         replyText = `Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation.`;
       }
     }
-
+    
     // Step 7: Extract fields
     const extractedFields = extractFieldsFromReply(
       replyText,
       input.inboundText,
     );
-
+    
     // Step 8: Check for duplicate outbound (deduplication guard)
     const normalizedReply = replyText.trim().toLowerCase().replace(/\s+/g, " ");
     const replyHash = createHash("sha256")
       .update(`${input.conversationId}:${normalizedReply}`)
       .digest("hex");
-
+    
     // Check if same reply was sent in last 10 minutes
     const tenMinutesAgo = new Date(Date.now() - 10 * 60 * 1000);
     const recentDuplicate = await prisma.message.findFirst({
@@ -1020,7 +1020,7 @@ Reply:`;
         },
       },
     });
-
+    
     if (recentDuplicate) {
       console.warn(
         `[ORCHESTRATOR] Duplicate outbound detected - skipping send`,
@@ -1035,7 +1035,7 @@ Reply:`;
         handoverReason: "Duplicate outbound message detected",
       };
     }
-
+    
     // Step 9: Update conversation state (update known fields, but don't increment question count for LLM replies)
     // LLM replies are less deterministic, so we only update known fields
     await updateConversationState(
@@ -1045,11 +1045,11 @@ Reply:`;
       },
       expectedStateVersion,
     );
-
+    
     // Step 10: Determine confidence and tasks
     const confidence = validation.isValid ? 75 : 50; // Lower confidence if validation failed
     const tasksToCreate: OrchestratorOutput["tasksToCreate"] = [];
-
+    
     // Create task if validation failed
     if (!validation.isValid && validation.error) {
       tasksToCreate.push({
@@ -1058,7 +1058,7 @@ Reply:`;
         dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24 hours
       });
     }
-
+    
     // CRITICAL FIX 2: Sanitize reply text to prevent JSON from being sent
     const { sanitizeReplyText } = await import("./sanitizeReplyText");
     const sanitized = sanitizeReplyText(replyText);
@@ -1067,7 +1067,7 @@ Reply:`;
         `[ORCHESTRATOR] Sanitized JSON reply: ${replyText.substring(0, 100)} -> ${sanitized.text.substring(0, 100)}`,
       );
     }
-
+    
     return {
       replyText: sanitized.text,
       extractedFields,
@@ -1079,7 +1079,7 @@ Reply:`;
     };
   } catch (error: any) {
     console.error(`[ORCHESTRATOR] Error generating reply:`, error);
-
+    
     // Fallback deterministic message
     return {
       replyText: `Thanks! To help quickly, please share: (1) Name (2) Service needed (3) Nationality (4) Expiry date if renewal (5) Email for quotation.`,
@@ -1088,8 +1088,8 @@ Reply:`;
       tasksToCreate: [
         {
           type: "QUALIFICATION",
-          title: `AI orchestrator error: ${error.message}`,
-          dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
+        title: `AI orchestrator error: ${error.message}`,
+        dueAt: new Date(Date.now() + 24 * 60 * 60 * 1000),
         },
       ],
       shouldEscalate: true,
@@ -1403,12 +1403,18 @@ export async function sendTemplate(input: {
           wasDuplicate: true,
         };
       }
-      // If status is FAILED, we can retry
-      if (existingNotification.status === "FAILED") {
+      // If status is PENDING, another process is handling this
+      if (existingNotification.status === "PENDING") {
         console.log(
-          `[ORCHESTRATOR] sendTemplate RETRY - previous attempt failed`,
+          `[ORCHESTRATOR] sendTemplate DUPLICATE - already processing (PENDING)`,
         );
+        return {
+          success: false,
+          wasDuplicate: true,
+          error: 'Already processing (PENDING)',
+        };
       }
+      // If status is FAILED, we can retry (caller will update the record)
     }
   } else {
     // For non-renewal templates, use AiReplyDedup
@@ -1438,13 +1444,14 @@ export async function sendTemplate(input: {
       templateParams,
     );
 
-    // Step 4: Update idempotency record with success (if using AiReplyDedup)
-    // For renewal notifications, the record is created in processReminders.ts
+    // Step 4: Update idempotency record with success
+    // For renewal notifications, the record is created/updated by the caller (processReminders.ts)
+    // We just return success - caller will update RenewalNotification record
     if (idempotencyKey.startsWith("renewal:")) {
-      // Renewal notification will be created by the caller
+      // Renewal notification record is managed by processReminders.ts
       // Just log success
       console.log(
-        `[ORCHESTRATOR] sendTemplate SUCCESS - renewal notification will be created by caller`,
+        `[ORCHESTRATOR] sendTemplate SUCCESS - renewal notification managed by caller`,
       );
     } else {
       // For non-renewal templates, update AiReplyDedup if we have a record
