@@ -30,26 +30,28 @@ async function runMigrations() {
     console.warn('⚠️  Set DIRECT_URL environment variable for better reliability.')
   }
   
-  // Increase timeout for advisory locks
-  migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT = '30000' // 30 seconds
+  // Increase timeout for advisory locks (PostgreSQL advisory lock timeout)
+  migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT = '60000' // 60 seconds (increased from 30)
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(`📦 Attempt ${attempt}/${MAX_RETRIES}: Running prisma migrate deploy...`)
+      console.log(`⏱️  Using lock timeout: ${migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT}ms`)
       
       execSync('npx prisma migrate deploy', {
         stdio: 'inherit',
         env: migrationEnv,
-        timeout: 120000, // 2 minute timeout per attempt
+        timeout: 300000, // 5 minute timeout per attempt (increased for 46 migrations)
       })
       
       console.log('✅ Migrations completed successfully')
       process.exit(0)
     } catch (error) {
-      const isTimeout = error.message?.includes('timed out') || 
-                       error.message?.includes('P1002') ||
-                       error.stderr?.toString().includes('timed out') ||
-                       error.stderr?.toString().includes('P1002')
+      const errorOutput = error.stderr?.toString() || error.stdout?.toString() || error.message || ''
+      const isTimeout = errorOutput.includes('timed out') || 
+                       errorOutput.includes('P1002') ||
+                       errorOutput.includes('advisory lock') ||
+                       errorOutput.includes('timeout')
       
       if (isTimeout && attempt < MAX_RETRIES) {
         const delay = INITIAL_DELAY * Math.pow(2, attempt - 1) // Exponential backoff

@@ -252,6 +252,7 @@ function InboxPageContent() {
   const [showTemplateModal, setShowTemplateModal] = useState(false)
   const [templates, setTemplates] = useState<Array<{ name: string; language: string; category: string; components?: any[] }>>([])
   const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
   const [selectedTemplate, setSelectedTemplate] = useState<{ name: string; language: string; components?: any[] } | null>(null)
   const [templateVariables, setTemplateVariables] = useState<string[]>([])
   const [sendingTemplate, setSendingTemplate] = useState(false)
@@ -548,18 +549,34 @@ function InboxPageContent() {
   }
 
   async function loadTemplates() {
-    if (templates.length > 0) return // Already loaded
-    
     setLoadingTemplates(true)
+    setTemplateError(null)
     try {
-      const res = await fetch('/api/whatsapp/templates')
+      const res = await fetch('/api/whatsapp/templates?onlyApproved=1')
       const data = await res.json()
+      
       if (data.ok && data.templates) {
         setTemplates(data.templates)
+        if (data.templates.length === 0) {
+          setTemplateError('No approved templates returned from this WABA.')
+        }
       } else {
-        console.error('Failed to load templates:', data.error)
+        // API returned an error
+        const errorMsg = data.message || data.error || 'Failed to load templates'
+        const errorDetails = data.details?.error?.message || data.details?.error?.error_user_msg || ''
+        const fullError = errorDetails ? `${errorMsg}: ${errorDetails}` : errorMsg
+        
+        setTemplateError(fullError)
+        console.error('Failed to load templates:', {
+          status: res.status,
+          error: data.error,
+          message: data.message,
+          details: data.details,
+        })
       }
-    } catch (err) {
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to load templates'
+      setTemplateError(errorMsg)
       console.error('Failed to load templates:', err)
     } finally {
       setLoadingTemplates(false)
@@ -1634,17 +1651,61 @@ function InboxPageContent() {
           </DialogHeader>
 
           <div className="space-y-4 mt-4">
+            {/* Error Message */}
+            {templateError && (
+              <div className="p-3 border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-700 dark:text-red-400">
+                <div className="flex items-start gap-2">
+                  <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <p className="font-medium">Error loading templates</p>
+                    <p className="mt-1">{templateError}</p>
+                  </div>
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={loadTemplates}
+                  className="mt-2"
+                  disabled={loadingTemplates}
+                >
+                  {loadingTemplates ? (
+                    <>
+                      <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                      Refreshing...
+                    </>
+                  ) : (
+                    'Refresh'
+                  )}
+                </Button>
+              </div>
+            )}
+
             {/* Template Selection */}
             <div>
-              <Label htmlFor="template-select">Template</Label>
+              <div className="flex items-center justify-between mb-2">
+                <Label htmlFor="template-select">Template</Label>
+                {!loadingTemplates && !templateError && (
+                  <button
+                    type="button"
+                    onClick={loadTemplates}
+                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                  >
+                    Refresh
+                  </button>
+                )}
+              </div>
               {loadingTemplates ? (
                 <div className="mt-2 p-4 border rounded-lg">
                   <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
                   Loading templates...
                 </div>
+              ) : templateError && templates.length === 0 ? (
+                <div className="mt-2 p-4 border rounded-lg text-sm text-muted-foreground">
+                  Unable to load templates. Check the error message above.
+                </div>
               ) : templates.length === 0 ? (
                 <div className="mt-2 p-4 border rounded-lg text-sm text-muted-foreground">
-                  No approved templates found. Create templates in Meta Business Manager.
+                  No approved templates returned from this WABA.
                 </div>
               ) : (
                 <Select

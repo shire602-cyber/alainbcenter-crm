@@ -38,12 +38,12 @@ export async function POST(req: NextRequest) {
     // Get options from query or body
     const { searchParams } = new URL(req.url)
     const dryRun = searchParams.get('dryRun') === 'true'
-    const limit = parseInt(searchParams.get('limit') || '100')
+    const max = parseInt(searchParams.get('limit') || '100')
 
     // Process reminders
     const results = await processRenewalReminders({
       dryRun,
-      limit,
+      max,
     })
 
     return NextResponse.json({
