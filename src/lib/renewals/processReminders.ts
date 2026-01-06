@@ -93,12 +93,14 @@ export async function processRenewalReminders(options: {
       const { upsertConversation } = await import('@/lib/conversation/upsert')
       const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
       
-      const conversationId = await upsertConversation({
+      const conversationResult = await upsertConversation({
         contactId: renewal.contact.id,
         channel: 'whatsapp',
         leadId: renewal.leadId || null,
         externalThreadId: getExternalThreadId('whatsapp', renewal.contact),
       })
+      
+      const conversationId = typeof conversationResult === 'object' ? conversationResult.id : conversationResult
 
       // Map renewal to template variables
       const templateVars = mapRenewalToTemplateVars({

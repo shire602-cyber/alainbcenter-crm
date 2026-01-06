@@ -69,8 +69,6 @@ export async function POST(req: NextRequest) {
         id: true,
         aiScore: true,
         aiNotes: true,
-        forecastProbability: true,
-        forecastReasonJson: true,
         stage: true,
         status: true,
       },

@@ -1304,9 +1304,6 @@ export async function sendTemplate(
     
     // Error handling - renewal notifications handle their own error records
     // For non-renewal templates, error is returned to caller
-    }
-    
-    await releaseConversationLock(conversationId)
     return {
       success: false,
       error: error.message || 'Unknown error',

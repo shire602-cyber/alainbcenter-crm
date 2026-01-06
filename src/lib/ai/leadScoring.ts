@@ -168,7 +168,7 @@ CRITICAL: Return ONLY valid JSON. No markdown code blocks, no explanations.`
     try {
       console.log(`[LEAD-SCORING] Generating score for lead ${leadId} (attempt ${parseAttempts + 1}/${maxParseAttempts})`)
 
-      const result = await generateCompletion(
+      const completionResult = await generateCompletion(
         messages_llm,
         options,
         {
@@ -178,7 +178,7 @@ CRITICAL: Return ONLY valid JSON. No markdown code blocks, no explanations.`
         }
       )
 
-      rawOutput = result.text
+      rawOutput = completionResult.text
       console.log(`[LEAD-SCORING] Raw output (${rawOutput.length} chars): ${rawOutput.substring(0, 200)}...`)
 
       // Parse JSON output
@@ -270,7 +270,7 @@ export async function scoreAndPersistLead(
   const updateData: any = {
     aiScore: result.aiScore,
     aiNotes: result.summary,
-    forecastProbability: Math.round(result.aiScore), // 0-100 probability
+    // Note: forecastProbability doesn't exist in Lead model - use dealProbability if needed
     forecastReasonJson: JSON.stringify([result.nextBestAction.rationale]),
   }
 
