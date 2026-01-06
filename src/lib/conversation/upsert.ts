@@ -110,6 +110,36 @@ export async function upsertConversation(
   
   // Create new conversation - use (contactId, channel) as base uniqueness
   // But store effectiveThreadId for future lookups
+  // CRITICAL FIX: Check if conversation exists and is soft-deleted before upsert
+  const existingByUnique = await prisma.conversation.findUnique({
+    where: {
+      contactId_channel: {
+        contactId: input.contactId,
+        channel: channelLower,
+      },
+    },
+  })
+  
+  // If conversation exists but is soft-deleted, restore it
+  if (existingByUnique && (existingByUnique as any).deletedAt) {
+    const restored = await prisma.conversation.update({
+      where: { id: existingByUnique.id },
+      data: {
+        deletedAt: null, // CRITICAL: Restore soft-deleted conversation
+        status: 'open',
+        leadId: input.leadId ?? existingByUnique.leadId,
+        externalThreadId: effectiveThreadId,
+        externalId: input.externalId ?? existingByUnique.externalId,
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        channel: channelLower,
+        language: input.language ?? existingByUnique.language,
+      },
+    })
+    console.log(`♻️ [UPSERT-CONV] Restored soft-deleted conversation ${restored.id} via unique constraint (new message received)`)
+    return { id: restored.id }
+  }
+  
   const conversation = await prisma.conversation.upsert({
     where: {
       contactId_channel: {
@@ -126,6 +156,7 @@ export async function upsertConversation(
       status: input.status || 'open',
       channel: channelLower, // Ensure normalized
       language: input.language ?? undefined, // CRITICAL FIX 4: Update language if provided
+      deletedAt: null, // CRITICAL FIX: Restore if soft-deleted (upsert update path)
     },
     create: {
       contactId: input.contactId,

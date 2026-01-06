@@ -10,6 +10,7 @@ export async function GET(req: NextRequest) {
     const pipelineStage = searchParams.get('pipelineStage') // Filter by pipeline stage
     const source = searchParams.get('source') // Filter by source
     const aiScoreCategory = searchParams.get('aiScoreCategory') // 'hot', 'warm', 'cold'
+    const serviceTypeId = searchParams.get('serviceTypeId') // Filter by service type
    
     // Advanced search parameters
     const searchName = searchParams.get('searchName')
@@ -70,6 +71,15 @@ export async function GET(req: NextRequest) {
           source: source,
         },
       })
+    }
+
+    if (serviceTypeId) {
+      const serviceId = parseInt(serviceTypeId)
+      if (!isNaN(serviceId)) {
+        andConditions.push({
+          serviceTypeId: serviceId,
+        })
+      }
     }
        
     // Advanced search filters
@@ -240,6 +250,9 @@ export async function GET(req: NextRequest) {
         },
         assignedUser: {
           select: { id: true, name: true, email: true }
+        },
+        serviceType: {
+          select: { id: true, name: true }
         },
           // Only get latest communication log (optimized)
         communicationLogs: {

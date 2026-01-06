@@ -77,6 +77,7 @@ type Lead = {
   lastContactChannel?: string | null
   assignedUserId?: number | null
   assignedUser?: { id: number; name: string; email: string } | null
+  serviceType?: { id: number; name: string } | null
   createdAt: string
   contact: Contact
   lastContact?: CommunicationLog | null
@@ -99,6 +100,7 @@ function LeadsPageContent() {
   const [pipelineStageFilter, setPipelineStageFilter] = useState<string>('')
   const [sourceFilter, setSourceFilter] = useState<string>('')
   const [aiScoreFilter, setAiScoreFilter] = useState<string>('')
+  const [serviceFilter, setServiceFilter] = useState<string>('')
   const [showCreateModal, setShowCreateModal] = useState(false)
   
   // PHASE 5F: View mode (list, grid, kanban)
@@ -120,6 +122,7 @@ function LeadsPageContent() {
       if (pipelineStageFilter) params.set('pipelineStage', pipelineStageFilter)
       if (sourceFilter) params.set('source', sourceFilter)
       if (aiScoreFilter) params.set('aiScoreCategory', aiScoreFilter)
+      if (serviceFilter) params.set('serviceTypeId', serviceFilter)
 
       const url = params.toString() ? `/api/leads?${params}` : '/api/leads'
       const res = await fetch(url)
@@ -132,7 +135,7 @@ function LeadsPageContent() {
     } finally {
       setLoading(false)
     }
-  }, [filter, pipelineStageFilter, sourceFilter, aiScoreFilter])
+  }, [filter, pipelineStageFilter, sourceFilter, aiScoreFilter, serviceFilter])
 
   useEffect(() => {
     loadLeads()
@@ -416,7 +419,7 @@ function LeadsPageContent() {
               />
             </div>
 
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-2">
+            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
               <div className="space-y-1">
                 <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Quick Filter</label>
                 <Select
@@ -478,7 +481,23 @@ function LeadsPageContent() {
                 </Select>
               </div>
 
-              {(pipelineStageFilter || sourceFilter || aiScoreFilter) && (
+              <div className="space-y-1">
+                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Service</label>
+                <Select 
+                  value={serviceFilter} 
+                  onChange={(e) => setServiceFilter(e.target.value)} 
+                  className="h-8 text-xs"
+                >
+                  <option value="">All</option>
+                  {serviceTypes.map((st) => (
+                    <option key={st.id} value={st.id.toString()}>
+                      {st.name}
+                    </option>
+                  ))}
+                </Select>
+              </div>
+
+              {(pipelineStageFilter || sourceFilter || aiScoreFilter || serviceFilter) && (
                 <div className="space-y-1">
                   <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">&nbsp;</label>
                   <Button
@@ -488,6 +507,7 @@ function LeadsPageContent() {
                       setPipelineStageFilter('')
                       setSourceFilter('')
                       setAiScoreFilter('')
+                      setServiceFilter('')
                     }}
                     className="h-8 w-full gap-1 text-xs"
                   >
@@ -531,12 +551,12 @@ function LeadsPageContent() {
             icon={Users}
             title="No leads found"
             description={
-              searchQuery || pipelineStageFilter || sourceFilter || aiScoreFilter
+              searchQuery || pipelineStageFilter || sourceFilter || aiScoreFilter || serviceFilter
                 ? 'Try adjusting your filters to see more results.'
                 : 'Get started by creating your first lead.'
             }
             action={
-              !searchQuery && !pipelineStageFilter && !sourceFilter && !aiScoreFilter && (
+              !searchQuery && !pipelineStageFilter && !sourceFilter && !aiScoreFilter && !serviceFilter && (
                 <Button onClick={() => setShowCreateModal(true)} size="sm" className="gap-2">
                   <Plus className="h-4 w-4" />
                   Create Lead

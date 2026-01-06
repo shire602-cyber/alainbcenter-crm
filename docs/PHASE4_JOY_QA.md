@@ -117,3 +117,12 @@ When testing, capture screenshots of:
 - [ ] Polling interval: 60s (not too frequent)
 
 
+
+
+
+
+
+
+
+
+

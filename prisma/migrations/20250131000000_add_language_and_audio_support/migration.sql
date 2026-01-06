@@ -57,3 +57,12 @@ CREATE INDEX IF NOT EXISTS "AITrainingDocument_language_stage_idx" ON "AITrainin
 CREATE INDEX IF NOT EXISTS "AITrainingDocument_serviceKey_idx" ON "AITrainingDocument"("serviceKey");
 CREATE INDEX IF NOT EXISTS "AITrainingDocument_serviceTypeId_idx" ON "AITrainingDocument"("serviceTypeId");
 
+
+
+
+
+
+
+
+
+

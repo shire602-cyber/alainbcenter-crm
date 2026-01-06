@@ -88,3 +88,12 @@ export function KanbanColumn({ stage, leads, updating, onStageChange }: KanbanCo
   )
 }
 
+
+
+
+
+
+
+
+
+

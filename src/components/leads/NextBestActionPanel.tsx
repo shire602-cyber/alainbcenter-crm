@@ -15,7 +15,7 @@
  * - Quick context = staff always know "where we are"
  */
 
-import { useState, useEffect, useMemo, useCallback, memo } from 'react'
+import { useState, useEffect, useMemo, useCallback, memo, useRef } from 'react'
 import { Clock, MessageSquare, CheckCircle2, ChevronDown, ChevronUp, Plus, Calendar } from 'lucide-react'
 import { format, formatDistanceToNow, differenceInDays } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -66,7 +66,50 @@ interface NextBestActionPanelProps {
   onComposerFocus?: () => void
 }
 
-export const NextBestActionPanel = memo(function NextBestActionPanel({ 
+// Custom comparison function to prevent re-renders when props haven't actually changed
+function arePropsEqual(prevProps: NextBestActionPanelProps, nextProps: NextBestActionPanelProps) {
+  // Compare leadId (primitive)
+  if (prevProps.leadId !== nextProps.leadId) {
+    console.log('[NextBestActionPanel] Props changed: leadId', { prev: prevProps.leadId, next: nextProps.leadId })
+    return false
+  }
+  
+  // Compare lead - check if it's the same object or if key fields are the same
+  if (prevProps.lead?.id !== nextProps.lead?.id) {
+    console.log('[NextBestActionPanel] Props changed: lead.id', { prev: prevProps.lead?.id, next: nextProps.lead?.id })
+    return false
+  }
+  if (prevProps.lead?.stage !== nextProps.lead?.stage) {
+    console.log('[NextBestActionPanel] Props changed: lead.stage', { prev: prevProps.lead?.stage, next: nextProps.lead?.stage })
+    return false
+  }
+  if (prevProps.lead?.lastInboundAt !== nextProps.lead?.lastInboundAt) {
+    console.log('[NextBestActionPanel] Props changed: lead.lastInboundAt', { prev: prevProps.lead?.lastInboundAt, next: nextProps.lead?.lastInboundAt })
+    return false
+  }
+  if (prevProps.lead?.lastOutboundAt !== nextProps.lead?.lastOutboundAt) {
+    console.log('[NextBestActionPanel] Props changed: lead.lastOutboundAt', { prev: prevProps.lead?.lastOutboundAt, next: nextProps.lead?.lastOutboundAt })
+    return false
+  }
+  
+  // Compare tasks - check if array length and task IDs are the same
+  if (prevProps.tasks?.length !== nextProps.tasks?.length) {
+    console.log('[NextBestActionPanel] Props changed: tasks.length', { prev: prevProps.tasks?.length, next: nextProps.tasks?.length })
+    return false
+  }
+  const prevTaskIds = prevProps.tasks?.map(t => t.id).sort().join(',') || ''
+  const nextTaskIds = nextProps.tasks?.map(t => t.id).sort().join(',') || ''
+  if (prevTaskIds !== nextTaskIds) {
+    console.log('[NextBestActionPanel] Props changed: tasks IDs', { prev: prevTaskIds, next: nextTaskIds })
+    return false
+  }
+  
+  // Function props are compared by reference, which is fine since we use refs
+  console.log('[NextBestActionPanel] Props are equal - preventing re-render')
+  return true
+}
+
+function NextBestActionPanelComponent({ 
   leadId, 
   lead, 
   tasks = [], 
@@ -77,6 +120,11 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
   const { showToast } = useToast()
   const [recommendedAction, setRecommendedAction] = useState<NextBestAction | null>(null)
   const [loading, setLoading] = useState(true)
+  // Store onActionPending in ref to avoid infinite loop (function prop changes on every render)
+  const onActionPendingRef = useRef(onActionPending)
+  useEffect(() => {
+    onActionPendingRef.current = onActionPending
+  }, [onActionPending])
 
   // Memoize lead data transformation
   const leadData: LeadData | null = useMemo(() => {
@@ -96,27 +144,43 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
     }
   }, [lead])
 
-  // Memoize conversation data
+  // Memoize conversation data - CRITICAL: Compare dates without creating new Date objects in comparison
   const conversationData: ConversationData = useMemo(() => {
     if (!lead) return {}
+    // Compare date strings directly to avoid new Date() calls that break memoization
+    const needsReply = lead.lastInboundAt && 
+      (!lead.lastOutboundAt || 
+       (typeof lead.lastInboundAt === 'string' && typeof lead.lastOutboundAt === 'string' 
+         ? lead.lastInboundAt > lead.lastOutboundAt
+         : new Date(lead.lastInboundAt) > new Date(lead.lastOutboundAt)))
     return {
       lastInboundAt: lead.lastInboundAt,
       lastOutboundAt: lead.lastOutboundAt,
       unreadCount: 0, // Could be enhanced with actual unread count
-      needsReplySince: lead.lastInboundAt && (!lead.lastOutboundAt || new Date(lead.lastInboundAt) > new Date(lead.lastOutboundAt))
-        ? lead.lastInboundAt
-        : null,
+      needsReplySince: needsReply ? lead.lastInboundAt : null,
     }
   }, [lead])
 
-  // Memoize tasks data
+  // Memoize tasks data - CRITICAL: Use stable date reference and task IDs to prevent memoization from breaking
+  const nowRef = useRef(new Date())
+  // Create a stable key based on task IDs to prevent recalculation when array reference changes
+  // CRITICAL: Calculate taskIdsKey inside useMemo to ensure hooks are called in the same order
+  const taskIdsKey = useMemo(() => {
+    if (!tasks || !Array.isArray(tasks)) return ''
+    return tasks.map((t: any) => t.id).sort().join(',')
+  }, [tasks])
+  const tasksKey = useMemo(() => {
+    if (!tasks || !Array.isArray(tasks)) return ''
+    return tasks.map((t: any) => `${t.id}-${t.status}-${t.dueAt || ''}`).sort().join('|')
+  }, [taskIdsKey])
   const tasksData: TasksData = useMemo(() => {
-  const openTasks = tasks.filter(t => t.status === 'OPEN')
+    const now = nowRef.current
+    const openTasks = tasks.filter(t => t.status === 'OPEN')
     const dueTasks = openTasks.filter(t => {
-    if (!t.dueAt) return false
-    const due = typeof t.dueAt === 'string' ? new Date(t.dueAt) : t.dueAt
-    return due <= new Date()
-  })
+      if (!t.dueAt) return false
+      const due = typeof t.dueAt === 'string' ? new Date(t.dueAt) : t.dueAt
+      return due <= now
+    })
     const quoteTaskDue = openTasks.some(t => 
       t.type === 'QUOTE' || t.title.toLowerCase().includes('quote')
     )
@@ -125,29 +189,80 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
       overdueCount: dueTasks.filter(t => {
         if (!t.dueAt) return false
         const due = typeof t.dueAt === 'string' ? new Date(t.dueAt) : t.dueAt
-        return due < new Date()
+        return due < now
       }).length,
       quoteTaskDue,
     }
-  }, [tasks])
+  }, [tasksKey]) // Use tasksKey instead of tasks array reference
+
+  // Store previous action in ref to compare and prevent infinite loops
+  const prevActionRef = useRef<NextBestAction | null>(null)
+  const renderCountRef = useRef(0)
+  renderCountRef.current += 1
+
+  // Memoize the recommended action computation to prevent unnecessary recalculations
+  const computedAction = useMemo(() => {
+    if (!leadData) return null
+    const action = determineNextBestAction(leadData, conversationData, tasksData)
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NextBestActionPanel.tsx:useMemo',message:'computedAction memoized',data:{renderCount:renderCountRef.current,actionKey:action.key,actionTitle:action.title,hasLeadData:!!leadData,hasConversationData:!!conversationData,hasTasksData:!!tasksData},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'DA'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    return action
+  }, [leadData, conversationData, tasksData])
 
   // Compute recommended action (deterministic, instant)
   useEffect(() => {
+    // #region agent log
+    const logData = {renderCount:renderCountRef.current,hasLeadData:!!leadData,hasConversationData:!!conversationData,hasTasksData:!!tasksData}
+    console.log('[NextBestActionPanel] useEffect triggered', logData)
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NextBestActionPanel.tsx:useEffect',message:'useEffect triggered',data:logData,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'DB'})}).catch(()=>{});
+    } catch (e) {
+      console.error('[NextBestActionPanel] Debug log error:', e)
+    }
+    // #endregion
+    
     if (!leadData) {
       setLoading(false)
       return
     }
 
+    // Compute action inside effect to avoid dependency on computedAction object reference
     const action = determineNextBestAction(leadData, conversationData, tasksData)
-    setRecommendedAction(action)
-    
-    // Notify parent if action is urgent
-    if (onActionPending) {
-      onActionPending(action.impact.urgency >= 80)
+
+    // CRITICAL FIX: Only update state if action has actually changed to prevent infinite loops
+    const prevAction = prevActionRef.current
+    const hasChanged = !prevAction || 
+      prevAction.key !== action.key ||
+      prevAction.title !== action.title ||
+      prevAction.impact.urgency !== action.impact.urgency ||
+      prevAction.impact.revenue !== action.impact.revenue ||
+      prevAction.impact.risk !== action.impact.risk
+
+    // #region agent log
+    const comparisonData = {renderCount:renderCountRef.current,hasChanged:hasChanged,prevActionKey:prevAction?.key,actionKey:action.key}
+    console.log('[NextBestActionPanel] action comparison', comparisonData)
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'NextBestActionPanel.tsx:useEffect',message:'action comparison',data:comparisonData,timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'DC'})}).catch(()=>{});
+    } catch (e) {
+      console.error('[NextBestActionPanel] Debug log error:', e)
+    }
+    // #endregion
+
+    if (hasChanged) {
+      prevActionRef.current = action
+      setRecommendedAction(action)
+      
+      // Notify parent if action is urgent (use ref to avoid dependency on function prop)
+      if (onActionPendingRef.current) {
+        onActionPendingRef.current(action.impact.urgency >= 80)
+      }
     }
     
     setLoading(false)
-  }, [leadData, conversationData, tasksData, onActionPending])
+  }, [leadData, conversationData, tasksData]) // Depend on the actual data, not computedAction
 
   // Handle primary action execution
   const handlePrimaryAction = useCallback(async () => {
@@ -398,7 +513,7 @@ export const NextBestActionPanel = memo(function NextBestActionPanel({
       </div>
     </div>
   )
-})
+}
 
 // Playbooks Section Component - PHASE B
 function PlaybooksSection({ 
@@ -508,3 +623,6 @@ function PlaybooksSection({
     </Accordion>
   )
 }
+
+// CRITICAL: Use custom comparison to prevent unnecessary re-renders when props haven't actually changed
+export const NextBestActionPanel = memo(NextBestActionPanelComponent, arePropsEqual)

@@ -68,3 +68,12 @@ npx prisma migrate dev --name add_lead_attachments
 
 Note: DIRECT_URL must be set in .env for migrations to work.
 
+
+
+
+
+
+
+
+
+

@@ -118,3 +118,12 @@
 - No horizontal scroll on desktop (columns fit viewport)
 - Horizontal scroll enabled on mobile for better UX
 
+
+
+
+
+
+
+
+
+

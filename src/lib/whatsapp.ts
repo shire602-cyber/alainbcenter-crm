@@ -24,59 +24,218 @@ interface WhatsAppError {
   }
 }
 
-export async function getWhatsAppCredentials() {
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:27',message:'getWhatsAppCredentials entry',data:{timestamp:Date.now()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
-  // PRIORITY: Check Integration model first (database), then fallback to env vars
-  let accessToken: string | null = null
-  let phoneNumberId: string | null = null
-
+/**
+ * Shared helper: Get WhatsApp access token from database or environment
+ * Single source of truth for token retrieval
+ * @returns Access token or null
+ */
+export async function getWhatsAppAccessTokenInternal(): Promise<string | null> {
+  // Try database first (Integration model)
   try {
     const integration = await prisma.integration.findUnique({
       where: { name: 'whatsapp' },
     })
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:33',message:'Integration lookup result',data:{hasIntegration:!!integration,isEnabled:integration?.isEnabled},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-    // #endregion
 
     if (integration) {
-      // Get from config JSON
+      // Get from config JSON (canonical location)
       if (integration.config) {
         try {
           const config = typeof integration.config === 'string'
             ? JSON.parse(integration.config)
             : integration.config
           
-          accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
-          phoneNumberId = config.phoneNumberId || null
+          // Canonical key: config.accessToken
+          // Legacy keys supported: integration.accessToken, integration.apiKey
+          const token = config.accessToken || integration.accessToken || integration.apiKey || null
+          
+          if (token) {
+            return token
+          }
         } catch (e) {
-          console.warn('Failed to parse integration config:', e)
+          console.warn('[WHATSAPP-CREDENTIALS] Failed to parse integration config:', e)
         }
       } else {
-        // Fallback to direct fields
-        accessToken = integration.accessToken || integration.apiKey || null
+        // Fallback to direct fields (legacy)
+        const token = integration.accessToken || integration.apiKey || null
+        if (token) {
+          return token
+        }
       }
     }
   } catch (e) {
-    console.warn('Could not fetch integration from DB:', e)
+    console.warn('[WHATSAPP-CREDENTIALS] Could not fetch integration from DB:', e)
+  }
+
+  // Fallback to environment variables
+  const envToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || null
+  if (envToken) {
+    return envToken
+  }
+
+  return null
+}
+
+/**
+ * Configuration self-check helper
+ * @returns Configuration status without exposing sensitive data
+ */
+export async function checkWhatsAppConfiguration(): Promise<{
+  tokenPresent: boolean
+  tokenSource: 'env' | 'db' | 'none'
+  phoneNumberIdPresent: boolean
+}> {
+  let tokenPresent = false
+  let tokenSource: 'env' | 'db' | 'none' = 'none'
+  let phoneNumberIdPresent = false
+
+  // Check database first
+  try {
+    const integration = await prisma.integration.findUnique({
+      where: { name: 'whatsapp' },
+      select: {
+        config: true,
+        accessToken: true,
+        apiKey: true,
+      },
+    })
+
+    if (integration) {
+      let hasTokenInConfig = false
+      if (integration.config) {
+        try {
+          const config = typeof integration.config === 'string'
+            ? JSON.parse(integration.config)
+            : integration.config
+          
+          if (config.accessToken || config.phoneNumberId) {
+            hasTokenInConfig = !!config.accessToken
+            phoneNumberIdPresent = !!config.phoneNumberId
+          }
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+
+      if (hasTokenInConfig || integration.accessToken || integration.apiKey) {
+        tokenPresent = true
+        tokenSource = 'db'
+      }
+
+      // Also check phoneNumberId from config if we haven't found it yet
+      if (!phoneNumberIdPresent && integration.config) {
+        try {
+          const config = typeof integration.config === 'string'
+            ? JSON.parse(integration.config)
+            : integration.config
+          phoneNumberIdPresent = !!config.phoneNumberId
+        } catch (e) {
+          // Ignore parse errors
+        }
+      }
+    }
+  } catch (e) {
+    // Ignore DB errors, fall back to env check
+  }
+
+  // Check environment variables if not found in DB
+  if (!tokenPresent) {
+    const envToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN
+    if (envToken) {
+      tokenPresent = true
+      tokenSource = 'env'
+    }
+    const envPhoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID
+    if (envPhoneNumberId) {
+      phoneNumberIdPresent = true
+    }
+  }
+
+  return {
+    tokenPresent,
+    tokenSource,
+    phoneNumberIdPresent,
+  }
+}
+
+/**
+ * Unified WhatsApp credentials function
+ * Single source of truth for both upload/sending and media proxy
+ * @returns { accessToken, phoneNumberId, tokenSource }
+ * where tokenSource is 'env' | 'db'
+ */
+export async function getWhatsAppCredentials(): Promise<{
+  accessToken: string
+  phoneNumberId: string
+  tokenSource: 'env' | 'db'
+}> {
+  let accessToken: string | null = null
+  let phoneNumberId: string | null = null
+  let tokenSource: 'env' | 'db' = 'db'
+
+  // Try database first (Integration model)
+  try {
+    const integration = await prisma.integration.findUnique({
+      where: { name: 'whatsapp' },
+      select: {
+        config: true,
+        accessToken: true,
+        apiKey: true,
+      },
+    })
+
+    if (integration) {
+      // Get from config JSON (canonical location)
+      if (integration.config) {
+        try {
+          const config = typeof integration.config === 'string'
+            ? JSON.parse(integration.config)
+            : integration.config
+          
+          // Canonical keys: config.accessToken, config.phoneNumberId
+          // Legacy keys supported: integration.accessToken, integration.apiKey
+          accessToken = config.accessToken || integration.accessToken || integration.apiKey || null
+          phoneNumberId = config.phoneNumberId || null
+          
+          if (accessToken) {
+            tokenSource = 'db'
+          }
+        } catch (e) {
+          console.warn('[WHATSAPP-CREDENTIALS] Failed to parse integration config:', e)
+        }
+      } else {
+        // Fallback to direct fields (legacy)
+        accessToken = integration.accessToken || integration.apiKey || null
+        if (accessToken) {
+          tokenSource = 'db'
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('[WHATSAPP-CREDENTIALS] Could not fetch integration from DB:', e)
   }
 
   // Fallback to environment variables if not found in database
-  if (!accessToken) accessToken = process.env.WHATSAPP_ACCESS_TOKEN || null
-  if (!phoneNumberId) phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
+  if (!accessToken) {
+    // Preferred: WHATSAPP_ACCESS_TOKEN, fallback: META_ACCESS_TOKEN
+    accessToken = process.env.WHATSAPP_ACCESS_TOKEN || process.env.META_ACCESS_TOKEN || null
+    if (accessToken) {
+      tokenSource = 'env'
+    }
+  }
 
-  // #region agent log
-  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'whatsapp.ts:70',message:'Credentials check',data:{hasAccessToken:!!accessToken,hasPhoneNumberId:!!phoneNumberId,accessTokenLength:accessToken?.length||0,phoneNumberIdLength:phoneNumberId?.length||0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'E'})}).catch(()=>{});
-  // #endregion
+  // Get phoneNumberId from environment if not found in database
+  if (!phoneNumberId) {
+    phoneNumberId = process.env.WHATSAPP_PHONE_NUMBER_ID || null
+  }
+
   if (!accessToken || !phoneNumberId) {
     const errorMsg = 'WhatsApp not configured. Please configure it in /admin/integrations or set WHATSAPP_ACCESS_TOKEN and WHATSAPP_PHONE_NUMBER_ID environment variables'
     console.error(`❌ [WHATSAPP-CREDENTIALS] ${errorMsg}`)
-    console.error(`❌ [WHATSAPP-CREDENTIALS] Debug: accessToken=${!!accessToken}, phoneNumberId=${!!phoneNumberId}`)
+    console.error(`❌ [WHATSAPP-CREDENTIALS] Debug: accessToken=${!!accessToken}, phoneNumberId=${!!phoneNumberId}, tokenSource=${tokenSource}`)
     throw new Error(errorMsg)
   }
 
-  return { accessToken, phoneNumberId }
+  return { accessToken, phoneNumberId, tokenSource }
 }
 
 /**

@@ -55,9 +55,12 @@ interface Message {
   status?: string
   channel: string
   // PHASE 5A: Media fields from Message model
-  mediaUrl?: string | null
+  mediaUrl?: string | null // Stores providerMediaId for WhatsApp
   mediaMimeType?: string | null
   providerMessageId?: string | null
+  // PHASE 3: Media proxy URL (from API)
+  mediaProxyUrl?: string | null
+  mediaRenderable?: boolean
   // PHASE 5B: Attachments
   attachments?: MessageAttachment[]
 }
@@ -123,14 +126,47 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
   const [imageError, setImageError] = useState(false)
   const [showLightbox, setShowLightbox] = useState(false)
   
-  // CRITICAL FIX: Ensure URLs use proxy for WhatsApp media IDs
+  // STEP 3: ALWAYS use proxy - url should already be a proxy URL from API
+  // If not, construct it from messageId (never use raw WhatsApp media IDs)
   const getMediaUrl = (url: string) => {
-    if (url.startsWith('http') || url.startsWith('/')) return url
-    return `/api/whatsapp/media/${encodeURIComponent(url)}${messageId ? `?messageId=${messageId}` : ''}`
+    // STEP 3: If url is already a proxy URL, use it
+    if (url.startsWith('http') || url.startsWith('/api/')) return url
+    // STEP 3: Otherwise, construct proxy URL from messageId (url might be a WhatsApp media ID)
+    return `/api/media/messages/${messageId}`
   }
 
   if (attachment.type === 'image') {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:132',message:'MediaAttachment image render',data:{attachmentId:attachment.id,attachmentUrl:attachment.url,attachmentType:attachment.type,isUnavailable:!attachment.url||attachment.url===''},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'P'})}).catch(()=>{});
+    // #endregion
     const imageUrl = getMediaUrl(attachment.url)
+    const isUnavailable = !attachment.url || attachment.url === ''
+    
+    if (isUnavailable) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:139',message:'Returning unavailable image UI',data:{attachmentId:attachment.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'S'})}).catch(()=>{});
+      // #endregion
+      return (
+        <div className={cn(
+          "flex items-center gap-3 p-3 rounded-lg border-2",
+          isOutbound
+            ? "bg-primary/20 border-primary/40"
+            : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+        )}>
+          <Image className={cn(
+            "h-5 w-5 flex-shrink-0",
+            isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-300"
+          )} />
+          <div className={cn(
+            "text-sm font-medium",
+            isOutbound ? "text-primary-foreground/90" : "text-slate-700 dark:text-slate-200"
+          )}>
+            Image unavailable
+          </div>
+        </div>
+      )
+    }
+    
     return (
       <>
         <div className="relative group">
@@ -183,8 +219,35 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
   }
 
   if (attachment.type === 'audio') {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:185',message:'MediaAttachment audio render',data:{attachmentId:attachment.id,attachmentUrl:attachment.url,attachmentType:attachment.type,isUnavailable:!attachment.url||attachment.url===''},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'Q'})}).catch(()=>{});
+    // #endregion
     // CRITICAL FIX: Handle WhatsApp media URLs - use proxy endpoint if needed
     const audioUrl = getMediaUrl(attachment.url)
+    const isUnavailable = !attachment.url || attachment.url === ''
+    
+    if (isUnavailable) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:220',message:'Returning unavailable audio UI',data:{attachmentId:attachment.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'T'})}).catch(()=>{});
+      // #endregion
+      return (
+        <div className={cn(
+          "flex items-center gap-3 p-3 rounded-lg border-2",
+          isOutbound ? "bg-primary/20 border-primary/40" : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+        )}>
+          <Music className={cn(
+            "h-5 w-5 flex-shrink-0",
+            isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-300"
+          )} />
+          <div className={cn(
+            "text-sm font-medium",
+            isOutbound ? "text-primary-foreground/90" : "text-slate-700 dark:text-slate-200"
+          )}>
+            Audio message unavailable
+          </div>
+        </div>
+      )
+    }
     
     return (
       <div className={cn(
@@ -195,7 +258,24 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
           "h-5 w-5 flex-shrink-0",
           isOutbound ? "text-primary-foreground" : "text-slate-600 dark:text-slate-400"
         )} />
-        <audio controls className="flex-1 max-w-[250px]" preload="metadata">
+        <audio 
+          controls 
+          className="flex-1 max-w-[250px]" 
+          preload="metadata"
+          onPlay={(e) => {
+            // CRITICAL FIX: Handle play() promise to avoid "interrupted by pause()" error
+            const audio = e.currentTarget
+            const playPromise = audio.play()
+            if (playPromise !== undefined) {
+              playPromise.catch((error: any) => {
+                // Ignore AbortError (play interrupted by pause) - this is expected
+                if (error.name !== 'AbortError' && !error.message?.includes('interrupted')) {
+                  console.error('[AUDIO] Play error:', error)
+                }
+              })
+            }
+          }}
+        >
           <source src={audioUrl} type={attachment.mimeType || 'audio/mpeg'} />
           <source src={audioUrl} type="audio/ogg" />
           <source src={audioUrl} type="audio/wav" />
@@ -214,6 +294,9 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
   }
 
   if (attachment.type === 'document') {
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:261',message:'MediaAttachment document render',data:{attachmentId:attachment.id,attachmentUrl:attachment.url,attachmentType:attachment.type,attachmentFilename:attachment.filename,isUnavailable:!attachment.url||attachment.url===''},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'R'})}).catch(()=>{});
+    // #endregion
     const isPdf = attachment.mimeType === 'application/pdf'
     const sizeBytes = attachment.sizeBytes
     const fileSize = sizeBytes
@@ -225,6 +308,41 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
       : null
 
     const docUrl = getMediaUrl(attachment.url)
+    const isUnavailable = !attachment.url || attachment.url === ''
+    
+    if (isUnavailable) {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:284',message:'Returning unavailable document UI',data:{attachmentId:attachment.id,attachmentFilename:attachment.filename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'U'})}).catch(()=>{});
+      // #endregion
+      return (
+        <div className={cn(
+          "flex items-center gap-3 p-3 rounded-lg border-2",
+          isOutbound
+            ? "bg-primary/20 border-primary/40"
+            : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+        )}>
+          <FileText className={cn(
+            "h-5 w-5 flex-shrink-0",
+            isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-300"
+          )} />
+          <div className="flex-1 min-w-0">
+            <div className={cn(
+              "text-sm font-medium truncate",
+              isOutbound ? "text-primary-foreground/90" : "text-slate-700 dark:text-slate-200"
+            )}>
+              {attachment.filename || 'Document'}
+            </div>
+            <div className={cn(
+              "text-xs mt-0.5 font-medium",
+              isOutbound ? "text-primary-foreground/70" : "text-slate-600 dark:text-slate-300"
+            )}>
+              Media unavailable
+            </div>
+          </div>
+        </div>
+      )
+    }
+    
     return (
       <a
         href={docUrl}
@@ -303,28 +421,103 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
   showAvatar: boolean
   isLastInGroup: boolean
 }) {
-  const isAudio = message.type === 'audio' || message.mediaMimeType?.startsWith('audio/')
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:300',message:'MessageBubble render',data:{messageId:message.id,type:message.type,mediaUrl:message.mediaUrl,mediaMimeType:message.mediaMimeType,hasAttachments:!!(message.attachments&&message.attachments.length>0),attachmentsCount:message.attachments?.length||0,body:message.body?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I'})}).catch(()=>{});
+  // #endregion
+  
+  // CRITICAL FIX: Better type detection - check body for document patterns, check mediaMimeType, then fall back to type
+  const detectMediaType = (): string => {
+    // Check if body contains document pattern
+    if (message.body?.match(/\[document:/i)) return 'document'
+    
+    // Check mediaMimeType first (most reliable)
+    if (message.mediaMimeType?.startsWith('audio/')) return 'audio'
+    if (message.mediaMimeType?.startsWith('image/')) return 'image'
+    if (message.mediaMimeType?.startsWith('video/')) return 'video'
+    if (message.mediaMimeType?.startsWith('application/') || message.mediaMimeType?.includes('pdf')) return 'document'
+    
+    // Check type field
+    if (message.type === 'audio' || message.type === 'AUDIO') return 'audio'
+    if (message.type === 'image' || message.type === 'IMAGE') return 'image'
+    if (message.type === 'video' || message.type === 'VIDEO') return 'video'
+    if (message.type === 'document' || message.type === 'DOCUMENT') return 'document'
+    
+    // Default to document if mediaUrl exists (safer than text)
+    return 'document'
+  }
+  
+  const isAudio = message.type === 'audio' || message.type === 'AUDIO' || message.mediaMimeType?.startsWith('audio/')
   const hasMedia = message.mediaUrl || (message.attachments && message.attachments.length > 0)
   const attachments = message.attachments || []
   
+  // CRITICAL FIX: Detect media from body patterns even if mediaUrl is null (for old messages)
+  const bodyHasDocumentPattern = message.body?.match(/\[document:\s*(.+?)\]/i)
+  const bodyHasImagePattern = message.body?.match(/\[image\]/i)
+  const bodyHasAudioPattern = message.body?.match(/\[(audio|Audio received)\]/i)
+  const bodyHasVideoPattern = message.body?.match(/\[video\]/i)
+  const hasMediaPlaceholder = bodyHasDocumentPattern || bodyHasImagePattern || bodyHasAudioPattern || bodyHasVideoPattern
+  
+  // STEP 3: ALWAYS use proxy - never use raw mediaUrl directly
   // CRITICAL FIX: If message has mediaUrl but no attachments, create a virtual attachment
-  // Ensure audio messages are properly detected BEFORE creating virtual attachment
-  // CRITICAL: Use proxy endpoint for WhatsApp media IDs
-  const mediaAttachments = message.mediaUrl && attachments.length === 0
-    ? [{
-        id: message.id,
-        type: isAudio ? 'audio' : (message.type || (message.mediaMimeType?.startsWith('image/') ? 'image' : message.mediaMimeType?.startsWith('video/') ? 'video' : 'document')),
-        url: (message.mediaUrl.startsWith('http') || message.mediaUrl.startsWith('/')) 
-          ? message.mediaUrl 
-          : `/api/whatsapp/media/${encodeURIComponent(message.mediaUrl)}?messageId=${message.id}`, // Use proxy for WhatsApp media IDs
-        mimeType: message.mediaMimeType,
-        filename: null,
-        sizeBytes: null,
-        thumbnailUrl: null,
-        durationSec: null,
-        createdAt: message.createdAt,
-      }]
+  // OR if message has media placeholder in body but no mediaUrl (old messages), create placeholder attachment
+  const mediaAttachments = (message.mediaUrl && attachments.length === 0)
+    ? (() => {
+        // STEP 3: ALWAYS use proxy endpoint - never expose raw mediaUrl to browser
+        // The proxy will normalize media source from multiple fields
+        const url = message.mediaProxyUrl || `/api/media/messages/${message.id}`
+        return [{
+          id: message.id,
+          type: detectMediaType(),
+          url,
+          mimeType: message.mediaMimeType,
+          filename: message.body?.match(/\[document:\s*(.+?)\]/i)?.[1] || null, // Extract filename from body if present
+          sizeBytes: null,
+          thumbnailUrl: null,
+          durationSec: null,
+          createdAt: message.createdAt,
+        }]
+      })()
+    : (hasMediaPlaceholder && !message.mediaUrl && attachments.length === 0)
+    ? (() => {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:439',message:'Creating placeholder attachment',data:{messageId:message.id,bodyHasDocumentPattern:!!bodyHasDocumentPattern,bodyHasImagePattern:!!bodyHasImagePattern,bodyHasAudioPattern:!!bodyHasAudioPattern,bodyHasVideoPattern:!!bodyHasVideoPattern,body:message.body?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'L'})}).catch(()=>{});
+        // #endregion
+        // Create placeholder attachment for old messages with media placeholders but no mediaUrl
+        let placeholderType = 'document'
+        let placeholderFilename = null
+        
+        if (bodyHasDocumentPattern) {
+          placeholderType = 'document'
+          placeholderFilename = bodyHasDocumentPattern[1] || null
+        } else if (bodyHasImagePattern) {
+          placeholderType = 'image'
+        } else if (bodyHasAudioPattern) {
+          placeholderType = 'audio'
+        } else if (bodyHasVideoPattern) {
+          placeholderType = 'video'
+        }
+        
+        const placeholder = [{
+          id: message.id,
+          type: placeholderType,
+          url: '', // No URL available - will show as unavailable
+          mimeType: null,
+          filename: placeholderFilename,
+          sizeBytes: null,
+          thumbnailUrl: null,
+          durationSec: null,
+          createdAt: message.createdAt,
+        }]
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:466',message:'Placeholder attachment created',data:{messageId:message.id,placeholderType:placeholderType,placeholderFilename:placeholderFilename,placeholderUrl:placeholder[0].url},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'M'})}).catch(()=>{});
+        // #endregion
+        return placeholder
+      })()
     : attachments
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:328',message:'Media attachment creation',data:{messageId:message.id,hasMediaUrl:!!message.mediaUrl,hasAttachments:attachments.length>0,mediaAttachmentsCount:mediaAttachments.length,detectedType:detectMediaType()},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'J'})}).catch(()=>{});
+  // #endregion
   
   return (
     <div className={cn(
@@ -349,12 +542,20 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
           ? "bg-primary text-primary-foreground"
           : "bg-card border border-subtle"
       )}>
-        {/* PHASE 5C: Render media attachments - CRITICAL: Always render if hasMedia */}
-        {hasMedia && mediaAttachments.length > 0 && (
+        {/* PHASE 5C: Render media attachments - CRITICAL: Always render if mediaAttachments exist (even if hasMedia is false for old messages) */}
+        {(() => {
+          // #region agent log
+          fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:498',message:'Rendering media attachments check',data:{messageId:message.id,mediaAttachmentsCount:mediaAttachments.length,hasMedia:hasMedia,hasMediaPlaceholder:hasMediaPlaceholder,willRender:mediaAttachments.length>0},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'N'})}).catch(()=>{});
+          // #endregion
+          return mediaAttachments.length > 0
+        })() && (
           <div className="space-y-2 mb-2">
-            {mediaAttachments.map((att) => (
-              <MediaAttachment key={att.id} attachment={att} isOutbound={isOutbound} messageId={message.id} />
-            ))}
+            {mediaAttachments.map((att) => {
+              // #region agent log
+              fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'ConversationWorkspace.tsx:501',message:'Rendering MediaAttachment',data:{messageId:message.id,attachmentId:att.id,attachmentType:att.type,attachmentUrl:att.url,attachmentFilename:att.filename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'O'})}).catch(()=>{});
+              // #endregion
+              return <MediaAttachment key={att.id} attachment={att} isOutbound={isOutbound} messageId={message.id} />
+            })}
           </div>
         )}
         
@@ -368,8 +569,16 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
           </div>
         )}
         
-        {/* Text body - only show if not media-only message */}
-        {message.body && message.body !== '[Audio received]' && message.body !== '[audio]' && (
+        {/* Text body - only show if not media-only message or placeholder */}
+        {message.body && 
+         !message.body.match(/^\[(audio|document|image|video|media)/i) && 
+         message.body !== '[Audio received]' && 
+         message.body !== '[audio]' && 
+         message.body !== '[image]' && 
+         message.body !== '[document]' && 
+         message.body !== '[video]' && 
+         !message.body.match(/\[document:/i) && 
+         !hasMediaPlaceholder && (
           <p className={cn(
             "text-body leading-relaxed whitespace-pre-wrap break-words",
             isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"

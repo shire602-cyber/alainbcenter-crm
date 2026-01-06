@@ -22,6 +22,7 @@ import { normalizeChannel } from '../utils/channelNormalize'
 import { upsertConversation } from '../conversation/upsert'
 import { getExternalThreadId } from '../conversation/getExternalThreadId'
 import { mergeJsonSafe, buildLeadUpdateFromExtracted, buildConversationUpdateFromExtracted } from './mergeCollectedData'
+import { resolveWhatsAppMedia } from '../media/resolveWhatsAppMedia'
 
 export interface AutoMatchInput {
   channel: 'WHATSAPP' | 'EMAIL' | 'INSTAGRAM' | 'FACEBOOK' | 'WEBCHAT'
@@ -31,7 +32,19 @@ export interface AutoMatchInput {
   fromName?: string | null
   text: string
   timestamp?: Date
-  metadata?: Record<string, any>
+  metadata?: {
+    // PHASE C: providerMediaId is REQUIRED for WhatsApp media (Meta Graph API media ID)
+    providerMediaId?: string | null
+    // Legacy field for backward compatibility
+    mediaUrl?: string | null
+    mediaMimeType?: string | null
+    mediaFilename?: string | null
+    mediaSize?: number | null
+    mediaSha256?: string | null
+    // Legacy filename field
+    filename?: string | null
+    [key: string]: any // Allow other metadata fields
+  }
 }
 
 export interface AutoMatchResult {
@@ -199,6 +212,11 @@ export async function handleInboundMessageAutoMatch(
   }))
 
   // Step 5: CREATE CommunicationLog
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:createCommunicationLog-call',message:'Calling createCommunicationLog with metadata',data:{conversationId:conversation.id,hasMetadata:!!input.metadata,mediaUrl:input.metadata?.mediaUrl,mediaMimeType:input.metadata?.mediaMimeType,filename:input.metadata?.filename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I2'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
   const message = await createCommunicationLog({
     conversationId: conversation.id,
     leadId: lead.id,
@@ -208,7 +226,7 @@ export async function handleInboundMessageAutoMatch(
     text: input.text,
     providerMessageId: input.providerMessageId,
     timestamp: input.timestamp || new Date(),
-    metadata: input.metadata, // CRITICAL FIX 3: Pass metadata for audio detection
+    metadata: input.metadata, // CRITICAL FIX 3: Pass metadata for audio detection (includes mediaUrl, mediaMimeType, filename)
   })
 
   // CRITICAL FIX: Update conversation unreadCount and lastMessageAt after message is created
@@ -996,6 +1014,8 @@ async function createCommunicationLog(input: {
   metadata?: {
     mediaUrl?: string | null
     mediaMimeType?: string | null
+    filename?: string | null
+    [key: string]: any
   }
 }): Promise<any> {
   // CRITICAL FIX: Include contactId to ensure proper linking
@@ -1007,29 +1027,239 @@ async function createCommunicationLog(input: {
   // CRITICAL: Normalize channel to lowercase for consistency
   const normalizedChannel = normalizeChannel(input.channel)
   
-  // CRITICAL FIX 3: Determine message type (audio if transcribed, otherwise text)
-  // Check if input text indicates it was transcribed from audio
-  const isAudioTranscribed = input.metadata?.mediaMimeType?.startsWith('audio/') || false
-  const messageType = isAudioTranscribed ? 'audio' : 'text'
+  // PHASE C: Use canonical media resolver (single source of truth)
+  // Build dbMessage-like object from available metadata
+  const dbMessage = {
+    type: input.metadata?.messageType || null,
+    body: input.text || null,
+    providerMediaId: input.metadata?.providerMediaId || null,
+    mediaUrl: input.metadata?.mediaUrl || null,
+    mediaMimeType: input.metadata?.mediaMimeType || null,
+    rawPayload: input.metadata?.rawPayload || null,
+    payload: input.metadata?.payload || null,
+    providerMessageId: input.providerMessageId || null,
+  }
   
-  // PART A FIX: Persist mediaUrl and mediaMimeType from metadata
-  const mediaUrl = input.metadata?.mediaUrl || null
-  const mediaMimeType = input.metadata?.mediaMimeType || null
+  const resolved = resolveWhatsAppMedia(undefined, dbMessage, undefined, input.metadata)
   
-  // Determine message type based on mediaMimeType if present
-  let finalMessageType = messageType
-  if (mediaMimeType) {
-    if (mediaMimeType.startsWith('audio/')) {
-      finalMessageType = 'audio'
-    } else if (mediaMimeType.startsWith('image/')) {
-      finalMessageType = 'image'
-    } else if (mediaMimeType.startsWith('video/')) {
-      finalMessageType = 'video'
-    } else if (mediaMimeType === 'application/pdf' || mediaMimeType.includes('pdf')) {
-      finalMessageType = 'document'
+  // Set fields from resolver
+  let providerMediaId = resolved.providerMediaId
+  let mediaMimeType = resolved.mediaMimeType
+  const finalMessageType = resolved.finalType
+  const mediaFilename = resolved.filename
+  const mediaSize = resolved.size
+  const mediaSha256 = resolved.sha256
+  const mediaCaption = resolved.caption
+  
+  // Legacy compatibility: also set mediaUrl (same as providerMediaId)
+  const mediaUrl = providerMediaId
+  
+  // Log media resolution
+  console.log('[AUTO-MATCH][MEDIA-RESOLVED]', { 
+    providerMessageId: input.providerMessageId, 
+    finalType: finalMessageType, 
+    hasId: !!providerMediaId, 
+    source: resolved.debug?.source 
+  })
+  
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:createCommunicationLog',message:'Extracting media from metadata',data:{hasMetadata:!!input.metadata,providerMediaId,mediaUrl,mediaUrlType:typeof mediaUrl,mediaMimeType,mediaFilename,metadataKeys:input.metadata?Object.keys(input.metadata):[]},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I3'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
+  
+  // PHASE C: Diagnostic log for media ingestion
+  console.log('[MEDIA]', JSON.stringify({
+    messageId: 'pending', // Will be set after creation
+    providerMediaId: providerMediaId, // Meta Graph API media ID (REQUIRED)
+    mediaType: mediaMimeType ? (mediaMimeType.startsWith('audio/') ? 'audio' : 
+                                mediaMimeType.startsWith('image/') ? 'image' : 
+                                mediaMimeType.startsWith('video/') ? 'video' : 
+                                mediaMimeType.includes('pdf') || mediaMimeType.includes('document') ? 'document' : 'unknown') : null,
+    mediaMimeType: mediaMimeType,
+    mediaFilename: mediaFilename,
+    hasProviderMediaId: !!providerMediaId,
+  }))
+  
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:createCommunicationLog',message:'Creating message with media',data:{mediaUrl,mediaMimeType,finalMessageType,hasMediaUrl:!!mediaUrl,hasMediaMimeType:!!mediaMimeType},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I1'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
+  
+  // CRITICAL: Store rawPayload for media recovery
+  // ALWAYS try to store rawPayload, even if it seems invalid
+  let rawPayload: string | null = null
+  if (input.metadata?.rawPayload) {
+    try {
+      if (typeof input.metadata.rawPayload === 'string') {
+        rawPayload = input.metadata.rawPayload
+        // Validate it's not just empty string or 'null'/'undefined' strings
+        if (rawPayload.trim() === '' || rawPayload === 'null' || rawPayload === 'undefined') {
+          console.warn(`⚠️ [AUTO-MATCH] rawPayload is empty/invalid string: ${rawPayload}`)
+          rawPayload = null
+        } else {
+          // Validate it's valid JSON
+          try {
+            JSON.parse(rawPayload)
+            // Valid JSON - keep it
+          } catch (e) {
+            console.warn(`⚠️ [AUTO-MATCH] rawPayload is not valid JSON, storing anyway for recovery: ${e}`)
+            // Still store it - might be recoverable
+          }
+        }
+      } else if (input.metadata.rawPayload && typeof input.metadata.rawPayload === 'object') {
+        // It's an object - stringify it
+        rawPayload = JSON.stringify(input.metadata.rawPayload)
+        // Validate the stringified result
+        if (!rawPayload || rawPayload.trim() === '' || rawPayload === 'null' || rawPayload === 'undefined') {
+          console.warn(`⚠️ [AUTO-MATCH] rawPayload stringified to invalid value: ${rawPayload}`)
+          rawPayload = null
+        }
+      } else {
+        // Try to convert to string as last resort
+        rawPayload = String(input.metadata.rawPayload)
+        if (rawPayload === 'null' || rawPayload === 'undefined' || rawPayload.trim() === '') {
+          rawPayload = null
+        }
+      }
+    } catch (e: any) {
+      console.error(`❌ [AUTO-MATCH] Failed to process rawPayload: ${e.message}`, {
+        rawPayloadType: typeof input.metadata.rawPayload,
+        rawPayloadValue: input.metadata.rawPayload,
+        rawPayloadKeys: input.metadata.rawPayload && typeof input.metadata.rawPayload === 'object' 
+          ? Object.keys(input.metadata.rawPayload) 
+          : 'not an object',
+      })
+      rawPayload = null
+    }
+  } else {
+    console.error(`❌ [AUTO-MATCH] CRITICAL: No rawPayload in metadata for message ${input.providerMessageId}`, {
+      hasMetadata: !!input.metadata,
+      metadataKeys: input.metadata ? Object.keys(input.metadata) : [],
+      providerMessageId: input.providerMessageId,
+      channel: input.channel,
+    })
+  }
+  
+  // Media extraction is now handled by canonical resolver above
+  // No need for additional fallback extraction - resolver handles all cases
+  
+  // PHASE C: Always store media data in payload for recovery
+  // This ensures the proxy can always recover media ID even if mediaUrl is null
+  // Legacy compatibility: mediaUrl is same as providerMediaId (declared above)
+  let payloadData: any = null
+  if (mediaUrl || mediaMimeType || finalMessageType !== 'text') {
+    // Determine media kind from type or mimeType (includes sticker)
+    let mediaKind: 'image' | 'document' | 'audio' | 'video' | 'sticker' | null = null
+    if (finalMessageType === 'audio' || mediaMimeType?.startsWith('audio/')) {
+      mediaKind = 'audio'
+    } else if (finalMessageType === 'image' || mediaMimeType?.startsWith('image/')) {
+      mediaKind = 'image'
+    } else if (finalMessageType === 'document' || mediaMimeType?.includes('pdf') || mediaMimeType?.includes('document')) {
+      mediaKind = 'document'
+    } else if (finalMessageType === 'video' || mediaMimeType?.startsWith('video/')) {
+      mediaKind = 'video'
+    } else if (finalMessageType === 'sticker' || mediaMimeType === 'image/webp') {
+      mediaKind = 'sticker'
+    }
+    
+    // PHASE C: Store structured media data in payload
+    payloadData = {
+      media: providerMediaId ? {
+        id: providerMediaId, // Meta Graph API media ID (REQUIRED)
+        kind: mediaKind || finalMessageType,
+        mimeType: mediaMimeType || null,
+        filename: mediaFilename || null,
+        caption: mediaCaption || null, // Store caption for images/videos
+      } : null,
+      // Also store at top level for backward compatibility
+      mediaUrl: providerMediaId || null, // Legacy: same as providerMediaId
+      mimeType: mediaMimeType || null,
+      caption: mediaCaption || null, // Store caption at top level too
     }
   }
   
+  // CRITICAL: Log what we're storing
+  console.log(`💾 [AUTO-MATCH] Storing message:`, {
+    providerMessageId: input.providerMessageId,
+    type: finalMessageType,
+    mediaUrl: mediaUrl || 'NULL',
+    mediaMimeType: mediaMimeType || 'NULL',
+    hasRawPayload: !!rawPayload,
+    hasPayload: !!payloadData,
+    body: input.text?.substring(0, 50),
+  })
+  
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:1227',message:'DB_STORE_BEFORE',data:{providerMessageId:input.providerMessageId,type:finalMessageType,providerMediaId:providerMediaId||null,mediaUrl:mediaUrl||null,mediaMimeType:mediaMimeType||null,hasRawPayload:!!rawPayload},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  
+  // CRITICAL: Final validation - if this is a media message, we MUST have providerMediaId or rawPayload with media object
+  if (finalMessageType !== 'text' && !providerMediaId && rawPayload) {
+    try {
+      const raw = typeof rawPayload === 'string' ? JSON.parse(rawPayload) : rawPayload
+      
+      // Check if rawPayload actually contains a media object (includes sticker)
+      const hasMediaInRawPayload = !!(raw.audio || raw.image || raw.document || raw.video || raw.sticker)
+      
+      if (!hasMediaInRawPayload) {
+        console.error(`❌ [AUTO-MATCH] CRITICAL: Media message ${input.providerMessageId} has rawPayload but NO media objects!`, {
+          messageType: finalMessageType,
+          rawPayloadKeys: Object.keys(raw),
+          rawPayloadPreview: JSON.stringify(raw).substring(0, 500),
+          hasProviderMediaId: !!providerMediaId,
+        })
+        // This is a data quality issue - log but continue
+      } else {
+        console.log(`✅ [AUTO-MATCH] rawPayload contains media objects for recovery`)
+      }
+    } catch (e) {
+      // Ignore parse errors
+      console.warn(`⚠️ [AUTO-MATCH] Failed to validate rawPayload: ${e}`)
+    }
+  }
+  
+  // CRITICAL: If we still don't have providerMediaId for a media message, log as ERROR
+  if (finalMessageType !== 'text' && !providerMediaId) {
+    console.error(`❌ [AUTO-MATCH] CRITICAL: Storing media message ${input.providerMessageId} with NULL providerMediaId!`, {
+      messageType: finalMessageType,
+      hasMediaUrl: !!mediaUrl,
+      hasRawPayload: !!rawPayload,
+      hasPayload: !!payloadData,
+      rawPayloadPreview: rawPayload ? rawPayload.substring(0, 200) : null,
+      metadataKeys: input.metadata ? Object.keys(input.metadata) : [],
+      metadataProviderMediaId: input.metadata?.providerMediaId || 'NULL',
+      metadataMediaUrl: input.metadata?.mediaUrl || 'NULL',
+    })
+    // Still create message - proxy will try to recover
+  } else if (finalMessageType !== 'text' && providerMediaId) {
+    console.log(`✅ [AUTO-MATCH] Media message validated:`, {
+      messageType: finalMessageType,
+      providerMediaId,
+      providerMediaIdLength: providerMediaId.length,
+    })
+  }
+
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:1261',message:'DB_CREATE_START',data:{providerMessageId:input.providerMessageId,type:finalMessageType,providerMediaId:providerMediaId||null,mediaUrl:mediaUrl||null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
+  // Use metadata.messageType if present, otherwise use resolved finalType
+  const finalType = input.metadata?.messageType ?? finalMessageType
+
+  // Handle rawPayload and payload conversion (string or object) - use metadata directly
+  const finalRawPayload = input.metadata?.rawPayload
+    ? (typeof input.metadata.rawPayload === 'string'
+        ? input.metadata.rawPayload
+        : JSON.stringify(input.metadata.rawPayload))
+    : null
+  
+  const finalPayload = input.metadata?.payload
+    ? (typeof input.metadata.payload === 'string'
+        ? input.metadata.payload
+        : JSON.stringify(input.metadata.payload))
+    : null
+
   const message = await prisma.message.create({
     data: {
       conversationId: input.conversationId,
@@ -1037,15 +1267,45 @@ async function createCommunicationLog(input: {
       contactId: input.contactId, // CRITICAL: Link to contact
       direction: normalizedDirection, // Use normalized direction (INBOUND/OUTBOUND)
       channel: normalizedChannel, // Always lowercase for consistency
-      type: finalMessageType, // CRITICAL FIX 3: Store as 'audio' if transcribed from audio
+      type: input.metadata?.messageType ?? finalType, // Prefer metadata.messageType
       body: input.text, // CRITICAL FIX 3: Contains transcript if audio, or original text
       providerMessageId: input.providerMessageId,
-      mediaUrl: mediaUrl, // PART A FIX: Persist media ID from WhatsApp
-      mediaMimeType: mediaMimeType, // PART A FIX: Persist MIME type
+      // Persist rawPayload and payload from metadata (required for debugging)
+      rawPayload: finalRawPayload,
+      payload: finalPayload,
+      // IMPORTANT: persist providerMediaId if provided in metadata
+      providerMediaId: input.metadata?.providerMediaId ?? null,
+      // keep legacy compatibility
+      mediaUrl: input.metadata?.mediaUrl ?? null,
+      mediaMimeType: input.metadata?.mediaMimeType ?? null,
+      mediaFilename: input.metadata?.mediaFilename ?? null,
+      mediaSize: input.metadata?.mediaSize ?? null,
+      mediaSha256: input.metadata?.mediaSha256 ?? null,
+      mediaCaption: input.metadata?.mediaCaption ?? null,
       status: 'RECEIVED',
       createdAt: input.timestamp,
+    } as any, // Type assertion needed for fields that may not be in Prisma types
+  })
+  
+  // TEMP DEBUG: Verification logging after save
+  const verifyMessage = await prisma.message.findUnique({
+    where: { id: message.id },
+    select: {
+      id: true,
+      type: true,
+      rawPayload: true,
+      providerMediaId: true,
     },
   })
+  console.error('🔍 [AUTO-MATCH-VERIFY] Message saved:', {
+    id: verifyMessage?.id,
+    type: verifyMessage?.type,
+    hasRawPayload: !!verifyMessage?.rawPayload,
+    providerMediaId: verifyMessage?.providerMediaId || null,
+  })
+  // #region agent log
+  fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:1279',message:'DB_CREATE_SUCCESS',data:{messageId:message.id,providerMessageId:input.providerMessageId,type:finalMessageType,storedProviderMediaId:message.providerMediaId||null,storedMediaUrl:message.mediaUrl||null},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
+  // #endregion
 
   // Always create CommunicationLog entry (Phase 1 requirement)
   try {
@@ -1069,6 +1329,20 @@ async function createCommunicationLog(input: {
   }
 
   console.log(`✅ [AUTO-MATCH] Created message: ${message.id}`)
+  
+  // PHASE C: Update diagnostic log with actual messageId
+  if (providerMediaId || mediaMimeType) {
+    console.log('[MEDIA]', JSON.stringify({
+      messageId: message.id,
+      providerMediaId: providerMediaId, // Meta Graph API media ID (REQUIRED)
+      mediaType: finalMessageType,
+      mediaMimeType: mediaMimeType,
+      mediaFilename: mediaFilename,
+      mediaSize: mediaSize,
+      hasProviderMediaId: !!providerMediaId,
+    }))
+  }
+  
   return message
 }
 

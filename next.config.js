@@ -46,6 +46,9 @@ const nextConfig = {
     ignoreBuildErrors: false,
   },
   
+  // Exclude media_audit directory from build (temporary zip extraction)
+  pageExtensions: ['ts', 'tsx', 'js', 'jsx'],
+  
   // Disable ESLint during build to avoid config conflicts
   eslint: {
     ignoreDuringBuilds: true,

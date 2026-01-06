@@ -6,7 +6,7 @@
  * Desktop: 3-column layout
  */
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useMemo } from 'react'
 import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { LeadDNA } from '@/components/leads/LeadDNA'
@@ -29,6 +29,14 @@ export default function LeadDetailPage({
 }: {
   params: Promise<{ id: string }>
 }) {
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:27',message:'LeadDetailPage component render start',data:{paramsType:typeof params,paramsIsPromise:params instanceof Promise},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'CA'})}).catch(()=>{});
+  } catch (e) {
+    console.error('[LEAD-PAGE] Error in initial log:', e);
+  }
+  // #endregion
+  
   const [leadId, setLeadId] = useState<number | null>(null)
   const [lead, setLead] = useState<any>(null)
   const [loading, setLoading] = useState(true)
@@ -52,7 +60,8 @@ export default function LeadDetailPage({
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:46',message:'init() entry',data:{},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
-      const resolved = await params
+      try {
+        const resolved = await params
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:48',message:'params resolved',data:{resolvedId:resolved?.id,resolvedType:typeof resolved?.id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
       // #endregion
@@ -73,15 +82,23 @@ export default function LeadDetailPage({
       // #endregion
       setLeadId(id)
       await loadLead(id)
+      } catch (error: any) {
+        // #region agent log
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:init',message:'Error in init()',data:{errorMessage:error?.message,errorName:error?.name,errorStack:error?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'CB'})}).catch(()=>{});
+        // #endregion
+        console.error('[LEAD-PAGE] Error in init():', error);
+        setLoading(false);
+      }
     }
     init()
   }, [params, router])
 
   // Build stamp useEffect - called after all useState hooks
   useEffect(() => {
+    // Try to get build info, but don't fail if endpoint doesn't exist
     fetch('/api/health')
-      .then(res => res.json())
-      .then(data => setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }))
+      .then(res => res.ok ? res.json() : null)
+      .then(data => data ? setBuildInfo({ buildId: data.buildId, buildTime: data.buildTime }) : null)
       .catch(() => {})
   }, [])
 
@@ -100,8 +117,36 @@ export default function LeadDetailPage({
     onErrorBackoff: true,
   })
 
+  // CRITICAL: All hooks must be called before any conditional returns
+  // Memoize tasks array to prevent unnecessary re-renders of NextBestActionPanel
+  // Use a stable dependency based on task IDs to prevent new array references
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:122',message:'before useMemo tasksKey',data:{hasLead:!!lead,hasTasksGrouped:!!lead?.tasksGrouped,hasOpen:!!lead?.tasksGrouped?.open},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
+  const tasksKey = lead?.tasksGrouped?.open?.map((t: any) => t.id).sort().join(',') || ''
+  const memoizedTasks = useMemo(() => {
+    // #region agent log
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:useMemo',message:'useMemo memoizedTasks executing',data:{tasksKey,hasLead:!!lead,hasTasksGrouped:!!lead?.tasksGrouped,hasOpen:!!lead?.tasksGrouped?.open},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+    } catch (e) {}
+    // #endregion
+    return lead?.tasksGrouped?.open || []
+  }, [tasksKey])
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:127',message:'after useMemo memoizedTasks',data:{memoizedTasksLength:memoizedTasks.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H1'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
+
   // Keyboard shortcuts - PHASE C (client-only)
   // CRITICAL: Hook must be called unconditionally - guard logic inside
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:129',message:'before useEffect keyboard',data:{hasWindow:typeof window !== 'undefined',hasLeadId:!!leadId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H2'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
   useEffect(() => {
     // Guard logic inside hook - this is safe
     if (typeof window === 'undefined' || !leadId) return
@@ -152,7 +197,12 @@ export default function LeadDetailPage({
   async function loadLead(id: number) {
     // #region agent log
     console.log('[LEAD-PAGE] loadLead() entry:', { leadId: id })
-    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:133',message:'loadLead() entry',data:{leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    // Make debug logging non-blocking and handle errors silently
+    try {
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:133',message:'loadLead() entry',data:{leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+    } catch (e) {
+      // Silently ignore debug logging errors
+    }
     // #endregion
     try {
       // Get conversationId or contactId from URL search params for fallback
@@ -164,7 +214,12 @@ export default function LeadDetailPage({
       else if (contactId) url += `?contactId=${contactId}`
       
       // #region agent log
-      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:143',message:'fetching API',data:{url,leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      // Make debug logging non-blocking and handle errors silently
+      try {
+        fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:143',message:'fetching API',data:{url,leadId:id},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'B'})}).catch(()=>{});
+      } catch (e) {
+        // Silently ignore debug logging errors
+      }
       // #endregion
       const res = await fetch(url)
       // #region agent log
@@ -282,6 +337,11 @@ export default function LeadDetailPage({
   // PHASE 1 DEBUG: All hooks called before conditional returns
   // Loading state - render AFTER all hooks
   // CRITICAL: No hooks or conditional logic before early returns
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'page.tsx:319',message:'before conditional return check',data:{loading,hasLeadId:!!leadId,hasLead:!!lead,allHooksCalled:true},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'H3'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
   if (loading || !leadId) {
     return (
       <MainLayout>
@@ -452,7 +512,7 @@ export default function LeadDetailPage({
               <SheetTitle>Quick Actions</SheetTitle>
             </SheetHeader>
             <div className="mt-4">
-              <NextBestActionPanel leadId={leadId!} lead={lead} />
+              <NextBestActionPanel leadId={leadId!} lead={lead} tasks={memoizedTasks} />
             </div>
           </SheetContent>
         </Sheet>

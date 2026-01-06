@@ -43,7 +43,7 @@ model User {
   createdTasks          Task[]               @relation("CreatedTasks")
   uploadedDocuments     Document[]           @relation("UploadedDocuments")
   createdAITrainingDocs AITrainingDocument[]
-  createdAttachments    LeadAttachment[]      @relation("CreatedAttachments")
+  createdAttachments    LeadAttachment[]     @relation("CreatedAttachments")
   staffSettings         StaffSettings?
 }
 
@@ -351,6 +351,8 @@ model Conversation {
   questionsAskedCount    Int       @default(0) // Track total questions asked (max 5 for business setup)
   knownFields            String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
   language               String? // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.) for multilingual support
+  aiState                String? // Conversation state for AI gating: WAITING_FOR_EXIT_CONFIRMATION, WAITING_FOR_PASSPORT, etc.
+  aiLockUntil            DateTime? // Per-conversation lock expiration timestamp (prevents concurrent processing)
   deletedAt              DateTime? // Soft delete timestamp
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
@@ -368,6 +370,7 @@ model Conversation {
   outboundMessageLogs  OutboundMessageLog[]
   replyEngineLogs      ReplyEngineLog[]
   outboundJobs         OutboundJob[]
+  aiReplyDedups        AiReplyDedup[]
   // Note: Partial unique index for externalThreadId will be added via migration
 
   // C) CONVERSATION UNIQUENESS: One conversation per (contactId, channel, externalThreadId)
@@ -395,8 +398,12 @@ model Message {
   channel           String // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
   type              String       @default("text") // text | image | document | audio | video | location | etc
   body              String? // Text content (nullable for media-only messages)
-  mediaUrl          String? // URL to media file
-  mediaMimeType     String? // MIME type for media
+  mediaUrl          String? // DEPRECATED: Legacy field - use providerMediaId instead. May contain temporary download URLs.
+  mediaMimeType     String? // MIME type for media (e.g., "image/jpeg", "audio/ogg", "application/pdf")
+  mediaFilename     String? // Filename for documents (e.g., "invoice.pdf")
+  mediaSize         Int? // Media file size in bytes
+  mediaSha256       String? // SHA256 hash of media file (optional, for verification)
+  providerMediaId   String? // REQUIRED FOR WHATSAPP: Meta Graph API media ID (e.g., "882580977660655") - used to fetch download URL on demand
   providerMessageId String? // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
   status            String       @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED | PENDING
   payload           String? // JSON: Provider-specific payload/metadata (stored as string - works for both SQLite and PostgreSQL)
@@ -415,6 +422,7 @@ model Message {
   replyEngineLogsAsInbound ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
   attachments              LeadAttachment[]
   outboundJobs             OutboundJob[]        @relation("OutboundJobInboundMessage")
+  aiReplyDedupInboundMessage AiReplyDedup[]      @relation("AiReplyDedupInboundMessage")
 
   @@unique([channel, providerMessageId]) // Prevent duplicate messages when webhooks retry (composite unique)
   @@index([conversationId, createdAt])
@@ -596,25 +604,25 @@ model Document {
 
 // PHASE 5: LeadAttachment for general file attachments (images, audio, documents) linked to leads/conversations/messages
 model LeadAttachment {
-  id             Int          @id @default(autoincrement())
-  lead           Lead         @relation(fields: [leadId], references: [id])
-  leadId         Int
-  conversation   Conversation? @relation(fields: [conversationId], references: [id])
-  conversationId Int?
-  message        Message?     @relation(fields: [messageId], references: [id])
-  messageId      Int?
-  type           String       // image | document | audio | video
-  url            String       // Public URL or storage path
-  mimeType       String?      // MIME type (e.g., image/jpeg, application/pdf, audio/mpeg)
-  filename       String       // Original filename
-  sizeBytes      Int?         // File size in bytes
-  thumbnailUrl   String?      // Thumbnail URL for images/videos
-  durationSec    Int?         // Duration in seconds (for audio/video)
-  storageProvider String      @default("local") // local | s3 | r2 | meta
-  storagePath    String?      // Server path or storage key
-  createdById    Int?
-  createdBy      User?        @relation("CreatedAttachments", fields: [createdById], references: [id])
-  createdAt      DateTime     @default(now())
+  id              Int           @id @default(autoincrement())
+  lead            Lead          @relation(fields: [leadId], references: [id])
+  leadId          Int
+  conversation    Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId  Int?
+  message         Message?      @relation(fields: [messageId], references: [id])
+  messageId       Int?
+  type            String // image | document | audio | video
+  url             String // Public URL or storage path
+  mimeType        String? // MIME type (e.g., image/jpeg, application/pdf, audio/mpeg)
+  filename        String // Original filename
+  sizeBytes       Int? // File size in bytes
+  thumbnailUrl    String? // Thumbnail URL for images/videos
+  durationSec     Int? // Duration in seconds (for audio/video)
+  storageProvider String        @default("local") // local | s3 | r2 | meta
+  storagePath     String? // Server path or storage key
+  createdById     Int?
+  createdBy       User?         @relation("CreatedAttachments", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
 
   @@index([leadId, createdAt])
   @@index([conversationId])
@@ -941,4 +949,27 @@ model OutboundJob {
   @@index([claimedAt]) // For stale job recovery
   @@index([status, claimedAt]) // For finding stale jobs
   @@index([idempotencyKey]) // For idempotency lookups
+}
+
+// AI Reply Deduplication (hard idempotency for AI outbound messages)
+model AiReplyDedup {
+  id                Int          @id @default(autoincrement())
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  conversationId    Int
+  inboundMessage    Message?     @relation("AiReplyDedupInboundMessage", fields: [inboundMessageId], references: [id])
+  inboundMessageId  Int
+  aiActionType      String       @default("auto_reply") // 'auto_reply' | 'question' | 'handoff' | etc.
+  idempotencyKey    String       @unique // Format: wa_ai:{conversationId}:{inboundMessageId}:{aiActionType}
+  status            String       @default("PENDING") // PENDING | SENT | FAILED
+  error             String? // Error message if failed
+  outboundMessageId Int? // Reference to Message.id if created
+  providerMessageId String? // WhatsApp provider message ID
+  createdAt         DateTime     @default(now())
+  sentAt            DateTime? // When message was actually sent
+  failedAt          DateTime? // When send failed
+
+  @@index([conversationId, createdAt])
+  @@index([inboundMessageId])
+  @@index([idempotencyKey])
+  @@index([status, createdAt])
 }

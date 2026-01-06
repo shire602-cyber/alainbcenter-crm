@@ -448,7 +448,7 @@ export async function POST(req: NextRequest) {
       console.log('[WEBHOOK] Completed ExternalEventLog upsert for all messages')
 
       // Step 2: Filter and process actual customer messages
-      // CRITICAL: Ignore status updates and echo messages (from our own number)
+      // CRITICAL: Only process actual user messages (not status updates, not echo messages, not system messages)
       const actualMessages = value.messages.filter((msg: any) => {
         // Ignore if it's a status update
         if (msg.type === 'status' || msg.status) {
@@ -458,6 +458,12 @@ export async function POST(req: NextRequest) {
         // Ignore echo messages (messages we sent)
         if (msg.context?.from === value.metadata?.phone_number_id) {
           console.log(`⏭️ [WEBHOOK] Ignoring echo message (from our number): ${msg.id}`)
+          return false
+        }
+        // CRITICAL: Only process messages from users (direction === 'inbound' or from === 'user')
+        // Meta webhook: messages from users have 'from' field with phone number, not system
+        if (!msg.from || msg.from === value.metadata?.phone_number_id) {
+          console.log(`⏭️ [WEBHOOK] Ignoring system message: ${msg.id}`)
           return false
         }
         return true
@@ -592,7 +598,7 @@ export async function POST(req: NextRequest) {
       } catch (e) {}
       // #endregion
       
-      // CRITICAL: Ignore status updates and echo messages (from our own number)
+      // CRITICAL: Only process actual user messages (not status updates, not echo messages, not system messages)
       const actualMessages = value.messages.filter((msg: any) => {
         // Ignore if it's a status update
         if (msg.type === 'status' || msg.status) {
@@ -602,6 +608,12 @@ export async function POST(req: NextRequest) {
         // Ignore echo messages (messages we sent)
         if (msg.context?.from === value.metadata?.phone_number_id) {
           console.log(`⏭️ [WEBHOOK] Ignoring echo message (from our number): ${msg.id}`)
+          return false
+        }
+        // CRITICAL: Only process messages from users (direction === 'inbound' or from === 'user')
+        // Meta webhook: messages from users have 'from' field with phone number, not system
+        if (!msg.from || msg.from === value.metadata?.phone_number_id) {
+          console.log(`⏭️ [WEBHOOK] Ignoring system message: ${msg.id}`)
           return false
         }
         return true

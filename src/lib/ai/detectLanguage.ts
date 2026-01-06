@@ -86,3 +86,12 @@ export async function detectLanguage(
   return detectLanguageSimple(text)
 }
 
+
+
+
+
+
+
+
+
+

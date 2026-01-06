@@ -7,6 +7,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
+import { hasMedia } from '@/lib/media/mediaTypeDetection'
 
 export async function GET(
   req: NextRequest,
@@ -99,14 +100,33 @@ export async function GET(
     })
 
     // Format response - PHASE 5A: Include all media fields
-    const formattedMessages = messages.map((msg) => ({
+    const formattedMessages = messages.map((msg) => {
+      // #region agent log
+      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api/leads/[id]/messages/route.ts:102',message:'Formatting message',data:{messageId:msg.id,type:msg.type,mediaUrl:msg.mediaUrl,mediaMimeType:msg.mediaMimeType,hasAttachments:!!(msg.attachments&&msg.attachments.length>0),attachmentsCount:msg.attachments?.length||0,body:msg.body?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'K'})}).catch(()=>{});
+      // #endregion
+      // PHASE 3: Generate mediaProxyUrl if media is available
+      // mediaUrl stores WhatsApp media ID (providerMediaId), not a URL
+      // FIX: Use centralized media detection logic
+      const hasMediaResult = hasMedia(msg.type, msg.mediaMimeType)
+      const hasProviderMediaId = !!msg.mediaUrl && msg.mediaUrl.trim() !== '' // For WhatsApp, mediaUrl is the media ID
+      // CRITICAL FIX: Always set mediaProxyUrl if hasMedia, even if mediaUrl is null
+      // The proxy will try to recover from rawPayload/ExternalEventLog
+      // This allows old messages to potentially recover media IDs
+      const mediaRenderable = hasMediaResult // Remove hasProviderMediaId requirement - let proxy try recovery
+      const mediaProxyUrl = hasMediaResult ? `/api/media/messages/${msg.id}` : null
+
+      return {
       id: msg.id,
       direction: msg.direction, // INBOUND | OUTBOUND
       channel: msg.channel,
       type: msg.type || 'text', // text | image | document | audio | video
       body: msg.body,
-      mediaUrl: msg.mediaUrl,
+      mediaUrl: msg.mediaUrl, // Stores providerMediaId for WhatsApp
       mediaMimeType: msg.mediaMimeType,
+      mediaFilename: (msg as any).mediaFilename || null, // FIX: Include mediaFilename for document downloads
+      mediaSize: (msg as any).mediaSize || null, // FIX: Include mediaSize for file size display
+      mediaProxyUrl: mediaProxyUrl, // PHASE 3: Proxy URL for secure media access
+      mediaRenderable: mediaRenderable, // PHASE 3: Whether media can be rendered via proxy
       providerMessageId: msg.providerMessageId, // WhatsApp message ID if any
       status: msg.status,
       sentAt: msg.sentAt,
@@ -139,7 +159,8 @@ export async function GET(
         durationSec: att.durationSec,
         createdAt: att.createdAt,
       })),
-    }))
+      }
+    })
 
     return NextResponse.json({
       ok: true,

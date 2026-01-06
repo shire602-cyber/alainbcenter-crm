@@ -51,6 +51,9 @@ import { MediaMessage } from '@/components/inbox/MediaMessage'
 import { hasMedia, detectMediaType } from '@/lib/media/mediaTypeDetection'
 import { MEDIA_TYPES } from '@/lib/media/extractMediaId'
 import { Select } from '@/components/ui/select'
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog'
+import { Label } from '@/components/ui/label'
+import { Languages } from 'lucide-react'
 
 type Contact = {
   id: number
@@ -245,6 +248,15 @@ function InboxPageContent() {
   const [user, setUser] = useState<{ id: number; name: string; email: string; role: string } | null>(null)
   const [assigning, setAssigning] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [showTemplateModal, setShowTemplateModal] = useState(false)
+  const [templates, setTemplates] = useState<Array<{ name: string; language: string; category: string; components?: any[] }>>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [selectedTemplate, setSelectedTemplate] = useState<{ name: string; language: string; components?: any[] } | null>(null)
+  const [templateVariables, setTemplateVariables] = useState<string[]>([])
+  const [sendingTemplate, setSendingTemplate] = useState(false)
+  const [requiresTemplate, setRequiresTemplate] = useState(false)
+  const [translations, setTranslations] = useState<Record<number, { text: string; showing: boolean }>>({})
+  const [translating, setTranslating] = useState<Record<number, boolean>>({})
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -534,6 +546,65 @@ function InboxPageContent() {
     }
   }
 
+  async function loadTemplates() {
+    if (templates.length > 0) return // Already loaded
+    
+    setLoadingTemplates(true)
+    try {
+      const res = await fetch('/api/whatsapp/templates')
+      const data = await res.json()
+      if (data.ok && data.templates) {
+        setTemplates(data.templates)
+      } else {
+        console.error('Failed to load templates:', data.error)
+      }
+    } catch (err) {
+      console.error('Failed to load templates:', err)
+    } finally {
+      setLoadingTemplates(false)
+    }
+  }
+
+  async function handleSendTemplate() {
+    if (!selectedConversation || !selectedTemplate) return
+
+    setSendingTemplate(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const res = await fetch('/api/whatsapp/send-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedConversation.contact.phone,
+          templateName: selectedTemplate.name,
+          language: selectedTemplate.language,
+          variables: templateVariables,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.ok) {
+        setSuccess('Template message sent successfully!')
+        setShowTemplateModal(false)
+        setSelectedTemplate(null)
+        setTemplateVariables([])
+        setRequiresTemplate(false)
+        await loadMessages(selectedConversation.id)
+        await loadConversations()
+      } else {
+        setError(data.error || 'Failed to send template message')
+      }
+    } catch (err: any) {
+      setError('Failed to send template message')
+      console.error(err)
+    } finally {
+      setSendingTemplate(false)
+    }
+  }
+
   async function handleSendMessage(e: FormEvent) {
     e.preventDefault()
     if (!selectedConversation) return
@@ -565,9 +636,17 @@ function InboxPageContent() {
         await loadMessages(selectedConversation.id)
         await loadConversations()
       } else {
-        setError(data.error || 'Failed to send message')
-        if (data.hint) {
-          setError(`${data.error}\n💡 ${data.hint}`)
+        // Check if this is a 24-hour window error
+        if (data.requiresTemplate) {
+          setRequiresTemplate(true)
+          await loadTemplates() // Load templates before opening modal
+          setShowTemplateModal(true)
+          setError('WhatsApp requires a template outside the 24-hour window.')
+        } else {
+          setError(data.error || 'Failed to send message')
+          if (data.hint) {
+            setError(`${data.error}\n💡 ${data.hint}`)
+          }
         }
       }
     } catch (err: any) {
@@ -619,6 +698,64 @@ function InboxPageContent() {
         return Globe
       default:
         return MessageCircle
+    }
+  }
+
+  // Language detection helper
+  function detectLanguage(text: string): 'en' | 'non-en' {
+    if (!text || typeof text !== 'string') return 'en'
+    
+    // Check for Arabic (common in UAE)
+    const arabicRegex = /[\u0600-\u06FF]/
+    if (arabicRegex.test(text)) {
+      return 'non-en'
+    }
+    
+    // Check for mostly ASCII (likely English)
+    const asciiRatio = (text.match(/[\x00-\x7F]/g) || []).length / text.length
+    if (asciiRatio > 0.9) {
+      return 'en'
+    }
+    
+    // Default to non-English if uncertain
+    return 'non-en'
+  }
+
+  // Translate message
+  async function handleTranslate(messageId: number, text: string) {
+    // Check if already translated
+    if (translations[messageId]) {
+      setTranslations(prev => ({
+        ...prev,
+        [messageId]: { ...prev[messageId], showing: !prev[messageId].showing }
+      }))
+      return
+    }
+
+    setTranslating(prev => ({ ...prev, [messageId]: true }))
+
+    try {
+      const res = await fetch('/api/translate', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ text, targetLang: 'en' }),
+      })
+
+      const data = await res.json()
+
+      if (data.translatedText) {
+        setTranslations(prev => ({
+          ...prev,
+          [messageId]: { text: data.translatedText, showing: true }
+        }))
+      } else {
+        setError(data.error || 'Translation failed')
+      }
+    } catch (err: any) {
+      setError('Failed to translate message')
+      console.error(err)
+    } finally {
+      setTranslating(prev => ({ ...prev, [messageId]: false }))
     }
   }
 
@@ -1079,9 +1216,51 @@ function InboxPageContent() {
                                 }
                               })}
                               {/* Show body text if present */}
-                              {msg.body && msg.body !== '[audio]' && msg.body !== '[Audio received]' && msg.body !== '[image]' && msg.body !== '[document]' && (
-                                <p className="text-sm whitespace-pre-wrap break-words mt-2">{msg.body}</p>
-                              )}
+                              {msg.body && msg.body !== '[audio]' && msg.body !== '[Audio received]' && msg.body !== '[image]' && msg.body !== '[document]' && (() => {
+                                const isNonEnglish = isInbound && detectLanguage(msg.body) === 'non-en'
+                                const hasTranslation = translations[msg.id]
+                                const isTranslating = translating[msg.id]
+                                
+                                return (
+                                  <div className="space-y-2 mt-2">
+                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                    {/* Translation button for inbound non-English messages */}
+                                    {isInbound && (isNonEnglish || true) && (
+                                      <div className="flex items-center gap-2">
+                                        <button
+                                          type="button"
+                                          onClick={() => handleTranslate(msg.id, msg.body || '')}
+                                          disabled={isTranslating}
+                                          className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors flex items-center gap-1"
+                                        >
+                                          {isTranslating ? (
+                                            <>
+                                              <Loader2 className="h-3 w-3 animate-spin" />
+                                              Translating...
+                                            </>
+                                          ) : hasTranslation ? (
+                                            hasTranslation.showing ? 'Hide translation' : 'Show translation'
+                                          ) : (
+                                            <>
+                                              <Languages className="h-3 w-3" />
+                                              Translate
+                                            </>
+                                          )}
+                                        </button>
+                                      </div>
+                                    )}
+                                    {/* Translation display */}
+                                    {hasTranslation && hasTranslation.showing && (
+                                      <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Translation:</p>
+                                        <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
+                                          {hasTranslation.text}
+                                        </p>
+                                      </div>
+                                    )}
+                                  </div>
+                                )
+                              })()}
                             </div>
                               )
                             }
@@ -1122,9 +1301,51 @@ function InboxPageContent() {
                                       body: msg.body,
                                     }}
                                   />
-                                  {msg.body && !['[audio]', '[Audio received]', '[image]', '[video]', '[document:', '[document: file]'].some(placeholder => msg.body?.includes(placeholder)) && (
-                                    <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                                  )}
+                                  {msg.body && !['[audio]', '[Audio received]', '[image]', '[video]', '[document:', '[document: file]'].some(placeholder => msg.body?.includes(placeholder)) && (() => {
+                                    const isNonEnglish = isInbound && detectLanguage(msg.body) === 'non-en'
+                                    const hasTranslation = translations[msg.id]
+                                    const isTranslating = translating[msg.id]
+                                    
+                                    return (
+                                      <div className="space-y-2">
+                                        <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
+                                        {/* Translation button for inbound non-English messages */}
+                                        {isInbound && (isNonEnglish || true) && (
+                                          <div className="flex items-center gap-2 mt-1">
+                                            <button
+                                              type="button"
+                                              onClick={() => handleTranslate(msg.id, msg.body || '')}
+                                              disabled={isTranslating}
+                                              className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors flex items-center gap-1"
+                                            >
+                                              {isTranslating ? (
+                                                <>
+                                                  <Loader2 className="h-3 w-3 animate-spin" />
+                                                  Translating...
+                                                </>
+                                              ) : hasTranslation ? (
+                                                hasTranslation.showing ? 'Hide translation' : 'Show translation'
+                                              ) : (
+                                                <>
+                                                  <Languages className="h-3 w-3" />
+                                                  Translate
+                                                </>
+                                              )}
+                                            </button>
+                                          </div>
+                                        )}
+                                        {/* Translation display */}
+                                        {hasTranslation && hasTranslation.showing && (
+                                          <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Translation:</p>
+                                            <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
+                                              {hasTranslation.text}
+                                            </p>
+                                          </div>
+                                        )}
+                                      </div>
+                                    )
+                                  })()}
                                   </div>
                                 )
                             }
@@ -1142,7 +1363,51 @@ function InboxPageContent() {
                               if (bodyLower.match(/^\[(audio|document|image|video|media)/i)) {
                                 return <p className="text-sm opacity-75">[Media message]</p>
                               }
-                              return <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
+                              
+                              // For inbound messages, add translation support
+                              const isNonEnglish = isInbound && detectLanguage(displayText) === 'non-en'
+                              const hasTranslation = translations[msg.id]
+                              const isTranslating = translating[msg.id]
+                              
+                              return (
+                                <div className="space-y-2">
+                                  <p className="text-sm whitespace-pre-wrap break-words">{displayText}</p>
+                                  {/* Translation button for inbound non-English messages */}
+                                  {isInbound && (isNonEnglish || true) && (
+                                    <div className="flex items-center gap-2 mt-1">
+                                      <button
+                                        type="button"
+                                        onClick={() => handleTranslate(msg.id, displayText)}
+                                        disabled={isTranslating}
+                                        className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors flex items-center gap-1"
+                                      >
+                                        {isTranslating ? (
+                                          <>
+                                            <Loader2 className="h-3 w-3 animate-spin" />
+                                            Translating...
+                                          </>
+                                        ) : hasTranslation ? (
+                                          hasTranslation.showing ? 'Hide translation' : 'Show translation'
+                                        ) : (
+                                          <>
+                                            <Languages className="h-3 w-3" />
+                                            Translate
+                                          </>
+                                        )}
+                                      </button>
+                                    </div>
+                                  )}
+                                  {/* Translation display */}
+                                  {hasTranslation && hasTranslation.showing && (
+                                    <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
+                                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Translation:</p>
+                                      <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
+                                        {hasTranslation.text}
+                                      </p>
+                                    </div>
+                                  )}
+                                </div>
+                              )
                             }
                             return <p className="text-sm opacity-75">[Media message]</p>
                           })()}
@@ -1292,6 +1557,23 @@ function InboxPageContent() {
                     }}
                     rows={1}
                   />
+                  {/* Templates button - only show for WhatsApp channel */}
+                  {selectedConversation?.channel?.toLowerCase() === 'whatsapp' && (
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="default"
+                      onClick={async () => {
+                        await loadTemplates()
+                        setShowTemplateModal(true)
+                      }}
+                      disabled={sending || uploading}
+                      className="h-[44px] px-3"
+                      title="Send template message"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </Button>
+                  )}
                   <Button 
                     type="submit" 
                     disabled={(!newMessage.trim() && !selectedFile) || sending || uploading} 
@@ -1324,6 +1606,123 @@ function InboxPageContent() {
         </BentoCard>
       </div>
       
+      {/* Template Modal */}
+      <Dialog open={showTemplateModal} onOpenChange={setShowTemplateModal}>
+        <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Send WhatsApp Template</DialogTitle>
+            <DialogDescription>
+              {requiresTemplate 
+                ? 'WhatsApp requires a template message outside the 24-hour window.'
+                : 'Select a template to send. Templates can be sent at any time.'}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 mt-4">
+            {/* Template Selection */}
+            <div>
+              <Label htmlFor="template-select">Template</Label>
+              {loadingTemplates ? (
+                <div className="mt-2 p-4 border rounded-lg">
+                  <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                  Loading templates...
+                </div>
+              ) : templates.length === 0 ? (
+                <div className="mt-2 p-4 border rounded-lg text-sm text-muted-foreground">
+                  No approved templates found. Create templates in Meta Business Manager.
+                </div>
+              ) : (
+                <Select
+                  id="template-select"
+                  value={selectedTemplate ? `${selectedTemplate.name}|${selectedTemplate.language}` : ''}
+                  onChange={(e) => {
+                    const [name, language] = e.target.value.split('|')
+                    const template = templates.find(t => t.name === name && t.language === language)
+                    if (template) {
+                      setSelectedTemplate(template)
+                      // Extract body component to count variables
+                      const bodyComponent = template.components?.find((c: any) => c.type === 'body')
+                      let variableCount = 0
+                      if (bodyComponent) {
+                        // Check text field for {{1}}, {{2}}, etc.
+                        const text = bodyComponent.text || ''
+                        const matches = text.match(/\{\{(\d+)\}\}/g) || []
+                        // Get unique variable numbers and find max
+                        const variableNumbers = matches.map((m: string) => parseInt(m.replace(/[{}]/g, '')))
+                        variableCount = variableNumbers.length > 0 ? Math.max(...variableNumbers) : 0
+                      }
+                      setTemplateVariables(new Array(variableCount).fill(''))
+                    }
+                  }}
+                  className="mt-2"
+                >
+                  <option value="">Select a template...</option>
+                  {templates.map((template, idx) => (
+                    <option key={idx} value={`${template.name}|${template.language}`}>
+                      {template.name} ({template.language}) - {template.category}
+                    </option>
+                  ))}
+                </Select>
+              )}
+            </div>
+
+            {/* Template Variables */}
+            {selectedTemplate && templateVariables.length > 0 && (
+              <div className="space-y-2">
+                <Label>Template Variables</Label>
+                {templateVariables.map((value, idx) => (
+                  <div key={idx}>
+                    <Label htmlFor={`var-${idx}`} className="text-xs text-muted-foreground">
+                      Variable {idx + 1}
+                    </Label>
+                    <Input
+                      id={`var-${idx}`}
+                      value={value}
+                      onChange={(e) => {
+                        const newVars = [...templateVariables]
+                        newVars[idx] = e.target.value
+                        setTemplateVariables(newVars)
+                      }}
+                      placeholder={`Enter value for variable ${idx + 1}`}
+                      className="mt-1"
+                    />
+                  </div>
+                ))}
+              </div>
+            )}
+
+            {/* Actions */}
+            <div className="flex gap-2 justify-end pt-4 border-t">
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowTemplateModal(false)
+                  setSelectedTemplate(null)
+                  setTemplateVariables([])
+                  setRequiresTemplate(false)
+                }}
+                disabled={sendingTemplate}
+              >
+                Cancel
+              </Button>
+              <Button
+                onClick={handleSendTemplate}
+                disabled={!selectedTemplate || sendingTemplate}
+              >
+                {sendingTemplate ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send Template'
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* STEP 0: Build stamp for deployment verification */}
       {buildInfo && (
         <div className="fixed bottom-2 right-2 text-xs text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded z-50">

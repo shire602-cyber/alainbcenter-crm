@@ -1,107 +1,65 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { requireAdminApi } from '@/lib/authApi'
-import { prisma } from '@/lib/prisma'
+import { requireAuthApi } from '@/lib/authApi'
+import { getWhatsAppCredentials } from '@/lib/whatsapp'
+
+const WHATSAPP_API_VERSION = 'v24.0'
 
 /**
  * GET /api/whatsapp/templates
- * List all WhatsApp templates
+ * List approved WhatsApp message templates from Meta Graph API
  */
 export async function GET(req: NextRequest) {
   try {
-    await requireAdminApi()
+    await requireAuthApi()
 
-    try {
-      const status = req.nextUrl.searchParams.get('status')
-      const where: any = {}
-      if (status) {
-        where.status = status
-      }
-
-      const templates = await (prisma as any).whatsAppTemplate?.findMany({
-        where,
-        orderBy: { createdAt: 'desc' },
-      })
-
-      return NextResponse.json(templates || [])
-    } catch (modelError: any) {
-      if (
-        modelError.message?.includes('whatsAppTemplate') ||
-        modelError.message?.includes('does not exist')
-      ) {
-        console.warn('WhatsAppTemplate model not available yet')
-        return NextResponse.json([])
-      }
-      throw modelError
-    }
-  } catch (error: any) {
-    console.error('GET /api/whatsapp/templates error:', error)
-    return NextResponse.json(
-      { error: error.message || 'Failed to load templates' },
-      { status: error.statusCode || 500 }
-    )
-  }
-}
-
-/**
- * POST /api/whatsapp/templates
- * Create a new WhatsApp template
- */
-export async function POST(req: NextRequest) {
-  try {
-    await requireAdminApi()
-
-    const body = await req.json()
-    const { name, language, body: templateBody, status } = body
-
-    if (!name || !templateBody) {
+    // Get WABA ID from environment
+    const wabaId = process.env.WHATSAPP_WABA_ID
+    if (!wabaId) {
       return NextResponse.json(
-        { error: 'Name and body are required' },
-        { status: 400 }
+        { error: 'WHATSAPP_WABA_ID environment variable not set' },
+        { status: 500 }
       )
     }
 
-    try {
-      const existing = await (prisma as any).whatsAppTemplate?.findUnique({
-        where: { name },
-      })
+    // Get access token
+    const { accessToken } = await getWhatsAppCredentials()
 
-      if (existing) {
-        return NextResponse.json(
-          { error: 'Template with this name already exists' },
-          { status: 400 }
-        )
-      }
+    // Fetch templates from Meta Graph API
+    const url = `https://graph.facebook.com/${WHATSAPP_API_VERSION}/${wabaId}/message_templates?fields=name,language,status,category,components`
 
-      const template = await (prisma as any).whatsAppTemplate.create({
-        data: {
-          name,
-          language: language || 'en_US',
-          body: templateBody,
-          status: status || 'draft',
-        },
-      })
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+        'Content-Type': 'application/json',
+      },
+    })
 
-      return NextResponse.json(template, { status: 201 })
-    } catch (modelError: any) {
-      if (
-        modelError.message?.includes('whatsAppTemplate') ||
-        modelError.message?.includes('does not exist')
-      ) {
-        return NextResponse.json(
-          {
-            error:
-              'WhatsApp templates feature not available. Please run: npx prisma migrate dev && npx prisma generate',
-          },
-          { status: 503 }
-        )
-      }
-      throw modelError
+    if (!response.ok) {
+      const error = await response.json()
+      console.error('[WHATSAPP-TEMPLATES] API error:', error)
+      return NextResponse.json(
+        { error: error.error?.message || 'Failed to fetch templates' },
+        { status: response.status }
+      )
     }
+
+    const data = await response.json()
+
+    // Filter only APPROVED templates and sort by name
+    const approvedTemplates = (data.data || [])
+      .filter((template: any) => template.status === 'APPROVED')
+      .sort((a: any, b: any) => a.name.localeCompare(b.name))
+
+    return NextResponse.json({
+      ok: true,
+      templates: approvedTemplates,
+    })
   } catch (error: any) {
-    console.error('POST /api/whatsapp/templates error:', error)
+    console.error('[WHATSAPP-TEMPLATES] Error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to create template' },
-      { status: error.statusCode || 500 }
+      { error: error.message || 'Failed to fetch templates' },
+      { status: 500 }
     )
   }
 }

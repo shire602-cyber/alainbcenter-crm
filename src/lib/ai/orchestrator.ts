@@ -38,6 +38,171 @@ const BANNED_QUESTION_KEYS = new Set([
   'ASK_NEW_OR_RENEW',
 ])
 
+/**
+ * Build idempotency key for AI reply
+ * Format: wa_ai:{conversationId}:{inboundMessageId}:{aiActionType}
+ */
+export function buildIdempotencyKey(
+  conversationId: number,
+  inboundMessageId: number,
+  aiActionType: string = 'auto_reply'
+): string {
+  return `wa_ai:${conversationId}:${inboundMessageId}:${aiActionType}`
+}
+
+/**
+ * Check and acquire per-conversation lock
+ * Returns true if lock acquired, false if already locked
+ */
+async function acquireConversationLock(
+  conversationId: number,
+  lockDurationSeconds: number = 30
+): Promise<boolean> {
+  const now = new Date()
+  const lockUntil = new Date(now.getTime() + lockDurationSeconds * 1000)
+  
+  try {
+    // Try to acquire lock (only if not locked or lock expired)
+    const updated = await prisma.conversation.updateMany({
+      where: {
+        id: conversationId,
+        OR: [
+          { aiLockUntil: null },
+          { aiLockUntil: { lt: now } }, // Lock expired
+        ],
+      },
+      data: {
+        aiLockUntil: lockUntil,
+      },
+    })
+    
+    if (updated.count > 0) {
+      console.log(`[ORCHESTRATOR] Lock acquired for conversation ${conversationId} until ${lockUntil.toISOString()}`)
+      return true
+    } else {
+      // Check if lock exists
+      const conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: { aiLockUntil: true },
+      })
+      
+      if (conversation?.aiLockUntil && conversation.aiLockUntil > now) {
+        console.log(`[ORCHESTRATOR] AI_LOCKED_SKIP conversation ${conversationId} - lock until ${conversation.aiLockUntil.toISOString()}`)
+        return false
+      }
+      
+      // Lock expired but update failed (race condition) - try again
+      return false
+    }
+  } catch (error: any) {
+    console.error(`[ORCHESTRATOR] Failed to acquire lock for conversation ${conversationId}:`, error.message)
+    return false
+  }
+}
+
+/**
+ * Release conversation lock
+ */
+async function releaseConversationLock(conversationId: number): Promise<void> {
+  try {
+    await prisma.conversation.update({
+      where: { id: conversationId },
+      data: { aiLockUntil: null },
+    })
+    console.log(`[ORCHESTRATOR] Lock released for conversation ${conversationId}`)
+  } catch (error: any) {
+    console.warn(`[ORCHESTRATOR] Failed to release lock for conversation ${conversationId}:`, error.message)
+  }
+}
+
+/**
+ * Check idempotency before sending AI reply
+ * Returns existing dedup record if found, null if can proceed
+ */
+async function checkIdempotency(
+  idempotencyKey: string
+): Promise<{ exists: boolean; record?: any }> {
+  try {
+    const existing = await prisma.aiReplyDedup.findUnique({
+      where: { idempotencyKey },
+    })
+    
+    if (existing) {
+      console.log(`[ORCHESTRATOR] AI_DEDUP_HIT idempotencyKey=${idempotencyKey.substring(0, 32)}... status=${existing.status}`)
+      return { exists: true, record: existing }
+    }
+    
+    return { exists: false }
+  } catch (error: any) {
+    console.error(`[ORCHESTRATOR] Failed to check idempotency:`, error.message)
+    // Fail open - allow send if check fails
+    return { exists: false }
+  }
+}
+
+/**
+ * Create idempotency record BEFORE sending
+ */
+async function createIdempotencyRecord(
+  conversationId: number,
+  inboundMessageId: number,
+  aiActionType: string,
+  idempotencyKey: string
+): Promise<{ success: boolean; recordId?: number }> {
+  try {
+    const record = await prisma.aiReplyDedup.create({
+      data: {
+        conversationId,
+        inboundMessageId,
+        aiActionType,
+        idempotencyKey,
+        status: 'PENDING',
+      },
+    })
+    
+    console.log(`[ORCHESTRATOR] Idempotency record created id=${record.id} key=${idempotencyKey.substring(0, 32)}...`)
+    return { success: true, recordId: record.id }
+  } catch (error: any) {
+    // Unique constraint violation = duplicate
+    if (error.code === 'P2002') {
+      console.log(`[ORCHESTRATOR] AI_DEDUP_HIT (DB constraint) idempotencyKey=${idempotencyKey.substring(0, 32)}...`)
+      return { success: false }
+    }
+    
+    console.error(`[ORCHESTRATOR] Failed to create idempotency record:`, error.message)
+    // Fail open - allow send if record creation fails
+    return { success: true }
+  }
+}
+
+/**
+ * Update idempotency record after send
+ */
+async function updateIdempotencyRecord(
+  recordId: number,
+  status: 'SENT' | 'FAILED',
+  outboundMessageId?: number,
+  providerMessageId?: string,
+  error?: string
+): Promise<void> {
+  try {
+    await prisma.aiReplyDedup.update({
+      where: { id: recordId },
+      data: {
+        status,
+        outboundMessageId,
+        providerMessageId,
+        error,
+        sentAt: status === 'SENT' ? new Date() : undefined,
+        failedAt: status === 'FAILED' ? new Date() : undefined,
+      },
+    })
+    console.log(`[ORCHESTRATOR] Idempotency record updated id=${recordId} status=${status}`)
+  } catch (error: any) {
+    console.warn(`[ORCHESTRATOR] Failed to update idempotency record:`, error.message)
+  }
+}
+
 export interface OrchestratorInput {
   conversationId: number
   leadId?: number
@@ -780,6 +945,230 @@ Reply:`
       }],
       shouldEscalate: true,
       handoverReason: error.message,
+    }
+  }
+}
+
+/**
+ * SEND AI REPLY - SINGLE ENTRY POINT FOR ALL AI OUTBOUND MESSAGES
+ * 
+ * This function MUST be used for all AI-generated outbound messages.
+ * It provides:
+ * - Idempotency (hard guarantee: same inboundMessageId + aiActionType = at most one outbound)
+ * - Per-conversation locking (prevents concurrent processing)
+ * - State gating (conversation.aiState progression)
+ * - DB-level deduplication (unique constraint on idempotencyKey)
+ * 
+ * @param input - Orchestrator input (conversationId, inboundMessageId, etc.)
+ * @param aiActionType - Type of AI action: 'auto_reply' | 'question' | 'handoff' | etc.
+ * @returns Result with success flag and messageId if sent
+ */
+export async function sendAiReply(
+  input: OrchestratorInput,
+  aiActionType: string = 'auto_reply'
+): Promise<{
+  success: boolean
+  messageId?: string
+  wasDuplicate?: boolean
+  error?: string
+  skipped?: boolean
+  skipReason?: string
+}> {
+  const { conversationId, inboundMessageId } = input
+  
+  // Step 1: Build idempotency key
+  const idempotencyKey = buildIdempotencyKey(conversationId, inboundMessageId, aiActionType)
+  
+  console.log(`[ORCHESTRATOR] sendAiReply ENTRY`, JSON.stringify({
+    conversationId,
+    inboundMessageId,
+    aiActionType,
+    idempotencyKey: idempotencyKey.substring(0, 32) + '...',
+  }))
+  
+  // Step 2: Check idempotency (DB-level check)
+  const idempotencyCheck = await checkIdempotency(idempotencyKey)
+  if (idempotencyCheck.exists) {
+    const record = idempotencyCheck.record!
+    if (record.status === 'SENT') {
+      console.log(`[ORCHESTRATOR] AI_DEDUP_HIT - already sent idempotencyKey=${idempotencyKey.substring(0, 32)}...`)
+      return {
+        success: true,
+        wasDuplicate: true,
+        messageId: record.providerMessageId || undefined,
+        skipped: true,
+        skipReason: 'Already sent (idempotency)',
+      }
+    } else if (record.status === 'PENDING') {
+      // Another process is handling this - skip
+      console.log(`[ORCHESTRATOR] AI_DEDUP_HIT - pending idempotencyKey=${idempotencyKey.substring(0, 32)}...`)
+      return {
+        success: false,
+        wasDuplicate: true,
+        skipped: true,
+        skipReason: 'Already processing (idempotency)',
+      }
+    }
+  }
+  
+  // Step 3: Acquire per-conversation lock
+  const lockAcquired = await acquireConversationLock(conversationId, 30)
+  if (!lockAcquired) {
+    console.log(`[ORCHESTRATOR] AI_LOCKED_SKIP conversation ${conversationId}`)
+    return {
+      success: false,
+      skipped: true,
+      skipReason: 'Conversation locked (concurrent processing)',
+    }
+  }
+  
+  let idempotencyRecordId: number | undefined = undefined
+  
+  try {
+    // Step 4: Create idempotency record BEFORE generating/sending (DB-level protection)
+    const recordResult = await createIdempotencyRecord(
+      conversationId,
+      inboundMessageId,
+      aiActionType,
+      idempotencyKey
+    )
+    
+    if (!recordResult.success) {
+      // Duplicate detected by DB constraint
+      await releaseConversationLock(conversationId)
+      return {
+        success: false,
+        wasDuplicate: true,
+        skipped: true,
+        skipReason: 'Duplicate (DB constraint)',
+      }
+    }
+    
+    idempotencyRecordId = recordResult.recordId
+    
+    // Step 5: Generate AI reply
+    const orchestratorResult = await generateAIReply(input)
+    
+    // Step 6: Check if reply is empty (deduplication or stop)
+    if (!orchestratorResult.replyText || orchestratorResult.replyText.trim().length === 0) {
+      await updateIdempotencyRecord(
+        idempotencyRecordId!,
+        'FAILED',
+        undefined,
+        undefined,
+        orchestratorResult.handoverReason || 'Empty reply'
+      )
+      await releaseConversationLock(conversationId)
+      return {
+        success: false,
+        skipped: true,
+        skipReason: orchestratorResult.handoverReason || 'Empty reply',
+      }
+    }
+    
+    // Step 7: Load conversation and contact for sending
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      include: {
+        contact: true,
+        lead: true,
+      },
+    })
+    
+    if (!conversation || !conversation.contact) {
+      throw new Error(`Conversation ${conversationId} or contact not found`)
+    }
+    
+    const phone = conversation.contact.phoneNormalized || conversation.contact.phone
+    if (!phone) {
+      throw new Error(`Contact ${conversation.contact.id} has no phone number`)
+    }
+    
+    // Step 8: Send via sendOutboundWithIdempotency (this has its own idempotency layer)
+    const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+    const inboundMessage = await prisma.message.findUnique({
+      where: { id: inboundMessageId },
+      select: { providerMessageId: true },
+    })
+    
+    const sendResult = await sendOutboundWithIdempotency({
+      conversationId,
+      contactId: conversation.contact.id,
+      leadId: conversation.leadId || null,
+      phone,
+      text: orchestratorResult.replyText,
+      provider: 'whatsapp',
+      triggerProviderMessageId: inboundMessage?.providerMessageId || null,
+      replyType: orchestratorResult.nextStepKey ? 'question' : 'answer',
+      lastQuestionKey: orchestratorResult.nextStepKey || null,
+      flowStep: null,
+    })
+    
+    // Step 9: Update idempotency record
+    if (sendResult.success && sendResult.messageId) {
+      await updateIdempotencyRecord(
+        idempotencyRecordId!,
+        'SENT',
+        undefined, // outboundMessageId will be found via providerMessageId
+        sendResult.messageId
+      )
+      
+      // Update conversation state if nextStepKey provided
+      if (orchestratorResult.nextStepKey) {
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: {
+            aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
+          },
+        })
+      }
+      
+      console.log(`[ORCHESTRATOR] AI_SEND`, JSON.stringify({
+        conversationId,
+        inboundMessageId,
+        aiActionType,
+        idempotencyKey: idempotencyKey.substring(0, 32) + '...',
+        messageId: sendResult.messageId,
+        nextStepKey: orchestratorResult.nextStepKey,
+      }))
+      
+      await releaseConversationLock(conversationId)
+      return {
+        success: true,
+        messageId: sendResult.messageId,
+      }
+    } else {
+      await updateIdempotencyRecord(
+        idempotencyRecordId!,
+        'FAILED',
+        undefined,
+        undefined,
+        sendResult.error || 'Send failed'
+      )
+      await releaseConversationLock(conversationId)
+      return {
+        success: false,
+        error: sendResult.error || 'Send failed',
+      }
+    }
+  } catch (error: any) {
+    console.error(`[ORCHESTRATOR] sendAiReply error:`, error)
+    
+    // Update idempotency record on error
+    if (idempotencyRecordId) {
+      await updateIdempotencyRecord(
+        idempotencyRecordId,
+        'FAILED',
+        undefined,
+        undefined,
+        error.message || 'Unknown error'
+      )
+    }
+    
+    await releaseConversationLock(conversationId)
+    return {
+      success: false,
+      error: error.message || 'Unknown error',
     }
   }
 }

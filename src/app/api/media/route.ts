@@ -22,7 +22,13 @@ export async function GET(req: NextRequest) {
     if (!urlParam) {
       return NextResponse.json(
         { error: 'URL parameter is required' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          },
+        }
       )
     }
 
@@ -38,7 +44,13 @@ export async function GET(req: NextRequest) {
     if (!targetUrl.startsWith('http://') && !targetUrl.startsWith('https://')) {
       return NextResponse.json(
         { error: 'Invalid URL - must be http or https' },
-        { status: 400 }
+        { 
+          status: 400,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          },
+        }
       )
     }
 
@@ -65,10 +77,36 @@ export async function GET(req: NextRequest) {
       headers: fetchHeaders,
     })
 
+    // FIX: Handle expired media (410 Gone)
+    if (mediaResponse.status === 410) {
+      return NextResponse.json(
+        { 
+          error: 'upstream_expired',
+          reason: 'Media URL expired. Ask customer to resend.',
+        },
+        { 
+          status: 410,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          },
+        }
+      )
+    }
+    
     if (!mediaResponse.ok) {
       return NextResponse.json(
-        { error: `Failed to fetch media: ${mediaResponse.status}` },
-        { status: mediaResponse.status }
+        { 
+          error: 'upstream_failed',
+          reason: `Failed to fetch media: ${mediaResponse.status}`,
+        },
+        { 
+          status: mediaResponse.status,
+          headers: {
+            'Access-Control-Allow-Origin': '*',
+            'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+          },
+        }
       )
     }
 
@@ -88,6 +126,10 @@ export async function GET(req: NextRequest) {
       'Accept-Ranges': acceptRanges,
       'Content-Disposition': 'inline',
       'Cache-Control': 'public, max-age=3600', // Cache for 1 hour
+      'Access-Control-Allow-Origin': '*', // FIX: CORS headers
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range, Content-Type',
+      'Access-Control-Expose-Headers': 'Content-Length, Content-Range, Accept-Ranges',
     }
 
     // Add Content-Length if available
@@ -111,9 +153,34 @@ export async function GET(req: NextRequest) {
   } catch (error: any) {
     console.error('[MEDIA-PROXY] Error:', error)
     return NextResponse.json(
-      { error: error.message || 'Failed to proxy media' },
-      { status: 500 }
+      { 
+        error: 'internal_error',
+        reason: error.message || 'Failed to proxy media',
+      },
+      { 
+        status: 500,
+        headers: {
+          'Access-Control-Allow-Origin': '*',
+          'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+        },
+      }
     )
   }
+}
+
+/**
+ * OPTIONS /api/media
+ * Handle CORS preflight requests
+ */
+export async function OPTIONS() {
+  return new NextResponse(null, {
+    status: 200,
+    headers: {
+      'Access-Control-Allow-Origin': '*',
+      'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
+      'Access-Control-Allow-Headers': 'Range, Content-Type, Authorization',
+      'Access-Control-Max-Age': '86400',
+    },
+  })
 }
 

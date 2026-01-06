@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 import { computeConversationFlags } from '@/lib/inbox/intelligence'
+import { MEDIA_TYPES } from '@/lib/media/extractMediaId'
 /**
  * GET /api/inbox/conversations/[id]
  * Returns full conversation details with all messages
@@ -93,6 +94,8 @@ export async function GET(
           messages: {
             orderBy: { createdAt: 'asc' },
             take: 500, // Limit to last 500 messages to prevent memory issues
+            // NOTE: Using `include` includes all message fields (providerMediaId, mediaFilename, mediaSize, etc.)
+            // Fields are accessed later via type assertions where needed (e.g., (msg as any).mediaSize)
             include: {
               createdByUser: {
                 select: {
@@ -164,16 +167,61 @@ export async function GET(
       isArchived = false
     }
 
+    // Canonical media detection helper
+    const looksLikeWhatsAppMediaId = (v?: string | null): boolean => {
+      if (!v) return false
+      return /^[0-9]{8,}$/.test(v.trim()) // WhatsApp media IDs are numeric strings (simple heuristic)
+    }
+
+    // Canonical isMedia() function - same logic as outbound
+    const isMedia = (msg: any): boolean => {
+      // Priority 1: providerMediaId exists
+      if (msg.providerMediaId && msg.providerMediaId.trim() !== '') return true
+      
+      // Priority 2: mediaUrl exists and looks like WhatsApp media ID (numeric)
+      if (looksLikeWhatsAppMediaId(msg.mediaUrl)) return true
+      
+      // Priority 3: type is in MEDIA_TYPES
+      if (msg.type && MEDIA_TYPES.has((msg.type || '').toLowerCase())) return true
+      
+      // Priority 4: mediaMimeType indicates media
+      if (msg.mediaMimeType) {
+        const mime = msg.mediaMimeType.toLowerCase()
+        if (mime.match(/^(image|audio|video)\//) || mime === 'application/pdf') return true
+      }
+      
+      return false
+    }
+
     // Format messages for frontend - PHASE 5A: Include attachments
     const formattedMessages = conversation.messages.map((msg: any) => {
+      // Use canonical isMedia() function
+      const msgIsMedia = isMedia(msg)
+      const mediaProxyUrl = msgIsMedia ? `/api/media/messages/${msg.id}` : null
+      
+      // Debug log (no PII)
+      console.log('[INBOX-MEDIA-CLASSIFY]', {
+        messageId: msg.id,
+        type: msg.type,
+        providerMediaId: !!msg.providerMediaId,
+        mediaUrl: !!msg.mediaUrl,
+        mediaMimeType: msg.mediaMimeType,
+        isMedia: msgIsMedia,
+      })
+
       const formatted = {
         id: msg.id,
         direction: msg.direction,
         channel: msg.channel,
         type: msg.type,
         body: msg.body,
-        mediaUrl: msg.mediaUrl,
+        providerMediaId: (msg as any).providerMediaId || null, // CRITICAL: Include providerMediaId
+        mediaUrl: msg.mediaUrl, // CRITICAL: Include mediaUrl (legacy compatibility, stores providerMediaId for WhatsApp)
         mediaMimeType: msg.mediaMimeType,
+        mediaFilename: msg.mediaFilename || null, // CRITICAL: Include mediaFilename for document downloads
+        mediaSize: (msg as any).mediaSize || null, // FIX: Include mediaSize for file size display
+        mediaProxyUrl: mediaProxyUrl, // Canonical proxy URL
+        hasMedia: msgIsMedia, // Canonical media flag
         status: msg.status,
         providerMessageId: msg.providerMessageId,
         sentAt: msg.sentAt?.toISOString() || null,
@@ -196,18 +244,6 @@ export async function GET(
           durationSec: att.durationSec,
           thumbnailUrl: att.thumbnailUrl,
         })),
-      }
-      
-      // PHASE 1 DEBUG: Log messages with media
-      if (msg.mediaUrl || (msg.attachments && msg.attachments.length > 0)) {
-        console.log('[INBOX-API-DEBUG] Message with media', {
-          messageId: msg.id,
-          type: msg.type,
-          mediaUrl: msg.mediaUrl,
-          mediaMimeType: msg.mediaMimeType,
-          attachmentsCount: msg.attachments?.length || 0,
-          attachments: msg.attachments?.map((a: any) => ({ type: a.type, url: a.url })) || [],
-        })
       }
       
       return formatted

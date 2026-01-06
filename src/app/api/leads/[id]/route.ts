@@ -28,6 +28,7 @@ export async function GET(
     const resolvedParams = await params
     const numericId = parseInt(resolvedParams.id)
     // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api/leads/[id]/route.ts:29',message:'Params resolved and ID parsed',data:{requestId:requestId,resolvedId:resolvedParams.id,numericId:numericId,isNaN:isNaN(numericId)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'BB'})}).catch(()=>{});
     console.log(`[LEAD-API] [${requestId}] Parsed ID: ${numericId} from ${resolvedParams.id}`)
     // #endregion
     
@@ -52,6 +53,9 @@ export async function GET(
     const dbQueryStart = Date.now()
     console.log(`[LEAD-API] [${requestId}] DB query start`)
     
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api/leads/[id]/route.ts:55',message:'Starting Prisma query',data:{requestId:requestId,leadId:numericId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'BC'})}).catch(()=>{});
+    // #endregion
     let lead = await prisma.lead.findUnique({
       where: { id: numericId },
       include: {
@@ -457,6 +461,7 @@ export async function GET(
 
     const responseStart = Date.now()
     // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api/leads/[id]/route.ts:459',message:'Preparing JSON response',data:{requestId:requestId,leadId:lead.id,contactName:lead.contact?.fullName||'null',tasksOpenCount:tasksOpen.length,tasksDoneCount:tasksDone.length,tasksSnoozedCount:tasksSnoozed.length},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'BD'})}).catch(()=>{});
     console.log(`[LEAD-API] [${requestId}] Preparing response with lead.id=${lead.id}, lead.contact=${lead.contact?.fullName || 'null'}`)
     // #endregion
     const response = NextResponse.json({
@@ -475,9 +480,13 @@ export async function GET(
     console.log(`[LEAD-API] [${requestId}] Response prepared in ${responseDuration}ms, total: ${totalDuration}ms`)
     return response
   } catch (error: any) {
-    const totalDuration = Date.now() - requestStart
-    console.error(`[LEAD-API] [${requestId}] GET /api/leads/[id] error after ${totalDuration}ms:`, error.message)
-    console.error(`[LEAD-API] [${requestId}] Error stack:`, error.stack)
+    const totalDuration = requestStart ? Date.now() - requestStart : 0
+    const errorRequestId = requestId || `error_${Date.now()}`
+    // #region agent log
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'api/leads/[id]/route.ts:477',message:'GET /api/leads/[id] error caught',data:{requestId:errorRequestId,errorMessage:error?.message,errorName:error?.name,errorCode:error?.code,statusCode:error?.statusCode,totalDuration:totalDuration,stack:error?.stack?.substring(0,500)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'BA'})}).catch(()=>{});
+    // #endregion
+    console.error(`[LEAD-API] [${errorRequestId}] GET /api/leads/[id] error after ${totalDuration}ms:`, error.message)
+    console.error(`[LEAD-API] [${errorRequestId}] Error stack:`, error.stack)
     
     // If it's an auth error, return 401
     if (error.statusCode === 401) {

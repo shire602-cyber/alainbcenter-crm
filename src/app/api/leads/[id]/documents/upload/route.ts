@@ -4,6 +4,7 @@ import { prisma } from '@/lib/prisma'
 import { writeFile, mkdir } from 'fs/promises'
 import { join } from 'path'
 import { existsSync } from 'fs'
+import { sanitizeFilename } from '@/lib/media/storage'
 
 // POST /api/leads/[id]/documents/upload
 // Upload a document file
@@ -90,8 +91,9 @@ export async function POST(
     }
 
     // Generate unique filename
+    // FIX #9: Use centralized sanitizeFilename function for consistency and security
     const timestamp = Date.now()
-    const sanitizedFileName = file.name.replace(/[^a-zA-Z0-9.-]/g, '_')
+    const sanitizedFileName = sanitizeFilename(file.name)
     const fileName = `${timestamp}-${sanitizedFileName}`
     const filePath = join(uploadsDir, fileName)
 

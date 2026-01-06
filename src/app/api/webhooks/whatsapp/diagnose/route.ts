@@ -66,6 +66,9 @@ export async function GET(req: NextRequest) {
     const recentWebhookEvents = await prisma.externalEventLog.findMany({
       where: {
         provider: 'whatsapp',
+        externalId: {
+          startsWith: 'message-', // Only get message webhook payloads
+        },
       },
       orderBy: { receivedAt: 'desc' },
       take: 10,
@@ -76,6 +79,65 @@ export async function GET(req: NextRequest) {
         payload: true,
       },
     })
+    
+    // Parse webhook payloads to extract media information
+    const parsedWebhookEvents = recentWebhookEvents.map((event) => {
+      let parsedPayload = null
+      let mediaInfo = null
+      try {
+        parsedPayload = JSON.parse(event.payload || '{}')
+        if (parsedPayload.message) {
+          const msg = parsedPayload.message
+          mediaInfo = {
+            messageId: msg.id || parsedPayload.messageId,
+            messageType: msg.type || parsedPayload.messageType,
+            hasAudio: !!msg.audio,
+            hasImage: !!msg.image,
+            hasDocument: !!msg.document,
+            hasVideo: !!msg.video,
+            audioKeys: msg.audio ? Object.keys(msg.audio) : [],
+            audioId: msg.audio?.id,
+            audioMediaId: msg.audio?.media_id,
+            audioMediaIdAlt: msg.audio?.mediaId,
+            extractedMediaUrl: parsedPayload.extractedMediaUrl,
+            audioObject: msg.audio || null,
+            fullMessageObject: msg,
+          }
+        }
+      } catch (e) {
+        // Payload might not be valid JSON
+      }
+      return {
+        id: event.id,
+        externalId: event.externalId,
+        receivedAt: event.receivedAt?.toISOString(),
+        mediaInfo,
+        payloadPreview: event.payload?.substring(0, 500) || null,
+      }
+    })
+    
+    // Get recent inbound media messages with null mediaUrl
+    const recentMediaMessagesWithoutUrl = await prisma.message.findMany({
+      where: {
+        channel: 'whatsapp',
+        direction: 'INBOUND',
+        type: {
+          in: ['audio', 'image', 'document', 'video'],
+        },
+        mediaUrl: null,
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 10,
+      select: {
+        id: true,
+        type: true,
+        body: true,
+        providerMessageId: true,
+        mediaUrl: true,
+        mediaMimeType: true,
+        createdAt: true,
+      },
+    })
 
     return NextResponse.json({
       success: true,
@@ -83,6 +145,7 @@ export async function GET(req: NextRequest) {
         totalInboundMessages: recentMessages.length,
         totalConversations: recentConversations.length,
         totalWebhookEvents: recentWebhookEvents.length,
+        mediaMessagesWithoutUrl: recentMediaMessagesWithoutUrl.length,
       },
       recentMessages: recentMessages.map((msg) => ({
         id: msg.id,
@@ -102,11 +165,15 @@ export async function GET(req: NextRequest) {
         messageCount: conv.messages.length,
         recentMessages: conv.messages,
       })),
-      recentWebhookEvents: recentWebhookEvents.map((event) => ({
-        id: event.id,
-        externalId: event.externalId,
-        receivedAt: event.receivedAt?.toISOString(),
-        payloadPreview: event.payload ? JSON.parse(event.payload).substring(0, 200) : null,
+          recentWebhookEvents: parsedWebhookEvents,
+      recentMediaMessagesWithoutUrl: recentMediaMessagesWithoutUrl.map((msg) => ({
+        id: msg.id,
+        type: msg.type,
+        body: msg.body?.substring(0, 50),
+        providerMessageId: msg.providerMessageId,
+        mediaUrl: msg.mediaUrl,
+        mediaMimeType: msg.mediaMimeType,
+        createdAt: msg.createdAt.toISOString(),
       })),
     })
   } catch (error: any) {

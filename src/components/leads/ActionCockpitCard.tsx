@@ -64,6 +64,7 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button 
+                    type="button"
                     variant="ghost" 
                     size="icon" 
                     className="h-8 w-8 rounded-lg btn-pressable"
@@ -73,17 +74,32 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end" className="radius-xl">
                   {onSnooze && (
-                    <DropdownMenuItem onClick={onSnooze}>
+                    <DropdownMenuItem 
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        onSnooze()
+                      }}
+                    >
                       Snooze 30m
                     </DropdownMenuItem>
                   )}
                   {onMarkHandled && (
-                    <DropdownMenuItem onClick={onMarkHandled}>
+                    <DropdownMenuItem 
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        onMarkHandled()
+                      }}
+                    >
                       Mark handled
                     </DropdownMenuItem>
                   )}
                   {onAssign && (
-                    <DropdownMenuItem onClick={onAssign}>
+                    <DropdownMenuItem 
+                      onSelect={(e) => {
+                        e.preventDefault()
+                        onAssign()
+                      }}
+                    >
                       Assign to...
                     </DropdownMenuItem>
                   )}
