@@ -40,17 +40,27 @@ async function runMigrations() {
   }
   
   // Increase timeout for advisory locks (PostgreSQL advisory lock timeout)
-  migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT = '60000' // 60 seconds (increased from 30)
+  migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT = '30000' // 30 seconds (reduced to fail faster)
+  
+  // Check if we should skip migrations (useful for Vercel builds with connection issues)
+  const skipMigrations = process.env.SKIP_MIGRATIONS === 'true' || process.env.VERCEL === '1'
+  
+  if (skipMigrations) {
+    console.log('⏭️  Skipping migrations (SKIP_MIGRATIONS=true or VERCEL=1)')
+    console.log('💡 Migrations should be run separately or via a migration job')
+    process.exit(0)
+  }
   
   for (let attempt = 1; attempt <= MAX_RETRIES; attempt++) {
     try {
       console.log(`📦 Attempt ${attempt}/${MAX_RETRIES}: Running prisma migrate deploy...`)
       console.log(`⏱️  Using lock timeout: ${migrationEnv.PRISMA_MIGRATE_LOCK_TIMEOUT}ms`)
       
+      // Use shorter timeout per attempt to fail faster
       execSync('npx prisma migrate deploy', {
         stdio: 'inherit',
         env: migrationEnv,
-        timeout: 300000, // 5 minute timeout per attempt (increased for 46 migrations)
+        timeout: 120000, // 2 minute timeout per attempt (reduced for faster failure)
       })
       
       console.log('✅ Migrations completed successfully')
@@ -61,7 +71,8 @@ async function runMigrations() {
                        errorOutput.includes('p1002') ||
                        errorOutput.includes('advisory lock') ||
                        errorOutput.includes('timeout') ||
-                       errorOutput.includes('was reached but timed out')
+                       errorOutput.includes('was reached but timed out') ||
+                       errorOutput.includes('elapsed:')
       
       if (isTimeout && attempt < MAX_RETRIES) {
         const delay = INITIAL_DELAY * Math.pow(2, attempt - 1) // Exponential backoff
@@ -70,17 +81,21 @@ async function runMigrations() {
         continue
       }
       
-      // If timeout on last attempt, skip migrations (they can be run manually)
+      // If timeout on last attempt, skip migrations gracefully (don't fail build)
       if (isTimeout && attempt === MAX_RETRIES) {
         console.error('❌ Migration failed after all retry attempts due to timeout')
         console.error('⚠️  WARNING: Migrations were not applied during build')
-        console.error('💡 This is likely due to using a pooled connection without DIRECT_URL')
+        console.error('💡 This is likely due to:')
+        console.error('   1. Using pooled connection without DIRECT_URL')
+        console.error('   2. Another migration process holding the lock')
+        console.error('   3. Database connection issues')
         console.error('💡 Solutions:')
         console.error('   1. Set DIRECT_URL in Vercel environment variables (recommended)')
         console.error('   2. Run migrations manually: npx prisma migrate deploy')
-        console.error('   3. Or use: vercel env pull && npx prisma migrate deploy')
+        console.error('   3. Or set SKIP_MIGRATIONS=true to skip during build')
         console.warn('⚠️  Continuing build without migrations (app may fail at runtime if schema mismatch)')
-        // Don't exit - let build continue (migrations can be run manually)
+        console.warn('⚠️  Consider running migrations via a separate job or after deployment')
+        // Exit with 0 to allow build to continue
         process.exit(0)
       }
       
