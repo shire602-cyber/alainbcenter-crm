@@ -478,6 +478,20 @@ export async function POST(req: NextRequest) {
         return true
       })
       
+      console.log('[WEBHOOK] FILTER RESULT', {
+        totalMessages: value.messages?.length || 0,
+        actualMessages: actualMessages.length,
+        businessPhoneNumberId: value.metadata?.phone_number_id || null,
+        displayPhoneNumber: value.metadata?.display_phone_number || null,
+        sample: (value.messages || []).slice(0, 3).map((m: any) => ({
+          id: m.id,
+          type: m.type,
+          from: m.from,
+          hasContext: !!m.context,
+          contextFrom: m.context?.from || null,
+        })),
+      })
+      
       console.log(`📨 Filtered to ${actualMessages.length} actual customer messages (ignored ${value.messages.length - actualMessages.length} status/echo)`)
       
       // Step 3: Process each actual message (continue with existing handleInboundMessageAutoMatch logic)
@@ -635,6 +649,20 @@ export async function POST(req: NextRequest) {
         }
 
         return true
+      })
+      
+      console.log('[WEBHOOK] FILTER RESULT', {
+        totalMessages: value.messages?.length || 0,
+        actualMessages: actualMessages.length,
+        businessPhoneNumberId: value.metadata?.phone_number_id || null,
+        displayPhoneNumber: value.metadata?.display_phone_number || null,
+        sample: (value.messages || []).slice(0, 3).map((m: any) => ({
+          id: m.id,
+          type: m.type,
+          from: m.from,
+          hasContext: !!m.context,
+          contextFrom: m.context?.from || null,
+        })),
       })
       
       console.log(`📨 Filtered to ${actualMessages.length} actual customer messages (ignored ${value.messages.length - actualMessages.length} status/echo)`)
