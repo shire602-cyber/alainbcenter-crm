@@ -48,14 +48,22 @@ export async function GET(req: NextRequest) {
 
     const { accessToken, wabaId, phoneNumberId } = credentials
 
-    // CRITICAL: Try to get WABA ID from phone_number_id if wabaId not provided or invalid
-    // Meta API: We can query phone_number_id to get its WABA ID
-    let effectiveWabaId = wabaId
+    // CRITICAL: Validate and fetch WABA ID
+    // Application IDs often contain dashes or are very long - reject them immediately
+    const looksLikeApplicationId = wabaId && (wabaId.includes('-') || wabaId.length > 20 || !/^\d+$/.test(wabaId))
     
-    // If wabaId looks suspicious (contains dashes, too long, or empty), try to fetch it
-    const looksLikeApplicationId = effectiveWabaId && (effectiveWabaId.includes('-') || effectiveWabaId.length > 20)
+    let effectiveWabaId: string | null = null
     
-    if ((!effectiveWabaId || looksLikeApplicationId) && phoneNumberId) {
+    // Only use stored wabaId if it looks valid (numeric, reasonable length)
+    if (wabaId && !looksLikeApplicationId) {
+      effectiveWabaId = wabaId
+      console.log(`[WHATSAPP-TEMPLATES] Using stored WABA ID: ${wabaId.substring(0, 10)}...`)
+    } else if (wabaId && looksLikeApplicationId) {
+      console.warn(`[WHATSAPP-TEMPLATES] Stored wabaId looks like Application ID (${wabaId.substring(0, 20)}...), will attempt auto-fetch`)
+    }
+    
+    // ALWAYS try to auto-fetch from phone_number_id if we don't have a valid WABA ID
+    if (!effectiveWabaId && phoneNumberId) {
       try {
         console.log(`[WHATSAPP-TEMPLATES] Attempting to fetch WABA ID from phone_number_id: ${phoneNumberId.substring(0, 10)}...`)
         
@@ -73,8 +81,8 @@ export async function GET(req: NextRequest) {
           const phoneInfo = await phoneInfoResponse.json()
           const fetchedWabaId = phoneInfo.whatsapp_business_account?.id || phoneInfo.whatsapp_business_account
           
-          if (fetchedWabaId) {
-            console.log(`[WHATSAPP-TEMPLATES] Successfully fetched WABA ID from phone_number_id: ${fetchedWabaId.substring(0, 10)}...`)
+          if (fetchedWabaId && typeof fetchedWabaId === 'string') {
+            console.log(`[WHATSAPP-TEMPLATES] ✅ Successfully fetched WABA ID: ${fetchedWabaId.substring(0, 10)}...`)
             effectiveWabaId = fetchedWabaId
           }
         } else {
