@@ -287,6 +287,10 @@ export async function GET(
     }
     // ===== END PRIORITY F =====
     
+    // Initialize upstream error tracking (for debug output)
+    let upstreamError: any = null
+    let downloadError: any = null
+    
     // ===== DEBUG =====
     if (new URL(req.url).searchParams.get("debug") === "1") {
       // Fetch recent ExternalEventLog entries for debugging
@@ -295,6 +299,24 @@ export async function GET(
         take: 10,
         select: { id: true, provider: true, externalId: true, receivedAt: true },
       })
+
+      // Get credentials info for debug output
+      let credentialsInfo: any = {}
+      try {
+        const { getWhatsAppCredentials } = await import('@/lib/whatsapp')
+        const creds = await getWhatsAppCredentials()
+        credentialsInfo = {
+          usedTokenSource: creds.tokenSource === 'env' ? 'fallback' : 'primary',
+          hasToken: !!creds.accessToken,
+          hasPhoneNumberId: !!creds.phoneNumberId,
+        }
+      } catch {
+        credentialsInfo = {
+          usedTokenSource: null,
+          hasToken: false,
+          hasPhoneNumberId: false,
+        }
+      }
 
       return NextResponse.json({
           messageId: message.id,
@@ -323,6 +345,14 @@ export async function GET(
         externalEventPayloadLength: externalEventLog?.payload ? String(externalEventLog.payload).length : 0,
         externalEventPayloadSample: externalEventLog?.payload ? String(externalEventLog.payload).slice(0, 200) : null,
         recentExternalEvents: recentExternalEvents,
+        // Upstream error details
+        upstreamStep: upstreamError?.step || downloadError?.step || null,
+        upstreamStatus: upstreamError?.status || downloadError?.status || null,
+        upstreamErrorText: upstreamError?.errorText || downloadError?.errorText || null,
+        upstreamErrorJson: upstreamError?.errorJson || downloadError?.errorJson || null,
+        usedTokenSource: credentialsInfo.usedTokenSource,
+        usedGraphVersion: 'v21.0',
+        usedMediaId: resolved.providerMediaId || recoveredProviderMediaId || null,
       }, { status: 200 })
     }
     // ===== END DEBUG =====
@@ -406,6 +436,37 @@ export async function GET(
     
     // Use resolved.providerMediaId or recovered one for Graph fetch
     const providerMediaId = resolved.providerMediaId || recoveredProviderMediaId
+
+    // Validate media ID is numeric (WhatsApp media IDs are digits only)
+    if (providerMediaId && !/^[0-9]+$/.test(providerMediaId)) {
+      console.error('[MEDIA-PROXY] Invalid media ID format (non-numeric)', {
+        messageId: message.id,
+        providerMediaId,
+        providerMediaIdType: typeof providerMediaId,
+      })
+      
+      if (new URL(req.url).searchParams.get("debug") === "1") {
+        return NextResponse.json({
+          messageId: message.id,
+          error: 'invalid_media_id_format',
+          reason: 'Media ID must be numeric (digits only). WhatsApp media IDs are numeric.',
+          providerMediaId,
+          upstreamStep: null,
+          upstreamStatus: null,
+          upstreamErrorText: null,
+          upstreamErrorJson: null,
+        }, { status: 400 })
+      }
+      
+      return NextResponse.json(
+        { 
+          error: 'invalid_media_id_format',
+          reason: 'Invalid media ID format',
+          messageId: message.id,
+        },
+        { status: 400 }
+      )
+    }
 
     // If still no providerMediaId after recovery, return error
     if (!providerMediaId) {
@@ -508,6 +569,28 @@ export async function GET(
         fileSize: mediaInfo.fileSize || null,
       })
     } catch (error: any) {
+      // Capture upstream error details
+      upstreamError = error.upstreamError || {
+        step: 'resolve_media_url' as const,
+        status: error.status || error.statusCode || null,
+        errorText: error.message || null,
+        errorJson: null,
+      }
+      
+      // Try to extract error JSON if available
+      if (error.response) {
+        try {
+          const text = await error.response.text()
+          upstreamError.errorText = text.length > 4000 ? text.substring(0, 4000) : text
+          try {
+            upstreamError.errorJson = JSON.parse(text)
+          } catch {
+            // Not JSON
+          }
+        } catch {
+          // Ignore
+        }
+      }
       // Extract status code from error if available
       const statusCode = error.response?.status || error.status || error.statusCode || null
       const errorMessage = error.message || 'Unknown error'
@@ -523,6 +606,29 @@ export async function GET(
         errorType: error.constructor.name,
         errorBodySummary,
       })
+
+      // Check if this is a debug request - if so, return detailed error info
+      const isDebug = new URL(req.url).searchParams.get("debug") === "1"
+      
+      if (isDebug) {
+        return NextResponse.json({
+          messageId: message.id,
+          error: 'meta_api_failed',
+          reason: errorMessage || 'Failed to fetch media URL from Meta Graph API',
+          providerMediaId,
+          stage: 'metadata',
+          status: 502,
+          hint: `Meta Graph API returned non-200 status (${statusCode || 'unknown'}). Check Meta API status.`,
+          // Upstream error details
+          upstreamStep: upstreamError?.step || 'resolve_media_url',
+          upstreamStatus: upstreamError?.status || statusCode,
+          upstreamErrorText: upstreamError?.errorText || errorMessage,
+          upstreamErrorJson: upstreamError?.errorJson || null,
+          usedTokenSource: tokenSource === 'env' ? 'fallback' : 'primary',
+          usedGraphVersion: 'v21.0',
+          usedMediaId: providerMediaId,
+        }, { status: 502 })
+      }
 
       if (error instanceof MediaExpiredError) {
         return NextResponse.json(
@@ -611,6 +717,28 @@ export async function GET(
         hasBody: !!mediaResponse.body,
       })
     } catch (error: any) {
+      // Capture upstream error details
+      downloadError = error.upstreamError || {
+        step: 'download_bytes' as const,
+        status: error.status || error.statusCode || null,
+        errorText: error.message || null,
+        errorJson: null,
+      }
+      
+      // Try to extract error JSON if available
+      if (error.response) {
+        try {
+          const text = await error.response.text()
+          downloadError.errorText = text.length > 4000 ? text.substring(0, 4000) : text
+          try {
+            downloadError.errorJson = JSON.parse(text)
+          } catch {
+            // Not JSON
+          }
+        } catch {
+          // Ignore
+        }
+      }
       // Extract status code from error if available
       const statusCode = error.response?.status || error.status || error.statusCode || null
       const errorMessage = error.message || 'Unknown error'
@@ -626,6 +754,29 @@ export async function GET(
         errorType: error.constructor.name,
         errorBodySummary,
       })
+
+      // Check if this is a debug request - if so, return detailed error info
+      const isDebug = new URL(req.url).searchParams.get("debug") === "1"
+      
+      if (isDebug) {
+        return NextResponse.json({
+          messageId: message.id,
+          error: 'meta_download_failed',
+          reason: errorMessage || 'Failed to download media from Meta',
+          providerMediaId,
+          stage: 'download',
+          status: 502,
+          hint: `Meta media download returned non-200 status (${statusCode || 'unknown'}). Check Meta API status or network connectivity.`,
+          // Upstream error details
+          upstreamStep: downloadError?.step || 'download_bytes',
+          upstreamStatus: downloadError?.status || statusCode,
+          upstreamErrorText: downloadError?.errorText || errorMessage,
+          upstreamErrorJson: downloadError?.errorJson || null,
+          usedTokenSource: tokenSource === 'env' ? 'fallback' : 'primary',
+          usedGraphVersion: 'v21.0',
+          usedMediaId: providerMediaId,
+        }, { status: 502 })
+      }
 
       if (error instanceof MediaExpiredError) {
         return NextResponse.json(
@@ -928,6 +1079,24 @@ export async function HEAD(
         select: { id: true, provider: true, externalId: true, receivedAt: true },
       })
 
+      // Get credentials info for debug output
+      let credentialsInfo: any = {}
+      try {
+        const { getWhatsAppCredentials } = await import('@/lib/whatsapp')
+        const creds = await getWhatsAppCredentials()
+        credentialsInfo = {
+          usedTokenSource: creds.tokenSource === 'env' ? 'fallback' : 'primary',
+          hasToken: !!creds.accessToken,
+          hasPhoneNumberId: !!creds.phoneNumberId,
+        }
+      } catch {
+        credentialsInfo = {
+          usedTokenSource: null,
+          hasToken: false,
+          hasPhoneNumberId: false,
+        }
+      }
+
       return NextResponse.json({
         messageId: message.id,
         type: message.type,
@@ -955,6 +1124,14 @@ export async function HEAD(
         externalEventPayloadLength: externalEventLog?.payload ? String(externalEventLog.payload).length : 0,
         externalEventPayloadSample: externalEventLog?.payload ? String(externalEventLog.payload).slice(0, 200) : null,
         recentExternalEvents: recentExternalEvents,
+        // Upstream error details (will be null if no errors occurred)
+        upstreamStep: null,
+        upstreamStatus: null,
+        upstreamErrorText: null,
+        upstreamErrorJson: null,
+        usedTokenSource: credentialsInfo.usedTokenSource,
+        usedGraphVersion: 'v21.0',
+        usedMediaId: resolved.providerMediaId || recoveredProviderMediaId || null,
       }, { status: 200 })
     }
     // ===== END DEBUG =====

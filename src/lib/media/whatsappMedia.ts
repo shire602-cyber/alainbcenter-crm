@@ -12,6 +12,13 @@ export interface WhatsAppMediaInfo {
   fileName?: string
 }
 
+export interface UpstreamErrorDetails {
+  step: 'resolve_media_url' | 'download_bytes'
+  status: number | null
+  errorText: string | null
+  errorJson: any | null
+}
+
 export class MediaExpiredError extends Error {
   constructor(message: string) {
     super(message)
@@ -73,8 +80,23 @@ export async function getWhatsAppDownloadUrl(
       }
 
       if (!response.ok) {
-        const error = await response.json().catch(() => ({}))
-        const errorMessage = error.error?.message || `Failed to fetch media URL: ${response.statusText}`
+        // Capture error details for debugging
+        let errorJson: any = null
+        let errorText: string | null = null
+        
+        try {
+          const text = await response.text()
+          errorText = text.length > 4000 ? text.substring(0, 4000) : text
+          try {
+            errorJson = JSON.parse(text)
+          } catch {
+            // Not JSON, keep as text
+          }
+        } catch {
+          errorText = response.statusText
+        }
+        
+        const errorMessage = errorJson?.error?.message || errorText || `Failed to fetch media URL: ${response.statusText}`
         
         // Retry on 5xx errors (server errors)
         if (response.status >= 500 && attempt < retries) {
@@ -84,10 +106,16 @@ export async function getWhatsAppDownloadUrl(
           continue
         }
         
-        // Preserve status code in error for logging
+        // Preserve status code and error details in error for logging
         const errorWithStatus: any = new Error(errorMessage)
         errorWithStatus.status = response.status
         errorWithStatus.statusCode = response.status
+        errorWithStatus.upstreamError = {
+          step: 'resolve_media_url' as const,
+          status: response.status,
+          errorText,
+          errorJson,
+        }
         throw errorWithStatus
       }
 
@@ -218,11 +246,32 @@ export async function fetchWhatsAppMediaStream(
       }
 
       if (!response.ok) {
-        const errorText = await response.text().catch(() => response.statusText)
-        // Preserve status code in error for logging
-        const errorWithStatus: any = new Error(`Failed to download media: ${response.status} ${errorText}`)
+        // Capture error details for debugging
+        let errorText: string | null = null
+        let errorJson: any = null
+        
+        try {
+          const text = await response.text()
+          errorText = text.length > 4000 ? text.substring(0, 4000) : text
+          try {
+            errorJson = JSON.parse(text)
+          } catch {
+            // Not JSON, keep as text
+          }
+        } catch {
+          errorText = response.statusText
+        }
+        
+        // Preserve status code and error details in error for logging
+        const errorWithStatus: any = new Error(`Failed to download media: ${response.status} ${errorText || response.statusText}`)
         errorWithStatus.status = response.status
         errorWithStatus.statusCode = response.status
+        errorWithStatus.upstreamError = {
+          step: 'download_bytes' as const,
+          status: response.status,
+          errorText,
+          errorJson,
+        }
         throw errorWithStatus
       }
 
