@@ -13,7 +13,7 @@ async function checkIfLeadHasDocuments(leadId: number): Promise<boolean> {
   }
 }
 
-const COMPANY_IDENTITY = 'IMPLSE AI – UAE business setup & visa services'
+const COMPANY_IDENTITY = 'Alain Business Center – UAE business setup & visa services'
 
 export function getSystemPrompt(): string {
   return `You are an AI assistant helping agents at ${COMPANY_IDENTITY} communicate with clients via WhatsApp.
@@ -337,7 +337,7 @@ This is the FIRST message from the customer. Their message was: "${lastUserMessa
 
 YOU MUST:
 1. Respond DIRECTLY to what they said. If they said "HI" or "hello", greet them naturally. If they mentioned a service (like "family visa"), acknowledge it and respond about that service.
-2. NEVER use a template or generic message like "Welcome to IMPLSE AI. Please share: 1. Your full name 2. What service..."
+2. NEVER use a template or generic message like "Welcome to Alain Business Center. Please share: 1. Your full name 2. What service..."
 3. NEVER ask for multiple pieces of information in a numbered list format
 4. Your reply must be UNIQUE and based on their actual message: "${lastUserMessage}"
 5. If they just said "HI" or "hello", respond with a friendly greeting and ask ONE simple question (not a numbered list)
@@ -360,14 +360,14 @@ ABSOLUTELY FORBIDDEN PHRASES (NEVER USE):
 - Any template-like structure
 
 Example GOOD replies:
-- If they said "HI": "Hello! I'm ${agentName} from IMPLSE AI. I can help you with business setup, visas, and other UAE services. What service are you looking for?"
+- If they said "HI": "Hello! I'm ${agentName} from Alain Business Center. I can help you with business setup, visas, and other UAE services. What service are you looking for?"
 - If they said "family visa": "Great! I can help you with family visa services. What's your nationality?"
 - If they said "visit visa": "I'd be happy to help with visit visa. Are you currently in the UAE?"
 - If they said "jama family visa somalia": "I can help you with family visa for Somalia. What's your current situation?"
 
 Example BAD replies (NEVER USE - THESE ARE TEMPLATES):
 - "Hi Abdurahman Shire, thank you for your interest in our services. To better assist you, could you please share: 1. What specific service are you looking for? 2. What is your timeline? Looking forward to helping you!"
-- "Welcome to IMPLSE AI. Please share: 1. Your full name 2. What service..."
+- "Welcome to Alain Business Center. Please share: 1. Your full name 2. What service..."
 - "Hi, thank you for your interest. To help you, please provide: 1) Full name 2) Service needed..."
 
 Reply only with the message text, no explanations or metadata.`

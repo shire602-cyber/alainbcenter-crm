@@ -169,7 +169,7 @@ export async function POST(
                 email: lead.contact.email,
                 nationality: lead.contact.nationality,
               },
-              companyIdentity: 'IMPLSE AI – UAE business setup & visa services',
+              companyIdentity: 'Alain Business Center – UAE business setup & visa services',
             },
             'professional',
             'en'
@@ -223,7 +223,7 @@ export async function POST(
                 email: lead.contact.email,
                 nationality: lead.contact.nationality,
               },
-              companyIdentity: 'IMPLSE AI – UAE business setup & visa services',
+              companyIdentity: 'Alain Business Center – UAE business setup & visa services',
             },
             'friendly',
             'en'
