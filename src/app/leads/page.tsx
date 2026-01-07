@@ -552,12 +552,23 @@ export default function LeadsPageNew() {
             </span>
             <div className="flex items-center gap-2 ml-auto">
               <Select
-                onChange={(e) => {
-                  if (e.target.value === 'change-stage') {
-                    // TODO: Show stage picker modal
-                  } else if (e.target.value === 'assign-owner') {
-                    // TODO: Show owner picker modal
+                onChange={async (e) => {
+                  const action = e.target.value
+                  if (action === 'change-stage') {
+                    const stage = prompt('Enter new stage:') || ''
+                    if (stage) {
+                      await handleBulkAction('change-stage', { pipelineStage: stage })
+                    }
+                  } else if (action === 'assign-owner') {
+                    const userId = prompt('Enter user ID (or leave empty to unassign):') || ''
+                    await handleBulkAction('assign-owner', { assignedUserId: userId ? parseInt(userId) : null })
+                  } else if (action === 'delete') {
+                    if (confirm(`Delete ${selectedIds.size} lead(s)?`)) {
+                      await handleBulkAction('delete')
+                    }
                   }
+                  // Reset select
+                  e.target.value = ''
                 }}
                 defaultValue=""
               >
