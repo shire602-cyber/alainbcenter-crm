@@ -50,7 +50,12 @@ export async function buildRenewalTemplateVars(
   const renewal = await prisma.renewal.findUnique({
     where: { id: renewalId },
     include: {
-      contact: true,
+      lead: {
+        include: {
+          contact: true,
+        },
+      },
+      Contact: true,
     },
   })
 
@@ -58,8 +63,19 @@ export async function buildRenewalTemplateVars(
     throw new Error(`Renewal ${renewalId} not found`)
   }
 
-  const customerName = renewal.contact.fullName || 'Valued Customer'
-  const serviceType = renewal.serviceType || 'Service'
+  // Get contact from lead.contact (preferred) or Contact relation
+  const contact = renewal.lead?.contact || renewal.Contact
+  const customerName = contact?.fullName || 'Valued Customer'
+  
+  // Map RenewalType enum to readable string
+  const typeMap: Record<string, string> = {
+    'TRADE_LICENSE': 'Trade License',
+    'EMIRATES_ID': 'Emirates ID',
+    'RESIDENCY': 'Residency',
+    'VISIT_VISA': 'Visit Visa',
+  }
+  const serviceType = typeMap[renewal.type] || renewal.type.replace(/_/g, ' ')
+  
   const formattedExpiry = formatExpiryDate(renewal.expiryDate)
 
   return {
