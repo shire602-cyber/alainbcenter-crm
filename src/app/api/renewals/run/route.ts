@@ -33,10 +33,25 @@ export async function POST(req: NextRequest) {
       // Continue with default dryRun = false
     }
 
+    // Parse request body for config
+    let body: any = {}
+    try {
+      body = await req.json().catch(() => ({}))
+    } catch {
+      // Body might be empty, use defaults
+    }
+
     // Run renewal engine
     let result
     try {
-      result = await runRenewalEngine({ dryRun })
+      const config = {
+        windowDays: body.windowDays || 30,
+        serviceTypes: body.serviceTypes || undefined,
+        assignedToUserId: body.assignedToUserId || undefined,
+        onlyNotContacted: body.onlyNotContacted || false,
+        dryRun,
+      }
+      result = await runRenewalEngine(config)
     } catch (engineError: any) {
       console.error('Engine execution error:', engineError)
       return NextResponse.json(

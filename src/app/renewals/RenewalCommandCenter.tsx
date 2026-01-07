@@ -109,6 +109,7 @@ export default function RenewalCommandCenter() {
   const [selectedItemEvents, setSelectedItemEvents] = useState<RenewalEvent[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [drawerLoading, setDrawerLoading] = useState(false)
+  const [activeTab, setActiveTab] = useState('summary')
   const [runningEngine, setRunningEngine] = useState(false)
   const [userRole, setUserRole] = useState<string | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
@@ -423,82 +424,6 @@ export default function RenewalCommandCenter() {
     setDrawerOpen(true)
     loadRenewalDetail(item.id)
   }
-
-  // Sort and filter items
-  const sortedAndFilteredItems = useMemo(() => {
-    const now = new Date()
-    
-    // Calculate urgency and sort
-    const itemsWithUrgency = expiryItems
-      .map((item) => {
-        const days = item.daysRemaining ?? differenceInDays(parseISO(item.expiryDate), now)
-        let urgency: UrgencyLevel = 'upcoming'
-        
-        if (days <= 14 && days >= 0) urgency = 'urgent'
-        else if (days < 0) urgency = 'expired'
-        else if (days <= 30) urgency = 'action'
-        
-        return { ...item, urgency, daysRemaining: days }
-      })
-      .filter((item) => {
-        // Service type filter
-        if (serviceTypeFilter !== 'all') {
-          const serviceType = item.type
-          if (!serviceType.toLowerCase().includes(serviceTypeFilter.toLowerCase())) {
-            return false
-          }
-        }
-        
-        // Status filter
-        if (statusFilter !== 'all' && item.renewalStatus !== statusFilter) {
-          return false
-        }
-        
-        // Assigned filter
-        if (assignedFilter !== 'all') {
-          const assignedId = item.lead?.assignedUser?.id || item.assignedUser?.id
-          if (assignedId?.toString() !== assignedFilter) return false
-        }
-        
-        // Days remaining range
-        if (item.daysRemaining < daysRemainingRange[0] || item.daysRemaining > daysRemainingRange[1]) {
-          return false
-        }
-        
-        // Not contacted filter
-        if (notContactedOnly && item.lastReminderSentAt) {
-          return false
-        }
-        
-        // Search
-        if (searchQuery) {
-          const query = searchQuery.toLowerCase()
-          const matchesName = item.contact.fullName?.toLowerCase().includes(query)
-          const matchesPhone = item.contact.phone?.toLowerCase().includes(query)
-          const matchesType = item.type.toLowerCase().includes(query)
-          if (!matchesName && !matchesPhone && !matchesType) {
-            return false
-          }
-        }
-        
-        return true
-      })
-    
-    // Sort by urgency priority
-    const urgencyOrder: Record<UrgencyLevel, number> = {
-      urgent: 0,
-      expired: 1,
-      action: 2,
-      upcoming: 3,
-    }
-    
-    return itemsWithUrgency.sort((a, b) => {
-      const urgencyDiff = urgencyOrder[a.urgency] - urgencyOrder[b.urgency]
-      if (urgencyDiff !== 0) return urgencyDiff
-      return a.daysRemaining - b.daysRemaining
-    })
-  }, [expiryItems, serviceTypeFilter, statusFilter, assignedFilter, daysRemainingRange, notContactedOnly, searchQuery])
-
 
   const getUrgencyBadge = (urgency: UrgencyLevel, days: number) => {
     switch (urgency) {
@@ -977,7 +902,7 @@ export default function RenewalCommandCenter() {
                   </Button>
                 </div>
 
-                <Tabs defaultValue="summary" className="mt-6">
+                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
                   <TabsList className="grid w-full grid-cols-4">
                     <TabsTrigger value="summary">Summary</TabsTrigger>
                     <TabsTrigger value="timeline">Timeline</TabsTrigger>
