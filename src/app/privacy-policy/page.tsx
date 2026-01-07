@@ -10,7 +10,7 @@ export default function PrivacyPolicyPage() {
   const lastUpdated = 'January 7, 2025'
   const companyName = 'Alain Business Center'
   const companyAddress = 'Al Ain, United Arab Emirates'
-  const contactEmail = 'privacy@alainbusinesscenter.com' // Update with your actual email
+  const contactEmail = 'ashire@alainbcenter.com'
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-gray-50 to-white">
