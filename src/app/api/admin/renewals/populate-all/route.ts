@@ -30,12 +30,12 @@ export async function POST(req: NextRequest) {
 
     // Get summary statistics
     const renewalCount = await prisma.renewal.count()
-    const pendingCount = await prisma.renewal.count({
-      where: { status: 'PENDING' },
+    const activeCount = await prisma.renewal.count({
+      where: { status: 'ACTIVE' },
     })
-    const withNextReminder = await prisma.renewal.count({
+    const withNextFollowUp = await prisma.renewal.count({
       where: {
-        nextReminderAt: { not: null },
+        nextFollowUpAt: { not: null },
       },
     })
 
@@ -44,8 +44,8 @@ export async function POST(req: NextRequest) {
       results,
       statistics: {
         totalRenewals: renewalCount,
-        pending: pendingCount,
-        withNextReminder: withNextReminder,
+        active: activeCount,
+        withNextFollowUp: withNextFollowUp,
       },
       message: 'Renewals populated successfully',
       timestamp: new Date().toISOString(),

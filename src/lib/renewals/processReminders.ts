@@ -66,23 +66,26 @@ export async function processRenewalReminders(
   const errors: string[] = []
 
   try {
-    // Fetch renewals that need reminders
+    // Fetch renewals that need reminders (using new Renewal model)
+    // Note: This file may need refactoring for new renewal system
     const renewals = await prisma.renewal.findMany({
       where: {
         status: 'ACTIVE',
-        reminderStage: { lt: 3 },
-        nextReminderAt: { lte: now },
-        remindersEnabled: true,
+        nextFollowUpAt: { lte: now },
         expiryDate: { gt: now }, // Not expired yet
       },
       include: {
-        contact: true,
-        lead: true,
-        conversation: true,
+        lead: {
+          include: {
+            contact: true,
+          },
+        },
+        Contact: true,
+        Conversation: true,
       },
       take: max,
       orderBy: {
-        nextReminderAt: 'asc',
+        nextFollowUpAt: 'asc',
       },
     })
 
@@ -91,7 +94,7 @@ export async function processRenewalReminders(
     for (const renewal of renewals) {
       try {
         // Check if user replied recently (pause if < 24h)
-        const lastInboundAt = renewal.conversation?.lastInboundAt
+        const lastInboundAt = renewal.Conversation?.lastInboundAt
         if (lastInboundAt) {
           const hoursSinceLastInbound =
             (now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)
@@ -101,7 +104,7 @@ export async function processRenewalReminders(
             const rescheduleTo = new Date(now.getTime() + 24 * 60 * 60 * 1000)
             await prisma.renewal.update({
               where: { id: renewal.id },
-              data: { nextReminderAt: rescheduleTo },
+              data: { nextFollowUpAt: rescheduleTo },
             })
             
             console.log(
@@ -112,8 +115,8 @@ export async function processRenewalReminders(
           }
         }
 
-        // Determine stage to send
-        const stageToSend = (renewal.reminderStage + 1) as 1 | 2 | 3
+        // Determine stage to send (default to stage 1 for now, since reminderStage was removed)
+        const stageToSend = 1 as 1 | 2 | 3
 
         // Get template variables
         const { vars } = await buildRenewalTemplateVars(renewal.id)
@@ -123,16 +126,16 @@ export async function processRenewalReminders(
 
         // Ensure conversation exists
         let conversationId = renewal.conversationId
-        if (!conversationId) {
+        if (!conversationId && renewal.lead?.contact) {
           // Create conversation if missing
           const { upsertConversation } = await import('../conversation/upsert')
           const { getExternalThreadId } = await import('../conversation/getExternalThreadId')
           
           const conversation = await upsertConversation({
-            contactId: renewal.contactId,
+            contactId: renewal.lead.contact.id,
             channel: 'whatsapp',
-            leadId: renewal.leadId || null,
-            externalThreadId: getExternalThreadId('whatsapp', renewal.contact),
+            leadId: renewal.leadId,
+            externalThreadId: getExternalThreadId('whatsapp', renewal.lead.contact),
           })
           
           conversationId = conversation.id
@@ -177,9 +180,13 @@ export async function processRenewalReminders(
             }
 
             // Get phone number
-            const phone = renewal.contact.phoneNormalized || renewal.contact.phone
+            const contact = renewal.lead?.contact || renewal.Contact
+            if (!contact) {
+              throw new Error(`Renewal ${renewal.id} has no contact information`)
+            }
+            const phone = contact.phone
             if (!phone) {
-              throw new Error(`Contact ${renewal.contactId} has no phone number`)
+              throw new Error(`Contact ${contact.id} has no phone number`)
             }
 
             // Create notification record BEFORE sending (idempotency)
@@ -212,8 +219,8 @@ export async function processRenewalReminders(
             // Send template via orchestrator
             const sendResult = await sendTemplate({
               conversationId: conversationId!,
-              leadId: renewal.leadId || 0,
-              contactId: renewal.contactId,
+              leadId: renewal.leadId,
+              contactId: contact.id,
               phone,
               templateName,
               templateParams: vars,
@@ -264,14 +271,15 @@ export async function processRenewalReminders(
 
         // Update renewal if at least one channel succeeded
         if (allChannelsSucceeded || channelResults.some(r => r.success)) {
-          const nextReminderAt = computeNextReminderAt(renewal.expiryDate, stageToSend)
+          // Calculate next follow-up (7 days from now as default)
+          const nextFollowUpAt = new Date(now)
+          nextFollowUpAt.setDate(nextFollowUpAt.getDate() + 7)
           
           await prisma.renewal.update({
             where: { id: renewal.id },
             data: {
-              reminderStage: stageToSend,
-              lastRemindedAt: now,
-              nextReminderAt,
+              lastContactedAt: now,
+              nextFollowUpAt,
             },
           })
 

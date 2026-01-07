@@ -6,7 +6,6 @@
  */
 
 import { prisma } from '@/lib/prisma'
-import { parseReminderSchedule, calculateNextReminderAt } from './service'
 
 export interface PopulateOptions {
   dryRun?: boolean
@@ -82,11 +81,17 @@ export async function populateRenewalsFromExpiryItems(
 
     try {
       // Check if renewal already exists for this expiry item
+      // New Renewal model: only has leadId, type (enum), expiryDate
+      if (!expiryItem.leadId) {
+        results.skipped++
+        continue
+      }
+
       const existingRenewal = await prisma.renewal.findFirst({
         where: {
-          contactId: expiryItem.contactId,
+          leadId: expiryItem.leadId,
           expiryDate: expiryItem.expiryDate,
-          serviceType: expiryItem.type,
+          type: mapExpiryTypeToRenewalType(expiryItem.type),
         },
       })
 
@@ -96,41 +101,38 @@ export async function populateRenewalsFromExpiryItems(
         continue
       }
 
-      // Map expiry type to service type
-      const serviceType = mapExpiryTypeToServiceType(expiryItem.type)
+      // Map expiry type to RenewalType enum
+      const renewalType = mapExpiryTypeToRenewalType(expiryItem.type)
 
-      // Parse reminder schedule
-      const reminderSchedule = parseReminderSchedule(expiryItem.reminderScheduleDays || '[30,14,7,1]')
-
-      // Calculate next reminder date
-      const nextReminderAt = calculateNextReminderAt(
-        expiryItem.expiryDate,
-        reminderSchedule,
-        expiryItem.lastReminderSentAt
-      )
+      // Map renewalStatus to RenewalStatus enum
+      const statusMap: Record<string, 'ACTIVE' | 'CONTACTED' | 'IN_PROGRESS' | 'RENEWED' | 'EXPIRED' | 'LOST'> = {
+        'NOT_STARTED': 'ACTIVE',
+        'IN_PROGRESS': 'IN_PROGRESS',
+        'RENEWED': 'RENEWED',
+        'NOT_RENEWING': 'LOST',
+      }
+      const renewalStatus = statusMap[expiryItem.renewalStatus] || 'ACTIVE'
 
       if (dryRun) {
         console.log(`[RENEWAL-POPULATE] DRY RUN - Would create renewal for expiry item ${expiryItem.id}`)
-        console.log(`  Contact: ${expiryItem.contact.fullName} (${expiryItem.contact.phone})`)
-        console.log(`  Service: ${serviceType}`)
+        console.log(`  Lead: ${expiryItem.lead?.id || 'None'}`)
+        console.log(`  Type: ${renewalType}`)
         console.log(`  Expiry: ${expiryItem.expiryDate.toISOString()}`)
-        console.log(`  Next Reminder: ${nextReminderAt?.toISOString() || 'None'}`)
+        console.log(`  Status: ${renewalStatus}`)
         results.created++
         continue
       }
 
-      // Create renewal
+      // Create renewal with new model structure
       const renewal = await prisma.renewal.create({
         data: {
-          contactId: expiryItem.contactId,
-          leadId: expiryItem.leadId,
-          serviceType,
+          leadId: expiryItem.leadId!,
+          type: renewalType,
           expiryDate: expiryItem.expiryDate,
-          status: 'PENDING',
-          lastNotifiedAt: expiryItem.lastReminderSentAt,
-          nextReminderAt,
-          reminderSchedule: JSON.stringify(reminderSchedule),
-          remindersEnabled: expiryItem.remindersEnabled,
+          status: renewalStatus,
+          assignedUserId: expiryItem.assignedUserId || undefined,
+          lastContactedAt: expiryItem.lastReminderSentAt || undefined,
+          notes: expiryItem.notes || undefined,
         },
       })
 
@@ -148,18 +150,16 @@ export async function populateRenewalsFromExpiryItems(
 }
 
 /**
- * Map ExpiryItem type to Renewal serviceType
+ * Map ExpiryItem type to RenewalType enum
  */
-function mapExpiryTypeToServiceType(expiryType: string): string {
-  // Map expiry types to service types
-  const typeMap: Record<string, string> = {
-    'VISA_EXPIRY': 'VISA_RENEWAL',
-    'EMIRATES_ID_EXPIRY': 'EMIRATES_ID_RENEWAL',
-    'PASSPORT_EXPIRY': 'PASSPORT_RENEWAL',
-    'TRADE_LICENSE_EXPIRY': 'TRADE_LICENSE_RENEWAL',
-    'ESTABLISHMENT_CARD_EXPIRY': 'ESTABLISHMENT_CARD_RENEWAL',
-    'INSURANCE_EXPIRY': 'INSURANCE_RENEWAL',
-    'MEDICAL_FITNESS_EXPIRY': 'MEDICAL_RENEWAL',
+function mapExpiryTypeToRenewalType(expiryType: string): 'TRADE_LICENSE' | 'EMIRATES_ID' | 'RESIDENCY' | 'VISIT_VISA' {
+  const typeMap: Record<string, 'TRADE_LICENSE' | 'EMIRATES_ID' | 'RESIDENCY' | 'VISIT_VISA'> = {
+    'TRADE_LICENSE_EXPIRY': 'TRADE_LICENSE',
+    'ESTABLISHMENT_CARD_EXPIRY': 'TRADE_LICENSE',
+    'EMIRATES_ID_EXPIRY': 'EMIRATES_ID',
+    'VISA_EXPIRY': 'RESIDENCY',
+    'RESIDENCY_EXPIRY': 'RESIDENCY',
+    'VISIT_VISA_EXPIRY': 'VISIT_VISA',
   }
 
   // Try exact match
@@ -175,7 +175,7 @@ function mapExpiryTypeToServiceType(expiryType: string): string {
     }
   }
 
-  // Default: use the expiry type as-is with _RENEWAL suffix
-  return expiryType.replace(/_EXPIRY$/, '_RENEWAL') || 'RENEWAL'
+  // Default: assume trade license
+  return 'TRADE_LICENSE'
 }
 
