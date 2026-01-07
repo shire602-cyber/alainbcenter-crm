@@ -25,6 +25,7 @@ export async function middleware(req: NextRequest) {
 
   // Public paths that don't require authentication
   const publicPaths = [
+    '/', // Landing page (public)
     '/login',
     '/api/auth/login',
     '/api/auth/logout',
@@ -47,6 +48,13 @@ export async function middleware(req: NextRequest) {
   }
 
   // Check if path is public
+  // Special handling for root path: if user is logged in, they can access dashboard
+  // If not logged in, show landing page (public)
+  if (pathname === '/') {
+    // Root path is public (landing page), but we'll let the page component handle logged-in state
+    return NextResponse.next()
+  }
+  
   if (publicPaths.some((p) => pathname.startsWith(p))) {
     return NextResponse.next()
   }
