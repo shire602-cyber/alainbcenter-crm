@@ -31,6 +31,7 @@ export async function middleware(req: NextRequest) {
     '/setup',
     '/api/auth/setup',
     '/marketing', // Marketing pages are public
+    '/privacy-policy', // Privacy policy (required for Meta/Instagram management)
     '/api/automation/run-daily',
     '/api/auth/emergency-reset',
   ]
