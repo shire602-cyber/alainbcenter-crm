@@ -1,6 +1,7 @@
 'use client'
 
 import { useState, useEffect } from 'react'
+import { useRouter } from 'next/navigation'
 import Link from 'next/link'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -36,13 +37,39 @@ import {
 import { cn } from '@/lib/utils'
 
 export default function LandingPage() {
+  const router = useRouter()
   const [activeFeature, setActiveFeature] = useState(0)
   const [scrolled, setScrolled] = useState(false)
+  const [isAuthenticated, setIsAuthenticated] = useState<boolean | null>(null)
 
   useEffect(() => {
     const handleScroll = () => setScrolled(window.scrollY > 20)
     window.addEventListener('scroll', handleScroll)
     return () => window.removeEventListener('scroll', handleScroll)
+  }, [])
+
+  // Check if user is authenticated
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const res = await fetch('/api/auth/me', { credentials: 'include' })
+        if (res.ok) {
+          const user = await res.json()
+          if (user && user.id) {
+            // User is logged in - redirect to dashboard (or show dashboard)
+            // For now, we'll keep showing landing page but logged-in users can click "Dashboard" in nav
+            setIsAuthenticated(true)
+          } else {
+            setIsAuthenticated(false)
+          }
+        } else {
+          setIsAuthenticated(false)
+        }
+      } catch {
+        setIsAuthenticated(false)
+      }
+    }
+    checkAuth()
   }, [])
 
   const features = [
