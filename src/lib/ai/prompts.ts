@@ -13,7 +13,7 @@ async function checkIfLeadHasDocuments(leadId: number): Promise<boolean> {
   }
 }
 
-const COMPANY_IDENTITY = 'Al Ain Business Center – UAE business setup & visa services'
+const COMPANY_IDENTITY = 'IMPLSE AI – UAE business setup & visa services'
 
 export function getSystemPrompt(): string {
   return `You are an AI assistant helping agents at ${COMPANY_IDENTITY} communicate with clients via WhatsApp.
