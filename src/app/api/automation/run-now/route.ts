@@ -218,7 +218,7 @@ export async function POST(req: NextRequest) {
               sendResult = await sendEmail(
                 lead as any,
                 lead.contact as any,
-                'Follow-up from Alain Business Center',
+                'Follow-up from IMPLSE AI',
                 message
               )
             } else {

@@ -133,7 +133,7 @@ export async function GET(req: NextRequest) {
               messageText = `Hi ${contact.fullName}, we need some documents to proceed. Please share them when convenient.`
               break
             default:
-              messageText = `Hi ${contact.fullName}, this is a reminder from Alain Business Center.`
+              messageText = `Hi ${contact.fullName}, this is a reminder from IMPLSE AI.`
           }
         }
 

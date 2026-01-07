@@ -191,7 +191,7 @@ export async function POST(
         }
       } else if (normalizedChannel === 'EMAIL') {
         // Extract subject from body if it contains a subject line
-        let subject = `Message from Alain Business Center`
+        let subject = `Message from IMPLSE AI`
         let emailBody = messageBody.trim()
         
         // Check if body has subject line pattern "Subject: ..."

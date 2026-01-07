@@ -169,7 +169,7 @@ export async function POST(
                 email: lead.contact.email,
                 nationality: lead.contact.nationality,
               },
-              companyIdentity: 'Alain Business Center – UAE business setup & visa services',
+              companyIdentity: 'IMPLSE AI – UAE business setup & visa services',
             },
             'professional',
             'en'
@@ -223,7 +223,7 @@ export async function POST(
                 email: lead.contact.email,
                 nationality: lead.contact.nationality,
               },
-              companyIdentity: 'Alain Business Center – UAE business setup & visa services',
+              companyIdentity: 'IMPLSE AI – UAE business setup & visa services',
             },
             'friendly',
             'en'
@@ -280,7 +280,7 @@ export async function POST(
                 aiScore: lead.aiScore,
                 aiNotes: lead.aiNotes,
               },
-              companyIdentity: 'Alain Business Center',
+              companyIdentity: 'IMPLSE AI',
             },
             'friendly',
             'en'
@@ -337,7 +337,7 @@ export async function POST(
                 aiScore: lead.aiScore,
                 aiNotes: lead.aiNotes,
               },
-              companyIdentity: 'Alain Business Center',
+              companyIdentity: 'IMPLSE AI',
             },
             'professional',
             'en'
