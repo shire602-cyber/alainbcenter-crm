@@ -18,8 +18,9 @@ export default function RootLayout({
   return (
     <html lang="en" suppressHydrationWarning className={inter.variable}>
       <head>
-        <title>Alain Business Center CRM</title>
-        <meta name="description" content="Premium CRM for business setup and visa services" />
+        <title>IMPLSE AI - AI-Powered CRM</title>
+        <meta name="description" content="AI-powered CRM for business setup and visa services. Automate conversations, recover revenue, scale your business." />
+        <link rel="icon" href="/implse-ai-icon.svg" type="image/svg+xml" />
       </head>
       <body suppressHydrationWarning className="font-sans antialiased text-body text-foreground bg-app min-h-screen">
         <Providers>

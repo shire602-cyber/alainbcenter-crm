@@ -97,10 +97,10 @@ export function Sidebar() {
           <div className="flex grow flex-col gap-y-2 overflow-y-auto border-r border-border bg-card pb-4 px-4">
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-subtle mb-4">
             <Link href="/" className="flex items-center gap-3 flex-1 group">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 overflow-hidden flex-shrink-0 px-4 py-2 shadow-md transition-all duration-200 group-hover:shadow-lg group-hover:scale-[1.02]">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 overflow-hidden flex-shrink-0 px-2 py-2 shadow-md transition-all duration-200 group-hover:shadow-lg group-hover:scale-[1.02]">
                 <img 
-                  src="/brand/alain-logo.webp" 
-                  alt="Alain CRM" 
+                  src="/implse-ai-icon.svg" 
+                  alt="IMPLSE AI" 
                   className="w-full h-full object-contain"
                   onError={(e) => {
                     // Fallback to icon if image fails
@@ -109,15 +109,15 @@ export function Sidebar() {
                     const parent = target.parentElement
                     if (parent && !parent.querySelector('.logo-fallback')) {
                       const fallback = document.createElement('div')
-                      fallback.className = 'logo-fallback'
-                      fallback.innerHTML = '<svg class="h-5 w-5 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>'
+                      fallback.className = 'logo-fallback flex items-center justify-center w-full h-full'
+                      fallback.innerHTML = '<svg class="h-6 w-6 text-white" viewBox="0 0 64 64" fill="none" xmlns="http://www.w3.org/2000/svg"><path d="M 22 28 L 32 12 L 42 28 M 28 22 L 36 22" stroke="white" stroke-width="2.5" fill="none" stroke-linecap="round" stroke-linejoin="round"/></svg>'
                       parent.appendChild(fallback)
                     }
                   }}
                 />
               </div>
               <div className="flex-1 min-w-0">
-                  <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">Alain CRM</h1>
+                  <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">IMPLSE AI</h1>
                   <p className="text-xs text-muted-foreground font-normal truncate">AI Business CRM</p>
                 </div>
               </Link>

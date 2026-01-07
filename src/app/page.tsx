@@ -144,12 +144,22 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-                <Building2 className="h-5 w-5 text-white" />
-              </div>
-              <span className="text-xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent">
-                Alain CRM
-              </span>
+              <img 
+                src="/implse-ai-logo.svg" 
+                alt="IMPLSE AI" 
+                className="h-8 w-auto"
+                onError={(e) => {
+                  const target = e.target as HTMLImageElement
+                  target.style.display = 'none'
+                  const parent = target.parentElement
+                  if (parent && !parent.querySelector('.logo-fallback')) {
+                    const fallback = document.createElement('div')
+                    fallback.className = 'logo-fallback w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center'
+                    fallback.innerHTML = '<span class="text-white font-bold text-sm">A</span>'
+                    parent.appendChild(fallback)
+                  }
+                }}
+              />
             </div>
             <div className="hidden md:flex items-center gap-6">
               <Link href="#features" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
@@ -486,10 +496,22 @@ export default function LandingPage() {
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
               <div className="flex items-center gap-2 mb-4">
-                <div className="w-8 h-8 rounded-lg bg-gradient-to-br from-blue-600 to-purple-600 flex items-center justify-center">
-                  <Building2 className="h-5 w-5 text-white" />
-                </div>
-                <span className="text-white font-bold">Alain CRM</span>
+                <img 
+                  src="/implse-ai-logo.svg" 
+                  alt="IMPLSE AI" 
+                  className="h-8 w-auto brightness-0 invert"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement
+                    target.style.display = 'none'
+                    const parent = target.parentElement
+                    if (parent && !parent.querySelector('.logo-fallback')) {
+                      const fallback = document.createElement('div')
+                      fallback.className = 'logo-fallback w-8 h-8 rounded-lg bg-white/20 flex items-center justify-center'
+                      fallback.innerHTML = '<span class="text-white font-bold text-sm">A</span>'
+                      parent.appendChild(fallback)
+                    }
+                  }}
+                />
               </div>
               <p className="text-sm">
                 AI-powered CRM for UAE business services. Automate conversations, recover revenue, scale your business.
@@ -518,7 +540,7 @@ export default function LandingPage() {
             </div>
           </div>
           <div className="border-t border-gray-800 pt-8 text-center text-sm">
-            <p>© {new Date().getFullYear()} Alain Business Center. All rights reserved.</p>
+            <p>© {new Date().getFullYear()} IMPLSE AI. All rights reserved.</p>
           </div>
         </div>
       </footer>

@@ -8,7 +8,7 @@ export const metadata: Metadata = {
 
 export default function PrivacyPolicyPage() {
   const lastUpdated = 'January 7, 2025'
-  const companyName = 'Alain Business Center'
+  const companyName = 'IMPLSE AI'
   const companyAddress = 'Al Ain, United Arab Emirates'
   const contactEmail = 'ashire@alainbcenter.com'
 

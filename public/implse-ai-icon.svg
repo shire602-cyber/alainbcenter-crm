@@ -1,0 +1,42 @@
+<svg width="64" height="64" viewBox="0 0 64 64" xmlns="http://www.w3.org/2000/svg">
+  <defs>
+    <linearGradient id="iconGradient" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" style="stop-color:#1E3A8A;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3B82F6;stop-opacity:1" />
+    </linearGradient>
+    <filter id="iconGlow">
+      <feGaussianBlur stdDeviation="1.5" result="coloredBlur"/>
+      <feMerge>
+        <feMergeNode in="coloredBlur"/>
+        <feMergeNode in="SourceGraphic"/>
+      </feMerge>
+    </filter>
+  </defs>
+  
+  <!-- Circuit elements -->
+  <g opacity="0.5">
+    <path d="M20 18 L24 14 L28 18" stroke="#3B82F6" stroke-width="1" fill="none"/>
+    <circle cx="24" cy="14" r="1.5" fill="#60A5FA"/>
+    <circle cx="32" cy="20" r="1" fill="#60A5FA"/>
+  </g>
+  
+  <!-- Light rays -->
+  <g opacity="0.7">
+    <line x1="32" y1="12" x2="30" y2="8" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="32" y1="12" x2="32" y2="8" stroke="#60A5FA" stroke-width="1.5" stroke-linecap="round"/>
+    <line x1="32" y1="12" x2="34" y2="8" stroke="#3B82F6" stroke-width="1.5" stroke-linecap="round"/>
+  </g>
+  
+  <!-- Letter A -->
+  <path d="M 22 28 L 32 12 L 42 28 M 28 22 L 36 22" 
+        stroke="url(#iconGradient)" 
+        stroke-width="2.5" 
+        fill="none" 
+        stroke-linecap="round" 
+        stroke-linejoin="round"
+        filter="url(#iconGlow)"/>
+  
+  <!-- Base glow -->
+  <ellipse cx="32" cy="32" rx="6" ry="2" fill="#3B82F6" opacity="0.2"/>
+</svg>
+

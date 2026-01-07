@@ -119,8 +119,8 @@ export default function LoginPage() {
               <Link href="/" className="flex items-center gap-3 group">
                 <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 overflow-hidden flex-shrink-0 px-4 py-2 shadow-md transition-all duration-200 group-hover:shadow-lg group-hover:scale-[1.02]">
                   <img 
-                    src="/brand/alain-logo.webp" 
-                    alt="Alain CRM" 
+                    src="/implse-ai-icon.svg" 
+                    alt="IMPLSE AI" 
                     className="w-full h-full object-contain"
                     onError={(e) => {
                       const target = e.target as HTMLImageElement
@@ -136,7 +136,7 @@ export default function LoginPage() {
                   />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">Alain CRM</h2>
+                  <h2 className="text-xl font-semibold text-foreground">IMPLSE AI</h2>
                   <p className="text-xs text-muted-foreground">AI Business CRM</p>
                 </div>
               </Link>
