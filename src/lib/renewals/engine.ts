@@ -6,6 +6,12 @@
 import { prisma } from '@/lib/prisma'
 import { differenceInDays, format } from 'date-fns'
 import { toZonedTime } from 'date-fns-tz'
+import {
+  getTemplateMapping,
+  validateTemplateVariables,
+  type RenewalType,
+  type RenewalStage,
+} from './templates'
 
 // Default template mapping (can be overridden via config)
 const DEFAULT_TEMPLATE_MAPPING: Record<string, Record<string, string>> = {
@@ -53,9 +59,12 @@ export type EngineCandidate = {
   leadName: string
   phone: string
   serviceType: string
+  renewalType: string
   stage: string
   templateName: string | null
+  channel: string
   variables: Record<string, string>
+  estimatedValue: number | null
   willSend: boolean
   reasonIfSkipped?: string
   expiresAt: Date
@@ -80,37 +89,7 @@ export type EngineConfig = {
   dryRun: boolean
 }
 
-/**
- * Get template mapping from Integration config or use defaults
- */
-async function getTemplateMapping(): Promise<Record<string, Record<string, string>>> {
-  try {
-    const integration = await prisma.integration.findFirst({
-      where: {
-        OR: [
-          { name: 'whatsapp' },
-          { provider: 'whatsapp' },
-        ],
-        isEnabled: true,
-      },
-      select: { config: true },
-    })
-
-    if (integration?.config) {
-      const config = typeof integration.config === 'string'
-        ? JSON.parse(integration.config)
-        : integration.config
-
-      if (config.renewalTemplateMapping) {
-        return config.renewalTemplateMapping
-      }
-    }
-  } catch (error) {
-    console.warn('[RENEWAL-ENGINE] Failed to load template mapping from config, using defaults')
-  }
-
-  return DEFAULT_TEMPLATE_MAPPING
-}
+// Template mapping is now handled by the templates.ts module
 
 /**
  * Check if current time is within business hours (9am-9pm local time)
@@ -158,8 +137,7 @@ export async function runRenewalEngine(config: EngineConfig): Promise<EngineResu
   const candidates: EngineCandidate[] = []
   const errors: string[] = []
   
-  // Get template mapping
-  const templateMapping = await getTemplateMapping()
+  // Template mapping will be fetched per-item using new system
 
   // Build query filters
   const whereClause: any = {
@@ -225,8 +203,19 @@ export async function runRenewalEngine(config: EngineConfig): Promise<EngineResu
       const serviceType = item.serviceType
       const serviceName = item.serviceName || serviceType.replace('_', ' ')
 
-      // Get template name
-      const templateName = templateMapping[serviceType]?.[stage] || null
+      // Map RenewalServiceType to RenewalType
+      const renewalTypeMap: Record<string, RenewalType> = {
+        'TRADE_LICENSE': 'TRADE_LICENSE',
+        'EMIRATES_ID': 'EMIRATES_ID',
+        'RESIDENCY': 'RESIDENCY',
+        'VISIT_VISA': 'VISIT_VISA',
+      }
+      const renewalType = renewalTypeMap[serviceType] || 'TRADE_LICENSE' as RenewalType
+
+      // Get template mapping (new system)
+      const templateMappingConfig = await getTemplateMapping(renewalType, stage as RenewalStage)
+      const templateName = templateMappingConfig?.templateName || null
+      const channel = templateMappingConfig?.channel || 'whatsapp'
 
       // Prepare variables
       const variables = prepareTemplateVariables(
@@ -240,16 +229,19 @@ export async function runRenewalEngine(config: EngineConfig): Promise<EngineResu
       let willSend = true
       let reasonIfSkipped: string | undefined
 
-      // Guardrail 1: Missing template
-      if (!templateName) {
+      // Guardrail 1: Missing template mapping
+      if (!templateMappingConfig || !templateName) {
         willSend = false
-        reasonIfSkipped = `No template mapping for ${serviceType} / ${stage}`
+        reasonIfSkipped = `No template mapping for ${renewalType} / ${stage}`
       }
 
-      // Guardrail 2: Missing required variables
-      if (willSend && (!variables.name || !variables.service || !variables.expiryDate)) {
-        willSend = false
-        reasonIfSkipped = 'Missing required template variables'
+      // Guardrail 2: Validate required variables (new enhanced validation)
+      if (willSend && templateMappingConfig) {
+        const validation = validateTemplateVariables(templateMappingConfig, variables)
+        if (!validation.isValid) {
+          willSend = false
+          reasonIfSkipped = `Missing required template variables: ${validation.missingVariables.join(', ')}`
+        }
       }
 
       // Guardrail 3: Rate limit (24 hours)
@@ -279,9 +271,12 @@ export async function runRenewalEngine(config: EngineConfig): Promise<EngineResu
         leadName,
         phone,
         serviceType,
+        renewalType: renewalType,
         stage,
         templateName,
+        channel,
         variables,
+        estimatedValue: item.expectedValue,
         willSend,
         reasonIfSkipped,
         expiresAt: item.expiresAt,

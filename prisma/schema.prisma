@@ -47,6 +47,7 @@ model User {
   staffSettings         StaffSettings?
   assignedRenewalItems  RenewalItem[]        @relation("AssignedRenewalItems")
   createdRenewalEvents  RenewalEventLog[]    @relation("CreatedRenewalEvents")
+  assignedRenewals      Renewal[]            @relation("AssignedRenewals")
 }
 
 model ServiceType {
@@ -216,7 +217,7 @@ model Lead {
   sentAutomations    SentAutomation[]
   expiryItems        ExpiryItem[]       @relation("LeadExpiryItems")
   renewalExpiryLeads ExpiryItem[]       @relation("RenewalExpiryLeads")
-  renewals           Renewal[]
+  renewals           Renewal[] // First-class renewals linked to lead
   messages           Message[]
   conversations      Conversation[]
   automationRunLogs  AutomationRunLog[]
@@ -318,7 +319,7 @@ model ExpiryItem {
   @@index([leadId, expiryDate])
 }
 
-// Renewal V2: Revenue-first renewal items
+// Renewal V2: Revenue-first renewal items (RenewalItem model)
 enum RenewalServiceType {
   TRADE_LICENSE
   EMIRATES_ID
@@ -327,7 +328,7 @@ enum RenewalServiceType {
   CHANGE_STATUS
 }
 
-enum RenewalStatus {
+enum RenewalItemStatus {
   UPCOMING
   ACTION_REQUIRED
   URGENT
@@ -357,7 +358,7 @@ model RenewalItem {
   serviceType      RenewalServiceType
   serviceName      String?
   expiresAt        DateTime
-  status           RenewalStatus      @default(UPCOMING)
+  status           RenewalItemStatus  @default(UPCOMING)
   expectedValue    Int? // Expected revenue in AED
   probability      Int                @default(70) // 0-100 probability of renewal
   assignedToUserId Int?
@@ -396,37 +397,55 @@ model RenewalEventLog {
   @@index([renewalItemId, createdAt])
 }
 
+// Renewal Type Enum (for first-class Renewal model)
+enum RenewalType {
+  TRADE_LICENSE
+  EMIRATES_ID
+  RESIDENCY
+  VISIT_VISA
+}
+
+// Renewal Status Lifecycle Enum (for first-class Renewal model)
+enum RenewalStatus {
+  ACTIVE
+  CONTACTED
+  IN_PROGRESS
+  RENEWED
+  EXPIRED
+  LOST
+}
+
 model Renewal {
-  id               Int           @id @default(autoincrement())
-  contact          Contact       @relation(fields: [contactId], references: [id])
-  contactId        Int
-  lead             Lead?         @relation(fields: [leadId], references: [id])
-  leadId           Int?
-  conversation     Conversation? @relation(fields: [conversationId], references: [id])
-  conversationId   Int?
-  serviceType      String // Service type name (e.g., "VISA_RENEWAL", "EMIRATES_ID_RENEWAL")
-  expiryDate       DateTime
-  status           String        @default("ACTIVE") // ACTIVE | RENEWED | CANCELLED | EXPIRED
-  reminderStage    Int           @default(0) // 0=none sent yet, 1=R1 sent, 2=R2, 3=R3 done
-  lastNotifiedAt   DateTime?
-  lastRemindedAt   DateTime? // Last reminder timestamp
-  nextReminderAt   DateTime? // Next reminder due date (computed from reminder schedule)
-  reminderSchedule String        @default("[30,14,7]") // JSON array as string: days before expiry [R1, R2, R3]
-  remindersEnabled Boolean       @default(true)
-  createdAt        DateTime      @default(now())
-  updatedAt        DateTime      @updatedAt
+  id              Int           @id @default(autoincrement())
+  lead            Lead          @relation(fields: [leadId], references: [id])
+  leadId          Int
+  type            RenewalType
+  expiryDate      DateTime
+  status          RenewalStatus @default(ACTIVE)
+  estimatedValue  Int? // Estimated renewal value in AED
+  assignedUserId  Int?
+  assignedUser    User?         @relation("AssignedRenewals", fields: [assignedUserId], references: [id])
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
 
-  notifications RenewalNotification[]
+  notifications  RenewalNotification[]
+  Contact        Contact?              @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  Conversation   Conversation?         @relation(fields: [conversationId], references: [id])
+  conversationId Int?
 
-  @@index([contactId, expiryDate])
-  @@index([nextReminderAt])
-  @@index([status, nextReminderAt])
-  @@index([status, reminderStage, nextReminderAt])
+  @@index([leadId, expiryDate])
+  @@index([status, expiryDate])
+  @@index([assignedUserId, status, expiryDate])
+  @@index([expiryDate])
 }
 
 model RenewalNotification {
   id             Int      @id @default(autoincrement())
-  renewal        Renewal  @relation(fields: [renewalId], references: [id])
+  renewal        Renewal  @relation(fields: [renewalId], references: [id], onDelete: Cascade)
   renewalId      Int
   channel        String   @default("whatsapp") // whatsapp | facebook
   stage          Int // Reminder stage: 1, 2, or 3

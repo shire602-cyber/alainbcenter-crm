@@ -5,42 +5,25 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
-import { Select } from '@/components/ui/select'
-import { Label } from '@/components/ui/label'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
 import { Card } from '@/components/ui/card'
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import {
   RefreshCw,
-  Calendar,
-  AlertTriangle,
-  DollarSign,
-  Filter,
-  X,
-  Search,
   Phone,
   Mail,
-  ExternalLink,
-  MoreVertical,
-  TrendingUp,
+  MessageSquare,
   Clock,
   User,
-  FileText,
-  MessageSquare,
-  Receipt,
-  CheckCircle2,
-  XCircle,
   ChevronRight,
-  Send,
-  Plus,
-  Download,
-  Upload,
+  Search,
+  Play,
 } from 'lucide-react'
-import { format, differenceInDays, parseISO, addDays } from 'date-fns'
+import { format, differenceInDays, parseISO, formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
-import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 
 interface RenewalItem {
@@ -51,17 +34,16 @@ interface RenewalItem {
   expiresAt: string
   status: string
   expectedValue: number | null
-  probability: number
   assignedToUserId: number | null
   lastContactedAt: string | null
   nextActionAt: string | null
-  notes: string | null
   lead: {
     id: number
     contact: {
       id: number
       fullName: string
       phone: string | null
+      email: string | null
     }
     assignedUser: {
       id: number
@@ -73,31 +55,9 @@ interface RenewalItem {
     name: string
   } | null
   daysRemaining?: number
-  projectedRevenue?: number | null
 }
 
-interface RenewalEvent {
-  id: number
-  type: string
-  channel: string | null
-  payload: any
-  createdAt: string
-  createdBy: {
-    id: number
-    name: string
-  } | null
-}
-
-interface KPIData {
-  revenueAtRisk30: number
-  revenueAtRisk60: number
-  revenueAtRisk90: number
-  urgentCount: number
-  expiredNotContacted: number
-  recoveredThisMonth: number
-}
-
-type UrgencyLevel = 'urgent' | 'expired' | 'action' | 'upcoming'
+type QueueType = 'urgent' | 'this-week' | 'later' | 'expired'
 
 export default function RenewalCommandCenter() {
   const router = useRouter()
@@ -106,61 +66,20 @@ export default function RenewalCommandCenter() {
   const [renewalItems, setRenewalItems] = useState<RenewalItem[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedItem, setSelectedItem] = useState<RenewalItem | null>(null)
-  const [selectedItemEvents, setSelectedItemEvents] = useState<RenewalEvent[]>([])
   const [drawerOpen, setDrawerOpen] = useState(false)
-  const [drawerLoading, setDrawerLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState('summary')
-  const [runningEngine, setRunningEngine] = useState(false)
-  const [userRole, setUserRole] = useState<string | null>(null)
-  const [isAdmin, setIsAdmin] = useState(false)
-  const [users, setUsers] = useState<{ id: number; name: string }[]>([])
-  
-  // Filters
-  const [serviceTypeFilter, setServiceTypeFilter] = useState<string>('all')
-  const [statusFilter, setStatusFilter] = useState<string>('all')
-  const [assignedFilter, setAssignedFilter] = useState<string>('all')
-  const [daysRemainingRange, setDaysRemainingRange] = useState<[number, number]>([-365, 365])
-  const [notContactedOnly, setNotContactedOnly] = useState(false)
   const [searchQuery, setSearchQuery] = useState('')
-  
-  // Edit form state
-  const [editExpiresAt, setEditExpiresAt] = useState('')
-  const [editExpectedValue, setEditExpectedValue] = useState('')
-  const [editStatus, setEditStatus] = useState('')
-  const [editAssignedTo, setEditAssignedTo] = useState('')
-  const [saving, setSaving] = useState(false)
-  
-  // Timeline note state
-  const [newNote, setNewNote] = useState('')
-  const [addingNote, setAddingNote] = useState(false)
-  
-  const [kpiData, setKpiData] = useState<KPIData>({
-    revenueAtRisk30: 0,
-    revenueAtRisk60: 0,
-    revenueAtRisk90: 0,
-    urgentCount: 0,
-    expiredNotContacted: 0,
-    recoveredThisMonth: 0,
-  })
+  const [activeQueue, setActiveQueue] = useState<QueueType>('urgent')
+  const [isActionLoading, setIsActionLoading] = useState(false)
+  const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
+  const [whatsappMessage, setWhatsappMessage] = useState('')
+  const [selectedActionItem, setSelectedActionItem] = useState<RenewalItem | null>(null)
+  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
-    // Load user role
     fetch('/api/auth/me')
       .then(res => res.json())
       .then(data => {
-        const role = data.user?.role?.toUpperCase() || ''
-        setUserRole(role)
-        setIsAdmin(role === 'ADMIN')
-      })
-      .catch(() => {})
-    
-    // Load users for assignment dropdown
-    fetch('/api/admin/users')
-      .then(res => res.json())
-      .then(data => {
-        if (data.ok && data.users) {
-          setUsers(data.users)
-        }
+        setIsAdmin(data.user?.role?.toUpperCase() === 'ADMIN')
       })
       .catch(() => {})
     
@@ -170,24 +89,10 @@ export default function RenewalCommandCenter() {
   async function loadRenewals() {
     try {
       setLoading(true)
-      
-      // Build query params
-      const params = new URLSearchParams()
-      if (serviceTypeFilter !== 'all') params.append('serviceType', serviceTypeFilter)
-      if (statusFilter !== 'all') params.append('status', statusFilter)
-      if (assignedFilter !== 'all') params.append('assignedToUserId', assignedFilter)
-      if (notContactedOnly) params.append('notContacted', 'true')
-      if (searchQuery) params.append('search', searchQuery)
-      if (daysRemainingRange[0] !== -365) params.append('daysRemainingMin', daysRemainingRange[0].toString())
-      if (daysRemainingRange[1] !== 365) params.append('daysRemainingMax', daysRemainingRange[1].toString())
-      
-      const res = await fetch(`/api/renewals-v2?${params.toString()}`)
+      const res = await fetch('/api/renewals-v2')
       if (res.ok) {
         const data = await res.json()
         setRenewalItems(data.items || [])
-        setKpiData(data.summary || kpiData)
-      } else {
-        showToast('Failed to load renewals', 'error')
       }
     } catch (err) {
       console.error('Failed to load renewals:', err)
@@ -196,677 +101,458 @@ export default function RenewalCommandCenter() {
       setLoading(false)
     }
   }
-  
-  // Debounced search
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      loadRenewals()
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
-  
-  // Reload when filters change (but not search - handled separately)
-  useEffect(() => {
-    if (searchQuery === '') {
-      loadRenewals()
+
+  // Categorize renewals into queues
+  const queues = useMemo(() => {
+    const now = new Date()
+    const urgent: RenewalItem[] = []
+    const thisWeek: RenewalItem[] = []
+    const later: RenewalItem[] = []
+    const expired: RenewalItem[] = []
+
+    renewalItems.forEach(item => {
+      const days = differenceInDays(parseISO(item.expiresAt), now)
+      const daysRemaining = days
+
+      if (daysRemaining < 0) {
+        expired.push(item)
+      } else if (daysRemaining <= 1) {
+        urgent.push(item)
+      } else if (daysRemaining <= 7) {
+        thisWeek.push(item)
+      } else {
+        later.push(item)
+      }
+    })
+
+    // Sort each queue by urgency
+    const sortByUrgency = (a: RenewalItem, b: RenewalItem) => {
+      const daysA = differenceInDays(parseISO(a.expiresAt), now)
+      const daysB = differenceInDays(parseISO(b.expiresAt), now)
+      return daysA - daysB
     }
-  }, [serviceTypeFilter, statusFilter, assignedFilter, notContactedOnly, daysRemainingRange])
-  
-  async function loadRenewalDetail(itemId: number) {
+
+    return {
+      urgent: urgent.sort(sortByUrgency),
+      'this-week': thisWeek.sort(sortByUrgency),
+      later: later.sort(sortByUrgency),
+      expired: expired.sort(sortByUrgency),
+    }
+  }, [renewalItems])
+
+  // Filter by search query
+  const filteredQueues = useMemo(() => {
+    if (!searchQuery.trim()) return queues
+
+    const query = searchQuery.toLowerCase()
+    const filterItems = (items: RenewalItem[]) =>
+      items.filter(item =>
+        item.lead?.contact?.fullName?.toLowerCase().includes(query) ||
+        item.lead?.contact?.phone?.includes(query) ||
+        item.serviceType?.toLowerCase().includes(query)
+      )
+
+    return {
+      urgent: filterItems(queues.urgent),
+      'this-week': filterItems(queues['this-week']),
+      later: filterItems(queues.later),
+      expired: filterItems(queues.expired),
+    }
+  }, [queues, searchQuery])
+
+  const activeItems = filteredQueues[activeQueue]
+
+  async function handleAction(action: 'call' | 'whatsapp' | 'email', item: RenewalItem, data?: any) {
+    setIsActionLoading(true)
     try {
-      setDrawerLoading(true)
-      const [itemRes, eventsRes] = await Promise.all([
-        fetch(`/api/renewals-v2/${itemId}`),
-        fetch(`/api/renewals-v2/${itemId}/events`),
-      ])
-      
-      if (itemRes.ok) {
-        const itemData = await itemRes.json()
-        setSelectedItem(itemData)
-        
-        // Initialize edit form
-        setEditExpiresAt(format(parseISO(itemData.expiresAt), 'yyyy-MM-dd'))
-        setEditExpectedValue(itemData.expectedValue?.toString() || '')
-        setEditStatus(itemData.status)
-        setEditAssignedTo(itemData.assignedToUserId?.toString() || '')
+      switch (action) {
+        case 'call':
+          if (item.lead?.contact?.phone) {
+            navigator.clipboard.writeText(item.lead.contact.phone)
+            showToast('Phone number copied to clipboard', 'success')
+            
+            // Log contact
+            await fetch(`/api/renewals-v2/${item.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                lastContactedAt: new Date().toISOString(),
+                status: item.status === 'UPCOMING' || item.status === 'EXPIRED' ? 'CONTACTED' : item.status,
+              }),
+            })
+            await loadRenewals()
+          }
+          break
+
+        case 'whatsapp':
+          if (data?.message) {
+            const conversationRes = await fetch(`/api/inbox/conversations`)
+            const conversations = await conversationRes.json()
+            const conversation = conversations.find((c: any) =>
+              c.contact?.phone?.replace(/[^0-9]/g, '') === item.lead?.contact?.phone?.replace(/[^0-9]/g, '')
+            )
+
+            if (conversation) {
+              const sendRes = await fetch(`/api/inbox/conversations/${conversation.id}/messages`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ text: data.message }),
+              })
+
+              if (sendRes.ok) {
+                await fetch(`/api/renewals-v2/${item.id}`, {
+                  method: 'PATCH',
+                  headers: { 'Content-Type': 'application/json' },
+                  body: JSON.stringify({
+                    lastContactedAt: new Date().toISOString(),
+                    status: item.status === 'UPCOMING' || item.status === 'EXPIRED' ? 'CONTACTED' : item.status,
+                  }),
+                })
+                showToast('WhatsApp message sent', 'success')
+                await loadRenewals()
+              }
+            }
+          } else {
+            setSelectedActionItem(item)
+            setShowWhatsAppModal(true)
+          }
+          break
+
+        case 'email':
+          if (item.lead?.contact?.email) {
+            window.location.href = `mailto:${item.lead.contact.email}`
+            await fetch(`/api/renewals-v2/${item.id}`, {
+              method: 'PATCH',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({
+                lastContactedAt: new Date().toISOString(),
+                status: item.status === 'UPCOMING' || item.status === 'EXPIRED' ? 'CONTACTED' : item.status,
+              }),
+            })
+            await loadRenewals()
+          }
+          break
       }
-      
-      if (eventsRes.ok) {
-        const eventsData = await eventsRes.json()
-        setSelectedItemEvents(eventsData.events || [])
-      }
-    } catch (err) {
-      console.error('Failed to load renewal detail:', err)
-      showToast('Failed to load renewal details', 'error')
+    } catch (err: any) {
+      showToast(err.message || 'Action failed', 'error')
     } finally {
-      setDrawerLoading(false)
+      setIsActionLoading(false)
     }
   }
 
-  // Sort and filter items (server-side filtering already done, but client-side search still needed)
-  const filteredItems = useMemo(() => {
-    if (!searchQuery) return renewalItems
-    
-    const query = searchQuery.toLowerCase()
-    return renewalItems.filter((item) => {
-      const name = item.lead?.contact?.fullName?.toLowerCase() || ''
-      const phone = item.lead?.contact?.phone?.toLowerCase() || ''
-      return name.includes(query) || phone.includes(query)
-    })
-  }, [renewalItems, searchQuery])
-  
-  const sortedItems = useMemo(() => {
-    const now = new Date()
-    
-    const itemsWithUrgency = filteredItems.map((item) => {
-      const days = item.daysRemaining ?? differenceInDays(parseISO(item.expiresAt), now)
-      let urgency: UrgencyLevel = 'upcoming'
-      
-      if (days <= 14 && days >= 0) urgency = 'urgent'
-      else if (days < 0) urgency = 'expired'
-      else if (days <= 30) urgency = 'action'
-      
-      return { ...item, urgency, daysRemaining: days }
-    })
-    
-    // Sort by urgency priority
-    const urgencyOrder: Record<UrgencyLevel, number> = {
-      urgent: 0,
-      expired: 1,
-      action: 2,
-      upcoming: 3,
-    }
-    
-    return itemsWithUrgency.sort((a, b) => {
-      const urgencyDiff = urgencyOrder[a.urgency] - urgencyOrder[b.urgency]
-      if (urgencyDiff !== 0) return urgencyDiff
-      return a.daysRemaining - b.daysRemaining
-    })
-  }, [filteredItems])
-  
-  async function handleSaveChanges() {
-    if (!selectedItem) return
-    
-    try {
-      setSaving(true)
-      const res = await fetch(`/api/renewals-v2/${selectedItem.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          expiresAt: editExpiresAt ? new Date(editExpiresAt).toISOString() : undefined,
-          expectedValue: editExpectedValue ? parseInt(editExpectedValue) : null,
-          status: editStatus,
-          assignedToUserId: editAssignedTo ? parseInt(editAssignedTo) : null,
-        }),
-      })
-      
-      if (res.ok) {
-        showToast('Changes saved successfully', 'success')
-        await loadRenewalDetail(selectedItem.id)
-        await loadRenewals()
-      } else {
-        throw new Error('Failed to save')
-      }
-    } catch (err) {
-      showToast('Failed to save changes', 'error')
-    } finally {
-      setSaving(false)
-    }
-  }
-  
-  async function handleAddNote() {
-    if (!selectedItem || !newNote.trim()) return
-    
-    try {
-      setAddingNote(true)
-      const res = await fetch(`/api/renewals-v2/${selectedItem.id}/events`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ note: newNote }),
-      })
-      
-      if (res.ok) {
-        showToast('Note added', 'success')
-        setNewNote('')
-        await loadRenewalDetail(selectedItem.id)
-      } else {
-        throw new Error('Failed to add note')
-      }
-    } catch (err) {
-      showToast('Failed to add note', 'error')
-    } finally {
-      setAddingNote(false)
-    }
-  }
-  
-  async function handleSnooze(days: number) {
-    if (!selectedItem) return
-    
-    try {
-      const nextActionAt = addDays(new Date(), days).toISOString()
-      const res = await fetch(`/api/renewals-v2/${selectedItem.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nextActionAt }),
-      })
-      
-      if (res.ok) {
-        showToast(`Snoozed for ${days} days`, 'success')
-        await loadRenewalDetail(selectedItem.id)
-        await loadRenewals()
-      }
-    } catch (err) {
-      showToast('Failed to snooze', 'error')
-    }
-  }
-  
-  async function handleCall(item: RenewalItem) {
-    const phone = item.lead?.contact?.phone
-    if (phone) {
-      // Copy to clipboard
-      navigator.clipboard.writeText(phone)
-      showToast('Phone number copied to clipboard', 'success')
-      
-      // Log CONTACTED event
-      try {
-        await fetch(`/api/renewals-v2/${item.id}/events`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ 
-            note: `Called ${phone}`,
-            markAsContacted: true,
-          }),
-        })
-      } catch (err) {
-        // Silent fail
-      }
-    }
-  }
-  
-  async function handleRunEngine(dryRun: boolean) {
-    if (!isAdmin) return
-    
-    try {
-      setRunningEngine(true)
-      const endpoint = dryRun ? '/api/renewals/engine/dry-run' : '/api/renewals/engine/run'
-      const res = await fetch(endpoint, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          windowDays: 30,
-          onlyNotContacted: true,
-        }),
-      })
-      
-      const data = await res.json()
-      
-      if (dryRun) {
-        showToast(
-          `Dry run: ${data.totals.sendCount} would send, ${data.totals.skipCount} skipped`,
-          'info'
-        )
-      } else {
-        showToast(
-          `Engine ran: ${data.summary.sent} sent, ${data.summary.failed} failed`,
-          data.summary.failed > 0 ? 'warning' : 'success'
-        )
-        await loadRenewals()
-      }
-    } catch (err) {
-      showToast('Engine run failed', 'error')
-    } finally {
-      setRunningEngine(false)
-    }
-  }
-  
   function handleRowClick(item: RenewalItem) {
     setSelectedItem(item)
     setDrawerOpen(true)
-    loadRenewalDetail(item.id)
   }
 
-  const getUrgencyBadge = (urgency: UrgencyLevel, days: number) => {
-    switch (urgency) {
-      case 'urgent':
-        return <Badge variant="destructive" className="text-xs">Urgent ({days}d)</Badge>
-      case 'expired':
-        return <Badge variant="destructive" className="text-xs bg-red-600">Expired ({Math.abs(days)}d)</Badge>
-      case 'action':
-        return <Badge className="text-xs bg-orange-500">Action ({days}d)</Badge>
-      default:
-        return <Badge variant="secondary" className="text-xs">Upcoming ({days}d)</Badge>
+  const getServiceTypeBadge = (serviceType: string) => {
+    const colors: Record<string, string> = {
+      'TRADE_LICENSE': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
+      'EMIRATES_ID': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
+      'RESIDENCY': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
+      'VISIT_VISA': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+    }
+    return (
+      <Badge className={cn('text-xs font-medium', colors[serviceType] || 'bg-gray-100 text-gray-800')}>
+        {serviceType.replace(/_/g, ' ')}
+      </Badge>
+    )
+  }
+
+  const getExpiryCountdown = (expiresAt: string) => {
+    const now = new Date()
+    const days = differenceInDays(parseISO(expiresAt), now)
+    
+    if (days < 0) {
+      return <span className="text-red-600 dark:text-red-400 font-semibold">Expired {Math.abs(days)}d ago</span>
+    } else if (days === 0) {
+      return <span className="text-red-600 dark:text-red-400 font-semibold">Expires today</span>
+    } else if (days === 1) {
+      return <span className="text-orange-600 dark:text-orange-400 font-semibold">1 day left</span>
+    } else if (days <= 7) {
+      return <span className="text-orange-600 dark:text-orange-400 font-semibold">{days} days left</span>
+    } else {
+      return <span className="text-slate-600 dark:text-slate-400">{days} days left</span>
     }
   }
 
-  const clearFilters = () => {
-    setServiceTypeFilter('all')
-    setStatusFilter('all')
-    setAssignedFilter('all')
-    setDaysRemainingRange([-365, 365])
-    setNotContactedOnly(false)
-    setSearchQuery('')
+  const getLastContacted = (lastContactedAt: string | null) => {
+    if (!lastContactedAt) {
+      return <span className="text-slate-400 dark:text-slate-500 text-xs">Never</span>
+    }
+    try {
+      return (
+        <span className="text-xs text-slate-600 dark:text-slate-400">
+          {formatDistanceToNow(parseISO(lastContactedAt), { addSuffix: true })}
+        </span>
+      )
+    } catch {
+      return <span className="text-xs text-slate-600 dark:text-slate-400">{format(parseISO(lastContactedAt), 'MMM d')}</span>
+    }
   }
 
-  const hasActiveFilters = serviceTypeFilter !== 'all' || 
-    statusFilter !== 'all' || 
-    assignedFilter !== 'all' ||
-    daysRemainingRange[0] !== -365 ||
-    daysRemainingRange[1] !== 365 ||
-    notContactedOnly ||
-    searchQuery !== ''
+  const queueTabs = [
+    { id: 'urgent' as QueueType, label: 'Urgent Today', count: filteredQueues.urgent.length },
+    { id: 'this-week' as QueueType, label: 'This Week', count: filteredQueues['this-week'].length },
+    { id: 'later' as QueueType, label: 'Later', count: filteredQueues.later.length },
+    { id: 'expired' as QueueType, label: 'Expired', count: filteredQueues.expired.length },
+  ]
 
   return (
     <MainLayout>
       <div className="h-screen flex flex-col bg-background">
-        {/* Sticky Top Command Bar */}
-        <div className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b-2 border-slate-200 dark:border-slate-800 shadow-sm">
-          <div className="px-6 py-4">
-            <div className="flex items-center justify-between mb-4">
-              <div>
-                <h1 className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100">
-                  Renewal Command Center
-                </h1>
-                <p className="text-sm text-slate-600 dark:text-slate-400 mt-0.5">
-                  Track and manage renewal opportunities
-                </p>
-              </div>
-              <div className="flex gap-2">
-                {isAdmin && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRunEngine(false)}
-                      disabled={runningEngine}
-                      className="gap-2"
-                    >
-                      <RefreshCw className={cn("h-4 w-4", runningEngine && "animate-spin")} />
-                      Run Follow-up Engine
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => handleRunEngine(true)}
-                      disabled={runningEngine}
-                      className="gap-2"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Dry Run
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={true}
-                      className="gap-2"
-                    >
-                      <Download className="h-4 w-4" />
-                      Export
-                    </Button>
-                  </>
-                )}
-                {!isAdmin && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={true}
-                      className="gap-2 opacity-50"
-                      title="Admin only"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Run Follow-up Engine
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      disabled={true}
-                      className="gap-2 opacity-50"
-                      title="Admin only"
-                    >
-                      <RefreshCw className="h-4 w-4" />
-                      Dry Run
-                    </Button>
-                  </>
-                )}
-              </div>
-            </div>
-            
-            {/* KPI Bar */}
-            <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">Revenue at Risk (30d)</p>
-                <p className="text-lg font-semibold text-red-900 dark:text-red-100">
-                  AED {kpiData.revenueAtRisk30.toLocaleString()}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-orange-50 dark:bg-orange-900/20 border border-orange-200 dark:border-orange-800">
-                <p className="text-xs font-medium text-orange-700 dark:text-orange-400 mb-1">Revenue at Risk (60d)</p>
-                <p className="text-lg font-semibold text-orange-900 dark:text-orange-100">
-                  AED {kpiData.revenueAtRisk60.toLocaleString()}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800">
-                <p className="text-xs font-medium text-yellow-700 dark:text-yellow-400 mb-1">Revenue at Risk (90d)</p>
-                <p className="text-lg font-semibold text-yellow-900 dark:text-yellow-100">
-                  AED {kpiData.revenueAtRisk90.toLocaleString()}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800">
-                <p className="text-xs font-medium text-red-700 dark:text-red-400 mb-1">Urgent (≤14d)</p>
-                <p className="text-lg font-semibold text-red-900 dark:text-red-100">
-                  {kpiData.urgentCount}
-                </p>
-              </div>
-              <div className="p-3 rounded-xl bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700">
-                <p className="text-xs font-medium text-slate-700 dark:text-slate-400 mb-1">Expired & Not Contacted</p>
-                <p className="text-lg font-semibold text-slate-900 dark:text-slate-100">
-                  {kpiData.expiredNotContacted}
-                </p>
-              </div>
-            </div>
-            
-            <div className="mt-3 p-3 rounded-xl bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
-              <div className="flex items-center justify-between">
-                <div>
-                  <p className="text-xs font-medium text-green-700 dark:text-green-400 mb-1">Recovered This Month</p>
-                  <p className="text-xl font-semibold text-green-900 dark:text-green-100">
-                    AED {kpiData.recoveredThisMonth.toLocaleString()}
-                  </p>
-                </div>
-                <TrendingUp className="h-8 w-8 text-green-600 dark:text-green-400" />
-              </div>
-            </div>
-          </div>
-        </div>
-
-        {/* Main Content Area */}
-        <div className="flex-1 flex overflow-hidden">
-          {/* Left Filter Panel */}
-          <div className="w-64 border-r border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50 overflow-y-auto">
-            <div className="p-4 space-y-4">
-              <div className="flex items-center justify-between">
-                <h2 className="text-sm font-semibold text-slate-900 dark:text-slate-100 flex items-center gap-2">
-                  <Filter className="h-4 w-4" />
-                  Filters
-                </h2>
-                {hasActiveFilters && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={clearFilters}
-                    className="h-6 px-2 text-xs"
-                  >
-                    Clear
-                  </Button>
-                )}
-              </div>
-
-              {/* Service Type */}
-              <div>
-                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  Service Type
-                </Label>
-                <Select
-                  value={serviceTypeFilter}
-                  onChange={(e) => setServiceTypeFilter(e.target.value)}
-                  className="h-9 text-sm"
-                >
-                  <option value="all">All Services</option>
-                  <option value="TRADE_LICENSE">Trade License</option>
-                  <option value="EMIRATES_ID">Emirates ID</option>
-                  <option value="RESIDENCY">Residency</option>
-                  <option value="VISIT_VISA">Visit Visa</option>
-                  <option value="CHANGE_STATUS">Change Status</option>
-                </Select>
-              </div>
-
-              {/* Status */}
-              <div>
-                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  Status
-                </Label>
-                <Select
-                  value={statusFilter}
-                  onChange={(e) => setStatusFilter(e.target.value)}
-                  className="h-9 text-sm"
-                >
-                  <option value="all">All Status</option>
-                  <option value="UPCOMING">Upcoming</option>
-                  <option value="ACTION_REQUIRED">Action Required</option>
-                  <option value="URGENT">Urgent</option>
-                  <option value="EXPIRED">Expired</option>
-                  <option value="CONTACTED">Contacted</option>
-                  <option value="QUOTED">Quoted</option>
-                  <option value="IN_PROGRESS">In Progress</option>
-                  <option value="RENEWED">Renewed</option>
-                  <option value="LOST">Lost</option>
-                </Select>
-              </div>
-
-              {/* Assigned To */}
-              <div>
-                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  Assigned To
-                </Label>
-                <Select
-                  value={assignedFilter}
-                  onChange={(e) => setAssignedFilter(e.target.value)}
-                  className="h-9 text-sm"
-                >
-                  <option value="all">Everyone</option>
-                  {users.map((user) => (
-                    <option key={user.id} value={user.id.toString()}>
-                      {user.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* Days Remaining Filter - Quick selects */}
-              <div>
-                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  Days Remaining
-                </Label>
-                <div className="space-y-1">
-                  <Button
-                    variant={daysRemainingRange[1] <= 14 ? "default" : "outline"}
-                    size="sm"
-                    className="w-full h-7 text-xs justify-start"
-                    onClick={() => setDaysRemainingRange([-365, 14])}
-                  >
-                    ≤ 14 days (Urgent)
-                  </Button>
-                  <Button
-                    variant={daysRemainingRange[0] < 0 && daysRemainingRange[1] === 0 ? "default" : "outline"}
-                    size="sm"
-                    className="w-full h-7 text-xs justify-start"
-                    onClick={() => setDaysRemainingRange([-365, 0])}
-                  >
-                    Expired
-                  </Button>
-                  <Button
-                    variant={daysRemainingRange[0] === -365 && daysRemainingRange[1] === 365 ? "default" : "outline"}
-                    size="sm"
-                    className="w-full h-7 text-xs justify-start"
-                    onClick={() => setDaysRemainingRange([-365, 365])}
-                  >
-                    All
-                  </Button>
-                </div>
-              </div>
-
-              {/* Not Contacted Toggle */}
-              <div className="flex items-center gap-2">
-                <input
-                  type="checkbox"
-                  id="not-contacted"
-                  checked={notContactedOnly}
-                  onChange={(e) => setNotContactedOnly(e.target.checked)}
-                  className="h-4 w-4 rounded border-slate-300"
-                />
-                <Label htmlFor="not-contacted" className="text-xs font-medium text-slate-700 dark:text-slate-300 cursor-pointer">
-                  Not Contacted Only
-                </Label>
-              </div>
-
-              {/* Search */}
-              <div>
-                <Label className="text-xs font-medium text-slate-700 dark:text-slate-300 mb-1.5 block">
-                  Search
-                </Label>
+        {/* Command Bar */}
+        <div className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+          <div className="px-6 py-3">
+            <div className="flex items-center justify-between">
+              <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+                Renewals
+              </h1>
+              <div className="flex items-center gap-3">
                 <div className="relative">
-                  <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                  <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-slate-400" />
                   <Input
-                    placeholder="Name or phone..."
+                    placeholder="Search..."
                     value={searchQuery}
                     onChange={(e) => setSearchQuery(e.target.value)}
-                    className="h-9 pl-8 text-sm"
+                    className="w-64 pl-9 h-9 text-sm"
                   />
                 </div>
+                {isAdmin && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRunEngine(true)}
+                    className="gap-2 h-9"
+                  >
+                    <Play className="h-4 w-4" />
+                    Dry Run
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={loadRenewals}
+                  className="gap-2 h-9"
+                >
+                  <RefreshCw className="h-4 w-4" />
+                </Button>
               </div>
-            </div>
-          </div>
-
-          {/* Center Renewal Queue */}
-          <div className="flex-1 overflow-y-auto bg-white dark:bg-slate-900">
-            <div className="p-4">
-              {loading ? (
-                <div className="space-y-2">
-                  {[1, 2, 3, 4, 5].map((i) => (
-                    <Skeleton key={i} className="h-20 w-full rounded-xl" />
-                  ))}
-                </div>
-              ) : sortedItems.length === 0 ? (
-                <Card className="p-12 text-center">
-                  <Filter className="h-12 w-12 mx-auto mb-4 text-slate-400" />
-                  <h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100 mb-2">
-                    No renewals match filters
-                  </h3>
-                  <p className="text-sm text-slate-600 dark:text-slate-400 mb-4">
-                    Try adjusting your filter criteria
-                  </p>
-                  {hasActiveFilters && (
-                    <Button variant="outline" size="sm" onClick={clearFilters}>
-                      Clear Filters
-                    </Button>
-                  )}
-                </Card>
-              ) : (
-                <div className="space-y-2">
-                  {sortedItems.map((item) => {
-                    const urgency = item.urgency || 'upcoming'
-                    const days = item.daysRemaining ?? 0
-                    const revenue = item.projectedRevenue || 0
-                    
-                    return (
-                      <Card
-                        key={item.id}
-                        className="p-4 hover:shadow-lg transition-all cursor-pointer border-2 hover:border-primary/20"
-                        onClick={() => handleRowClick(item)}
-                      >
-                        <div className="flex items-start justify-between gap-4">
-                          <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-2">
-                              {getUrgencyBadge(urgency, days)}
-                              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
-                                {item.lead?.contact?.fullName || 'Unknown'}
-                              </h3>
-                            </div>
-                            
-                            <div className="grid grid-cols-2 gap-4 text-xs text-slate-600 dark:text-slate-400">
-                              <div>
-                                <span className="font-medium">Service:</span> {item.serviceType.replace(/_/g, ' ')}
-                              </div>
-                              <div>
-                                <span className="font-medium">Expires:</span> {format(parseISO(item.expiresAt), 'MMM d, yyyy')}
-                              </div>
-                              <div>
-                                <span className="font-medium">Phone:</span> {item.lead?.contact?.phone || 'N/A'}
-                              </div>
-                              <div>
-                                <span className="font-medium">Owner:</span> {item.assignedTo?.name || item.lead?.assignedUser?.name || 'Unassigned'}
-                              </div>
-                            </div>
-
-                            {item.lastContactedAt && (
-                              <div className="mt-2 text-xs text-slate-500 dark:text-slate-400">
-                                Last contacted: {format(parseISO(item.lastContactedAt), 'MMM d, yyyy')}
-                              </div>
-                            )}
-
-                            {revenue > 0 && (
-                              <div className="mt-2 flex items-center gap-1">
-                                <DollarSign className="h-3 w-3 text-green-600" />
-                                <span className="text-xs font-semibold text-green-600">
-                                  AED {revenue.toLocaleString()}
-                                </span>
-                                {item.probability && (
-                                  <span className="text-xs text-slate-500">
-                                    ({item.probability}% prob)
-                                  </span>
-                                )}
-                              </div>
-                            )}
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                if (item.leadId) {
-                                  window.open(`/leads/${item.leadId}`, '_blank')
-                                }
-                              }}
-                              disabled={!item.leadId}
-                              className="h-8"
-                              title="Open Lead"
-                            >
-                              <ExternalLink className="h-3 w-3" />
-                            </Button>
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={(e) => {
-                                e.stopPropagation()
-                                handleCall(item)
-                              }}
-                              disabled={!item.lead?.contact?.phone}
-                              className="h-8"
-                              title="Copy Phone"
-                            >
-                              <Phone className="h-3 w-3" />
-                            </Button>
-                            <ChevronRight className="h-4 w-4 text-slate-400" />
-                          </div>
-                        </div>
-                      </Card>
-                    )
-                  })}
-                </div>
-              )}
             </div>
           </div>
         </div>
 
-        {/* Right Drawer */}
-        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
-          <SheetContent side="right" className="w-full sm:w-[540px] overflow-y-auto">
-            {drawerLoading ? (
-              <div className="space-y-4">
-                <Skeleton className="h-8 w-48" />
-                <Skeleton className="h-32 w-full" />
-                <Skeleton className="h-32 w-full" />
-              </div>
-            ) : selectedItem ? (
-              <>
-                <SheetHeader>
-                  <SheetTitle>{selectedItem.lead?.contact?.fullName || 'Renewal Details'}</SheetTitle>
-                </SheetHeader>
+        {/* Queue Tabs */}
+        <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+          <div className="px-6">
+            <Tabs value={activeQueue} onValueChange={(v) => setActiveQueue(v as QueueType)}>
+              <TabsList className="h-10">
+                {queueTabs.map(tab => (
+                  <TabsTrigger key={tab.id} value={tab.id} className="gap-2">
+                    {tab.label}
+                    {tab.count > 0 && (
+                      <Badge variant="secondary" className="ml-1 text-xs">
+                        {tab.count}
+                      </Badge>
+                    )}
+                  </TabsTrigger>
+                ))}
+              </TabsList>
+            </Tabs>
+          </div>
+        </div>
 
-                {/* Action Buttons */}
-                <div className="mt-4 flex gap-2 flex-wrap">
+        {/* Renewal List */}
+        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
+          <div className="p-6">
+            {loading ? (
+              <div className="space-y-2">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : activeItems.length === 0 ? (
+              <Card className="p-12 text-center">
+                <p className="text-slate-500 dark:text-slate-400">
+                  {searchQuery ? 'No renewals match your search' : `No renewals in ${queueTabs.find(t => t.id === activeQueue)?.label.toLowerCase()}`}
+                </p>
+              </Card>
+            ) : (
+              <div className="space-y-1">
+                {activeItems.map((item) => {
+                  const days = differenceInDays(parseISO(item.expiresAt), new Date())
+                  
+                  return (
+                    <Card
+                      key={item.id}
+                      className="p-3 hover:shadow-md transition-all cursor-pointer border hover:border-primary/30"
+                      onClick={() => handleRowClick(item)}
+                    >
+                      <div className="flex items-center gap-4">
+                        {/* Lead Identity */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">
+                              {item.lead?.contact?.fullName || 'Unknown'}
+                            </span>
+                            {getServiceTypeBadge(item.serviceType)}
+                          </div>
+                          <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                            <span>{item.lead?.contact?.phone || 'No phone'}</span>
+                          </div>
+                        </div>
+
+                        {/* Expiry Countdown */}
+                        <div className="w-32 text-right">
+                          {getExpiryCountdown(item.expiresAt)}
+                        </div>
+
+                        {/* Estimated Value */}
+                        <div className="w-24 text-right">
+                          {item.expectedValue ? (
+                            <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                              AED {item.expectedValue.toLocaleString()}
+                            </span>
+                          ) : (
+                            <span className="text-xs text-slate-400">—</span>
+                          )}
+                        </div>
+
+                        {/* Assigned Owner */}
+                        <div className="w-32">
+                          {item.assignedTo ? (
+                            <div className="flex items-center gap-1.5">
+                              <User className="h-3 w-3 text-slate-400" />
+                              <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                                {item.assignedTo.name}
+                              </span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-slate-400">Unassigned</span>
+                          )}
+                        </div>
+
+                        {/* Last Contacted */}
+                        <div className="w-32">
+                          {getLastContacted(item.lastContactedAt)}
+                        </div>
+
+                        {/* Inline Actions */}
+                        <div className="flex items-center gap-1" onClick={(e) => e.stopPropagation()}>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAction('call', item)}
+                            disabled={!item.lead?.contact?.phone || isActionLoading}
+                            className="h-8 w-8 p-0"
+                            title="Call"
+                          >
+                            <Phone className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setSelectedActionItem(item)
+                              setShowWhatsAppModal(true)
+                            }}
+                            disabled={!item.lead?.contact?.phone || isActionLoading}
+                            className="h-8 w-8 p-0"
+                            title="WhatsApp"
+                          >
+                            <MessageSquare className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleAction('email', item)}
+                            disabled={!item.lead?.contact?.email || isActionLoading}
+                            className="h-8 w-8 p-0"
+                            title="Email"
+                          >
+                            <Mail className="h-4 w-4" />
+                          </Button>
+                          <ChevronRight className="h-4 w-4 text-slate-400" />
+                        </div>
+                      </div>
+                    </Card>
+                  )
+                })}
+              </div>
+            )}
+          </div>
+        </div>
+      </div>
+
+      {/* Detail Drawer */}
+      <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+        <SheetContent side="right" className="w-full sm:w-[540px] overflow-y-auto">
+          {selectedItem ? (
+            <>
+              <SheetHeader>
+                <SheetTitle>{selectedItem.lead?.contact?.fullName || 'Renewal Details'}</SheetTitle>
+              </SheetHeader>
+
+              <div className="mt-6 space-y-4">
+                <Card className="p-4">
+                  <div className="space-y-3 text-sm">
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Renewal Type:</span>
+                      {getServiceTypeBadge(selectedItem.serviceType)}
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Expires At:</span>
+                      <span className="font-medium">{format(parseISO(selectedItem.expiresAt), 'MMM d, yyyy')}</span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Estimated Value:</span>
+                      <span className="font-medium">
+                        {selectedItem.expectedValue ? `AED ${selectedItem.expectedValue.toLocaleString()}` : 'N/A'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Status:</span>
+                      <Badge variant="secondary">{selectedItem.status}</Badge>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Assigned To:</span>
+                      <span className="font-medium">
+                        {selectedItem.assignedTo?.name || 'Unassigned'}
+                      </span>
+                    </div>
+                    <div className="flex justify-between">
+                      <span className="text-slate-600 dark:text-slate-400">Last Contacted:</span>
+                      <span className="font-medium">
+                        {getLastContacted(selectedItem.lastContactedAt)}
+                      </span>
+                    </div>
+                  </div>
+                </Card>
+
+                <div className="flex gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleAction('call', selectedItem)}
+                    disabled={!selectedItem.lead?.contact?.phone}
+                    className="flex-1"
+                  >
+                    <Phone className="h-4 w-4 mr-2" />
+                    Call
+                  </Button>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setSelectedActionItem(selectedItem)
+                      setShowWhatsAppModal(true)
+                    }}
+                    disabled={!selectedItem.lead?.contact?.phone}
+                    className="flex-1"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    WhatsApp
+                  </Button>
                   <Button
                     variant="outline"
                     size="sm"
@@ -876,239 +562,80 @@ export default function RenewalCommandCenter() {
                       }
                     }}
                     disabled={!selectedItem.lead?.contact?.phone}
-                    className="gap-2"
+                    className="flex-1"
                   >
-                    <Send className="h-4 w-4" />
-                    Send Template
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleCall(selectedItem)}
-                    disabled={!selectedItem.lead?.contact?.phone}
-                    className="gap-2"
-                  >
-                    <Phone className="h-4 w-4" />
-                    Call
-                  </Button>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => handleSnooze(7)}
-                    className="gap-2"
-                  >
-                    <Clock className="h-4 w-4" />
-                    Snooze 7d
+                    Open Inbox
                   </Button>
                 </div>
+              </div>
+            </>
+          ) : null}
+        </SheetContent>
+      </Sheet>
 
-                <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-6">
-                  <TabsList className="grid w-full grid-cols-4">
-                    <TabsTrigger value="summary">Summary</TabsTrigger>
-                    <TabsTrigger value="timeline">Timeline</TabsTrigger>
-                    <TabsTrigger value="messages">Messages</TabsTrigger>
-                    <TabsTrigger value="quote">Quote</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="summary" className="mt-4 space-y-4">
-                    <Card className="p-4">
-                      <h3 className="font-semibold mb-4">Key Information</h3>
-                      <div className="space-y-3 text-sm">
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400">Expires At:</span>
-                          <span className="font-medium">{format(parseISO(selectedItem.expiresAt), 'MMM d, yyyy')}</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400">Days Remaining:</span>
-                          <span className="font-medium">{selectedItem.daysRemaining ?? 0} days</span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400">Expected Value:</span>
-                          <span className="font-medium">
-                            {selectedItem.expectedValue ? `AED ${selectedItem.expectedValue.toLocaleString()}` : 'N/A'}
-                          </span>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400">Status:</span>
-                          <Badge variant={selectedItem.status === 'RENEWED' ? 'default' : 'secondary'}>
-                            {selectedItem.status}
-                          </Badge>
-                        </div>
-                        <div className="flex justify-between">
-                          <span className="text-slate-600 dark:text-slate-400">Assigned To:</span>
-                          <span className="font-medium">
-                            {selectedItem.assignedTo?.name || 'Unassigned'}
-                          </span>
-                        </div>
-                      </div>
-                    </Card>
-
-                    <Card className="p-4">
-                      <h3 className="font-semibold mb-4">Edit Details</h3>
-                      <div className="space-y-3">
-                        <div>
-                          <Label className="text-xs">Expires At</Label>
-                          <Input 
-                            type="date" 
-                            className="mt-1" 
-                            value={editExpiresAt}
-                            onChange={(e) => setEditExpiresAt(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Expected Value (AED)</Label>
-                          <Input 
-                            type="number" 
-                            className="mt-1" 
-                            value={editExpectedValue}
-                            onChange={(e) => setEditExpectedValue(e.target.value)}
-                          />
-                        </div>
-                        <div>
-                          <Label className="text-xs">Status</Label>
-                          <Select 
-                            value={editStatus}
-                            onChange={(e) => setEditStatus(e.target.value)}
-                            className="mt-1"
-                          >
-                            <option value="UPCOMING">Upcoming</option>
-                            <option value="ACTION_REQUIRED">Action Required</option>
-                            <option value="URGENT">Urgent</option>
-                            <option value="EXPIRED">Expired</option>
-                            <option value="CONTACTED">Contacted</option>
-                            <option value="QUOTED">Quoted</option>
-                            <option value="IN_PROGRESS">In Progress</option>
-                            <option value="RENEWED">Renewed</option>
-                            <option value="LOST">Lost</option>
-                          </Select>
-                        </div>
-                        <div>
-                          <Label className="text-xs">Assigned To</Label>
-                          <Select 
-                            value={editAssignedTo}
-                            onChange={(e) => setEditAssignedTo(e.target.value)}
-                            className="mt-1"
-                          >
-                            <option value="">Unassigned</option>
-                            {users.map((user) => (
-                              <option key={user.id} value={user.id.toString()}>
-                                {user.name}
-                              </option>
-                            ))}
-                          </Select>
-                        </div>
-                        <Button 
-                          className="w-full" 
-                          onClick={handleSaveChanges}
-                          disabled={saving}
-                        >
-                          {saving ? 'Saving...' : 'Save Changes'}
-                        </Button>
-                      </div>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="timeline" className="mt-4 space-y-4">
-                    <Card className="p-4">
-                      <div className="flex items-center justify-between mb-4">
-                        <h3 className="font-semibold">Timeline</h3>
-                      </div>
-                      
-                      {/* Add Note */}
-                      <div className="mb-4 space-y-2">
-                        <Input
-                          placeholder="Add a note..."
-                          value={newNote}
-                          onChange={(e) => setNewNote(e.target.value)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter' && !e.shiftKey) {
-                              e.preventDefault()
-                              handleAddNote()
-                            }
-                          }}
-                        />
-                        <Button 
-                          size="sm" 
-                          onClick={handleAddNote}
-                          disabled={!newNote.trim() || addingNote}
-                          className="w-full"
-                        >
-                          <Plus className="h-4 w-4 mr-2" />
-                          {addingNote ? 'Adding...' : 'Add Note'}
-                        </Button>
-                      </div>
-                      
-                      {/* Events List */}
-                      <div className="space-y-3 max-h-96 overflow-y-auto">
-                        {selectedItemEvents.length === 0 ? (
-                          <p className="text-sm text-slate-500 text-center py-4">
-                            No events yet
-                          </p>
-                        ) : (
-                          selectedItemEvents.map((event) => (
-                            <div 
-                              key={event.id} 
-                              className="p-3 rounded-lg bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700"
-                            >
-                              <div className="flex items-start justify-between mb-1">
-                                <Badge variant="outline" className="text-xs">
-                                  {event.type}
-                                </Badge>
-                                <span className="text-xs text-slate-500">
-                                  {format(parseISO(event.createdAt), 'MMM d, HH:mm')}
-                                </span>
-                              </div>
-                              {event.payload?.note && (
-                                <p className="text-sm text-slate-700 dark:text-slate-300 mt-1">
-                                  {event.payload.note}
-                                </p>
-                              )}
-                              {event.createdBy && (
-                                <p className="text-xs text-slate-500 mt-1">
-                                  by {event.createdBy.name}
-                                </p>
-                              )}
-                            </div>
-                          ))
-                        )}
-                      </div>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="messages" className="mt-4">
-                    <Card className="p-4">
-                      <div className="space-y-3">
-                        <p className="text-sm text-slate-600 dark:text-slate-400">
-                          View all messages in the inbox
-                        </p>
-                        {selectedItem.lead?.contact?.phone ? (
-                          <Link href={`/inbox?phone=${encodeURIComponent(selectedItem.lead.contact.phone)}`}>
-                            <Button className="w-full" variant="default">
-                              <MessageSquare className="h-4 w-4 mr-2" />
-                              Jump to Inbox
-                            </Button>
-                          </Link>
-                        ) : (
-                          <p className="text-xs text-slate-500">No phone number available</p>
-                        )}
-                      </div>
-                    </Card>
-                  </TabsContent>
-
-                  <TabsContent value="quote" className="mt-4">
-                    <Card className="p-4">
-                      <p className="text-sm text-slate-600 dark:text-slate-400 text-center py-8">
-                        Quote view coming soon
-                      </p>
-                    </Card>
-                  </TabsContent>
-                </Tabs>
-              </>
-            ) : null}
-          </SheetContent>
-        </Sheet>
-      </div>
+      {/* WhatsApp Modal */}
+      {showWhatsAppModal && selectedActionItem && (
+        <Dialog open={showWhatsAppModal} onOpenChange={setShowWhatsAppModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Send WhatsApp Message</DialogTitle>
+              <DialogDescription>
+                Send a WhatsApp message to {selectedActionItem.lead?.contact?.phone}
+              </DialogDescription>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <div>
+                <Input
+                  value={whatsappMessage}
+                  onChange={(e) => setWhatsappMessage(e.target.value)}
+                  placeholder="Enter your message..."
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && e.metaKey) {
+                      handleAction('whatsapp', selectedActionItem, { message: whatsappMessage })
+                      setShowWhatsAppModal(false)
+                      setWhatsappMessage('')
+                    }
+                  }}
+                />
+              </div>
+            </div>
+            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+              <Button variant="outline" onClick={() => {
+                setShowWhatsAppModal(false)
+                setWhatsappMessage('')
+                setSelectedActionItem(null)
+              }}>
+                Cancel
+              </Button>
+              <Button
+                onClick={async () => {
+                  await handleAction('whatsapp', selectedActionItem, { message: whatsappMessage })
+                  setShowWhatsAppModal(false)
+                  setWhatsappMessage('')
+                  setSelectedActionItem(null)
+                }}
+                disabled={isActionLoading || !whatsappMessage.trim()}
+              >
+                {isActionLoading ? 'Sending...' : 'Send'}
+              </Button>
+            </div>
+          </DialogContent>
+        </Dialog>
+      )}
     </MainLayout>
   )
 }
 
+async function handleRunEngine(dryRun: boolean) {
+  // This will be called from the button onClick
+  const endpoint = dryRun ? '/api/renewals/engine/dry-run' : '/api/renewals/engine/run'
+  const res = await fetch(endpoint, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify({
+      windowDays: 30,
+      onlyNotContacted: true,
+    }),
+  })
+  return res.json()
+}
