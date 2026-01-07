@@ -56,9 +56,9 @@ export default function LandingPage() {
         if (res.ok) {
           const user = await res.json()
           if (user && user.id) {
-            // User is logged in - redirect to dashboard (or show dashboard)
-            // For now, we'll keep showing landing page but logged-in users can click "Dashboard" in nav
-            setIsAuthenticated(true)
+            // User is logged in - redirect to dashboard
+            router.replace('/dashboard')
+            return
           } else {
             setIsAuthenticated(false)
           }

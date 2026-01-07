@@ -54,8 +54,8 @@ export async function POST(req: NextRequest) {
     const sessionToken = await createSessionToken(user.id, user.email, user.role)
     console.log('[LOGIN API] Session token created, length:', sessionToken.length)
 
-    // Get redirect URL from query params or default to '/'
-    const redirectUrl = req.nextUrl.searchParams.get('redirect') || '/'
+    // Get redirect URL from query params or default to '/dashboard'
+    const redirectUrl = req.nextUrl.searchParams.get('redirect') || '/dashboard'
     
     // Return JSON response with success and cookie
     // This avoids redirect issues with fetch API

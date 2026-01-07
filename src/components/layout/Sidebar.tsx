@@ -25,7 +25,7 @@ import { Button } from '@/components/ui/button'
 
 // Organized navigation structure matching Odoo-like CRM layout
 const mainNavigation = [
-  { name: 'Dashboard', href: '/', icon: LayoutDashboard, description: 'Today at a glance' },
+  { name: 'Dashboard', href: '/dashboard', icon: LayoutDashboard, description: 'Today at a glance' },
   { name: 'Inbox', href: '/inbox', icon: MessageSquare, description: 'Omnichannel conversations' },
   { name: 'Leads', href: '/leads', icon: Users, description: 'All leads & contacts' },
   { name: 'Renewals', href: '/renewals', icon: RefreshCw, description: 'Expiry & renewals', adminOnly: false },

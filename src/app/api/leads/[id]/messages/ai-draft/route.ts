@@ -280,7 +280,7 @@ export async function POST(
                 aiScore: lead.aiScore,
                 aiNotes: lead.aiNotes,
               },
-              companyIdentity: 'IMPLSE AI',
+              companyIdentity: 'Alain Business Center',
             },
             'friendly',
             'en'
@@ -337,7 +337,7 @@ export async function POST(
                 aiScore: lead.aiScore,
                 aiNotes: lead.aiNotes,
               },
-              companyIdentity: 'IMPLSE AI',
+              companyIdentity: 'Alain Business Center',
             },
             'professional',
             'en'
