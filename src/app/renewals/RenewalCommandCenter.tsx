@@ -162,6 +162,39 @@ export default function RenewalCommandCenter() {
 
   const activeItems = filteredQueues[activeQueue]
 
+  async function handleRunEngine(dryRun: boolean) {
+    if (!isAdmin) return
+    
+    try {
+      const endpoint = dryRun ? '/api/renewals/engine/dry-run' : '/api/renewals/engine/run'
+      const res = await fetch(endpoint, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          windowDays: 30,
+          onlyNotContacted: true,
+        }),
+      })
+      
+      const data = await res.json()
+      
+      if (dryRun) {
+        showToast(
+          `Dry run: ${data.totals?.sendCount || 0} would send, ${data.totals?.skipCount || 0} skipped`,
+          'info'
+        )
+      } else {
+        showToast(
+          `Engine ran: ${data.summary?.sent || 0} sent, ${data.summary?.failed || 0} failed`,
+          'success'
+        )
+        await loadRenewals()
+      }
+    } catch (err) {
+      showToast('Engine run failed', 'error')
+    }
+  }
+
   async function handleAction(action: 'call' | 'whatsapp' | 'email', item: RenewalItem, data?: any) {
     setIsActionLoading(true)
     try {
@@ -624,18 +657,4 @@ export default function RenewalCommandCenter() {
       )}
     </MainLayout>
   )
-}
-
-async function handleRunEngine(dryRun: boolean) {
-  // This will be called from the button onClick
-  const endpoint = dryRun ? '/api/renewals/engine/dry-run' : '/api/renewals/engine/run'
-  const res = await fetch(endpoint, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({
-      windowDays: 30,
-      onlyNotContacted: true,
-    }),
-  })
-  return res.json()
 }
