@@ -1,735 +1,839 @@
 'use client'
 
-import { useEffect, useState, FormEvent, useMemo, useCallback, memo, Suspense } from 'react'
+/**
+ * NEW LEADS PAGE - Table-first professional worklist
+ * Modern, information-dense, actionable like respond.io/Odoo
+ */
+
+import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { useSearchParams, useRouter } from 'next/navigation'
+import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
-import { BentoCard } from '@/components/dashboard/BentoCard'
-import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
-import { Avatar } from '@/components/ui/avatar'
 import { Select } from '@/components/ui/select'
+import { Checkbox } from '@/components/ui/checkbox'
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table'
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
-import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogClose } from '@/components/ui/dialog'
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  Search,
+  Plus,
+  Filter,
+  Download,
+  Upload,
+  List,
+  KanbanSquare,
+  Phone,
+  MessageSquare,
+  Mail,
+  Eye,
+  MoreVertical,
+  X,
+  Save,
+  Trash2,
+  UserPlus,
+  RefreshCw,
+} from 'lucide-react'
+import { format, formatDistanceToNow } from 'date-fns'
 import {
   PIPELINE_STAGES,
   PIPELINE_STAGE_LABELS,
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   getAiScoreCategory,
-  type PipelineStage,
 } from '@/lib/constants'
-import {
-  Search,
-  Plus,
-  Filter,
-  MessageSquare,
-  Phone,
-  Mail,
-  Calendar,
-  AlertCircle,
-  Eye,
-  X,
-  TrendingUp,
-  Clock,
-  Flame,
-  Snowflake,
-  Sparkles,
-  Users,
-  KanbanSquare,
-  List,
-  Grid3x3,
-} from 'lucide-react'
-import { format } from 'date-fns'
-import { LeadCard } from './components/LeadCard'
+import { useToast } from '@/components/ui/toast'
 import { KanbanBoard } from '@/components/leads/KanbanBoard'
-
-type Contact = {
-  id: number
-  fullName: string
-  phone: string
-  email?: string | null
-  source?: string | null
-}
-
-type CommunicationLog = {
-  id: number
-  channel: string
-  direction: string
-  messageSnippet: string | null
-  createdAt: string
-}
 
 type Lead = {
   id: number
-  leadType: string | null
-  status: string
   pipelineStage: string
-  stage?: string
-  priority?: string
   aiScore: number | null
-  expiryDate: string | null
-  nextFollowUpAt: string | null
-  lastContactAt?: string | null
-  lastContactChannel?: string | null
-  assignedUserId?: number | null
-  assignedUser?: { id: number; name: string; email: string } | null
-  serviceType?: { id: number; name: string } | null
   createdAt: string
-  contact: Contact
-  lastContact?: CommunicationLog | null
-  expiryItems?: Array<{ id: number; type: string; expiryDate: string; renewalStatus?: string }>
-  renewalProbability?: number | null
-  estimatedRenewalValue?: string | null
+  contact: {
+    id: number
+    fullName: string
+    phone: string
+    email: string | null
+    source: string | null
+  }
+  assignedUser: {
+    id: number
+    name: string
+    email: string
+  } | null
+  serviceType: {
+    id: number
+    name: string
+  } | null
+  lastContact: {
+    channel: string
+    direction: string
+    createdAt: string
+  } | null
 }
 
-type FilterType = 'all' | 'followups_today' | 'expiring_90' | 'overdue' | 'hot_only'
-type SortType = 'recent' | 'name' | 'stage' | 'ai_priority'
+type User = {
+  id: number
+  name: string
+  email: string
+  role: string
+}
 
-function LeadsPageContent() {
-  const searchParams = useSearchParams()
+export default function LeadsPageNew() {
   const router = useRouter()
-  const [allLeads, setAllLeads] = useState<Lead[]>([])
-  const [loading, setLoading] = useState(true)
-  const [submitting, setSubmitting] = useState(false)
-  const [error, setError] = useState<string | null>(null)
-  const [filter, setFilter] = useState<FilterType>('all')
-  const [searchQuery, setSearchQuery] = useState('')
-  const [pipelineStageFilter, setPipelineStageFilter] = useState<string>('')
-  const [sourceFilter, setSourceFilter] = useState<string>('')
-  const [aiScoreFilter, setAiScoreFilter] = useState<string>('')
-  const [serviceFilter, setServiceFilter] = useState<string>('')
-  const [sortBy, setSortBy] = useState<SortType>('recent')
-  const [showCreateModal, setShowCreateModal] = useState(false)
+  const { showToast } = useToast()
   
-  // PHASE 5F: View mode (list, grid, kanban)
-  const [viewMode, setViewMode] = useState<'list' | 'grid' | 'kanban'>('grid')
-
-  const [fullName, setFullName] = useState('')
-  const [phone, setPhone] = useState('')
-  const [email, setEmail] = useState('')
-  const [serviceTypeId, setServiceTypeId] = useState('')
-  const [source, setSource] = useState('manual')
-  const [notes, setNotes] = useState('')
+  // State
+  const [leads, setLeads] = useState<Lead[]>([])
+  const [users, setUsers] = useState<User[]>([])
   const [serviceTypes, setServiceTypes] = useState<Array<{ id: number; name: string }>>([])
+  const [loading, setLoading] = useState(true)
+  const [viewMode, setViewMode] = useState<'table' | 'kanban'>('table')
+  const [isAdmin, setIsAdmin] = useState(false)
+  
+  // Filters
+  const [query, setQuery] = useState('')
+  const [debouncedQuery, setDebouncedQuery] = useState('')
+  const [pipelineStage, setPipelineStage] = useState('')
+  const [source, setSource] = useState('')
+  const [serviceTypeId, setServiceTypeId] = useState('')
+  const [assignedToUserId, setAssignedToUserId] = useState('')
+  const [aiScoreCategory, setAiScoreCategory] = useState('')
+  const [createdAtFrom, setCreatedAtFrom] = useState('')
+  const [createdAtTo, setCreatedAtTo] = useState('')
+  
+  // Selection
+  const [selectedIds, setSelectedIds] = useState<Set<number>>(new Set())
+  const [selectAll, setSelectAll] = useState(false)
+  
+  // Pagination
+  const [page, setPage] = useState(1)
+  const [limit] = useState(50)
+  const [total, setTotal] = useState(0)
+  
+  // Modals
+  const [showImportModal, setShowImportModal] = useState(false)
+  const [importFile, setImportFile] = useState<File | null>(null)
+  const [importPreview, setImportPreview] = useState<any>(null)
+  const [importing, setImporting] = useState(false)
 
+  // Debounce search
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setDebouncedQuery(query)
+      setPage(1) // Reset to first page on search
+    }, 300)
+    return () => clearTimeout(timer)
+  }, [query])
+
+  // Check user role
+  useEffect(() => {
+    fetch('/api/auth/me')
+      .then(res => res.json())
+      .then(data => {
+        setIsAdmin(data.user?.role?.toUpperCase() === 'ADMIN')
+      })
+      .catch(() => {})
+  }, [])
+
+  // Load users for filter
+  useEffect(() => {
+    fetch('/api/admin/users')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setUsers(data)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Load service types for filter
+  useEffect(() => {
+    fetch('/api/service-types')
+      .then(res => res.json())
+      .then(data => {
+        if (Array.isArray(data)) {
+          setServiceTypes(data)
+        }
+      })
+      .catch(() => {})
+  }, [])
+
+  // Load leads
   const loadLeads = useCallback(async () => {
     try {
       setLoading(true)
       const params = new URLSearchParams()
-      if (filter !== 'all') {
-        if (filter === 'hot_only') {
-          params.set('aiScoreCategory', 'hot')
-        } else {
-          params.set('filter', filter)
-        }
-      }
-      if (pipelineStageFilter) params.set('pipelineStage', pipelineStageFilter)
-      if (sourceFilter) params.set('source', sourceFilter)
-      if (aiScoreFilter) params.set('aiScoreCategory', aiScoreFilter)
-      if (serviceFilter) params.set('serviceTypeId', serviceFilter)
+      
+      if (debouncedQuery) params.set('query', debouncedQuery)
+      if (pipelineStage) params.set('pipelineStage', pipelineStage)
+      if (source) params.set('source', source)
+      if (serviceTypeId) params.set('serviceTypeId', serviceTypeId)
+      if (assignedToUserId) params.set('assignedToUserId', assignedToUserId)
+      if (aiScoreCategory) params.set('aiScoreCategory', aiScoreCategory)
+      if (createdAtFrom) params.set('createdAtFrom', createdAtFrom)
+      if (createdAtTo) params.set('createdAtTo', createdAtTo)
+      
+      params.set('page', page.toString())
+      params.set('limit', limit.toString())
 
-      const url = params.toString() ? `/api/leads?${params}` : '/api/leads'
-      const res = await fetch(url)
+      const res = await fetch(`/api/leads?${params}`)
       const data = await res.json()
-      // Handle both old format (array) and new format (object with leads and pagination)
-      setAllLeads(Array.isArray(data) ? data : (data.leads || []))
-    } catch (err) {
-      console.error(err)
-      setError('Failed to load leads')
+      
+      setLeads(data.leads || [])
+      setTotal(data.pagination?.total || 0)
+    } catch (error) {
+      console.error('Failed to load leads:', error)
+      showToast('Failed to load leads', 'error')
     } finally {
       setLoading(false)
     }
-  }, [filter, pipelineStageFilter, sourceFilter, aiScoreFilter, serviceFilter])
+  }, [debouncedQuery, pipelineStage, source, serviceTypeId, assignedToUserId, aiScoreCategory, createdAtFrom, createdAtTo, page, limit, showToast])
 
   useEffect(() => {
     loadLeads()
   }, [loadLeads])
 
-  // Check for action=create in URL and open modal
-  useEffect(() => {
-    const action = searchParams.get('action')
-    if (action === 'create') {
-      setShowCreateModal(true)
-      // Clean up URL by removing the query parameter
-      router.replace('/leads', { scroll: false })
+  // Handle selection
+  const toggleSelect = (id: number) => {
+    const newSelected = new Set(selectedIds)
+    if (newSelected.has(id)) {
+      newSelected.delete(id)
+    } else {
+      newSelected.add(id)
     }
-  }, [searchParams, router])
+    setSelectedIds(newSelected)
+    setSelectAll(newSelected.size === leads.length && leads.length > 0)
+  }
 
-  useEffect(() => {
-    fetch('/api/service-types')
-    .then((res) => res.json())
-    .then((data) => setServiceTypes(data))
-    .catch(() => {})
-  }, [])
-
-  const [debouncedSearch, setDebouncedSearch] = useState('')
-
-  useEffect(() => {
-    const timer = setTimeout(() => {
-      setDebouncedSearch(searchQuery)
-    }, 300)
-    return () => clearTimeout(timer)
-  }, [searchQuery])
-
-  const leads = useMemo(() => {
-    let filtered = allLeads
-    
-    // Apply search filter
-    if (debouncedSearch.trim()) {
-      const query = debouncedSearch.toLowerCase()
-      filtered = filtered.filter((lead) => {
-        const name = lead.contact?.fullName?.toLowerCase() || ''
-        const phone = lead.contact?.phone?.toLowerCase() || ''
-        const email = lead.contact?.email?.toLowerCase() || ''
-        return name.includes(query) || phone.includes(query) || email.includes(query)
-      })
+  const toggleSelectAll = () => {
+    if (selectAll) {
+      setSelectedIds(new Set())
+    } else {
+      setSelectedIds(new Set(leads.map(l => l.id)))
     }
-    
-    // Apply sorting
-    const sorted = [...filtered].sort((a, b) => {
-      switch (sortBy) {
-        case 'ai_priority':
-          // Sort by aiScore descending (null scores go to end)
-          if (a.aiScore === null && b.aiScore === null) return 0
-          if (a.aiScore === null) return 1
-          if (b.aiScore === null) return -1
-          return (b.aiScore || 0) - (a.aiScore || 0)
-        case 'name':
-          return (a.contact?.fullName || '').localeCompare(b.contact?.fullName || '')
-        case 'stage':
-          return (a.pipelineStage || '').localeCompare(b.pipelineStage || '')
-        case 'recent':
-        default:
-          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
-      }
-    })
-    
-    return sorted
-  }, [allLeads, debouncedSearch, sortBy])
+    setSelectAll(!selectAll)
+  }
 
-  async function handleSubmit(e: FormEvent) {
-    e.preventDefault()
-    setError(null)
-
-    if (!fullName || !phone) {
-      setError('Full name and phone are required')
+  // Bulk actions
+  const handleBulkAction = async (action: string, data?: any) => {
+    if (selectedIds.size === 0) {
+      showToast('Please select leads first', 'error')
       return
     }
 
     try {
-      setSubmitting(true)
-      const res = await fetch('/api/leads', {
+      const res = await fetch('/api/leads/bulk', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          fullName,
-          phone,
-          email,
-          serviceTypeId: serviceTypeId ? parseInt(serviceTypeId) : null,
-          source,
-          notes,
+          action,
+          leadIds: Array.from(selectedIds),
+          data,
         }),
       })
 
-      if (!res.ok) throw new Error('Failed to create lead')
-
-      setFullName('')
-      setPhone('')
-      setEmail('')
-      setServiceTypeId('')
-      setSource('manual')
-      setNotes('')
-      setShowCreateModal(false)
-      await loadLeads()
-    } catch (err) {
-      setError('Error creating lead')
-    } finally {
-      setSubmitting(false)
-    }
-  }
-
-  const handleUpdateStage = useCallback(async (leadId: number, pipelineStage: string) => {
-    try {
-      await fetch(`/api/leads/${leadId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pipelineStage }),
-      })
-      await loadLeads()
-    } catch (err) {
-      setError('Failed to update stage')
-    }
-  }, [loadLeads])
-
-  // PHASE 5F: Handle stage change for Kanban (with PipelineStage type)
-  const handleKanbanStageChange = useCallback(async (leadId: number, newStage: PipelineStage) => {
-    try {
-      const res = await fetch(`/api/leads/${leadId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ pipelineStage: newStage }),
-      })
-
+      const result = await res.json()
+      
       if (!res.ok) {
-        throw new Error('Failed to update stage')
+        throw new Error(result.error || 'Failed to perform bulk action')
       }
 
-      // Optimistically update local state
-      setAllLeads((prev) =>
-        prev.map((lead) =>
-          lead.id === leadId ? { ...lead, pipelineStage: newStage } : lead
-        )
-      )
-    } catch (err) {
-      console.error('Error updating stage:', err)
-      // Reload on error
-      await loadLeads()
-      throw err
-    }
-  }, [loadLeads])
+      showToast(`${result.updated} leads updated`, 'success')
 
-  async function handleSetFollowUp(leadId: number, days: number | 'custom') {
+      setSelectedIds(new Set())
+      setSelectAll(false)
+      loadLeads()
+    } catch (error: any) {
+      showToast(error.message || 'Failed to perform bulk action', 'error')
+    }
+  }
+
+  // CSV Import
+  const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (!file) return
+
+    setImportFile(file)
+
+    // Preview
+    const formData = new FormData()
+    formData.append('file', file)
+
     try {
-      let followUpDate: Date | null = null
-      
-      if (days === 'custom') {
-        const dateStr = prompt('Enter follow-up date (YYYY-MM-DD):')
-        if (!dateStr) return
-        followUpDate = new Date(dateStr)
-        if (isNaN(followUpDate.getTime())) {
-          setError('Invalid date format')
-          return
-        }
-      } else {
-        followUpDate = new Date()
-        followUpDate.setDate(followUpDate.getDate() + days)
-      }
-      
-      await fetch(`/api/leads/${leadId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ nextFollowUpAt: followUpDate.toISOString() }),
+      const res = await fetch('/api/leads/import?preview=true', {
+        method: 'POST',
+        body: formData,
       })
-      await loadLeads()
-    } catch (err) {
-      setError('Failed to set follow-up')
+
+      const data = await res.json()
+      if (res.ok) {
+        setImportPreview(data)
+        setShowImportModal(true)
+      } else {
+        throw new Error(data.error || 'Failed to preview import')
+      }
+    } catch (error: any) {
+      showToast(error.message || 'Failed to preview import', 'error')
     }
   }
 
-  function getFollowUpStatus(lead: Lead): 'today' | 'overdue' | 'scheduled' | 'none' {
-    if (!lead.nextFollowUpAt) return 'none'
-    
-    const followUpDate = new Date(lead.nextFollowUpAt)
-    const today = new Date()
-    today.setUTCHours(0, 0, 0, 0)
-    followUpDate.setUTCHours(0, 0, 0, 0)
-    
-    const daysDiff = Math.ceil((followUpDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-    
-    if (daysDiff < 0) return 'overdue'
-    if (daysDiff === 0) return 'today'
-    return 'scheduled'
-  }
+  const handleImport = async () => {
+    if (!importFile) return
 
-  function getNearestExpiry(lead: Lead): { type: string; expiryDate: string; daysUntil: number } | null {
-    if (lead.expiryItems && lead.expiryItems.length > 0) {
-      const nearest = lead.expiryItems[0]
-      const expiryDate = new Date(nearest.expiryDate)
-      const today = new Date()
-      today.setUTCHours(0, 0, 0, 0)
-      expiryDate.setUTCHours(0, 0, 0, 0)
-      const daysUntil = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      return { ...nearest, daysUntil }
+    setImporting(true)
+    const formData = new FormData()
+    formData.append('file', importFile)
+
+    try {
+      const res = await fetch('/api/leads/import', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const data = await res.json()
+      
+      if (!res.ok) {
+        throw new Error(data.error || 'Failed to import leads')
+      }
+
+      showToast(`Imported ${data.results.created} leads`, 'success')
+
+      setShowImportModal(false)
+      setImportFile(null)
+      setImportPreview(null)
+      loadLeads()
+    } catch (error: any) {
+      showToast(error.message || 'Failed to import leads', 'error')
+    } finally {
+      setImporting(false)
     }
-    if (lead.expiryDate) {
-      const expiryDate = new Date(lead.expiryDate)
-      const today = new Date()
-      today.setUTCHours(0, 0, 0, 0)
-      expiryDate.setUTCHours(0, 0, 0, 0)
-      const daysUntil = Math.ceil((expiryDate.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
-      return { type: 'LEGACY_EXPIRY', expiryDate: lead.expiryDate, daysUntil }
+  }
+
+  // CSV Export
+  const handleExport = async () => {
+    try {
+      const params = new URLSearchParams()
+      
+      if (debouncedQuery) params.set('query', debouncedQuery)
+      if (pipelineStage) params.set('pipelineStage', pipelineStage)
+      if (source) params.set('source', source)
+      if (serviceTypeId) params.set('serviceTypeId', serviceTypeId)
+      if (assignedToUserId) params.set('assignedToUserId', assignedToUserId)
+      if (aiScoreCategory) params.set('aiScoreCategory', aiScoreCategory)
+      if (createdAtFrom) params.set('createdAtFrom', createdAtFrom)
+      if (createdAtTo) params.set('createdAtTo', createdAtTo)
+      
+      if (selectedIds.size > 0) {
+        params.set('ids', Array.from(selectedIds).join(','))
+      }
+
+      const res = await fetch(`/api/leads/export?${params}`)
+      
+      if (!res.ok) {
+        throw new Error('Failed to export leads')
+      }
+
+      const blob = await res.blob()
+      const url = window.URL.createObjectURL(blob)
+      const a = document.createElement('a')
+      a.href = url
+      a.download = `leads-export-${new Date().toISOString().split('T')[0]}.csv`
+      document.body.appendChild(a)
+      a.click()
+      document.body.removeChild(a)
+      window.URL.revokeObjectURL(url)
+
+      showToast('Leads exported successfully', 'success')
+    } catch (error: any) {
+      showToast(error.message || 'Failed to export leads', 'error')
     }
-    return null
   }
 
-  function getWhatsAppLink(phone: string, name: string) {
-    // Navigate to inbox instead of external WhatsApp
-    const cleanPhone = phone.replace(/[^0-9]/g, '')
-    return `/inbox?phone=${encodeURIComponent(cleanPhone)}`
+  // Clear filters
+  const clearFilters = () => {
+    setQuery('')
+    setPipelineStage('')
+    setSource('')
+    setServiceTypeId('')
+    setAssignedToUserId('')
+    setAiScoreCategory('')
+    setCreatedAtFrom('')
+    setCreatedAtTo('')
+    setPage(1)
   }
 
-  function formatDate(date: string | null) {
-    if (!date) return '—'
-    return format(new Date(date), 'MMM dd, yyyy')
+  const hasActiveFilters = pipelineStage || source || serviceTypeId || assignedToUserId || aiScoreCategory || createdAtFrom || createdAtTo || debouncedQuery
+
+  const getScoreBadge = (score: number | null) => {
+    if (score === null) return null
+    const category = getAiScoreCategory(score)
+    const colors = {
+      hot: 'bg-red-500 text-white',
+      warm: 'bg-orange-500 text-white',
+      cold: 'bg-blue-500 text-white',
+    }
+    return (
+      <Badge className={colors[category]}>
+        {score}
+      </Badge>
+    )
   }
 
-  const formatSource = useCallback((source: string | null) => {
-    if (!source) return 'Manual'
-    return LEAD_SOURCE_LABELS[source as keyof typeof LEAD_SOURCE_LABELS] || source
-  }, [])
-
-  const getScoreBadgeVariant = useCallback((score: number | null): 'hot' | 'warm' | 'cold' | 'secondary' => {
-    if (score === null) return 'secondary'
-    return getAiScoreCategory(score)
-  }, [])
-
-  function getDaysUntilExpiry(expiryDate: string | null): number | null {
-    if (!expiryDate) return null
-    const expiry = new Date(expiryDate)
-    const today = new Date()
-    today.setUTCHours(0, 0, 0, 0)
-    expiry.setUTCHours(0, 0, 0, 0)
-    return Math.ceil((expiry.getTime() - today.getTime()) / (1000 * 60 * 60 * 24))
+  const getChannelIcon = (channel: string | null) => {
+    if (!channel) return null
+    switch (channel.toLowerCase()) {
+      case 'whatsapp':
+        return <MessageSquare className="h-4 w-4 text-green-600" />
+      case 'email':
+        return <Mail className="h-4 w-4 text-blue-600" />
+      default:
+        return <MessageSquare className="h-4 w-4 text-gray-600" />
+    }
   }
 
   return (
     <MainLayout>
-      <div className="space-y-2">
-        {/* Compact Header */}
-        <div className="flex items-center justify-between mb-2">
+      <div className="space-y-4">
+        {/* Top Bar */}
+        <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight">Leads</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
-              {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
+            <h1 className="text-2xl font-bold">Leads</h1>
+            <p className="text-sm text-muted-foreground">
+              {total} {total === 1 ? 'lead' : 'leads'}
             </p>
           </div>
+          
           <div className="flex items-center gap-2">
-            {/* PHASE 5F: View Mode Toggle */}
-            <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-800 rounded-lg p-1">
+            {/* View Toggle */}
+            <div className="flex items-center border rounded-lg p-1">
               <Button
-                variant={viewMode === 'list' ? 'default' : 'ghost'}
+                variant={viewMode === 'table' ? 'default' : 'ghost'}
                 size="sm"
-                onClick={() => setViewMode('list')}
-                className="h-7 px-2"
-                title="List view"
+                onClick={() => setViewMode('table')}
+                className="h-8"
               >
                 <List className="h-4 w-4" />
-              </Button>
-              <Button
-                variant={viewMode === 'grid' ? 'default' : 'ghost'}
-                size="sm"
-                onClick={() => setViewMode('grid')}
-                className="h-7 px-2"
-                title="Grid view"
-              >
-                <Grid3x3 className="h-4 w-4" />
               </Button>
               <Button
                 variant={viewMode === 'kanban' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('kanban')}
-                className="h-7 px-2"
-                title="Kanban view"
+                className="h-8"
               >
                 <KanbanSquare className="h-4 w-4" />
               </Button>
             </div>
-            <Button
-              onClick={() => setShowCreateModal(true)}
-              size="sm"
-              className="gap-2"
-            >
-              <Plus className="h-4 w-4" />
+
+            {isAdmin && (
+              <>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleExport}
+                  disabled={loading}
+                >
+                  <Download className="h-4 w-4 mr-2" />
+                  Export CSV
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => document.getElementById('import-file')?.click()}
+                >
+                  <Upload className="h-4 w-4 mr-2" />
+                  Import CSV
+                </Button>
+                <input
+                  id="import-file"
+                  type="file"
+                  accept=".csv"
+                  onChange={handleFileSelect}
+                  className="hidden"
+                />
+              </>
+            )}
+
+            <Button onClick={() => router.push('/leads?action=create')}>
+              <Plus className="h-4 w-4 mr-2" />
               New Lead
             </Button>
           </div>
         </div>
 
-        {/* Compact Filters - Bento Box */}
-        <BentoCard title="Filters & Search" icon={<Filter className="h-4 w-4" />}>
-          <div className="space-y-3">
-            <div className="relative">
-              <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
-              <Input
-                placeholder="Search by name, phone, or email..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-8 h-9 text-sm"
-              />
-            </div>
-
-            <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Quick Filter</label>
-                <Select
-                  value={filter}
-                  onChange={(e) => setFilter(e.target.value as FilterType)}
-                  className="h-8 text-xs"
-                >
-                  <option value="all">All</option>
-                  <option value="followups_today">📅 Today</option>
-                  <option value="expiring_90">⏰ 90d</option>
-                  <option value="overdue">🚨 Overdue</option>
-                  <option value="hot_only">🔥 Hot Only</option>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Sort</label>
-                <Select
-                  value={sortBy}
-                  onChange={(e) => setSortBy(e.target.value as SortType)}
-                  className="h-8 text-xs"
-                >
-                  <option value="recent">Recent</option>
-                  <option value="ai_priority">AI Priority</option>
-                  <option value="name">Name</option>
-                  <option value="stage">Stage</option>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Stage</label>
-                <Select
-                  value={pipelineStageFilter}
-                  onChange={(e) => setPipelineStageFilter(e.target.value)}
-                  className="h-8 text-xs"
-                >
-                  <option value="">All</option>
-                  {PIPELINE_STAGES.map((stage) => (
-                    <option key={stage} value={stage}>
-                      {PIPELINE_STAGE_LABELS[stage]}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Source</label>
-                <Select 
-                  value={sourceFilter} 
-                  onChange={(e) => setSourceFilter(e.target.value)} 
-                  className="h-8 text-xs"
-                >
-                  <option value="">All</option>
-                  {LEAD_SOURCES.map((src) => (
-                    <option key={src} value={src}>
-                      {LEAD_SOURCE_LABELS[src]}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">AI Score</label>
-                <Select 
-                  value={aiScoreFilter} 
-                  onChange={(e) => setAiScoreFilter(e.target.value)} 
-                  className="h-8 text-xs"
-                >
-                  <option value="">All</option>
-                  <option value="hot">🔥 Hot (75+)</option>
-                  <option value="warm">🌡️ Warm (40-74)</option>
-                  <option value="cold">❄️ Cold (&lt;40)</option>
-                </Select>
-              </div>
-
-              <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Service</label>
-                <Select 
-                  value={serviceFilter} 
-                  onChange={(e) => setServiceFilter(e.target.value)} 
-                  className="h-8 text-xs"
-                >
-                  <option value="">All</option>
-                  {serviceTypes.map((st) => (
-                    <option key={st.id} value={st.id.toString()}>
-                      {st.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {(pipelineStageFilter || sourceFilter || aiScoreFilter || serviceFilter) && (
-                <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">&nbsp;</label>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      setPipelineStageFilter('')
-                      setSourceFilter('')
-                      setAiScoreFilter('')
-                      setServiceFilter('')
-                    }}
-                    className="h-8 w-full gap-1 text-xs"
-                  >
-                    <X className="h-3 w-3" />
-                    Clear
-                  </Button>
-                </div>
-              )}
-            </div>
+        {/* Filters Row */}
+        <div className="flex flex-wrap items-center gap-2 p-4 bg-card border rounded-lg">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input
+              placeholder="Search name, phone, email..."
+              value={query}
+              onChange={(e) => setQuery(e.target.value)}
+              className="pl-8"
+            />
           </div>
-        </BentoCard>
 
-        {/* PHASE 5F: Leads View - List / Grid / Kanban */}
-        {loading ? (
-          viewMode === 'kanban' ? (
-            <div className="flex gap-4 overflow-x-auto pb-4">
-              {PIPELINE_STAGES.map((stage) => (
-                <div key={stage} className="flex-shrink-0 w-80 bg-card rounded-lg border p-4">
-                  <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded mb-4 animate-pulse" />
-                  <div className="space-y-3">
-                    {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-                    ))}
-                  </div>
-                </div>
-              ))}
-            </div>
-          ) : (
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-              {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                  <Skeleton className="h-4 w-24 mb-3" />
-                  <Skeleton className="h-3 w-full mb-2" />
-                  <Skeleton className="h-3 w-2/3" />
-                </div>
-              ))}
-            </div>
-          )
-        ) : leads.length === 0 ? (
-          <EmptyState
-            icon={Users}
-            title="No leads found"
-            description={
-              searchQuery || pipelineStageFilter || sourceFilter || aiScoreFilter || serviceFilter
-                ? 'Try adjusting your filters to see more results.'
-                : 'Get started by creating your first lead.'
-            }
-            action={
-              !searchQuery && !pipelineStageFilter && !sourceFilter && !aiScoreFilter && !serviceFilter && (
-                <Button onClick={() => setShowCreateModal(true)} size="sm" className="gap-2">
-                  <Plus className="h-4 w-4" />
-                  Create Lead
-                </Button>
-              )
-            }
-          />
-        ) : viewMode === 'kanban' ? (
-          <KanbanBoard
-            leads={leads}
-            onStageChange={handleKanbanStageChange}
-            filters={{
-              searchQuery,
-              pipelineStage: pipelineStageFilter,
-              source: sourceFilter,
-              aiScore: aiScoreFilter,
-            }}
-          />
-        ) : viewMode === 'list' ? (
-          <div className="space-y-2">
-            {leads.map((lead) => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                onUpdateStage={handleUpdateStage}
-                formatSource={formatSource}
-                getNearestExpiry={getNearestExpiry as any}
-                getScoreBadgeVariant={getScoreBadgeVariant}
-                formatDate={formatDate}
-                getWhatsAppLink={getWhatsAppLink}
-              />
+          <Select value={pipelineStage} onChange={(e) => setPipelineStage(e.target.value)}>
+            <option value="">All Stages</option>
+            {PIPELINE_STAGES.map(stage => (
+              <option key={stage} value={stage}>{PIPELINE_STAGE_LABELS[stage]}</option>
             ))}
-          </div>
-        ) : (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {leads.map((lead) => (
-              <LeadCard
-                key={lead.id}
-                lead={lead}
-                onUpdateStage={handleUpdateStage}
-                formatSource={formatSource}
-                getNearestExpiry={getNearestExpiry as any}
-                getScoreBadgeVariant={getScoreBadgeVariant}
-                formatDate={formatDate}
-                getWhatsAppLink={getWhatsAppLink}
-              />
+          </Select>
+
+          <Select value={source} onChange={(e) => setSource(e.target.value)}>
+            <option value="">All Sources</option>
+            {LEAD_SOURCES.map(src => (
+              <option key={src} value={src}>{LEAD_SOURCE_LABELS[src]}</option>
             ))}
+          </Select>
+
+          <Select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)}>
+            <option value="">All Owners</option>
+            {users.map(user => (
+              <option key={user.id} value={user.id}>{user.name}</option>
+            ))}
+          </Select>
+
+          <Select value={serviceTypeId} onChange={(e) => setServiceTypeId(e.target.value)}>
+            <option value="">All Services</option>
+            {serviceTypes.map(st => (
+              <option key={st.id} value={st.id.toString()}>{st.name}</option>
+            ))}
+          </Select>
+
+          <Select value={aiScoreCategory} onChange={(e) => setAiScoreCategory(e.target.value)}>
+            <option value="">All Scores</option>
+            <option value="hot">Hot (75+)</option>
+            <option value="warm">Warm (40-74)</option>
+            <option value="cold">Cold (&lt;40)</option>
+          </Select>
+
+          <Input
+            type="date"
+            placeholder="From"
+            value={createdAtFrom}
+            onChange={(e) => setCreatedAtFrom(e.target.value)}
+            className="w-[140px]"
+          />
+
+          <Input
+            type="date"
+            placeholder="To"
+            value={createdAtTo}
+            onChange={(e) => setCreatedAtTo(e.target.value)}
+            className="w-[140px]"
+          />
+
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" onClick={clearFilters}>
+              <X className="h-4 w-4 mr-2" />
+              Clear
+            </Button>
+          )}
+        </div>
+
+        {/* Bulk Actions Bar */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-lg">
+            <span className="text-sm font-medium">
+              {selectedIds.size} {selectedIds.size === 1 ? 'lead' : 'leads'} selected
+            </span>
+            <div className="flex items-center gap-2 ml-auto">
+              <Select
+                onChange={(e) => {
+                  if (e.target.value === 'change-stage') {
+                    // TODO: Show stage picker modal
+                  } else if (e.target.value === 'assign-owner') {
+                    // TODO: Show owner picker modal
+                  }
+                }}
+                defaultValue=""
+              >
+                <option value="">Bulk Actions...</option>
+                <option value="change-stage">Change Stage</option>
+                <option value="assign-owner">Assign Owner</option>
+                {isAdmin && <option value="delete">Delete</option>}
+              </Select>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleBulkAction('export-selected')}
+              >
+                <Download className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => {
+                  setSelectedIds(new Set())
+                  setSelectAll(false)
+                }}
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
 
-        {/* Create Lead Modal */}
-        <Dialog open={showCreateModal} onOpenChange={setShowCreateModal}>
-          <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
-            <DialogHeader>
-              <DialogTitle className="text-2xl">Create New Lead</DialogTitle>
-            </DialogHeader>
-            <form onSubmit={handleSubmit} className="space-y-4">
-              {error && (
-                <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm">
-                  {error}
-                </div>
-              )}
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Full Name *</label>
-                  <Input value={fullName} onChange={(e) => setFullName(e.target.value)} required />
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Phone *</label>
-                  <Input value={phone} onChange={(e) => setPhone(e.target.value)} required />
-                </div>
+        {/* Table View */}
+        {viewMode === 'table' && (
+          <div className="border rounded-lg overflow-hidden">
+            {loading ? (
+              <div className="p-4 space-y-3">
+                {[1, 2, 3, 4, 5].map(i => (
+                  <Skeleton key={i} className="h-12 w-full" />
+                ))}
               </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Email</label>
-                <Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} />
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="block text-sm font-medium mb-2">Service</label>
-                  <Select
-                    value={serviceTypeId}
-                    onChange={(e) => setServiceTypeId(e.target.value)}
-                  >
-                    <option value="">Select service...</option>
-                    {serviceTypes.map((st) => (
-                      <option key={st.id} value={st.id}>
-                        {st.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-
-                <div>
-                  <label className="block text-sm font-medium mb-2">Source</label>
-                  <Select value={source} onChange={(e) => setSource(e.target.value)}>
-                    {LEAD_SOURCES.map((src) => (
-                      <option key={src} value={src}>
-                        {LEAD_SOURCE_LABELS[src]}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium mb-2">Notes</label>
-                <textarea
-                  value={notes}
-                  onChange={(e) => setNotes(e.target.value)}
-                  className="flex min-h-[100px] w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+            ) : leads.length === 0 ? (
+              <div className="p-12">
+                <EmptyState
+                  icon={List}
+                  title="No leads found"
+                  description={hasActiveFilters ? "Try adjusting your filters" : "Get started by creating your first lead"}
                 />
               </div>
+            ) : (
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="w-12">
+                      <Checkbox
+                        checked={selectAll}
+                        onCheckedChange={toggleSelectAll}
+                      />
+                    </TableHead>
+                    <TableHead>Lead</TableHead>
+                    <TableHead>Channel</TableHead>
+                    <TableHead>Stage</TableHead>
+                    <TableHead>Service</TableHead>
+                    <TableHead>Owner</TableHead>
+                    <TableHead>Last Message</TableHead>
+                    <TableHead>AI Score</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead className="w-12"></TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {leads.map((lead) => (
+                    <TableRow
+                      key={lead.id}
+                      className="cursor-pointer hover:bg-muted/50"
+                      onClick={() => router.push(`/leads/${lead.id}`)}
+                    >
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <Checkbox
+                          checked={selectedIds.has(lead.id)}
+                          onCheckedChange={() => toggleSelect(lead.id)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <div>
+                          <div className="font-medium">{lead.contact.fullName}</div>
+                          <div className="text-sm text-muted-foreground">{lead.contact.phone}</div>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {getChannelIcon(lead.lastContact?.channel || null)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="outline">
+                          {PIPELINE_STAGE_LABELS[lead.pipelineStage as keyof typeof PIPELINE_STAGE_LABELS] || lead.pipelineStage}
+                        </Badge>
+                      </TableCell>
+                      <TableCell>
+                        {lead.serviceType?.name || '—'}
+                      </TableCell>
+                      <TableCell>
+                        {lead.assignedUser?.name || '—'}
+                      </TableCell>
+                      <TableCell>
+                        {lead.lastContact ? (
+                          <div>
+                            <div className="text-sm text-muted-foreground">
+                              {lead.lastContact.direction === 'INBOUND' || lead.lastContact.direction === 'IN' ? 'Received' : 'Sent'}
+                            </div>
+                            <div className="text-xs text-muted-foreground">
+                              {formatDistanceToNow(new Date(lead.lastContact.createdAt), { addSuffix: true })}
+                            </div>
+                          </div>
+                        ) : (
+                          '—'
+                        )}
+                      </TableCell>
+                      <TableCell>
+                        {getScoreBadge(lead.aiScore)}
+                      </TableCell>
+                      <TableCell>
+                        <Badge variant="secondary">
+                          {LEAD_SOURCE_LABELS[lead.contact.source as keyof typeof LEAD_SOURCE_LABELS] || lead.contact.source || 'Manual'}
+                        </Badge>
+                      </TableCell>
+                      <TableCell onClick={(e) => e.stopPropagation()}>
+                        <div className="flex items-center gap-1">
+                          {lead.contact.phone && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => window.open(`tel:${lead.contact.phone}`)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <Phone className="h-4 w-4" />
+                            </Button>
+                          )}
+                          {lead.contact.phone && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => router.push(`/inbox?phone=${encodeURIComponent(lead.contact.phone)}`)}
+                              className="h-8 w-8 p-0"
+                            >
+                              <MessageSquare className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            )}
 
-              <div className="flex justify-end gap-2 pt-4">
-                <Button type="button" variant="outline" onClick={() => setShowCreateModal(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={submitting}>
-                  {submitting ? 'Creating...' : 'Create Lead'}
-                </Button>
+            {/* Pagination */}
+            {!loading && leads.length > 0 && (
+              <div className="flex items-center justify-between p-4 border-t">
+                <div className="text-sm text-muted-foreground">
+                  Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} leads
+                </div>
+                <div className="flex items-center gap-2">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.max(1, p - 1))}
+                    disabled={page === 1}
+                  >
+                    Previous
+                  </Button>
+                  <span className="text-sm">
+                    Page {page} of {Math.ceil(total / limit)}
+                  </span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPage(p => Math.min(Math.ceil(total / limit), p + 1))}
+                    disabled={page >= Math.ceil(total / limit)}
+                  >
+                    Next
+                  </Button>
+                </div>
               </div>
-            </form>
+            )}
+          </div>
+        )}
+
+        {/* Kanban View */}
+        {viewMode === 'kanban' && (
+          <div>
+            {loading ? (
+              <div className="flex gap-4">
+                {PIPELINE_STAGES.map(stage => (
+                  <div key={stage} className="flex-1">
+                    <Skeleton className="h-96" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <KanbanBoard
+                leads={leads as any}
+                onStageChange={async (leadId, newStage) => {
+                  try {
+                    await fetch(`/api/leads/${leadId}`, {
+                      method: 'PATCH',
+                      headers: { 'Content-Type': 'application/json' },
+                      body: JSON.stringify({ pipelineStage: newStage }),
+                    })
+                    loadLeads()
+                  } catch (error) {
+                    showToast('Failed to update stage', 'error')
+                  }
+                }}
+                filters={{}}
+              />
+            )}
+          </div>
+        )}
+
+        {/* Import Modal */}
+        <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
+          <DialogContent className="max-w-2xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Import Preview</DialogTitle>
+            </DialogHeader>
+            {importPreview && (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-4 text-sm">
+                  <div>
+                    <div className="font-medium">Total Rows</div>
+                    <div>{importPreview.totalRows}</div>
+                  </div>
+                  <div>
+                    <div className="font-medium">Will Create</div>
+                    <div className="text-green-600">{importPreview.willCreate}</div>
+                  </div>
+                  <div>
+                    <div className="font-medium">Will Skip</div>
+                    <div className="text-red-600">{importPreview.willSkip}</div>
+                  </div>
+                </div>
+                
+                <div className="border rounded-lg max-h-[400px] overflow-y-auto">
+                  <table className="w-full text-sm">
+                    <thead className="bg-muted sticky top-0">
+                      <tr>
+                        <th className="p-2 text-left">Name</th>
+                        <th className="p-2 text-left">Phone</th>
+                        <th className="p-2 text-left">Status</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {importPreview.preview.map((item: any, i: number) => (
+                        <tr key={i} className="border-t">
+                          <td className="p-2">{item.name}</td>
+                          <td className="p-2">{item.phone}</td>
+                          <td className="p-2">
+                            {item.willCreate ? (
+                              <Badge variant="default">Will Create</Badge>
+                            ) : (
+                              <Badge variant="destructive">{item.reason}</Badge>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+
+                <div className="flex justify-end gap-2">
+                  <Button variant="outline" onClick={() => setShowImportModal(false)}>
+                    Cancel
+                  </Button>
+                  <Button onClick={handleImport} disabled={importing}>
+                    {importing ? 'Importing...' : 'Import'}
+                  </Button>
+                </div>
+              </div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -737,24 +841,3 @@ function LeadsPageContent() {
   )
 }
 
-export default function LeadsPage() {
-  return (
-    <Suspense fallback={
-      <MainLayout>
-        <div className="space-y-2">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
-            {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
-                <Skeleton className="h-4 w-24 mb-3" />
-                <Skeleton className="h-3 w-full mb-2" />
-                <Skeleton className="h-3 w-2/3" />
-              </div>
-            ))}
-          </div>
-        </div>
-      </MainLayout>
-    }>
-      <LeadsPageContent />
-    </Suspense>
-  )
-}

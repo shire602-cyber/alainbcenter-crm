@@ -202,10 +202,32 @@ export async function processOutboundJobs(
         // CRITICAL: Use sendAiReply wrapper (provides idempotency + locking)
         // This replaces the old generateAIReply + sendOutboundWithIdempotency flow
         if (job.status === 'PENDING' || !aiGeneratedContent) {
-          console.log(`🎯 [JOB-PROCESSOR] sendAiReply start jobId=${job.id} requestId=${jobRequestId} conversationId=${conversation.id} inboundMessageId=${message.id}`)
+          console.log(`🎯 [JOB-PROCESSOR] sendAiReply start jobId=${job.id} requestId=${jobRequestId} conversationId=${conversation.id} inboundMessageId=${message.id} inboundProviderMessageId=${job.inboundProviderMessageId || 'N/A'}`)
           const sendStartTime = Date.now()
           
           try {
+            // CRITICAL: Check if OutboundMessageDedup already exists and is SENT (idempotent retry)
+            if (job.inboundProviderMessageId) {
+              const dedupeKey = `auto:${conversation.id}:${job.inboundProviderMessageId}`;
+              const existingDedup = await prisma.outboundMessageDedup.findUnique({
+                where: { dedupeKey },
+                select: { status: true, providerMessageId: true },
+              });
+              
+              if (existingDedup?.status === 'SENT') {
+                console.log(`⏭️ [JOB-PROCESSOR] AI_OUTBOUND_BLOCKED_DUPLICATE jobId=${job.id} dedupeKey=${dedupeKey.substring(0, 32)}... already SENT (idempotent retry)`);
+                await prisma.outboundJob.update({
+                  where: { id: job.id },
+                  data: {
+                    status: 'SENT',
+                    completedAt: new Date(),
+                  },
+                });
+                processed.push(job.id);
+                continue;
+              }
+            }
+            
             const sendResult = await sendAiReply({
               conversationId: conversation.id,
               leadId: conversation.lead.id,
@@ -219,11 +241,12 @@ export async function processOutboundJobs(
             const sendElapsed = Date.now() - sendStartTime
             
             if (sendResult.wasDuplicate || sendResult.skipped) {
-              console.log(`⏭️ [JOB-PROCESSOR] Reply skipped for job ${job.id}: ${sendResult.skipReason || 'Duplicate'}`)
+              const reason = sendResult.skipReason || 'Duplicate';
+              console.log(`⏭️ [JOB-PROCESSOR] AI_OUTBOUND_BLOCKED jobId=${job.id} reason=${reason}`)
               await prisma.outboundJob.update({
                 where: { id: job.id },
                 data: {
-                  status: 'SENT',
+                  status: 'SENT', // Mark as SENT even if skipped (prevents retries)
                   completedAt: new Date(),
                 },
               })
@@ -232,7 +255,7 @@ export async function processOutboundJobs(
             }
             
             if (sendResult.success && sendResult.messageId) {
-              console.log(`✅ [JOB-PROCESSOR] sendAiReply end jobId=${job.id} requestId=${jobRequestId} messageId=${sendResult.messageId} elapsed=${sendElapsed}ms`)
+              console.log(`✅ [JOB-PROCESSOR] AI_OUTBOUND_SENT jobId=${job.id} requestId=${jobRequestId} messageId=${sendResult.messageId} elapsed=${sendElapsed}ms`)
               
               await prisma.outboundJob.update({
                 where: { id: job.id },
@@ -247,7 +270,25 @@ export async function processOutboundJobs(
               throw new Error(sendResult.error || 'Send failed')
             }
           } catch (sendError: any) {
-            // If send fails, save error and mark as FAILED
+            // If send fails, check if it's a duplicate/cooldown (should not retry)
+            const isDuplicateOrCooldown = sendError.message?.includes('Duplicate') || 
+                                         sendError.message?.includes('Cooldown') ||
+                                         sendError.message?.includes('cooldown');
+            
+            if (isDuplicateOrCooldown) {
+              console.log(`⏭️ [JOB-PROCESSOR] AI_OUTBOUND_BLOCKED jobId=${job.id} reason=${sendError.message}`)
+              await prisma.outboundJob.update({
+                where: { id: job.id },
+                data: {
+                  status: 'SENT', // Mark as SENT to prevent retries
+                  completedAt: new Date(),
+                },
+              })
+              processed.push(job.id)
+              continue
+            }
+            
+            // Real failure - mark as FAILED (will retry with exponential backoff)
             console.error(`❌ [JOB-PROCESSOR] sendAiReply failed jobId=${job.id}:`, sendError.message)
             await prisma.outboundJob.update({
               where: { id: job.id },

@@ -12,7 +12,15 @@ export async function GET(req: NextRequest) {
     const aiScoreCategory = searchParams.get('aiScoreCategory') // 'hot', 'warm', 'cold'
     const serviceTypeId = searchParams.get('serviceTypeId') // Filter by service type
    
-    // Advanced search parameters
+    // Unified search query (searches name, phone, email)
+    const query = searchParams.get('query')
+    const assignedToUserId = searchParams.get('assignedToUserId')
+    const createdAtFrom = searchParams.get('createdAtFrom')
+    const createdAtTo = searchParams.get('createdAtTo')
+    const aiScoreMin = searchParams.get('aiScoreMin')
+    const aiScoreMax = searchParams.get('aiScoreMax')
+    
+    // Advanced search parameters (backwards compatible)
     const searchName = searchParams.get('searchName')
     const searchPhone = searchParams.get('searchPhone')
     const searchEmail = searchParams.get('searchEmail')
@@ -81,8 +89,48 @@ export async function GET(req: NextRequest) {
         })
       }
     }
+
+    if (assignedToUserId) {
+      const userId = parseInt(assignedToUserId)
+      if (!isNaN(userId)) {
+        andConditions.push({
+          assignedUserId: userId,
+        })
+      }
+    }
+
+    // Unified query search (searches name, phone, email)
+    if (query) {
+      andConditions.push({
+        OR: [
+          {
+            contact: {
+              fullName: {
+                contains: query,
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            contact: {
+              phone: {
+                contains: query,
+              },
+            },
+          },
+          {
+            contact: {
+              email: {
+                contains: query,
+                mode: 'insensitive',
+              },
+            },
+          },
+        ],
+      })
+    }
        
-    // Advanced search filters
+    // Advanced search filters (backwards compatible)
     if (searchName) {
       andConditions.push({
         contact: {
@@ -154,21 +202,46 @@ export async function GET(req: NextRequest) {
       }
     }
 
-    if (searchCreatedFrom || searchCreatedTo) {
+    // Date range filters (new unified params + backwards compatible)
+    const createdFrom = createdAtFrom || searchCreatedFrom
+    const createdTo = createdAtTo || searchCreatedTo
+    if (createdFrom || createdTo) {
       const createdFilter: any = {}
-      if (searchCreatedFrom) {
-        const fromDate = new Date(searchCreatedFrom)
+      if (createdFrom) {
+        const fromDate = new Date(createdFrom)
         fromDate.setUTCHours(0, 0, 0, 0)
         createdFilter.gte = fromDate
       }
-      if (searchCreatedTo) {
-        const toDate = new Date(searchCreatedTo)
+      if (createdTo) {
+        const toDate = new Date(createdTo)
         toDate.setUTCHours(23, 59, 59, 999)
         createdFilter.lte = toDate
       }
       if (Object.keys(createdFilter).length > 0) {
         andConditions.push({
           createdAt: createdFilter,
+        })
+      }
+    }
+
+    // AI Score range filters
+    if (aiScoreMin || aiScoreMax) {
+      const scoreFilter: any = {}
+      if (aiScoreMin) {
+        const min = parseInt(aiScoreMin)
+        if (!isNaN(min)) {
+          scoreFilter.gte = min
+        }
+      }
+      if (aiScoreMax) {
+        const max = parseInt(aiScoreMax)
+        if (!isNaN(max)) {
+          scoreFilter.lte = max
+        }
+      }
+      if (Object.keys(scoreFilter).length > 0) {
+        andConditions.push({
+          aiScore: scoreFilter,
         })
       }
     }

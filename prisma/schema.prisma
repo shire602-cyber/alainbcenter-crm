@@ -503,6 +503,7 @@ model Conversation {
   language               String? // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.) for multilingual support
   aiState                String? // Conversation state for AI gating: WAITING_FOR_EXIT_CONFIRMATION, WAITING_FOR_PASSPORT, etc.
   aiLockUntil            DateTime? // Per-conversation lock expiration timestamp (prevents concurrent processing)
+  lastAiOutboundAt       DateTime? // Last AI auto-reply timestamp (for cooldown/throttling)
   deletedAt              DateTime? // Soft delete timestamp
   createdAt              DateTime  @default(now())
   updatedAt              DateTime  @updatedAt
@@ -521,6 +522,7 @@ model Conversation {
   replyEngineLogs      ReplyEngineLog[]
   outboundJobs         OutboundJob[]
   aiReplyDedups        AiReplyDedup[]
+  outboundMessageDedups OutboundMessageDedup[]
   renewals             Renewal[]
   // Note: Partial unique index for externalThreadId will be added via migration
 
@@ -1122,5 +1124,24 @@ model AiReplyDedup {
   @@index([conversationId, createdAt])
   @@index([inboundMessageId])
   @@index([idempotencyKey])
+  @@index([status, createdAt])
+}
+
+// Outbound Message Deduplication (for auto-replies using inboundProviderMessageId)
+model OutboundMessageDedup {
+  id                      Int       @id @default(autoincrement())
+  conversation            Conversation @relation(fields: [conversationId], references: [id])
+  conversationId          Int
+  inboundProviderMessageId String? // External WhatsApp message ID that triggered this auto-reply
+  dedupeKey               String   @unique // Format: auto:{conversationId}:{inboundProviderMessageId}
+  status                  String   @default("PENDING") // PENDING | SENT | FAILED
+  createdAt               DateTime @default(now())
+  sentAt                  DateTime? // When message was actually sent
+  providerMessageId       String? // WhatsApp provider message ID of the sent outbound message
+  lastError               String? // Last error message if failed
+
+  @@index([conversationId, createdAt])
+  @@index([inboundProviderMessageId])
+  @@index([dedupeKey])
   @@index([status, createdAt])
 }

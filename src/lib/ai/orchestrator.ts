@@ -41,13 +41,39 @@ const BANNED_QUESTION_KEYS = new Set([
 /**
  * Build idempotency key for AI reply
  * Format: wa_ai:{conversationId}:{inboundMessageId}:{aiActionType}
+ * OR: auto:{conversationId}:{inboundProviderMessageId} (if providerMessageId provided)
  */
 export function buildIdempotencyKey(
   conversationId: number,
   inboundMessageId: number,
   aiActionType: string = "auto_reply",
+  inboundProviderMessageId?: string | null,
 ): string {
+  // Use provider message ID if available (better for webhook replay deduplication)
+  if (inboundProviderMessageId) {
+    return `auto:${conversationId}:${inboundProviderMessageId}`;
+  }
+  // Fallback to internal message ID
   return `wa_ai:${conversationId}:${inboundMessageId}:${aiActionType}`;
+}
+
+/**
+ * Combine multiple AI segments into ONE WhatsApp message
+ * Ensures greeting + question + instructions are in a single message
+ */
+export function buildSingleAutoReplyText(parts: string | string[]): string {
+  if (typeof parts === 'string') {
+    // Already a single string - ensure it's clean
+    return parts.trim();
+  }
+  
+  // Combine multiple parts with line breaks
+  const combined = parts
+    .map(part => part.trim())
+    .filter(part => part.length > 0)
+    .join('\n\n'); // Double line break between segments
+  
+  return combined.trim();
 }
 
 /**
@@ -1125,20 +1151,91 @@ export async function sendAiReply(
 }> {
   const { conversationId, inboundMessageId } = input;
 
-  // Step 1: Build idempotency key
+  // Step 0: Get inbound message to extract providerMessageId
+  const inboundMessage = await prisma.message.findUnique({
+    where: { id: inboundMessageId },
+    select: { providerMessageId: true },
+  });
+  const inboundProviderMessageId = inboundMessage?.providerMessageId || null;
+
+  // Step 1: Build idempotency key (use providerMessageId if available)
   const idempotencyKey = buildIdempotencyKey(
     conversationId,
     inboundMessageId,
     aiActionType,
+    inboundProviderMessageId,
   );
+
+  // Step 1.5: Check OutboundMessageDedup (provider-level deduplication)
+  const dedupeKey = inboundProviderMessageId 
+    ? `auto:${conversationId}:${inboundProviderMessageId}`
+    : null;
+  
+  if (dedupeKey) {
+    const existingDedup = await prisma.outboundMessageDedup.findUnique({
+      where: { dedupeKey },
+      select: { status: true, providerMessageId: true },
+    });
+    
+    if (existingDedup) {
+      if (existingDedup.status === "SENT") {
+        console.log(
+          `[ORCHESTRATOR] AI_OUTBOUND_BLOCKED_DUPLICATE conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} dedupeKey=${dedupeKey.substring(0, 32)}...`,
+        );
+        return {
+          success: true,
+          wasDuplicate: true,
+          messageId: existingDedup.providerMessageId || undefined,
+          skipped: true,
+          skipReason: "Already sent (OutboundMessageDedup)",
+        };
+      } else if (existingDedup.status === "PENDING") {
+        console.log(
+          `[ORCHESTRATOR] AI_OUTBOUND_BLOCKED_DUPLICATE conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} dedupeKey=${dedupeKey.substring(0, 32)}... (PENDING)`,
+        );
+        return {
+          success: false,
+          wasDuplicate: true,
+          skipped: true,
+          skipReason: "Already processing (OutboundMessageDedup PENDING)",
+        };
+      }
+    }
+  }
+
+  // Step 1.6: Check cooldown (60-120 seconds)
+  const conversation = await prisma.conversation.findUnique({
+    where: { id: conversationId },
+    select: { lastAiOutboundAt: true },
+  });
+
+  if (conversation?.lastAiOutboundAt) {
+    const cooldownSeconds = 90; // 90 seconds cooldown (between 60-120)
+    const cooldownMs = cooldownSeconds * 1000;
+    const timeSinceLastOutbound = Date.now() - conversation.lastAiOutboundAt.getTime();
+    
+    if (timeSinceLastOutbound < cooldownMs) {
+      const remainingSeconds = Math.ceil((cooldownMs - timeSinceLastOutbound) / 1000);
+      console.log(
+        `[ORCHESTRATOR] AI_OUTBOUND_BLOCKED_COOLDOWN conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} remainingSeconds=${remainingSeconds}`,
+      );
+      return {
+        success: false,
+        skipped: true,
+        skipReason: `Cooldown active (${remainingSeconds}s remaining)`,
+      };
+    }
+  }
 
   console.log(
     `[ORCHESTRATOR] sendAiReply ENTRY`,
     JSON.stringify({
       conversationId,
       inboundMessageId,
+      inboundProviderMessageId,
       aiActionType,
       idempotencyKey: idempotencyKey.substring(0, 32) + "...",
+      dedupeKey: dedupeKey?.substring(0, 32) + "..." || null,
     }),
   );
 
@@ -1209,11 +1306,11 @@ export async function sendAiReply(
     // Step 5: Generate AI reply
     const orchestratorResult = await generateAIReply(input);
 
+    // Step 5.5: Combine multiple segments into ONE message (ONE MESSAGE POLICY)
+    let finalReplyText = buildSingleAutoReplyText(orchestratorResult.replyText);
+
     // Step 6: Check if reply is empty (deduplication or stop)
-    if (
-      !orchestratorResult.replyText ||
-      orchestratorResult.replyText.trim().length === 0
-    ) {
+    if (!finalReplyText || finalReplyText.trim().length === 0) {
       await updateIdempotencyRecord(
         idempotencyRecordId!,
         "FAILED",
@@ -1248,29 +1345,57 @@ export async function sendAiReply(
       throw new Error(`Contact ${conversation.contact.id} has no phone number`);
     }
 
+    // Step 7.5: Create OutboundMessageDedup record BEFORE sending (atomic protection)
+    let outboundDedupId: number | undefined = undefined;
+    if (dedupeKey) {
+      try {
+        const dedupRecord = await prisma.outboundMessageDedup.create({
+          data: {
+            conversationId,
+            inboundProviderMessageId,
+            dedupeKey,
+            status: "PENDING",
+          },
+        });
+        outboundDedupId = dedupRecord.id;
+      } catch (error: any) {
+        // Unique constraint violation = duplicate
+        if (error.code === "P2002") {
+          await releaseConversationLock(conversationId);
+          console.log(
+            `[ORCHESTRATOR] AI_OUTBOUND_BLOCKED_DUPLICATE conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} dedupeKey=${dedupeKey.substring(0, 32)}... (DB constraint)`,
+          );
+          return {
+            success: false,
+            wasDuplicate: true,
+            skipped: true,
+            skipReason: "Duplicate (OutboundMessageDedup DB constraint)",
+          };
+        }
+        throw error;
+      }
+    }
+
     // Step 8: Send via sendOutboundWithIdempotency (this has its own idempotency layer)
     const { sendOutboundWithIdempotency } =
       await import("@/lib/outbound/sendWithIdempotency");
-    const inboundMessage = await prisma.message.findUnique({
-      where: { id: inboundMessageId },
-      select: { providerMessageId: true },
-    });
 
     const sendResult = await sendOutboundWithIdempotency({
       conversationId,
       contactId: conversation.contact.id,
       leadId: conversation.leadId || null,
       phone,
-      text: orchestratorResult.replyText,
+      text: finalReplyText, // Use combined single message
       provider: "whatsapp",
-      triggerProviderMessageId: inboundMessage?.providerMessageId || null,
+      triggerProviderMessageId: inboundProviderMessageId,
       replyType: orchestratorResult.nextStepKey ? "question" : "answer",
       lastQuestionKey: orchestratorResult.nextStepKey || null,
       flowStep: null,
     });
 
-    // Step 9: Update idempotency record
+    // Step 9: Update idempotency records and conversation
     if (sendResult.success && sendResult.messageId) {
+      // Update AiReplyDedup
       await updateIdempotencyRecord(
         idempotencyRecordId!,
         "SENT",
@@ -1278,26 +1403,31 @@ export async function sendAiReply(
         sendResult.messageId,
       );
 
-      // Update conversation state if nextStepKey provided
-      if (orchestratorResult.nextStepKey) {
-        await prisma.conversation.update({
-          where: { id: conversationId },
+      // Update OutboundMessageDedup
+      if (outboundDedupId) {
+        await prisma.outboundMessageDedup.update({
+          where: { id: outboundDedupId },
           data: {
-            aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
+            status: "SENT",
+            sentAt: new Date(),
+            providerMessageId: sendResult.messageId,
           },
         });
       }
 
+      // Update conversation: lastAiOutboundAt (for cooldown) and aiState
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: {
+          lastAiOutboundAt: new Date(),
+          ...(orchestratorResult.nextStepKey && {
+            aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
+          }),
+        },
+      });
+
       console.log(
-        `[ORCHESTRATOR] AI_SEND`,
-        JSON.stringify({
-          conversationId,
-          inboundMessageId,
-          aiActionType,
-          idempotencyKey: idempotencyKey.substring(0, 32) + "...",
-          messageId: sendResult.messageId,
-          nextStepKey: orchestratorResult.nextStepKey,
-        }),
+        `[ORCHESTRATOR] AI_OUTBOUND_SENT conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} dedupeKey=${dedupeKey?.substring(0, 32) || 'N/A'}... messageId=${sendResult.messageId}`,
       );
 
       await releaseConversationLock(conversationId);
@@ -1306,6 +1436,7 @@ export async function sendAiReply(
         messageId: sendResult.messageId,
       };
     } else {
+      // Update both dedup records to FAILED
       await updateIdempotencyRecord(
         idempotencyRecordId!,
         "FAILED",
@@ -1313,6 +1444,16 @@ export async function sendAiReply(
         undefined,
         sendResult.error || "Send failed",
       );
+      
+      if (outboundDedupId) {
+        await prisma.outboundMessageDedup.update({
+          where: { id: outboundDedupId },
+          data: {
+            status: "FAILED",
+            lastError: sendResult.error || "Send failed",
+          },
+        });
+      }
       await releaseConversationLock(conversationId);
       return {
         success: false,

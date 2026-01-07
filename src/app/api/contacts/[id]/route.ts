@@ -46,6 +46,10 @@ export async function PATCH(
       updateData.nationality = body.nationality || null
     }
 
+    if (body.phone !== undefined) {
+      updateData.phone = body.phone || null
+    }
+
     const contact = await prisma.contact.update({
       where: { id: contactId },
       data: updateData,
