@@ -1402,11 +1402,25 @@ async function createCommunicationLog(input: {
           channel: normalizedChannel,
           providerMessageId: input.providerMessageId,
         },
+        include: {
+          contact: true,
+          conversation: true,
+          lead: true,
+        },
       })
       if (message) {
         console.log(`[AUTO-MATCH] Message already exists (idempotency): ${message.id} for providerMessageId ${input.providerMessageId}`)
-        // Return existing message - don't create duplicate
-        return message
+        // Return full result with existing entities - don't create duplicate
+        return {
+          contact: message.contact,
+          conversation: message.conversation,
+          lead: message.lead,
+          message: message,
+          extractedFields: {},
+          tasksCreated: 0,
+          autoReplied: false,
+          wasDuplicate: true,
+        }
       }
     } catch (findError: any) {
       // If findFirst fails, continue to create (shouldn't happen, but handle gracefully)
@@ -1424,20 +1438,35 @@ async function createCommunicationLog(input: {
     // Handle unique constraint violation (duplicate message)
     if (err.code === 'P2002' || msg.includes('Unique constraint') || msg.includes('duplicate key') || msg.includes('already exists')) {
       console.log(`[AUTO-MATCH] Duplicate message detected (idempotency), fetching existing: channel=${normalizedChannel}, providerMessageId=${input.providerMessageId}`)
-      // Message already exists, fetch it
+      // Message already exists, fetch it with related entities
       if (input.providerMessageId) {
         message = await prisma.message.findFirst({
           where: {
             channel: normalizedChannel,
             providerMessageId: input.providerMessageId,
           },
+          include: {
+            contact: true,
+            conversation: true,
+            lead: true,
+          },
         })
         if (message) {
           console.log(`[AUTO-MATCH] Found existing message: ${message.id}`)
-          return message
+          // Return full result with existing entities
+          return {
+            contact: message.contact,
+            conversation: message.conversation,
+            lead: message.lead,
+            message: message,
+            extractedFields: {},
+            tasksCreated: 0,
+            autoReplied: false,
+            wasDuplicate: true,
+          }
         }
       }
-      // If we can't find it, log and return null (shouldn't happen)
+      // If we can't find it, log and throw error (shouldn't happen)
       console.error('[AUTO-MATCH] Unique constraint violation but couldn\'t find existing message')
       throw new Error('Duplicate message but existing message not found')
     }
@@ -1475,9 +1504,24 @@ async function createCommunicationLog(input: {
                 channel: normalizedChannel,
                 providerMessageId: input.providerMessageId,
               },
+              include: {
+                contact: true,
+                conversation: true,
+                lead: true,
+              },
             })
             if (message) {
-              return message
+              // Return full result with existing entities
+              return {
+                contact: message.contact,
+                conversation: message.conversation,
+                lead: message.lead,
+                message: message,
+                extractedFields: {},
+                tasksCreated: 0,
+                autoReplied: false,
+                wasDuplicate: true,
+              }
             }
           }
         }
