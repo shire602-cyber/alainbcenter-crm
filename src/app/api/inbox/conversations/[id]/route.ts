@@ -48,7 +48,6 @@ export async function GET(
           ruleEngineMemory: true,
           deletedAt: true,
           contact: {
-          contact: {
             select: {
               id: true,
               fullName: true,
@@ -112,9 +111,23 @@ export async function GET(
           messages: {
             orderBy: { createdAt: 'asc' },
             take: 500, // Limit to last 500 messages to prevent memory issues
-            // NOTE: Using `include` includes all message fields (providerMediaId, mediaFilename, mediaSize, etc.)
+            // NOTE: Using explicit select to include all message fields (providerMediaId, mediaFilename, mediaSize, etc.)
             // Fields are accessed later via type assertions where needed (e.g., (msg as any).mediaSize)
-            include: {
+            select: {
+              id: true,
+              direction: true,
+              channel: true,
+              type: true,
+              body: true,
+              providerMediaId: true,
+              mediaUrl: true,
+              mediaMimeType: true,
+              mediaFilename: true,
+              mediaSize: true,
+              status: true,
+              providerMessageId: true,
+              sentAt: true,
+              createdAt: true,
               createdByUser: {
                 select: {
                   id: true,
