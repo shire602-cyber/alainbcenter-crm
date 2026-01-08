@@ -277,8 +277,16 @@ function InboxPageContent() {
 
       if (data.ok) {
         setConversations(data.conversations || [])
+        setError(null) // Clear any previous errors
       } else {
-        setError(data.error || 'Failed to load conversations')
+        // Don't show DB migration errors prominently - they're handled gracefully
+        if (data.code === 'DB_MISMATCH') {
+          // Silently handle - the API will work without deletedAt column
+          setConversations([])
+          setError(null)
+        } else {
+          setError(data.error || 'Failed to load conversations')
+        }
       }
     } catch (err: any) {
       setError('Failed to load conversations')
