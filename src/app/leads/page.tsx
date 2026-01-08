@@ -127,6 +127,16 @@ export default function LeadsPageNew() {
   const [importFile, setImportFile] = useState<File | null>(null)
   const [importPreview, setImportPreview] = useState<any>(null)
   const [importing, setImporting] = useState(false)
+  const [showBulkStageModal, setShowBulkStageModal] = useState(false)
+  const [showBulkOwnerModal, setShowBulkOwnerModal] = useState(false)
+  const [showBulkDeleteModal, setShowBulkDeleteModal] = useState(false)
+  const [bulkStageValue, setBulkStageValue] = useState('')
+  const [bulkOwnerValue, setBulkOwnerValue] = useState('')
+  
+  // Saved views
+  const [savedViews, setSavedViews] = useState<Array<{ id: string; name: string; filters: any }>>([])
+  const [showSaveViewModal, setShowSaveViewModal] = useState(false)
+  const [saveViewName, setSaveViewName] = useState('')
 
   // Debounce search
   useEffect(() => {
@@ -170,6 +180,64 @@ export default function LeadsPageNew() {
       })
       .catch(() => {})
   }, [])
+
+  // Load saved views from localStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('leads_saved_views')
+      if (saved) {
+        setSavedViews(JSON.parse(saved))
+      }
+    } catch (e) {
+      console.error('Failed to load saved views:', e)
+    }
+  }, [])
+
+  // Save current filters as a view
+  const saveCurrentView = () => {
+    const view = {
+      id: Date.now().toString(),
+      name: saveViewName || `View ${savedViews.length + 1}`,
+      filters: {
+        query: debouncedQuery,
+        pipelineStage,
+        source,
+        serviceTypeId,
+        assignedToUserId,
+        aiScoreCategory,
+        createdAtFrom,
+        createdAtTo,
+      },
+    }
+    const updated = [...savedViews, view]
+    setSavedViews(updated)
+    localStorage.setItem('leads_saved_views', JSON.stringify(updated))
+    setShowSaveViewModal(false)
+    setSaveViewName('')
+    showToast('View saved', 'success')
+  }
+
+  // Load a saved view
+  const loadSavedView = (view: { filters: any }) => {
+    setQuery(view.filters.query || '')
+    setPipelineStage(view.filters.pipelineStage || '')
+    setSource(view.filters.source || '')
+    setServiceTypeId(view.filters.serviceTypeId || '')
+    setAssignedToUserId(view.filters.assignedToUserId || '')
+    setAiScoreCategory(view.filters.aiScoreCategory || '')
+    setCreatedAtFrom(view.filters.createdAtFrom || '')
+    setCreatedAtTo(view.filters.createdAtTo || '')
+    setPage(1)
+    showToast('View loaded', 'success')
+  }
+
+  // Delete a saved view
+  const deleteSavedView = (id: string) => {
+    const updated = savedViews.filter(v => v.id !== id)
+    setSavedViews(updated)
+    localStorage.setItem('leads_saved_views', JSON.stringify(updated))
+    showToast('View deleted', 'success')
+  }
 
   // Load leads
   const loadLeads = useCallback(async () => {
@@ -542,6 +610,36 @@ export default function LeadsPageNew() {
               Clear
             </Button>
           )}
+          
+          {/* Saved Views */}
+          {savedViews.length > 0 && (
+            <Select
+              onChange={(e) => {
+                if (e.target.value) {
+                  const view = savedViews.find(v => v.id === e.target.value)
+                  if (view) loadSavedView(view)
+                  e.target.value = ''
+                }
+              }}
+              defaultValue=""
+              className="w-[140px]"
+            >
+              <option value="">Saved Views...</option>
+              {savedViews.map(view => (
+                <option key={view.id} value={view.id}>{view.name}</option>
+              ))}
+            </Select>
+          )}
+          
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => setShowSaveViewModal(true)}
+            disabled={!hasActiveFilters}
+          >
+            <Save className="h-4 w-4 mr-2" />
+            Save View
+          </Button>
         </div>
 
         {/* Bulk Actions Bar */}
@@ -552,20 +650,14 @@ export default function LeadsPageNew() {
             </span>
             <div className="flex items-center gap-2 ml-auto">
               <Select
-                onChange={async (e) => {
+                onChange={(e) => {
                   const action = e.target.value
                   if (action === 'change-stage') {
-                    const stage = prompt('Enter new stage:') || ''
-                    if (stage) {
-                      await handleBulkAction('change-stage', { pipelineStage: stage })
-                    }
+                    setShowBulkStageModal(true)
                   } else if (action === 'assign-owner') {
-                    const userId = prompt('Enter user ID (or leave empty to unassign):') || ''
-                    await handleBulkAction('assign-owner', { assignedUserId: userId ? parseInt(userId) : null })
+                    setShowBulkOwnerModal(true)
                   } else if (action === 'delete') {
-                    if (confirm(`Delete ${selectedIds.size} lead(s)?`)) {
-                      await handleBulkAction('delete')
-                    }
+                    setShowBulkDeleteModal(true)
                   }
                   // Reset select
                   e.target.value = ''
@@ -580,7 +672,25 @@ export default function LeadsPageNew() {
               <Button
                 variant="outline"
                 size="sm"
-                onClick={() => handleBulkAction('export-selected')}
+                onClick={async () => {
+                  const params = new URLSearchParams()
+                  params.set('ids', Array.from(selectedIds).join(','))
+                  const res = await fetch(`/api/leads/export?${params}`)
+                  if (res.ok) {
+                    const blob = await res.blob()
+                    const url = window.URL.createObjectURL(blob)
+                    const a = document.createElement('a')
+                    a.href = url
+                    a.download = `leads-selected-${new Date().toISOString().split('T')[0]}.csv`
+                    document.body.appendChild(a)
+                    a.click()
+                    document.body.removeChild(a)
+                    window.URL.revokeObjectURL(url)
+                    showToast('Selected leads exported', 'success')
+                  } else {
+                    showToast('Failed to export', 'error')
+                  }
+                }}
               >
                 <Download className="h-4 w-4" />
               </Button>
@@ -612,7 +722,18 @@ export default function LeadsPageNew() {
                 <EmptyState
                   icon={List}
                   title="No leads found"
-                  description={hasActiveFilters ? "Try adjusting your filters" : "Get started by creating your first lead"}
+                  description={hasActiveFilters ? "No leads match your current filters" : "Get started by creating your first lead"}
+                  action={hasActiveFilters ? (
+                    <Button onClick={clearFilters} variant="outline">
+                      <X className="h-4 w-4 mr-2" />
+                      Clear Filters
+                    </Button>
+                  ) : (
+                    <Button onClick={() => router.push('/leads?action=create')}>
+                      <Plus className="h-4 w-4 mr-2" />
+                      Create Lead
+                    </Button>
+                  )}
                 />
               </div>
             ) : (
@@ -784,6 +905,134 @@ export default function LeadsPageNew() {
             )}
           </div>
         )}
+
+        {/* Bulk Stage Change Modal */}
+        <Dialog open={showBulkStageModal} onOpenChange={setShowBulkStageModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Change Stage for {selectedIds.size} Lead(s)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Select value={bulkStageValue} onChange={(e) => setBulkStageValue(e.target.value)}>
+                <option value="">Select Stage</option>
+                {PIPELINE_STAGES.map(stage => (
+                  <option key={stage} value={stage}>{PIPELINE_STAGE_LABELS[stage]}</option>
+                ))}
+              </Select>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => {
+                  setShowBulkStageModal(false)
+                  setBulkStageValue('')
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={async () => {
+                  if (bulkStageValue) {
+                    await handleBulkAction('change-stage', { pipelineStage: bulkStageValue })
+                    setShowBulkStageModal(false)
+                    setBulkStageValue('')
+                  }
+                }} disabled={!bulkStageValue}>
+                  Update
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Owner Assignment Modal */}
+        <Dialog open={showBulkOwnerModal} onOpenChange={setShowBulkOwnerModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Assign Owner for {selectedIds.size} Lead(s)</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Select value={bulkOwnerValue} onChange={(e) => setBulkOwnerValue(e.target.value)}>
+                <option value="">Unassign (No Owner)</option>
+                {users.map(user => (
+                  <option key={user.id} value={user.id.toString()}>{user.name}</option>
+                ))}
+              </Select>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => {
+                  setShowBulkOwnerModal(false)
+                  setBulkOwnerValue('')
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={async () => {
+                  await handleBulkAction('assign-owner', {
+                    assignedUserId: bulkOwnerValue ? parseInt(bulkOwnerValue) : null
+                  })
+                  setShowBulkOwnerModal(false)
+                  setBulkOwnerValue('')
+                }}>
+                  Update
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Bulk Delete Modal */}
+        <Dialog open={showBulkDeleteModal} onOpenChange={setShowBulkDeleteModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Delete {selectedIds.size} Lead(s)?</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <p className="text-sm text-muted-foreground">
+                This action cannot be undone. Are you sure you want to delete {selectedIds.size} lead(s)?
+              </p>
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => setShowBulkDeleteModal(false)}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="destructive"
+                  onClick={async () => {
+                    await handleBulkAction('delete')
+                    setShowBulkDeleteModal(false)
+                  }}
+                >
+                  Delete
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
+
+        {/* Save View Modal */}
+        <Dialog open={showSaveViewModal} onOpenChange={setShowSaveViewModal}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Save Current View</DialogTitle>
+            </DialogHeader>
+            <div className="space-y-4 py-4">
+              <Input
+                placeholder="View name (e.g., 'Hot Leads', 'My Pipeline')"
+                value={saveViewName}
+                onChange={(e) => setSaveViewName(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && saveViewName.trim()) {
+                    saveCurrentView()
+                  }
+                }}
+              />
+              <div className="flex justify-end gap-2">
+                <Button variant="outline" onClick={() => {
+                  setShowSaveViewModal(false)
+                  setSaveViewName('')
+                }}>
+                  Cancel
+                </Button>
+                <Button onClick={saveCurrentView} disabled={!saveViewName.trim()}>
+                  Save
+                </Button>
+              </div>
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Import Modal */}
         <Dialog open={showImportModal} onOpenChange={setShowImportModal}>
