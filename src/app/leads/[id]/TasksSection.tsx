@@ -201,7 +201,7 @@ export default function TasksSection({ leadId }: { leadId: number }) {
 
   async function handleNudge(taskId: number) {
     try {
-      const res = await fetch(`/api/tasks/${taskId}`, {
+      const res = await fetch(`/api/tasks/${taskId}/nudge`, {
         method: 'POST',
       })
 
