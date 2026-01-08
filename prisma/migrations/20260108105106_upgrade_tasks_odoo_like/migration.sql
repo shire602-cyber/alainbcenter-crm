@@ -29,6 +29,18 @@ ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "taskId" INTEGER;
 ALTER TABLE "Notification" ADD COLUMN IF NOT EXISTS "userId" INTEGER;
 
 -- Add foreign key and indexes for task notifications
-ALTER TABLE "Notification" ADD CONSTRAINT "Notification_taskId_fkey" FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- Use DO block to safely add constraint only if it doesn't exist (PostgreSQL-specific)
+DO $$
+BEGIN
+    IF NOT EXISTS (
+        SELECT 1 FROM pg_constraint 
+        WHERE conname = 'Notification_taskId_fkey'
+    ) THEN
+        ALTER TABLE "Notification" 
+        ADD CONSTRAINT "Notification_taskId_fkey" 
+        FOREIGN KEY ("taskId") REFERENCES "Task"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+    END IF;
+END $$;
+
 CREATE INDEX IF NOT EXISTS "Notification_taskId_idx" ON "Notification"("taskId");
 CREATE INDEX IF NOT EXISTS "Notification_userId_isRead_idx" ON "Notification"("userId", "isRead");
