@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
+import { getWebhookUrl } from '@/lib/publicUrl'
 
 /**
  * POST /api/settings/whatsapp/test
@@ -38,7 +39,8 @@ export async function POST(req: NextRequest) {
     const accessToken = config.accessToken || integration.accessToken || integration.apiKey
     const phoneNumberId = config.phoneNumberId
     const webhookVerifyToken = config.webhookVerifyToken
-    const webhookUrl = integration.webhookUrl || config.webhookUrl
+    // Auto-compute webhook URL if not stored (use current request to determine public URL)
+    const webhookUrl = integration.webhookUrl || config.webhookUrl || getWebhookUrl('/api/webhooks/whatsapp', req)
 
     // Validate required fields
     const missingFields: string[] = []
