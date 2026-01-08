@@ -461,22 +461,66 @@ export async function generateAIReply(
     );
     
     // Step 1: Load conversation and lead context
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: input.conversationId },
-      include: {
-        lead: {
-          include: {
-            contact: true,
-            serviceType: true,
-            aiAgentProfile: true, // CRITICAL FIX 4: Load agent profile for language settings
+    let conversation
+    try {
+      conversation = await prisma.conversation.findUnique({
+        where: { id: input.conversationId },
+        include: {
+          lead: {
+            include: {
+              contact: true,
+              serviceType: true,
+              aiAgentProfile: true, // CRITICAL FIX 4: Load agent profile for language settings
+            },
+          },
+          messages: {
+            orderBy: { createdAt: "desc" },
+            take: 10, // Last 10 messages for context
           },
         },
-        messages: {
-          orderBy: { createdAt: "desc" },
-          take: 10, // Last 10 messages for context
-        },
-      },
-    });
+      });
+    } catch (error: any) {
+      // Gracefully handle missing lastProcessedInboundMessageId column
+      if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.warn('[DB] lastProcessedInboundMessageId column not found, querying with select (this is OK if migration not yet applied)')
+        // Use select to explicitly exclude the problematic column but include relations
+        conversation = await prisma.conversation.findUnique({
+          where: { id: input.conversationId },
+          select: {
+            id: true,
+            contactId: true,
+            leadId: true,
+            channel: true,
+            status: true,
+            lastMessageAt: true,
+            lastInboundAt: true,
+            lastOutboundAt: true,
+            unreadCount: true,
+            priorityScore: true,
+            createdAt: true,
+            updatedAt: true,
+            aiState: true,
+            aiLockUntil: true,
+            lastAiOutboundAt: true,
+            ruleEngineMemory: true,
+            deletedAt: true,
+            lead: {
+              include: {
+                contact: true,
+                serviceType: true,
+                aiAgentProfile: true,
+              },
+            },
+            messages: {
+              orderBy: { createdAt: "desc" },
+              take: 10,
+            },
+          },
+        }) as any
+      } else {
+        throw error
+      }
+    }
     
     if (!conversation) {
       throw new Error(`Conversation ${input.conversationId} not found`);
