@@ -1,21 +1,17 @@
 -- Add reminder_stage and conversationId to Renewal
 -- NOTE: This migration may run before the Renewal table is created (for shadow database validation)
--- So we check if the table exists first
+-- So we check if the table exists first and wrap everything in a single DO block to avoid static analysis issues
 
 DO $$
 BEGIN
+  -- Only proceed if Renewal table exists
   IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Renewal') THEN
+    -- Add columns
     ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "reminderStage" INTEGER NOT NULL DEFAULT 0;
     ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "conversationId" INTEGER;
     ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "lastRemindedAt" TIMESTAMP(3);
-  END IF;
-END $$;
-
--- Update status default to ACTIVE (was PENDING)
--- Note: Existing records with status='PENDING' should be updated to 'ACTIVE' if they're still active
-DO $$
-BEGIN
-  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Renewal') THEN
+    
+    -- Update status default to ACTIVE (was PENDING)
     ALTER TABLE "Renewal" ALTER COLUMN "status" SET DEFAULT 'ACTIVE';
 
     -- Update existing PENDING records to ACTIVE (if they're not expired)
@@ -23,12 +19,8 @@ BEGIN
     SET "status" = 'ACTIVE' 
     WHERE "status" = 'PENDING' 
       AND "expiryDate" > NOW();
-  END IF;
-END $$;
-
--- Add foreign key for conversationId (only if it doesn't exist)
-DO $$ 
-BEGIN
+    
+    -- Add foreign key for conversationId (only if it doesn't exist)
     IF NOT EXISTS (
         SELECT 1 FROM pg_constraint 
         WHERE conname = 'Renewal_conversationId_fkey'
@@ -36,6 +28,7 @@ BEGIN
         ALTER TABLE "Renewal" ADD CONSTRAINT "Renewal_conversationId_fkey" 
           FOREIGN KEY ("conversationId") REFERENCES "Conversation"("id") ON DELETE SET NULL ON UPDATE CASCADE;
     END IF;
+  END IF;
 END $$;
 
 -- Add channel and stage to RenewalNotification
@@ -72,7 +65,7 @@ END $$;
 -- Update idempotency key format (already unique, but update existing records if needed)
 -- Note: Existing records will have old format, new records will use new format
 
--- Create indexes (only if tables exist)
+-- Create indexes (only if tables exist) - wrapped in same DO block to avoid static analysis
 DO $$
 BEGIN
   IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Renewal') THEN
