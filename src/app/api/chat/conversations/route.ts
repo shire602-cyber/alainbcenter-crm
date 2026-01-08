@@ -81,7 +81,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Format conversations for frontend
-    const formattedConversations = conversations.map((conv) => {
+    const formattedConversations = conversations.map((conv: any) => {
       const lastMessage = conv.messages[0]
       
       // Count unread inbound messages
