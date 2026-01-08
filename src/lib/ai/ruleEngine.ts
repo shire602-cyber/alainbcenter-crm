@@ -1321,10 +1321,19 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
           ...(updatedMemory.service && { lockedService: updatedMemory.service.toLowerCase().replace(/\s+/g, '_') }),
         }
       })
-      console.log(`💾 [RULE-ENGINE] Persisted memory updates:`, Object.keys(memoryUpdates))
+      console.log(
+        `💾 [RULE-ENGINE] Persisted memory updates conversationId=${context.conversationId} updates=${Object.keys(memoryUpdates).join(',')} currentState=${currentState}`
+      )
     } catch (error) {
       console.error('❌ [RULE-ENGINE] Failed to persist memory:', error)
     }
+  }
+  
+  // Log final state and result kind
+  if (result) {
+    console.log(
+      `[RULE-ENGINE] Result conversationId=${context.conversationId} kind=${result.kind} currentState=${currentState} needsHuman=${result.kind === 'REPLY' ? result.needsHuman : false}`
+    )
   }
   
   // CRITICAL FIX C: Return structured result

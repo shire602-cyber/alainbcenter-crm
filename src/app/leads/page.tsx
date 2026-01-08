@@ -25,6 +25,7 @@ import {
 import { Skeleton } from '@/components/ui/skeleton'
 import { EmptyState } from '@/components/ui/empty-state'
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import { Avatar } from '@/components/ui/avatar'
 import {
   Search,
   Plus,
@@ -43,6 +44,8 @@ import {
   Trash2,
   UserPlus,
   RefreshCw,
+  ChevronDown,
+  ChevronUp,
 } from 'lucide-react'
 import { format, formatDistanceToNow } from 'date-fns'
 import {
@@ -137,6 +140,9 @@ export default function LeadsPageNew() {
   const [savedViews, setSavedViews] = useState<Array<{ id: string; name: string; filters: any }>>([])
   const [showSaveViewModal, setShowSaveViewModal] = useState(false)
   const [saveViewName, setSaveViewName] = useState('')
+  
+  // Advanced filters drawer
+  const [showAdvancedFilters, setShowAdvancedFilters] = useState(false)
 
   // Debounce search
   useEffect(() => {
@@ -472,36 +478,91 @@ export default function LeadsPageNew() {
     }
   }
 
+  // Get active filter chips
+  const activeFilterChips = useMemo(() => {
+    const chips: Array<{ key: string; label: string; value: string }> = []
+    if (pipelineStage) {
+      chips.push({ key: 'pipelineStage', label: 'Stage', value: PIPELINE_STAGE_LABELS[pipelineStage as keyof typeof PIPELINE_STAGE_LABELS] || pipelineStage })
+    }
+    if (source) {
+      chips.push({ key: 'source', label: 'Source', value: LEAD_SOURCE_LABELS[source as keyof typeof LEAD_SOURCE_LABELS] || source })
+    }
+    if (serviceTypeId) {
+      const service = serviceTypes.find(st => st.id.toString() === serviceTypeId)
+      if (service) chips.push({ key: 'serviceTypeId', label: 'Service', value: service.name })
+    }
+    if (assignedToUserId) {
+      const user = users.find(u => u.id.toString() === assignedToUserId)
+      if (user) chips.push({ key: 'assignedToUserId', label: 'Owner', value: user.name })
+    }
+    if (aiScoreCategory) {
+      chips.push({ key: 'aiScoreCategory', label: 'Score', value: aiScoreCategory.charAt(0).toUpperCase() + aiScoreCategory.slice(1) })
+    }
+    if (createdAtFrom || createdAtTo) {
+      chips.push({ key: 'dateRange', label: 'Date', value: `${createdAtFrom || '...'} to ${createdAtTo || '...'}` })
+    }
+    if (debouncedQuery) {
+      chips.push({ key: 'query', label: 'Search', value: debouncedQuery })
+    }
+    return chips
+  }, [pipelineStage, source, serviceTypeId, assignedToUserId, aiScoreCategory, createdAtFrom, createdAtTo, debouncedQuery, serviceTypes, users])
+
+  // Remove filter chip
+  const removeFilterChip = (key: string) => {
+    if (key === 'pipelineStage') setPipelineStage('')
+    else if (key === 'source') setSource('')
+    else if (key === 'serviceTypeId') setServiceTypeId('')
+    else if (key === 'assignedToUserId') setAssignedToUserId('')
+    else if (key === 'aiScoreCategory') setAiScoreCategory('')
+    else if (key === 'dateRange') {
+      setCreatedAtFrom('')
+      setCreatedAtTo('')
+    }
+    else if (key === 'query') setQuery('')
+  }
+
+  // Get initials for avatar
+  const getInitials = (name: string) => {
+    return name
+      .split(' ')
+      .map(n => n[0])
+      .join('')
+      .toUpperCase()
+      .slice(0, 2)
+  }
+
   return (
     <MainLayout>
-      <div className="space-y-4">
-        {/* Top Bar */}
+      <div className="space-y-6">
+        {/* Premium Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-2xl font-bold">Leads</h1>
-            <p className="text-sm text-muted-foreground">
-              {total} {total === 1 ? 'lead' : 'leads'}
+            <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              {total} {total === 1 ? 'lead' : 'leads'} total
             </p>
           </div>
           
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             {/* View Toggle */}
-            <div className="flex items-center border rounded-lg p-1">
+            <div className="flex items-center border rounded-lg p-1 bg-background">
               <Button
                 variant={viewMode === 'table' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('table')}
-                className="h-8"
+                className="h-8 px-3"
               >
-                <List className="h-4 w-4" />
+                <List className="h-4 w-4 mr-1.5" />
+                Table
               </Button>
               <Button
                 variant={viewMode === 'kanban' ? 'default' : 'ghost'}
                 size="sm"
                 onClick={() => setViewMode('kanban')}
-                className="h-8"
+                className="h-8 px-3"
               >
-                <KanbanSquare className="h-4 w-4" />
+                <KanbanSquare className="h-4 w-4 mr-1.5" />
+                Kanban
               </Button>
             </div>
 
@@ -512,6 +573,7 @@ export default function LeadsPageNew() {
                   size="sm"
                   onClick={handleExport}
                   disabled={loading}
+                  className="h-9"
                 >
                   <Download className="h-4 w-4 mr-2" />
                   Export CSV
@@ -520,6 +582,7 @@ export default function LeadsPageNew() {
                   variant="outline"
                   size="sm"
                   onClick={() => document.getElementById('import-file')?.click()}
+                  className="h-9"
                 >
                   <Upload className="h-4 w-4 mr-2" />
                   Import CSV
@@ -534,118 +597,194 @@ export default function LeadsPageNew() {
               </>
             )}
 
-            <Button onClick={() => router.push('/leads?action=create')}>
+            <Button onClick={() => router.push('/leads?action=create')} className="h-9">
               <Plus className="h-4 w-4 mr-2" />
               New Lead
             </Button>
           </div>
         </div>
 
-        {/* Filters Row */}
-        <div className="flex flex-wrap items-center gap-2 p-4 bg-card border rounded-lg">
-          <div className="relative flex-1 min-w-[200px]">
-            <Search className="absolute left-2 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search name, phone, email..."
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-              className="pl-8"
-            />
-          </div>
+        {/* Compact Filter Bar */}
+        <div className="space-y-3">
+          {/* Primary Filters Row */}
+          <div className="flex items-center gap-3">
+            <div className="relative flex-1 min-w-[280px]">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search name, phone, email..."
+                value={query}
+                onChange={(e) => setQuery(e.target.value)}
+                className="pl-10 h-10"
+              />
+            </div>
 
-          <Select value={pipelineStage} onChange={(e) => setPipelineStage(e.target.value)}>
-            <option value="">All Stages</option>
-            {PIPELINE_STAGES.map(stage => (
-              <option key={stage} value={stage}>{PIPELINE_STAGE_LABELS[stage]}</option>
-            ))}
-          </Select>
-
-          <Select value={source} onChange={(e) => setSource(e.target.value)}>
-            <option value="">All Sources</option>
-            {LEAD_SOURCES.map(src => (
-              <option key={src} value={src}>{LEAD_SOURCE_LABELS[src]}</option>
-            ))}
-          </Select>
-
-          <Select value={assignedToUserId} onChange={(e) => setAssignedToUserId(e.target.value)}>
-            <option value="">All Owners</option>
-            {users.map(user => (
-              <option key={user.id} value={user.id}>{user.name}</option>
-            ))}
-          </Select>
-
-          <Select value={serviceTypeId} onChange={(e) => setServiceTypeId(e.target.value)}>
-            <option value="">All Services</option>
-            {serviceTypes.map(st => (
-              <option key={st.id} value={st.id.toString()}>{st.name}</option>
-            ))}
-          </Select>
-
-          <Select value={aiScoreCategory} onChange={(e) => setAiScoreCategory(e.target.value)}>
-            <option value="">All Scores</option>
-            <option value="hot">Hot (75+)</option>
-            <option value="warm">Warm (40-74)</option>
-            <option value="cold">Cold (&lt;40)</option>
-          </Select>
-
-          <Input
-            type="date"
-            placeholder="From"
-            value={createdAtFrom}
-            onChange={(e) => setCreatedAtFrom(e.target.value)}
-            className="w-[140px]"
-          />
-
-          <Input
-            type="date"
-            placeholder="To"
-            value={createdAtTo}
-            onChange={(e) => setCreatedAtTo(e.target.value)}
-            className="w-[140px]"
-          />
-
-          {hasActiveFilters && (
-            <Button variant="ghost" size="sm" onClick={clearFilters}>
-              <X className="h-4 w-4 mr-2" />
-              Clear
-            </Button>
-          )}
-          
-          {/* Saved Views */}
-          {savedViews.length > 0 && (
-            <Select
-              onChange={(e) => {
-                if (e.target.value) {
-                  const view = savedViews.find(v => v.id === e.target.value)
-                  if (view) loadSavedView(view)
-                  e.target.value = ''
-                }
-              }}
-              defaultValue=""
-              className="w-[140px]"
+            <Select 
+              value={pipelineStage} 
+              onChange={(e) => setPipelineStage(e.target.value)}
+              className="h-10 min-w-[140px]"
             >
-              <option value="">Saved Views...</option>
-              {savedViews.map(view => (
-                <option key={view.id} value={view.id}>{view.name}</option>
+              <option value="">All Stages</option>
+              {PIPELINE_STAGES.map(stage => (
+                <option key={stage} value={stage}>{PIPELINE_STAGE_LABELS[stage]}</option>
               ))}
             </Select>
+
+            <Select 
+              value={source} 
+              onChange={(e) => setSource(e.target.value)}
+              className="h-10 min-w-[140px]"
+            >
+              <option value="">All Sources</option>
+              {LEAD_SOURCES.map(src => (
+                <option key={src} value={src}>{LEAD_SOURCE_LABELS[src]}</option>
+              ))}
+            </Select>
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
+              className="h-10"
+            >
+              <Filter className="h-4 w-4 mr-2" />
+              Advanced
+              {showAdvancedFilters ? (
+                <ChevronUp className="h-4 w-4 ml-2" />
+              ) : (
+                <ChevronDown className="h-4 w-4 ml-2" />
+              )}
+            </Button>
+
+            {hasActiveFilters && (
+              <Button variant="ghost" size="sm" onClick={clearFilters} className="h-10">
+                <X className="h-4 w-4 mr-2" />
+                Clear
+              </Button>
+            )}
+
+            {/* Saved Views */}
+            {savedViews.length > 0 && (
+              <Select
+                onChange={(e) => {
+                  if (e.target.value) {
+                    const view = savedViews.find(v => v.id === e.target.value)
+                    if (view) loadSavedView(view)
+                    e.target.value = ''
+                  }
+                }}
+                defaultValue=""
+                className="h-10 min-w-[140px]"
+              >
+                <option value="">Saved Views...</option>
+                {savedViews.map(view => (
+                  <option key={view.id} value={view.id}>{view.name}</option>
+                ))}
+              </Select>
+            )}
+            
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setShowSaveViewModal(true)}
+              disabled={!hasActiveFilters}
+              className="h-10"
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Save View
+            </Button>
+          </div>
+
+          {/* Advanced Filters Drawer */}
+          {showAdvancedFilters && (
+            <div className="p-4 bg-muted/30 rounded-lg border border-border/50 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Owner</label>
+                  <Select 
+                    value={assignedToUserId} 
+                    onChange={(e) => setAssignedToUserId(e.target.value)}
+                    className="h-9"
+                  >
+                    <option value="">All Owners</option>
+                    {users.map(user => (
+                      <option key={user.id} value={user.id.toString()}>{user.name}</option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Service</label>
+                  <Select 
+                    value={serviceTypeId} 
+                    onChange={(e) => setServiceTypeId(e.target.value)}
+                    className="h-9"
+                  >
+                    <option value="">All Services</option>
+                    {serviceTypes.map(st => (
+                      <option key={st.id} value={st.id.toString()}>{st.name}</option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">AI Score</label>
+                  <Select 
+                    value={aiScoreCategory} 
+                    onChange={(e) => setAiScoreCategory(e.target.value)}
+                    className="h-9"
+                  >
+                    <option value="">All Scores</option>
+                    <option value="hot">Hot (75+)</option>
+                    <option value="warm">Warm (40-74)</option>
+                    <option value="cold">Cold (&lt;40)</option>
+                  </Select>
+                </div>
+
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Date Range</label>
+                  <div className="flex gap-2">
+                    <Input
+                      type="date"
+                      placeholder="From"
+                      value={createdAtFrom}
+                      onChange={(e) => setCreatedAtFrom(e.target.value)}
+                      className="h-9 text-xs"
+                    />
+                    <Input
+                      type="date"
+                      placeholder="To"
+                      value={createdAtTo}
+                      onChange={(e) => setCreatedAtTo(e.target.value)}
+                      className="h-9 text-xs"
+                    />
+                  </div>
+                </div>
+              </div>
+            </div>
           )}
-          
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setShowSaveViewModal(true)}
-            disabled={!hasActiveFilters}
-          >
-            <Save className="h-4 w-4 mr-2" />
-            Save View
-          </Button>
+
+          {/* Active Filter Chips */}
+          {activeFilterChips.length > 0 && (
+            <div className="flex flex-wrap items-center gap-2">
+              {activeFilterChips.map(chip => (
+                <Badge
+                  key={chip.key}
+                  variant="secondary"
+                  className="px-2.5 py-1 text-xs font-medium cursor-pointer hover:bg-secondary/80"
+                  onClick={() => removeFilterChip(chip.key)}
+                >
+                  {chip.label}: {chip.value}
+                  <X className="h-3 w-3 ml-1.5" />
+                </Badge>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
-          <div className="flex items-center gap-2 p-3 bg-primary/10 border border-primary/20 rounded-lg">
-            <span className="text-sm font-medium">
+          <div className="flex items-center gap-3 p-4 bg-primary/5 border border-primary/20 rounded-lg backdrop-blur-sm">
+            <span className="text-sm font-semibold text-foreground">
               {selectedIds.size} {selectedIds.size === 1 ? 'lead' : 'leads'} selected
             </span>
             <div className="flex items-center gap-2 ml-auto">
@@ -710,15 +849,15 @@ export default function LeadsPageNew() {
 
         {/* Table View */}
         {viewMode === 'table' && (
-          <div className="border rounded-lg overflow-hidden">
+          <div className="rounded-lg border border-border/50 bg-card shadow-sm overflow-hidden">
             {loading ? (
-              <div className="p-4 space-y-3">
+              <div className="p-6 space-y-3">
                 {[1, 2, 3, 4, 5].map(i => (
-                  <Skeleton key={i} className="h-12 w-full" />
+                  <Skeleton key={i} className="h-14 w-full" />
                 ))}
               </div>
             ) : leads.length === 0 ? (
-              <div className="p-12">
+              <div className="p-16">
                 <EmptyState
                   icon={List}
                   title="No leads found"
@@ -737,109 +876,125 @@ export default function LeadsPageNew() {
                 />
               </div>
             ) : (
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead className="w-12">
-                      <Checkbox
-                        checked={selectAll}
-                        onCheckedChange={toggleSelectAll}
-                      />
-                    </TableHead>
-                    <TableHead>Lead</TableHead>
-                    <TableHead>Channel</TableHead>
-                    <TableHead>Stage</TableHead>
-                    <TableHead>Service</TableHead>
-                    <TableHead>Owner</TableHead>
-                    <TableHead>Last Message</TableHead>
-                    <TableHead>AI Score</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {leads.map((lead) => (
-                    <TableRow
-                      key={lead.id}
-                      className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => router.push(`/leads/${lead.id}`)}
-                    >
-                      <TableCell onClick={(e) => e.stopPropagation()}>
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader className="sticky top-0 z-10 bg-muted/50 backdrop-blur-sm">
+                    <TableRow className="border-b border-border/50 hover:bg-transparent">
+                      <TableHead className="w-12 h-12">
                         <Checkbox
-                          checked={selectedIds.has(lead.id)}
-                          onCheckedChange={() => toggleSelect(lead.id)}
+                          checked={selectAll}
+                          onCheckedChange={toggleSelectAll}
                         />
-                      </TableCell>
-                      <TableCell>
-                        <div>
-                          <div className="font-medium">{lead.contact.fullName}</div>
-                          <div className="text-sm text-muted-foreground">{lead.contact.phone}</div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        {getChannelIcon(lead.lastContact?.channel || null)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="outline">
-                          {PIPELINE_STAGE_LABELS[lead.pipelineStage as keyof typeof PIPELINE_STAGE_LABELS] || lead.pipelineStage}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        {lead.serviceType?.name || '—'}
-                      </TableCell>
-                      <TableCell>
-                        {lead.assignedUser?.name || '—'}
-                      </TableCell>
-                      <TableCell>
-                        {lead.lastContact ? (
-                          <div>
-                            <div className="text-sm text-muted-foreground">
-                              {lead.lastContact.direction === 'INBOUND' || lead.lastContact.direction === 'IN' ? 'Received' : 'Sent'}
-                            </div>
-                            <div className="text-xs text-muted-foreground">
-                              {formatDistanceToNow(new Date(lead.lastContact.createdAt), { addSuffix: true })}
+                      </TableHead>
+                      <TableHead className="h-12 font-semibold">Lead</TableHead>
+                      <TableHead className="h-12 font-semibold">Channel</TableHead>
+                      <TableHead className="h-12 font-semibold">Stage</TableHead>
+                      <TableHead className="h-12 font-semibold">Service</TableHead>
+                      <TableHead className="h-12 font-semibold">Owner</TableHead>
+                      <TableHead className="h-12 font-semibold">Last Message</TableHead>
+                      <TableHead className="h-12 font-semibold">AI Score</TableHead>
+                      <TableHead className="h-12 font-semibold">Status</TableHead>
+                      <TableHead className="w-24 h-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {leads.map((lead) => (
+                      <TableRow
+                        key={lead.id}
+                        className="cursor-pointer hover:bg-muted/30 transition-colors border-b border-border/30"
+                        onClick={() => router.push(`/leads/${lead.id}`)}
+                      >
+                        <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
+                          <Checkbox
+                            checked={selectedIds.has(lead.id)}
+                            onCheckedChange={() => toggleSelect(lead.id)}
+                          />
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <div className="flex items-center gap-3">
+                            <Avatar
+                              fallback={getInitials(lead.contact.fullName)}
+                              size="sm"
+                            />
+                            <div>
+                              <div className="font-semibold text-foreground">{lead.contact.fullName}</div>
+                              <div className="text-xs text-muted-foreground mt-0.5">{lead.contact.phone}</div>
                             </div>
                           </div>
-                        ) : (
-                          '—'
-                        )}
-                      </TableCell>
-                      <TableCell>
-                        {getScoreBadge(lead.aiScore)}
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">
-                          {LEAD_SOURCE_LABELS[lead.contact.source as keyof typeof LEAD_SOURCE_LABELS] || lead.contact.source || 'Manual'}
-                        </Badge>
-                      </TableCell>
-                      <TableCell onClick={(e) => e.stopPropagation()}>
-                        <div className="flex items-center gap-1">
-                          {lead.contact.phone && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => window.open(`tel:${lead.contact.phone}`)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <Phone className="h-4 w-4" />
-                            </Button>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {getChannelIcon(lead.lastContact?.channel || null)}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <Badge variant="outline" className="font-medium">
+                            {PIPELINE_STAGE_LABELS[lead.pipelineStage as keyof typeof PIPELINE_STAGE_LABELS] || lead.pipelineStage}
+                          </Badge>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {lead.serviceType?.name ? (
+                            <Badge variant="secondary" className="font-normal">
+                              {lead.serviceType.name}
+                            </Badge>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
                           )}
-                          {lead.contact.phone && (
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              onClick={() => router.push(`/inbox?phone=${encodeURIComponent(lead.contact.phone)}`)}
-                              className="h-8 w-8 p-0"
-                            >
-                              <MessageSquare className="h-4 w-4" />
-                            </Button>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <span className="text-sm text-foreground">{lead.assignedUser?.name || <span className="text-muted-foreground">—</span>}</span>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {lead.lastContact ? (
+                            <div className="space-y-0.5">
+                              <div className="text-xs text-muted-foreground">
+                                {lead.lastContact.direction === 'INBOUND' || lead.lastContact.direction === 'IN' ? 'Received' : 'Sent'}
+                              </div>
+                              <div className="text-xs text-muted-foreground/70">
+                                {formatDistanceToNow(new Date(lead.lastContact.createdAt), { addSuffix: true })}
+                              </div>
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground text-sm">—</span>
                           )}
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {getScoreBadge(lead.aiScore)}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          <Badge variant="secondary" className="font-normal">
+                            {LEAD_SOURCE_LABELS[lead.contact.source as keyof typeof LEAD_SOURCE_LABELS] || lead.contact.source || 'Manual'}
+                          </Badge>
+                        </TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
+                          <div className="flex items-center gap-1">
+                            {lead.contact.phone && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => window.open(`tel:${lead.contact.phone}`)}
+                                className="h-8 w-8 p-0 hover:bg-primary/10"
+                                title="Call"
+                              >
+                                <Phone className="h-4 w-4" />
+                              </Button>
+                            )}
+                            {lead.contact.phone && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                onClick={() => router.push(`/inbox?phone=${encodeURIComponent(lead.contact.phone)}`)}
+                                className="h-8 w-8 p-0 hover:bg-primary/10"
+                                title="Open in Inbox"
+                              >
+                                <MessageSquare className="h-4 w-4" />
+                              </Button>
+                            )}
+                          </div>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
             )}
 
             {/* Pagination */}
