@@ -67,11 +67,11 @@ export async function processRenewalReminders(
 
   try {
     // Fetch renewals that need reminders (using new Renewal model)
-    // Note: This file may need refactoring for new renewal system
-    const renewals = await prisma.renewal.findMany({
+    // Calculate current reminder stage from existing notifications
+    // Stage progression: 0 = none sent, 1 = R1 sent, 2 = R2 sent, 3 = R3 sent (done)
+    const allRenewals = await prisma.renewal.findMany({
       where: {
         status: 'ACTIVE',
-        nextFollowUpAt: { lte: now },
         expiryDate: { gt: now }, // Not expired yet
       },
       include: {
@@ -82,12 +82,61 @@ export async function processRenewalReminders(
         },
         Contact: true,
         Conversation: true,
+        notifications: {
+          where: {
+            status: 'SENT',
+          },
+          orderBy: {
+            stage: 'desc',
+          },
+          take: 1, // Get highest stage sent
+        },
       },
-      take: max,
-      orderBy: {
-        nextFollowUpAt: 'asc',
-      },
+      take: max * 2, // Fetch more to filter by stage
     })
+
+    // Filter renewals that need reminders:
+    // 1. Calculate current stage from notifications (max stage sent, or 0 if none)
+    // 2. Only process if stage < 3 (not all reminders sent)
+    // 3. Calculate nextReminderAt from expiryDate and current stage
+    // 4. Only process if nextReminderAt <= now
+    type RenewalWithStage = typeof allRenewals[0] & {
+      currentStage: number;
+      nextStage: number;
+      nextReminderAt: Date | null;
+    };
+
+    const renewals: RenewalWithStage[] = allRenewals
+      .map((renewal) => {
+        // Calculate current reminder stage (0-3)
+        const currentStage = renewal.notifications.length > 0 
+          ? renewal.notifications[0].stage 
+          : 0;
+        
+        // Skip if all reminders sent (stage >= 3)
+        if (currentStage >= 3) {
+          return null;
+        }
+
+        // Calculate next reminder date from expiry date and next stage
+        const nextStage = currentStage + 1;
+        const nextReminderAt = computeNextReminderAt(renewal.expiryDate, nextStage - 1);
+        
+        // Skip if next reminder is not due yet
+        if (!nextReminderAt || nextReminderAt > now) {
+          return null;
+        }
+
+        return {
+          ...renewal,
+          currentStage,
+          nextStage,
+          nextReminderAt,
+        } as RenewalWithStage;
+      })
+      .filter((r): r is RenewalWithStage => r !== null)
+      .slice(0, max)
+      .sort((a, b) => (a.nextReminderAt?.getTime() || 0) - (b.nextReminderAt?.getTime() || 0));
 
     console.log(`[RENEWAL-JOB] Found ${renewals.length} renewal(s) needing reminders`)
 
@@ -104,7 +153,7 @@ export async function processRenewalReminders(
             const rescheduleTo = new Date(now.getTime() + 24 * 60 * 60 * 1000)
             await prisma.renewal.update({
               where: { id: renewal.id },
-              data: { nextFollowUpAt: rescheduleTo },
+              data: { nextFollowUpAt: rescheduleTo }, // nextFollowUpAt is used for reminder scheduling
             })
             
             console.log(
@@ -115,8 +164,8 @@ export async function processRenewalReminders(
           }
         }
 
-        // Determine stage to send (default to stage 1 for now, since reminderStage was removed)
-        const stageToSend = 1 as 1 | 2 | 3
+        // Determine stage to send (current stage + 1)
+        const stageToSend = renewal.nextStage as 1 | 2 | 3
 
         // Get template variables
         const { vars } = await buildRenewalTemplateVars(renewal.id)
@@ -271,15 +320,17 @@ export async function processRenewalReminders(
 
         // Update renewal if at least one channel succeeded
         if (allChannelsSucceeded || channelResults.some(r => r.success)) {
-          // Calculate next follow-up (7 days from now as default)
-          const nextFollowUpAt = new Date(now)
-          nextFollowUpAt.setDate(nextFollowUpAt.getDate() + 7)
+          // Calculate next reminder date for the next stage
+          // After sending stage N, the current stage becomes N, so next reminder is for stage N+1
+          const currentStage = renewal.currentStage
+          const nextStage = currentStage + 1
+          const nextReminderAt = computeNextReminderAt(renewal.expiryDate, nextStage)
           
           await prisma.renewal.update({
             where: { id: renewal.id },
             data: {
               lastContactedAt: now,
-              nextFollowUpAt,
+              nextFollowUpAt: nextReminderAt, // Use nextReminderAt for next follow-up
             },
           })
 

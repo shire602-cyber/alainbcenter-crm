@@ -23,9 +23,11 @@
 ### 3. Conversation-Level Throttling ✅
 - **Field**: `Conversation.lastAiOutboundAt` (new)
 - **Cooldown**: 90 seconds (configurable, between 60-120s)
-- **Enforcement**: Checked in `sendAiReply()` before sending (line ~1168)
+- **Enforcement**: Checked in `sendAiReply()` before sending (line ~1206)
   - If `lastAiOutboundAt` < 90s ago → block send
   - Updated after successful send
+  - **AI-ONLY**: This cooldown ONLY applies to AI auto-replies via `sendAiReply()`
+  - Human-sent messages go through different endpoints and are NOT affected by this cooldown
 
 ### 4. Retry Behavior Fixed ✅
 - **Job Processor**: `src/lib/jobs/processOutboundJobs.ts`

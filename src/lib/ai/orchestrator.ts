@@ -1203,7 +1203,10 @@ export async function sendAiReply(
     }
   }
 
-  // Step 1.6: Check cooldown (30 seconds hard throttling)
+  // Step 1.6: Check cooldown (90 seconds - AI-only throttling)
+  // NOTE: This cooldown ONLY applies to AI auto-replies, not human-sent messages
+  // Human messages go through different endpoints (e.g., /api/inbox/conversations/[id]/messages)
+  // and do NOT call sendAiReply(), so they are not affected by this cooldown.
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
     select: { lastAiOutboundAt: true, lastProcessedInboundMessageId: true },
@@ -1222,7 +1225,7 @@ export async function sendAiReply(
   }
 
   if (conversation?.lastAiOutboundAt) {
-    const cooldownSeconds = 30; // 30 seconds hard throttling (user requirement)
+    const cooldownSeconds = 90; // 90 seconds cooldown (60-120s range as per documentation)
     const cooldownMs = cooldownSeconds * 1000;
     const timeSinceLastOutbound = Date.now() - conversation.lastAiOutboundAt.getTime();
     
@@ -1477,6 +1480,9 @@ export async function sendAiReply(
     }
   } catch (error: any) {
     console.error(`[ORCHESTRATOR] sendAiReply error:`, error);
+
+    // CRITICAL: Release lock in catch block to prevent conversation from being locked forever
+    await releaseConversationLock(conversationId);
 
     // Update idempotency record on error
     if (idempotencyRecordId) {
