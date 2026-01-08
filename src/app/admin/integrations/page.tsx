@@ -7,7 +7,6 @@ import { Button } from '@/components/ui/button'
 import { IntegrationSettings } from '@/components/admin/IntegrationSettings'
 import { IntegrationIcon } from '@/components/admin/IntegrationIcon'
 import { MetaTesterIntegration } from '@/components/admin/MetaTesterIntegration'
-import { MetaTesterIntegration } from '@/components/admin/MetaTesterIntegration'
 import { 
   Settings,
   CheckCircle2,
