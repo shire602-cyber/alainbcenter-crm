@@ -1207,13 +1207,33 @@ export async function sendAiReply(
   // NOTE: This cooldown ONLY applies to AI auto-replies, not human-sent messages
   // Human messages go through different endpoints (e.g., /api/inbox/conversations/[id]/messages)
   // and do NOT call sendAiReply(), so they are not affected by this cooldown.
-  const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    select: { lastAiOutboundAt: true, lastProcessedInboundMessageId: true },
-  });
+  let conversation: { lastAiOutboundAt: Date | null; lastProcessedInboundMessageId?: string | null } | null = null;
+  try {
+    conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { lastAiOutboundAt: true, lastProcessedInboundMessageId: true },
+    });
+  } catch (error: any) {
+    // Gracefully handle missing lastProcessedInboundMessageId column
+    if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+      console.warn('[DB] lastProcessedInboundMessageId column not found, querying without it (this is OK if migration not yet applied)');
+      try {
+        conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { lastAiOutboundAt: true },
+        });
+      } catch (retryError: any) {
+        console.error('[DB] Failed to query conversation:', retryError);
+        throw retryError;
+      }
+    } else {
+      throw error;
+    }
+  }
 
   // CRITICAL FIX: Check inbound message idempotency (prevent duplicate webhook processing)
-  if (inboundProviderMessageId && conversation?.lastProcessedInboundMessageId === inboundProviderMessageId) {
+  // Only check if column exists (migration applied)
+  if (inboundProviderMessageId && conversation && 'lastProcessedInboundMessageId' in conversation && conversation.lastProcessedInboundMessageId === inboundProviderMessageId) {
     console.log(
       `[ORCHESTRATOR] AI_OUTBOUND_BLOCKED_IDEMPOTENCY conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} (already processed)`,
     );
@@ -1431,18 +1451,42 @@ export async function sendAiReply(
       }
 
       // Update conversation: lastAiOutboundAt (for cooldown), lastProcessedInboundMessageId (for idempotency), and aiState
-      await prisma.conversation.update({
-        where: { id: conversationId },
-        data: {
-          lastAiOutboundAt: new Date(),
-          ...(inboundProviderMessageId && {
-            lastProcessedInboundMessageId: inboundProviderMessageId,
-          }),
-          ...(orchestratorResult.nextStepKey && {
-            aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
-          }),
-        },
-      });
+      // Gracefully handle missing lastProcessedInboundMessageId column
+      const updateData: any = {
+        lastAiOutboundAt: new Date(),
+        ...(orchestratorResult.nextStepKey && {
+          aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
+        }),
+      };
+      
+      // Only include lastProcessedInboundMessageId if column exists (try-catch will handle if it doesn't)
+      if (inboundProviderMessageId) {
+        updateData.lastProcessedInboundMessageId = inboundProviderMessageId;
+      }
+      
+      try {
+        await prisma.conversation.update({
+          where: { id: conversationId },
+          data: updateData,
+        });
+      } catch (error: any) {
+        // If lastProcessedInboundMessageId column doesn't exist, retry without it
+        if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+          console.warn('[DB] lastProcessedInboundMessageId column not found, updating without it (this is OK if migration not yet applied)');
+          const fallbackData: any = {
+            lastAiOutboundAt: new Date(),
+            ...(orchestratorResult.nextStepKey && {
+              aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
+            }),
+          };
+          await prisma.conversation.update({
+            where: { id: conversationId },
+            data: fallbackData,
+          });
+        } else {
+          throw error;
+        }
+      }
 
       console.log(
         `[ORCHESTRATOR] AI_OUTBOUND_SENT conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} dedupeKey=${dedupeKey?.substring(0, 32) || 'N/A'}... messageId=${sendResult.messageId}`,

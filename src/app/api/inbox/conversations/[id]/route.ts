@@ -122,9 +122,10 @@ export async function GET(
         },
       })
     } catch (error: any) {
-      // Gracefully handle missing deletedAt column - query works without it
-      if (error.code === 'P2022' || error.message?.includes('deletedAt') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
-        console.warn('[DB] deletedAt column not found, querying without it (this is OK if migration not yet applied)')
+      // Gracefully handle missing columns (deletedAt, lastProcessedInboundMessageId, etc.) - query works without them
+      if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column') || 
+          error.message?.includes('deletedAt') || error.message?.includes('lastProcessedInboundMessageId')) {
+        console.warn('[DB] Missing column detected, querying without it (this is OK if migration not yet applied):', error.message?.substring(0, 100))
         // Retry without deletedAt - the query should work fine
         try {
           conversation = await prisma.conversation.findUnique({
