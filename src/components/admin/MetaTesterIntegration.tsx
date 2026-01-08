@@ -27,24 +27,32 @@ export function MetaTesterIntegration({
   const [connecting, setConnecting] = useState(false)
   const [disconnecting, setDisconnecting] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [errorDetails, setErrorDetails] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
   const [connectionStatus, setConnectionStatus] = useState(connections)
+  const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
+  const [webhookVerifyTokenConfigured, setWebhookVerifyTokenConfigured] = useState(false)
 
-  // Refresh status periodically
+  // Load status on mount and refresh periodically
   useEffect(() => {
-    if (hasConnection) {
-      const interval = setInterval(async () => {
-        try {
-          const res = await fetch('/api/integrations/meta/status')
-          if (res.ok) {
-            const data = await res.json()
-            setConnectionStatus(data.connections || [])
-          }
-        } catch (err) {
-          // Silent fail
+    const loadStatus = async () => {
+      try {
+        const res = await fetch('/api/integrations/meta/status')
+        if (res.ok) {
+          const data = await res.json()
+          setConnectionStatus(data.connections || [])
+          setWebhookUrl(data.webhookUrl || null)
+          setWebhookVerifyTokenConfigured(data.webhookVerifyTokenConfigured || false)
         }
-      }, 30000) // Every 30 seconds
+      } catch (err) {
+        // Silent fail
+      }
+    }
 
+    loadStatus()
+
+    if (hasConnection) {
+      const interval = setInterval(loadStatus, 30000) // Every 30 seconds
       return () => clearInterval(interval)
     }
   }, [hasConnection])
@@ -73,10 +81,13 @@ export function MetaTesterIntegration({
 
       if (!res.ok) {
         setError(data.error || 'Failed to connect')
+        setErrorDetails(data.details || data.hint || null)
         return
       }
 
       setSuccess(`Connected to ${data.connection.pageName || data.connection.pageId}${data.connection.igUsername ? ` (@${data.connection.igUsername})` : ''}`)
+      setError(null)
+      setErrorDetails(null)
       setToken('')
       setWebhookVerifyToken('') // Clear after successful connection
       
@@ -85,6 +96,8 @@ export function MetaTesterIntegration({
       if (statusRes.ok) {
         const statusData = await statusRes.json()
         setConnectionStatus(statusData.connections || [])
+        setWebhookUrl(statusData.webhookUrl || null)
+        setWebhookVerifyTokenConfigured(statusData.webhookVerifyTokenConfigured || false)
       }
 
       // Reload page after 2 seconds to show updated state
@@ -93,6 +106,7 @@ export function MetaTesterIntegration({
       }, 2000)
     } catch (err: any) {
       setError(err.message || 'Failed to connect')
+      setErrorDetails('Network error or server unavailable')
     } finally {
       setConnecting(false)
     }
@@ -158,7 +172,10 @@ export function MetaTesterIntegration({
       <div className="space-y-3">
         {error && (
           <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-300">
-            {error}
+            <div className="font-medium">{error}</div>
+            {errorDetails && (
+              <div className="mt-1 text-red-600 dark:text-red-400">{errorDetails}</div>
+            )}
           </div>
         )}
         {success && (
@@ -198,16 +215,40 @@ export function MetaTesterIntegration({
           ))}
         </div>
 
-        <div className="pt-2 border-t border-slate-200 dark:border-slate-700">
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full text-xs h-7"
-            onClick={handleTestWebhook}
-          >
-            Test Webhook
-          </Button>
-        </div>
+        {webhookUrl && (
+          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+            <div className="text-xs space-y-1">
+              <p className="font-medium text-slate-700 dark:text-slate-300">Webhook Configuration:</p>
+              <div className="pl-2 space-y-1">
+                <p className="text-slate-600 dark:text-slate-400">
+                  <span className="font-medium">Callback URL:</span>{' '}
+                  <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">
+                    {webhookUrl}
+                  </code>
+                </p>
+                <p className="text-slate-600 dark:text-slate-400">
+                  <span className="font-medium">Verify Token:</span>{' '}
+                  {webhookVerifyTokenConfigured ? (
+                    <span className="text-green-600 dark:text-green-400">✓ Configured</span>
+                  ) : (
+                    <span className="text-yellow-600 dark:text-yellow-400">⚠ Not set</span>
+                  )}
+                </p>
+                <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
+                  Copy the Callback URL above and paste it in Meta Developers → Instagram → API Setup → Webhooks → Callback URL
+                </p>
+              </div>
+            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs h-7"
+              onClick={handleTestWebhook}
+            >
+              Test Webhook
+            </Button>
+          </div>
+        )}
       </div>
     )
   }
@@ -216,7 +257,10 @@ export function MetaTesterIntegration({
     <div className="space-y-3">
       {error && (
         <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-300">
-          {error}
+          <div className="font-medium">{error}</div>
+          {errorDetails && (
+            <div className="mt-1 text-red-600 dark:text-red-400">{errorDetails}</div>
+          )}
         </div>
       )}
       {success && (
@@ -256,6 +300,18 @@ export function MetaTesterIntegration({
           </p>
         </div>
       </div>
+
+      {webhookUrl && (
+        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
+          <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">Webhook URL for Meta:</p>
+          <code className="text-xs bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded break-all">
+            {webhookUrl}
+          </code>
+          <p className="text-blue-600 dark:text-blue-400 mt-1">
+            Copy this URL and paste it in Meta Developers → Instagram → API Setup → Webhooks → Callback URL
+          </p>
+        </div>
+      )}
 
       <Button
         variant="default"

@@ -39,8 +39,19 @@ export async function POST(req: NextRequest) {
     try {
       metaUser = await validateToken(token)
     } catch (error: any) {
+      console.error('Token validation error:', error)
+      // Extract more detailed error message
+      const errorMessage = error.message || 'Unknown error'
+      const isGraphAPIError = errorMessage.includes('Graph API error')
+      
       return NextResponse.json(
-        { error: 'Invalid token', details: error.message },
+        { 
+          error: isGraphAPIError ? errorMessage : 'Invalid token',
+          details: errorMessage,
+          hint: isGraphAPIError 
+            ? 'Make sure your tester token has the correct permissions (pages_read_engagement, pages_manage_metadata, instagram_basic, instagram_manage_messages)'
+            : 'Please check that your token is valid and not expired'
+        },
         { status: 401 }
       )
     }
@@ -50,8 +61,14 @@ export async function POST(req: NextRequest) {
     try {
       pages = await getUserPages(token)
     } catch (error: any) {
+      console.error('Get pages error:', error)
+      const errorMessage = error.message || 'Unknown error'
       return NextResponse.json(
-        { error: 'Failed to fetch pages', details: error.message },
+        { 
+          error: 'Failed to fetch pages', 
+          details: errorMessage,
+          hint: 'Make sure your token has "pages_read_engagement" permission and you have at least one Facebook Page'
+        },
         { status: 500 }
       )
     }

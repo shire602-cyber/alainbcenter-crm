@@ -45,14 +45,20 @@ The Meta integration allows you to:
 
 ## Step 3: Configure Webhook
 
-1. In your Meta App dashboard, go to **Webhooks**
-2. Click **Add Callback URL**
-3. Enter your webhook URL:
+1. In your Meta App dashboard, go to **Instagram** → **API Setup** → **Webhooks**
+2. **Important**: The webhook URL should be:
    ```
    https://your-domain.vercel.app/api/webhooks/meta
    ```
-4. Enter your **Verify Token** (set this in environment variables as `META_VERIFY_TOKEN`)
-5. Click **Verify and Save**
+   **NOT** `/api/webhooks/whatsapp` (that's for WhatsApp, not Meta/Instagram)
+3. Enter your **Verify Token** (you can set this in the admin UI when connecting, or use `META_VERIFY_TOKEN` env var)
+4. Click **Verify and Save**
+5. Subscribe to the following webhook fields:
+   - `messages`
+   - `messaging_postbacks`
+   - `message_deliveries`
+   - `message_reads`
+   - `leadgen` (optional)
 
 ## Step 4: Subscribe to Webhook Fields
 
@@ -126,9 +132,30 @@ The webhook endpoint (`/api/webhooks/meta`) handles verification automatically:
 
 ### Token Invalid
 
-- Check that the token hasn't expired (tester tokens last 60 days)
-- Verify all required permissions are granted
-- Regenerate the token in Graph API Explorer
+**Common causes:**
+1. **Token expired**: Tester tokens expire after 60 days. Generate a new one.
+2. **Missing permissions**: The token must have these permissions:
+   - `pages_show_list` - To list your pages
+   - `pages_read_engagement` - To read page data
+   - `pages_manage_metadata` - To manage page subscriptions
+   - `instagram_basic` - To access Instagram account
+   - `instagram_manage_messages` - To manage Instagram messages
+   - `pages_messaging` - To access messaging features
+3. **Wrong token type**: Make sure you're using a **User Token** (not Page Token) from Graph API Explorer
+4. **Token format**: The token should start with `EAAB...` or `EAA...`
+
+**How to fix:**
+1. Go to Meta Developers → Tools → Graph API Explorer
+2. Select your app
+3. Select "User Token" (not Page Token)
+4. Click "Generate Access Token"
+5. Grant all required permissions listed above
+6. Copy the new token and paste it in the admin UI
+
+**Error messages:**
+- "Graph API error (401): Invalid OAuth access token" → Token expired or invalid
+- "Graph API error (403): Insufficient permissions" → Missing required permissions
+- "Graph API error (190): Invalid OAuth 2.0 Access Token" → Token format is wrong
 
 ### No Pages Found
 
@@ -144,10 +171,12 @@ The webhook endpoint (`/api/webhooks/meta`) handles verification automatically:
 
 ### Webhook Not Receiving Events
 
+- **Wrong webhook URL**: Make sure you're using `/api/webhooks/meta` (NOT `/api/webhooks/whatsapp`)
 - Verify webhook URL is accessible (not behind firewall)
-- Check `META_VERIFY_TOKEN` matches in both places
-- Ensure webhook fields are subscribed
+- Check verify token matches in both places (Meta app and database)
+- Ensure webhook fields are subscribed (check in Meta Developers → Webhooks)
 - Check server logs for errors
+- The webhook URL is displayed in the admin UI after connecting - copy it from there
 
 ### Messages Not Appearing in Inbox
 

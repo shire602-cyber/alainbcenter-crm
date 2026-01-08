@@ -7,6 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-server'
 import { getAllConnections } from '@/server/integrations/meta/storage'
 import { getWebhookVerifyToken } from '@/server/integrations/meta/config'
+import { getWebhookUrl } from '@/lib/publicUrl'
 
 export async function GET(req: NextRequest) {
   try {
@@ -14,9 +15,11 @@ export async function GET(req: NextRequest) {
 
     const connections = await getAllConnections(null) // Single-tenant, use null
     const webhookVerifyToken = await getWebhookVerifyToken()
+    const webhookUrl = getWebhookUrl('/api/webhooks/meta', req)
 
     return NextResponse.json({
       success: true,
+      webhookUrl,
       webhookVerifyTokenConfigured: !!webhookVerifyToken,
       connections: connections.map((conn) => ({
         id: conn.id,
