@@ -1413,11 +1413,12 @@ async function createCommunicationLog(input: {
       if (existingMessage) {
         console.log(`[AUTO-MATCH] Message already exists (idempotency): ${existingMessage.id} for providerMessageId ${input.providerMessageId}`)
         // Return full result with entities from existing message
+        // Note: existingMessage.contact, existingMessage.conversation, existingMessage.lead should always be present due to include
         return {
-          contact: existingMessage.contact || contact, // Use contact from message or fallback to scope
-          conversation: existingMessage.conversation || conversation, // Use conversation from message or fallback to scope
-          lead: existingMessage.lead || lead, // Use lead from message or fallback to scope
-          message: existingMessage, // Use the existing message
+          contact: existingMessage.contact,
+          conversation: existingMessage.conversation,
+          lead: existingMessage.lead,
+          message: existingMessage,
           extractedFields: {},
           tasksCreated: 0,
           autoReplied: false,
@@ -1456,11 +1457,12 @@ async function createCommunicationLog(input: {
         if (duplicateMessage) {
           console.log(`[AUTO-MATCH] Found existing message: ${duplicateMessage.id}`)
           // Return full result with entities from existing message
+          // Note: duplicateMessage.contact, duplicateMessage.conversation, duplicateMessage.lead should always be present due to include
           return {
-            contact: duplicateMessage.contact || contact, // Use contact from message or fallback to scope
-            conversation: duplicateMessage.conversation || conversation, // Use conversation from message or fallback to scope
-            lead: duplicateMessage.lead || lead, // Use lead from message or fallback to scope
-            message: duplicateMessage, // Use the existing message
+            contact: duplicateMessage.contact,
+            conversation: duplicateMessage.conversation,
+            lead: duplicateMessage.lead,
+            message: duplicateMessage,
             extractedFields: {},
             tasksCreated: 0,
             autoReplied: false,
@@ -1514,11 +1516,12 @@ async function createCommunicationLog(input: {
             })
             if (fallbackDuplicateMessage) {
               // Return full result with entities from existing message
+              // Note: fallbackDuplicateMessage.contact, fallbackDuplicateMessage.conversation, fallbackDuplicateMessage.lead should always be present due to include
               return {
-                contact: fallbackDuplicateMessage.contact || contact, // Use contact from message or fallback to scope
-                conversation: fallbackDuplicateMessage.conversation || conversation, // Use conversation from message or fallback to scope
-                lead: fallbackDuplicateMessage.lead || lead, // Use lead from message or fallback to scope
-                message: fallbackDuplicateMessage, // Use the existing message
+                contact: fallbackDuplicateMessage.contact,
+                conversation: fallbackDuplicateMessage.conversation,
+                lead: fallbackDuplicateMessage.lead,
+                message: fallbackDuplicateMessage,
                 extractedFields: {},
                 tasksCreated: 0,
                 autoReplied: false,
