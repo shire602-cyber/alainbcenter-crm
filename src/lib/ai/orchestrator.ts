@@ -1009,7 +1009,7 @@ and let me know the best time for our consultant to call you.`;
       .slice()
       .reverse()
       .map(
-        (m) =>
+        (m: any) =>
           `${m.direction === "INBOUND" ? "User" : "Assistant"}: ${m.body || ""}`,
       )
       .join("\n");
