@@ -1,17 +1,30 @@
 -- Add reminder_stage and conversationId to Renewal
-ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "reminderStage" INTEGER NOT NULL DEFAULT 0;
-ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "conversationId" INTEGER;
-ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "lastRemindedAt" TIMESTAMP(3);
+-- NOTE: This migration may run before the Renewal table is created (for shadow database validation)
+-- So we check if the table exists first
+
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Renewal') THEN
+    ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "reminderStage" INTEGER NOT NULL DEFAULT 0;
+    ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "conversationId" INTEGER;
+    ALTER TABLE "Renewal" ADD COLUMN IF NOT EXISTS "lastRemindedAt" TIMESTAMP(3);
+  END IF;
+END $$;
 
 -- Update status default to ACTIVE (was PENDING)
 -- Note: Existing records with status='PENDING' should be updated to 'ACTIVE' if they're still active
-ALTER TABLE "Renewal" ALTER COLUMN "status" SET DEFAULT 'ACTIVE';
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Renewal') THEN
+    ALTER TABLE "Renewal" ALTER COLUMN "status" SET DEFAULT 'ACTIVE';
 
--- Update existing PENDING records to ACTIVE (if they're not expired)
-UPDATE "Renewal" 
-SET "status" = 'ACTIVE' 
-WHERE "status" = 'PENDING' 
-  AND "expiryDate" > NOW();
+    -- Update existing PENDING records to ACTIVE (if they're not expired)
+    UPDATE "Renewal" 
+    SET "status" = 'ACTIVE' 
+    WHERE "status" = 'PENDING' 
+      AND "expiryDate" > NOW();
+  END IF;
+END $$;
 
 -- Add foreign key for conversationId (only if it doesn't exist)
 DO $$ 
@@ -59,9 +72,17 @@ END $$;
 -- Update idempotency key format (already unique, but update existing records if needed)
 -- Note: Existing records will have old format, new records will use new format
 
--- Create indexes
-CREATE INDEX IF NOT EXISTS "Renewal_status_reminderStage_nextReminderAt_idx" 
-  ON "Renewal"("status", "reminderStage", "nextReminderAt");
-CREATE INDEX IF NOT EXISTS "RenewalNotification_channel_renewalId_stage_idx" 
-  ON "RenewalNotification"("channel", "renewalId", "stage");
+-- Create indexes (only if tables exist)
+DO $$
+BEGIN
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'Renewal') THEN
+    CREATE INDEX IF NOT EXISTS "Renewal_status_reminderStage_nextReminderAt_idx" 
+      ON "Renewal"("status", "reminderStage", "nextReminderAt");
+  END IF;
+  
+  IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'RenewalNotification') THEN
+    CREATE INDEX IF NOT EXISTS "RenewalNotification_channel_renewalId_stage_idx" 
+      ON "RenewalNotification"("channel", "renewalId", "stage");
+  END IF;
+END $$;
 
