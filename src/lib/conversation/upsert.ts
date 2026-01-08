@@ -212,11 +212,13 @@ export async function upsertConversation(
     return { id: restored.id }
   }
   
-  // CRITICAL FIX: Wrap upsert in try-catch to handle missing lastProcessedInboundMessageId column
-  // Since upsert doesn't support select, we need to fall back to manual findUnique + create/update
-  // IMPORTANT: Always use fallback pattern to avoid Prisma Client schema validation errors
+  // CRITICAL FIX: Use manual findUnique + create/update pattern instead of upsert
+  // This avoids Prisma Client schema validation errors when lastProcessedInboundMessageId column doesn't exist
+  // Since upsert doesn't support select, it tries to return ALL columns including missing ones
+  // The fallback pattern is safer and works whether or not the migration is applied
   let conversation
   try {
+    // Try upsert first (faster if column exists)
     conversation = await prisma.conversation.upsert({
       where: {
         contactId_channel: {
