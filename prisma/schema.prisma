@@ -41,6 +41,7 @@ model User {
   automationRunLogs     AutomationRunLog[]
   assignedTasks         Task[]               @relation("AssignedTasks")
   createdTasks          Task[]               @relation("CreatedTasks")
+  taskAssignments       TaskAssignee[]       @relation("TaskAssignees")
   uploadedDocuments     Document[]           @relation("UploadedDocuments")
   createdAITrainingDocs AITrainingDocument[]
   createdAttachments    LeadAttachment[]     @relation("CreatedAttachments")
@@ -212,6 +213,7 @@ model Lead {
 
   communicationLogs  CommunicationLog[]
   tasks              Task[]
+  taskNotifications  Notification[]
   documents          Document[]
   checklistItems     ChecklistItem[]
   chatMessages       ChatMessage[]
@@ -719,20 +721,40 @@ model Task {
   expiryItem      ExpiryItem?   @relation(fields: [expiryItemId], references: [id])
   expiryItemId    Int? // Task may be tied to a specific expiry
   title           String
+  description     String? // Task description/details
   type            String // CALL | WHATSAPP | EMAIL | MEETING | DOCUMENT_REQUEST | REPLY_WHATSAPP | ESCALATION | RENEWAL_OUTREACH | RENEWAL_FOLLOWUP | RENEWAL_INTERNAL | OTHER
-  dueAt           DateTime?
+  priority        String        @default("MEDIUM") // LOW | MEDIUM | HIGH
+  dueAt           DateTime? // Due date + time
   status          String        @default("OPEN") // OPEN | DONE | SNOOZED
   doneAt          DateTime?
-  assignedUserId  Int?
+  assignedUserId  Int? // Legacy single assignee (keep for backward compatibility)
   assignedUser    User?         @relation("AssignedTasks", fields: [assignedUserId], references: [id])
+  assignees       TaskAssignee[] // Many-to-many assignees
   createdByUserId Int?
   createdByUser   User?         @relation("CreatedTasks", fields: [createdByUserId], references: [id])
   aiSuggested     Boolean       @default(false)
   idempotencyKey  String?       @unique // For preventing duplicate auto-created tasks
+  lastNudgedAt    DateTime? // When task was last nudged (for rate limiting)
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   @@index([expiryItemId])
+  @@index([status, dueAt])
+  @@index([priority, dueAt])
+}
+
+model TaskAssignee {
+  id        Int      @id @default(autoincrement())
+  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId    Int
+  user      User     @relation("TaskAssignees", fields: [userId], references: [id])
+  userId    Int
+  assignedAt DateTime @default(now())
+  notifiedAt DateTime? // When assignee was last notified about this task
+
+  @@unique([taskId, userId])
+  @@index([userId, taskId])
+  @@index([taskId])
 }
 
 model Document {
@@ -939,13 +961,16 @@ model AutomationJob {
 
 model Notification {
   id             Int           @id @default(autoincrement())
-  type           String // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'system'
+  type           String // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'task_due_soon' | 'task_overdue' | 'task_completed' | 'system'
   title          String
   message        String
   lead           Lead?         @relation(fields: [leadId], references: [id])
   leadId         Int?
+  task           Task?         @relation(fields: [taskId], references: [id])
+  taskId         Int?
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
   conversationId Int?
+  userId         Int? // Target user for this notification (if null, applies to all users)
   isRead         Boolean       @default(false)
   readAt         DateTime?
   snoozedUntil   DateTime? // When to show notification again (for snooze feature)
@@ -953,8 +978,10 @@ model Notification {
 
   @@index([isRead, createdAt])
   @@index([leadId])
+  @@index([taskId])
   @@index([conversationId])
   @@index([type, createdAt])
+  @@index([userId, isRead])
   @@index([snoozedUntil])
 }
 

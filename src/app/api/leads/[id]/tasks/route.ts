@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import { requireAuthApi } from '@/lib/authApi'
+import { createTaskNotification } from '@/lib/tasks/notifications'
 
 // POST /api/leads/[id]/tasks
 // Create a new task for a lead
@@ -36,7 +37,13 @@ export async function POST(
       ? body.type.toUpperCase()
       : 'OTHER'
 
-    // Parse and validate due date
+    // Validate priority
+    const allowedPriorities = ['LOW', 'MEDIUM', 'HIGH', 'low', 'medium', 'high']
+    const priority = body.priority && allowedPriorities.includes(body.priority.toUpperCase())
+      ? body.priority.toUpperCase()
+      : 'MEDIUM'
+
+    // Parse and validate due date + time
     let dueAt: Date | null = null
     if (body.dueAt && body.dueAt !== '') {
       const parsedDate = new Date(body.dueAt)
@@ -47,6 +54,24 @@ export async function POST(
         )
       }
       dueAt = parsedDate
+    }
+
+    // Validate assignees (array of user IDs)
+    const assigneeIds: number[] = []
+    if (body.assigneeIds && Array.isArray(body.assigneeIds)) {
+      assigneeIds.push(...body.assigneeIds.map((id: any) => parseInt(id)).filter((id: number) => !isNaN(id)))
+    } else if (body.assignedUserId) {
+      // Legacy single assignee support
+      assigneeIds.push(parseInt(body.assignedUserId))
+    }
+
+    // Permission check: Non-admin can only assign to themselves (unless config allows)
+    const isAdmin = user.role === 'ADMIN'
+    if (!isAdmin && assigneeIds.length > 0) {
+      // Non-admin must include themselves if assigning to others
+      if (!assigneeIds.includes(user.id)) {
+        assigneeIds.push(user.id)
+      }
     }
 
     // Verify lead exists
@@ -66,12 +91,20 @@ export async function POST(
       data: {
         leadId,
         title: body.title.trim(),
+        description: body.description?.trim() || null,
         type: taskType,
+        priority,
         dueAt,
         status: body.status || 'OPEN',
-        assignedUserId: body.assignedUserId ? parseInt(body.assignedUserId) : null,
+        assignedUserId: assigneeIds.length === 1 ? assigneeIds[0] : null, // Legacy single assignee
         createdByUserId: user.id,
         aiSuggested: body.aiSuggested || false,
+        assignees: assigneeIds.length > 0 ? {
+          create: assigneeIds.map(userId => ({
+            userId,
+            assignedAt: new Date(),
+          })),
+        } : undefined,
       },
       include: {
         lead: {
@@ -82,11 +115,34 @@ export async function POST(
         assignedUser: {
           select: { id: true, name: true, email: true }
         },
+        assignees: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            }
+          }
+        },
         createdByUser: {
           select: { id: true, name: true, email: true }
         },
       },
     })
+
+    // Create notifications for assignees
+    if (assigneeIds.length > 0) {
+      try {
+        await createTaskNotification({
+          type: 'task_assigned',
+          taskId: task.id,
+          leadId,
+          title: `New task assigned: ${task.title}`,
+          message: `You have been assigned a new task: "${task.title}"${task.dueAt ? ` (Due: ${new Date(task.dueAt).toLocaleString()})` : ''}`,
+        })
+      } catch (notifError) {
+        console.error('Failed to create task assignment notification:', notifError)
+        // Don't fail task creation if notification fails
+      }
+    }
 
     return NextResponse.json(task, { status: 201 })
   } catch (error: any) {
@@ -133,12 +189,20 @@ export async function GET(
         assignedUser: {
           select: { id: true, name: true, email: true }
         },
+        assignees: {
+          include: {
+            user: {
+              select: { id: true, name: true, email: true }
+            }
+          }
+        },
         createdByUser: {
           select: { id: true, name: true, email: true }
         },
       },
       orderBy: [
         { status: 'asc' }, // OPEN first, then DONE
+        { priority: 'desc' }, // HIGH first, then MEDIUM, then LOW
         { dueAt: 'asc' }, // Then by due date
         { createdAt: 'desc' }, // Then by creation date
       ],
