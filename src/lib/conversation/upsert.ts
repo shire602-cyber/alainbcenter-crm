@@ -62,13 +62,49 @@ export async function upsertConversation(
   
   // Try to find existing conversation by (contactId, channel, externalThreadId)
   // CRITICAL FIX: Include soft-deleted conversations so we can restore them
-  const existing = await prisma.conversation.findFirst({
-    where: {
-      contactId: input.contactId,
-      channel: channelLower,
-      externalThreadId: effectiveThreadId,
-    },
-  })
+  // CRITICAL FIX: Use explicit select to avoid missing columns (lastProcessedInboundMessageId, etc.)
+  let existing
+  try {
+    existing = await prisma.conversation.findFirst({
+      where: {
+        contactId: input.contactId,
+        channel: channelLower,
+        externalThreadId: effectiveThreadId,
+      },
+    })
+  } catch (error: any) {
+    // Gracefully handle missing lastProcessedInboundMessageId column
+    if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+      console.warn('[DB] lastProcessedInboundMessageId column not found in upsertConversation findFirst, querying with select (this is OK if migration not yet applied)')
+      existing = await prisma.conversation.findFirst({
+        where: {
+          contactId: input.contactId,
+          channel: channelLower,
+          externalThreadId: effectiveThreadId,
+        },
+        select: {
+          id: true,
+          contactId: true,
+          leadId: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          updatedAt: true,
+          externalThreadId: true,
+          externalId: true,
+          language: true,
+          deletedAt: true,
+        },
+      }) as any
+    } else {
+      throw error
+    }
+  }
   
   if (existing) {
     // CRITICAL FIX: Restore soft-deleted conversations when new messages arrive
@@ -111,14 +147,50 @@ export async function upsertConversation(
   // Create new conversation - use (contactId, channel) as base uniqueness
   // But store effectiveThreadId for future lookups
   // CRITICAL FIX: Check if conversation exists and is soft-deleted before upsert
-  const existingByUnique = await prisma.conversation.findUnique({
-    where: {
-      contactId_channel: {
-        contactId: input.contactId,
-        channel: channelLower,
+  let existingByUnique
+  try {
+    existingByUnique = await prisma.conversation.findUnique({
+      where: {
+        contactId_channel: {
+          contactId: input.contactId,
+          channel: channelLower,
+        },
       },
-    },
-  })
+    })
+  } catch (error: any) {
+    // Gracefully handle missing lastProcessedInboundMessageId column
+    if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+      console.warn('[DB] lastProcessedInboundMessageId column not found in upsertConversation findUnique, querying with select (this is OK if migration not yet applied)')
+      existingByUnique = await prisma.conversation.findUnique({
+        where: {
+          contactId_channel: {
+            contactId: input.contactId,
+            channel: channelLower,
+          },
+        },
+        select: {
+          id: true,
+          contactId: true,
+          leadId: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          updatedAt: true,
+          externalThreadId: true,
+          externalId: true,
+          language: true,
+          deletedAt: true,
+        },
+      }) as any
+    } else {
+      throw error
+    }
+  }
   
   // If conversation exists but is soft-deleted, restore it
   if (existingByUnique && (existingByUnique as any).deletedAt) {

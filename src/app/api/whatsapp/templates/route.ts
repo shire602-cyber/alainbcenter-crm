@@ -35,11 +35,30 @@ export async function GET(req: NextRequest) {
     try {
       credentials = await getWhatsAppCredentials()
     } catch (error: any) {
+      console.error('[WHATSAPP-TEMPLATES] Failed to get credentials:', error)
       return NextResponse.json(
         {
           ok: false,
           error: 'missing_credentials',
           message: error.message || 'WhatsApp credentials not configured',
+          hint: 'Configure WhatsApp in /admin/integrations or set environment variables',
+          details: {
+            errorType: error.constructor?.name || 'Unknown',
+            errorMessage: error.message || String(error),
+          },
+        },
+        { status: 500 }
+      )
+    }
+
+    // CRITICAL: Validate credentials exist
+    if (!credentials) {
+      console.error('[WHATSAPP-TEMPLATES] getWhatsAppCredentials returned null/undefined')
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'missing_credentials',
+          message: 'WhatsApp credentials not configured',
           hint: 'Configure WhatsApp in /admin/integrations or set environment variables',
         },
         { status: 500 }
@@ -47,6 +66,25 @@ export async function GET(req: NextRequest) {
     }
 
     const { accessToken, wabaId, phoneNumberId } = credentials
+
+    // CRITICAL: Validate access token exists
+    if (!accessToken) {
+      console.error('[WHATSAPP-TEMPLATES] Access token is missing')
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'missing_access_token',
+          message: 'WhatsApp access token not configured',
+          hint: 'Configure WhatsApp access token in /admin/integrations',
+          details: {
+            tokenSource: credentials.tokenSource,
+            hasPhoneNumberId: !!phoneNumberId,
+            hasWabaId: !!wabaId,
+          },
+        },
+        { status: 500 }
+      )
+    }
 
     // CRITICAL: Validate and fetch WABA ID
     // Application IDs often contain dashes or are very long - reject them immediately
@@ -107,15 +145,23 @@ export async function GET(req: NextRequest) {
                 effectiveWabaId = fetchedId
               }
             }
+          } else {
+            const altErrorData = await altResponse.json().catch(() => ({ error: { message: 'Unknown error' } }))
+            console.warn(`[WHATSAPP-TEMPLATES] Failed to fetch WABA ID from phone_number_id (status ${altResponse.status}):`, altErrorData.error?.message || 'Unknown error')
           }
         }
-      } catch (e) {
-        console.warn('[WHATSAPP-TEMPLATES] Failed to get WABA ID from phone_number_id:', e)
+      } catch (e: any) {
+        console.warn('[WHATSAPP-TEMPLATES] Exception while fetching WABA ID from phone_number_id:', e.message || String(e))
       }
     }
 
     if (!effectiveWabaId) {
       const storedIdPreview = wabaId ? `${wabaId.substring(0, 20)}...` : 'not set'
+      console.error('[WHATSAPP-TEMPLATES] WABA ID not available', {
+        storedIdPreview,
+        looksLikeApplicationId,
+        phoneNumberIdPresent: !!phoneNumberId,
+      })
       return NextResponse.json(
         {
           ok: false,
@@ -135,6 +181,7 @@ export async function GET(req: NextRequest) {
 
     // Final validation: WABA ID should be numeric
     if (!/^\d+$/.test(effectiveWabaId)) {
+      console.error('[WHATSAPP-TEMPLATES] Invalid WABA ID format:', effectiveWabaId.substring(0, 20))
       return NextResponse.json(
         {
           ok: false,
@@ -157,19 +204,35 @@ export async function GET(req: NextRequest) {
 
     while (nextUrl && pageCount < maxPages) {
       try {
+        console.log(`[WHATSAPP-TEMPLATES] Fetching page ${pageCount + 1}, URL: ${nextUrl.substring(0, 100)}...`)
+        
+        // CRITICAL: Add timeout to prevent hanging requests (30 seconds)
+        const controller = new AbortController()
+        const timeoutId = setTimeout(() => controller.abort(), 30000)
+        
         const response: Response = await fetch(nextUrl, {
           method: 'GET',
           headers: {
             Authorization: `Bearer ${accessToken}`,
             'Content-Type': 'application/json',
           },
+          signal: controller.signal,
         })
+        
+        clearTimeout(timeoutId)
 
         if (!response.ok) {
           // Graph API returned an error
           const errorData = await response.json().catch(() => ({ error: { message: 'Unknown error' } }))
           const errorMessage = errorData.error?.message || `Graph API returned ${response.status}`
           const errorCode = errorData.error?.code
+          
+          console.error(`[WHATSAPP-TEMPLATES] Graph API error (status ${response.status}):`, {
+            errorCode,
+            errorMessage,
+            errorType: errorData.error?.type,
+            errorSubcode: errorData.error?.error_subcode,
+          })
           
           // CRITICAL: Handle "Application" node type error - means we're using wrong ID
           if (errorCode === 100 && errorMessage.includes('Application') && errorMessage.includes('message_templates')) {
@@ -207,6 +270,7 @@ export async function GET(req: NextRequest) {
         // Add templates from this page
         if (data.data && Array.isArray(data.data)) {
           allTemplates.push(...data.data)
+          console.log(`[WHATSAPP-TEMPLATES] Fetched ${data.data.length} templates from page ${pageCount + 1}`)
         }
 
         // Check for next page
@@ -219,12 +283,25 @@ export async function GET(req: NextRequest) {
         }
       } catch (fetchError: any) {
         // Network or parsing error
+        console.error('[WHATSAPP-TEMPLATES] Fetch error:', {
+          errorMessage: fetchError.message || String(fetchError),
+          errorName: fetchError.name,
+          errorStack: fetchError.stack?.substring(0, 200),
+          isTimeout: fetchError.name === 'AbortError' || fetchError.message?.includes('timeout'),
+          isNetworkError: fetchError.message?.includes('fetch') || fetchError.message?.includes('network'),
+        })
+        
         return NextResponse.json(
           {
             ok: false,
             error: 'fetch_error',
             message: fetchError.message || 'Failed to fetch templates from Graph API',
-            details: { error: fetchError.toString() },
+            details: { 
+              error: fetchError.toString(),
+              errorName: fetchError.name,
+              isTimeout: fetchError.name === 'AbortError' || fetchError.message?.includes('timeout'),
+              isNetworkError: fetchError.message?.includes('fetch') || fetchError.message?.includes('network'),
+            },
           },
           { status: 500 }
         )
@@ -242,6 +319,8 @@ export async function GET(req: NextRequest) {
 
     // Count approved templates
     const approvedCount = allTemplates.filter((t: any) => t.status === 'APPROVED').length
+
+    console.log(`[WHATSAPP-TEMPLATES] Successfully fetched ${allTemplates.length} templates (${approvedCount} approved)`)
 
     // Build response
     const response: any = {
@@ -266,12 +345,19 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json(response)
   } catch (error: any) {
-    console.error('[WHATSAPP-TEMPLATES] Error:', error)
+    console.error('[WHATSAPP-TEMPLATES] Unexpected error:', {
+      errorMessage: error.message || String(error),
+      errorName: error.constructor?.name,
+      errorStack: error.stack?.substring(0, 500),
+    })
     return NextResponse.json(
       {
         ok: false,
         error: 'server_error',
         message: error.message || 'Failed to fetch templates',
+        details: {
+          errorType: error.constructor?.name || 'Unknown',
+        },
       },
       { status: 500 }
     )

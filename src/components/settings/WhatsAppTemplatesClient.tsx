@@ -41,13 +41,66 @@ export function WhatsAppTemplatesClient({
   async function loadTemplates() {
     try {
       setLoading(true)
+      setError(null) // Clear previous errors
+      
       const res = await fetch('/api/whatsapp/templates')
-      if (res.ok) {
-        const data = await res.json()
-        setTemplates(data)
+      
+      if (!res.ok) {
+        // API returned an error response
+        const errorData = await res.json().catch(() => ({ message: 'Unknown error' }))
+        const errorMessage = errorData.message || errorData.error || `HTTP ${res.status}: ${res.statusText}`
+        const errorHint = errorData.hint || 'Check your WhatsApp integration settings'
+        
+        console.error('[WHATSAPP-TEMPLATES] API error:', {
+          status: res.status,
+          statusText: res.statusText,
+          error: errorData,
+        })
+        
+        setError(`${errorMessage}${errorHint ? ` - ${errorHint}` : ''}`)
+        return
       }
-    } catch (err) {
-      console.error('Failed to load templates:', err)
+      
+      const data = await res.json()
+      
+      if (data.ok === false) {
+        // API returned ok: false
+        const errorMessage = data.message || data.error || 'Failed to load templates'
+        const errorHint = data.hint || 'Check your WhatsApp integration settings'
+        
+        console.error('[WHATSAPP-TEMPLATES] API returned error:', data)
+        setError(`${errorMessage}${errorHint ? ` - ${errorHint}` : ''}`)
+        return
+      }
+      
+      // Success - set templates
+      if (Array.isArray(data.templates)) {
+        setTemplates(data.templates)
+      } else if (Array.isArray(data)) {
+        // Fallback: if API returns array directly
+        setTemplates(data)
+      } else {
+        console.warn('[WHATSAPP-TEMPLATES] Unexpected response format:', data)
+        setError('Unexpected response format from server')
+      }
+    } catch (err: any) {
+      // Network error, CORS error, or other fetch failure
+      console.error('[WHATSAPP-TEMPLATES] Fetch failed:', {
+        error: err,
+        message: err.message,
+        name: err.name,
+        stack: err.stack,
+      })
+      
+      const errorMessage = err.message || 'Failed to fetch templates'
+      const isNetworkError = err.message?.includes('fetch') || err.message?.includes('network') || err.name === 'TypeError'
+      const isTimeout = err.message?.includes('timeout') || err.name === 'AbortError'
+      
+      if (isNetworkError || isTimeout) {
+        setError(`Network error: ${errorMessage}. Please check your internet connection and try again.`)
+      } else {
+        setError(`Error: ${errorMessage}`)
+      }
     } finally {
       setLoading(false)
     }
