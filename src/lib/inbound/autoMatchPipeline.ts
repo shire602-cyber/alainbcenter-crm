@@ -1433,6 +1433,7 @@ async function createCommunicationLog(input: {
 
   // HOTFIX: Fallback retry for Prisma schema mismatch (temporary safety during Vercel deploys)
   // If Prisma Client doesn't recognize providerMediaId/media fields, retry without them
+  let message
   try {
     message = await prisma.message.create({ data })
   } catch (err: any) {
