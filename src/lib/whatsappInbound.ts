@@ -159,7 +159,12 @@ export async function findOrCreateConversation(
         unreadCount: true,
       },
     }) as any
-    console.log(`✅ [CONV] Created conversation ${conversation.id} for contact ${contactId}, lead ${leadId}`)
+    if (conversation) {
+      console.log(`✅ [CONV] Created conversation ${conversation.id} for contact ${contactId}, lead ${leadId}`)
+    } else {
+      console.error(`❌ [CONV] Failed to fetch created conversation ${conversationId} for contact ${contactId}, lead ${leadId}`)
+      throw new Error(`Failed to create or fetch conversation for contact ${contactId}`)
+    }
   } else {
     // CRITICAL FIX: Update leadId if it's null or different (link to current lead)
     if (!conversation.leadId || conversation.leadId !== leadId) {
