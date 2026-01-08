@@ -25,10 +25,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Find user by email
-    const user = await prisma.user.findUnique({
+    // Find user by email with timeout protection
+    const userPromise = prisma.user.findUnique({
       where: { email: email.toLowerCase().trim() },
+      select: {
+        id: true,
+        email: true,
+        password: true,
+        role: true,
+        name: true,
+      },
     })
+
+    // Add 5 second timeout for login query
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database query timeout')), 5000)
+    })
+
+    const user = await Promise.race([userPromise, timeoutPromise]) as any
 
     if (!user) {
       console.log('[LOGIN API] User not found:', email)

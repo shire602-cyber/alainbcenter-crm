@@ -94,6 +94,21 @@ export default async function IntegrationsPage() {
     orderBy: { name: 'asc' }
   }).catch(() => [])
 
+  // Check Meta connections
+  const metaConnections = await prisma.$queryRaw<Array<{
+    page_id: string
+    page_name: string | null
+    ig_username: string | null
+    status: string
+  }>>`
+    SELECT page_id, page_name, ig_username, status
+    FROM meta_connections
+    WHERE status = 'active'
+    ORDER BY created_at DESC
+  `.catch(() => [])
+
+  const hasMetaConnection = metaConnections.length > 0
+
   const integrationTypes = [
     {
       name: 'whatsapp',
@@ -129,6 +144,14 @@ export default async function IntegrationsPage() {
       iconName: 'Instagram',
       description: 'Connect Instagram Messaging API for DMs',
       providers: ['Meta Messaging API'],
+    },
+    {
+      name: 'meta',
+      label: 'Meta (FB/IG)',
+      iconName: 'Facebook',
+      description: 'Connect Meta Business for Instagram DMs, Facebook Messenger, and Lead Ads',
+      providers: ['Meta Business'],
+      isOAuth: true,
     },
     {
       name: 'openai',
@@ -180,7 +203,10 @@ export default async function IntegrationsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {integrationTypes.map((type) => {
             const integration = integrations.find((i) => i.name === type.name)
-            const isEnabled = integration?.isEnabled || false
+            // For Meta OAuth integration, check if we have active connections
+            const isEnabled = type.name === 'meta' 
+              ? hasMetaConnection 
+              : (integration?.isEnabled || false)
 
             return (
               <BentoCard 
@@ -209,7 +235,41 @@ export default async function IntegrationsPage() {
               >
                 <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{type.description}</p>
                 
-                {type.name === 'openai' && type.settingsUrl ? (
+                {type.name === 'meta' && (type as any).isOAuth ? (
+                  <div className="space-y-2">
+                    {hasMetaConnection ? (
+                      <>
+                        <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                          <p className="font-medium text-green-600 dark:text-green-400 mb-1">Connected Pages:</p>
+                          <ul className="list-disc list-inside space-y-0.5">
+                            {metaConnections.map((conn, idx) => (
+                              <li key={idx}>
+                                {conn.page_name || conn.page_id}
+                                {conn.ig_username && ` (@${conn.ig_username})`}
+                              </li>
+                            ))}
+                          </ul>
+                        </div>
+                        <Link href="/api/integrations/meta/start?workspace_id=1">
+                          <Button variant="outline" size="sm" className="w-full gap-2 text-xs h-8">
+                            Reconnect Meta
+                          </Button>
+                        </Link>
+                      </>
+                    ) : (
+                      <>
+                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                          Connect your Meta Business account to enable Instagram DMs, Facebook Messenger, and Lead Ads.
+                        </p>
+                        <Link href="/api/integrations/meta/start?workspace_id=1">
+                          <Button variant="default" size="sm" className="w-full gap-2 text-xs h-8">
+                            Connect Meta (FB/IG)
+                          </Button>
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                ) : type.name === 'openai' && type.settingsUrl ? (
                   <div className="space-y-2">
                     <p className="text-xs text-slate-600 dark:text-slate-400">
                       Configure AI models, providers, and pricing in the dedicated AI settings page.

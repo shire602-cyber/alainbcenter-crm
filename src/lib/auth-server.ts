@@ -62,6 +62,7 @@ async function decodeSessionTokenNode(token: string): Promise<SessionPayload | n
 
 /**
  * Get current user from session
+ * Optimized with timeout protection to prevent hanging
  */
 export async function getCurrentUser() {
   try {
@@ -73,12 +74,31 @@ export async function getCurrentUser() {
     const payload = await decodeSessionTokenNode(token)
     if (!payload) return null
 
-    const user = await prisma.user.findUnique({
+    // Add timeout protection for database query (5 second timeout)
+    const userPromise = prisma.user.findUnique({
       where: { id: payload.userId },
+      select: {
+        id: true,
+        name: true,
+        email: true,
+        role: true,
+        // Only select essential fields to reduce query time
+      },
     })
+
+    // Race between query and timeout
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Database query timeout')), 5000)
+    })
+
+    const user = await Promise.race([userPromise, timeoutPromise]) as any
 
     return user
   } catch (error: any) {
+    // Log timeout errors for debugging
+    if (error?.message?.includes('timeout')) {
+      console.error('[AUTH] Database query timeout in getCurrentUser:', error.message)
+    }
     return null
   }
 }

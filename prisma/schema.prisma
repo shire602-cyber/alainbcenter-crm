@@ -1174,3 +1174,39 @@ model OutboundMessageDedup {
   @@index([dedupeKey])
   @@index([status, createdAt])
 }
+
+// Meta Integration Tables
+model MetaConnection {
+  id              Int      @id @default(autoincrement())
+  workspaceId     Int      @default(1) @map("workspace_id")
+  pageId          String   @map("page_id")
+  pageName        String?  @map("page_name")
+  pageAccessToken String   @map("page_access_token") // Encrypted
+  igBusinessId    String?  @map("ig_business_id")
+  igUsername      String?  @map("ig_username")
+  scopes          String? // JSON array
+  status          String   @default("active")
+  createdAt       DateTime @default(now()) @map("created_at")
+  updatedAt       DateTime @updatedAt @map("updated_at")
+
+  @@unique([workspaceId, pageId])
+  @@index([workspaceId])
+  @@index([pageId])
+  @@index([status])
+  @@map("meta_connections")
+}
+
+model MetaWebhookEvent {
+  id         Int      @id @default(autoincrement())
+  workspaceId Int     @default(1) @map("workspace_id")
+  pageId     String?  @map("page_id")
+  eventType  String   @map("event_type")
+  payload    String   // JSON
+  receivedAt DateTime @default(now()) @map("received_at")
+
+  @@index([workspaceId])
+  @@index([pageId])
+  @@index([eventType])
+  @@index([receivedAt])
+  @@map("meta_webhook_events")
+}
