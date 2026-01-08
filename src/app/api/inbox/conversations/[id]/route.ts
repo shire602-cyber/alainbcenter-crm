@@ -224,20 +224,21 @@ export async function GET(
           throw retryError
         }
       } else {
-      // Handle PostgreSQL out of memory errors
-      if (error.code === '53200' || error.message?.includes('out of memory') || error.message?.includes('postgres message too large')) {
-        console.error('[DB-OOM] PostgreSQL out of memory error. Conversation may have too many messages.')
-        return NextResponse.json(
-          { 
-            ok: false, 
-            error: 'Database query failed: conversation too large. Please contact support.',
-            code: 'DB_OOM',
-            hint: 'This conversation has too many messages. Try archiving old messages.',
-          },
-          { status: 500 }
-        )
+        // Handle PostgreSQL out of memory errors
+        if (error.code === '53200' || error.message?.includes('out of memory') || error.message?.includes('postgres message too large')) {
+          console.error('[DB-OOM] PostgreSQL out of memory error. Conversation may have too many messages.')
+          return NextResponse.json(
+            { 
+              ok: false, 
+              error: 'Database query failed: conversation too large. Please contact support.',
+              code: 'DB_OOM',
+              hint: 'This conversation has too many messages. Try archiving old messages.',
+            },
+            { status: 500 }
+          )
+        }
+        throw error
       }
-      throw error
     }
 
     if (!conversation) {
