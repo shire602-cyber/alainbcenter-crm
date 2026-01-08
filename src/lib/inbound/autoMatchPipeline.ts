@@ -1438,27 +1438,22 @@ async function createCommunicationLog(input: {
     // Handle unique constraint violation (duplicate message)
     if (err.code === 'P2002' || msg.includes('Unique constraint') || msg.includes('duplicate key') || msg.includes('already exists')) {
       console.log(`[AUTO-MATCH] Duplicate message detected (idempotency), fetching existing: channel=${normalizedChannel}, providerMessageId=${input.providerMessageId}`)
-      // Message already exists, fetch it with related entities
+      // Message already exists, fetch it
       if (input.providerMessageId) {
         message = await prisma.message.findFirst({
           where: {
             channel: normalizedChannel,
             providerMessageId: input.providerMessageId,
           },
-          include: {
-            contact: true,
-            conversation: true,
-            lead: true,
-          },
         })
         if (message) {
           console.log(`[AUTO-MATCH] Found existing message: ${message.id}`)
-          // Return full result with existing entities
+          // Return full result using entities already created/found in this function call
           return {
-            contact: message.contact,
-            conversation: message.conversation,
-            lead: message.lead,
-            message: message,
+            contact: contact, // Use contact already in scope
+            conversation: conversation, // Use conversation already in scope
+            lead: lead, // Use lead already in scope
+            message: message, // Use the existing message
             extractedFields: {},
             tasksCreated: 0,
             autoReplied: false,
@@ -1504,19 +1499,14 @@ async function createCommunicationLog(input: {
                 channel: normalizedChannel,
                 providerMessageId: input.providerMessageId,
               },
-              include: {
-                contact: true,
-                conversation: true,
-                lead: true,
-              },
             })
             if (message) {
-              // Return full result with existing entities
+              // Return full result using entities already created/found in this function call
               return {
-                contact: message.contact,
-                conversation: message.conversation,
-                lead: message.lead,
-                message: message,
+                contact: contact, // Use contact already in scope
+                conversation: conversation, // Use conversation already in scope
+                lead: lead, // Use lead already in scope
+                message: message, // Use the existing message
                 extractedFields: {},
                 tasksCreated: 0,
                 autoReplied: false,
