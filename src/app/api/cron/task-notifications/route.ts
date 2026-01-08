@@ -54,12 +54,10 @@ export async function GET(req: NextRequest) {
         },
         assignees: {
           some: {
-            notifiedAt: {
-              or: [
-                null,
-                { lt: oneHourAgo }, // Not notified in last hour
-              ],
-            },
+            OR: [
+              { notifiedAt: null },
+              { notifiedAt: { lt: oneHourAgo } }, // Not notified in last hour
+            ],
           },
         },
       },
@@ -91,16 +89,14 @@ export async function GET(req: NextRequest) {
           message: `Task "${task.title}" is due in ${hoursUntilDue} hour${hoursUntilDue !== 1 ? 's' : ''}${task.lead.contact.fullName ? ` for ${task.lead.contact.fullName}` : ''}.`,
         })
 
-        // Update notifiedAt for assignees
+        // Update notifiedAt for assignees (only those not notified in last hour)
         await prisma.taskAssignee.updateMany({
           where: {
             taskId: task.id,
-            notifiedAt: {
-              or: [
-                null,
-                { lt: oneHourAgo },
-              ],
-            },
+            OR: [
+              { notifiedAt: null },
+              { notifiedAt: { lt: oneHourAgo } },
+            ],
           },
           data: {
             notifiedAt: now,
@@ -108,7 +104,7 @@ export async function GET(req: NextRequest) {
         })
 
         results.dueSoonProcessed++
-        results.notificationsCreated += task.assignees.length
+        results.notificationsCreated += task.assignees?.length || 0
       } catch (error: any) {
         results.errors.push(`Task ${task.id} (due soon): ${error.message}`)
         console.error(`❌ Failed to process due soon task ${task.id}:`, error)
@@ -124,12 +120,10 @@ export async function GET(req: NextRequest) {
         },
         assignees: {
           some: {
-            notifiedAt: {
-              or: [
-                null,
-                { lt: oneHourAgo }, // Not notified in last hour
-              ],
-            },
+            OR: [
+              { notifiedAt: null },
+              { notifiedAt: { lt: oneHourAgo } }, // Not notified in last hour
+            ],
           },
         },
       },
@@ -170,16 +164,14 @@ export async function GET(req: NextRequest) {
           message: `Task "${task.title}" is ${daysOverdue} day${daysOverdue !== 1 ? 's' : ''} overdue${task.lead.contact.fullName ? ` for ${task.lead.contact.fullName}` : ''}.`,
         })
 
-        // Update notifiedAt for assignees
+        // Update notifiedAt for assignees (only those not notified in last hour)
         await prisma.taskAssignee.updateMany({
           where: {
             taskId: task.id,
-            notifiedAt: {
-              or: [
-                null,
-                { lt: oneHourAgo },
-              ],
-            },
+            OR: [
+              { notifiedAt: null },
+              { notifiedAt: { lt: oneHourAgo } },
+            ],
           },
           data: {
             notifiedAt: now,
@@ -187,7 +179,7 @@ export async function GET(req: NextRequest) {
         })
 
         results.overdueProcessed++
-        results.notificationsCreated += task.assignees.length
+        results.notificationsCreated += task.assignees?.length || 0
       } catch (error: any) {
         results.errors.push(`Task ${task.id} (overdue): ${error.message}`)
         console.error(`❌ Failed to process overdue task ${task.id}:`, error)
