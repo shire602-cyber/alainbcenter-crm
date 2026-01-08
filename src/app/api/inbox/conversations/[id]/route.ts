@@ -24,12 +24,30 @@ export async function GET(
       )
     }
 
-    // TASK 3: Loud failure if schema mismatch (P2022) - do NOT silently work around
+    // Use explicit select to avoid fetching missing columns (lastProcessedInboundMessageId, etc.)
     let conversation
     try {
       conversation = await prisma.conversation.findUnique({
         where: { id: conversationId },
-        include: {
+        select: {
+          id: true,
+          contactId: true,
+          leadId: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          updatedAt: true,
+          aiState: true,
+          aiLockUntil: true,
+          lastAiOutboundAt: true,
+          ruleEngineMemory: true,
+          deletedAt: true,
+          contact: {
           contact: {
             select: {
               id: true,
