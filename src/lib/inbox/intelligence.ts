@@ -36,24 +36,123 @@ export async function computeConversationFlags(
   const now = new Date()
 
   // Fetch conversation with relations
-  // Use select instead of include for lead to avoid loading fields that may not exist yet (infoSharedAt, etc.)
-  const conversation = await prisma.conversation.findUnique({
-    where: { id: conversationId },
-    include: {
-      contact: true,
-      lead: {
+  // Use explicit select to avoid loading fields that may not exist yet (lastProcessedInboundMessageId, infoSharedAt, etc.)
+  let conversation
+  try {
+    conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        contactId: true,
+        leadId: true,
+        channel: true,
+        status: true,
+        lastMessageAt: true,
+        lastInboundAt: true,
+        lastOutboundAt: true,
+        unreadCount: true,
+        priorityScore: true,
+        createdAt: true,
+        updatedAt: true,
+        aiState: true,
+        aiLockUntil: true,
+        lastAiOutboundAt: true,
+        ruleEngineMemory: true,
+        deletedAt: true,
+        contact: true,
+        lead: {
+          select: {
+            id: true,
+            stage: true,
+            aiScore: true,
+            nextFollowUpAt: true,
+            expiryItems: {
+              orderBy: { expiryDate: 'asc' },
+              take: 1, // Nearest expiry
+              select: {
+                id: true,
+                type: true,
+                expiryDate: true,
+              },
+            },
+            assignedUser: {
+              select: {
+                id: true,
+                name: true,
+                email: true,
+              },
+            },
+            // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
+            // These will be available after migration is run
+          },
+        },
+        assignedUser: {
+          select: {
+            id: true,
+            name: true,
+            email: true,
+          },
+        },
+        messages: {
+          orderBy: { createdAt: 'desc' },
+          take: 10, // Last 10 messages to check reply status
+          select: {
+            id: true,
+            direction: true,
+            body: true,
+            createdAt: true,
+          },
+        },
+      },
+    }) as any
+  } catch (error: any) {
+    // Gracefully handle missing lastProcessedInboundMessageId column
+    if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+      console.warn('[DB] lastProcessedInboundMessageId column not found, querying with select (this is OK if migration not yet applied)')
+      // Retry with explicit select
+      conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
         select: {
           id: true,
-          stage: true,
-          aiScore: true,
-          nextFollowUpAt: true,
-          expiryItems: {
-            orderBy: { expiryDate: 'asc' },
-            take: 1, // Nearest expiry
+          contactId: true,
+          leadId: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          updatedAt: true,
+          aiState: true,
+          aiLockUntil: true,
+          lastAiOutboundAt: true,
+          ruleEngineMemory: true,
+          deletedAt: true,
+          contact: true,
+          lead: {
             select: {
               id: true,
-              type: true,
-              expiryDate: true,
+              stage: true,
+              aiScore: true,
+              nextFollowUpAt: true,
+              expiryItems: {
+                orderBy: { expiryDate: 'asc' },
+                take: 1,
+                select: {
+                  id: true,
+                  type: true,
+                  expiryDate: true,
+                },
+              },
+              assignedUser: {
+                select: {
+                  id: true,
+                  name: true,
+                  email: true,
+                },
+              },
             },
           },
           assignedUser: {
@@ -63,31 +162,39 @@ export async function computeConversationFlags(
               email: true,
             },
           },
-          // Exclude infoSharedAt, quotationSentAt, lastInfoSharedType for now
-          // These will be available after migration is run
+          messages: {
+            orderBy: { createdAt: 'desc' },
+            take: 10,
+            select: {
+              id: true,
+              direction: true,
+              body: true,
+              createdAt: true,
+            },
+          },
         },
-      },
-      assignedUser: {
-        select: {
-          id: true,
-          name: true,
-          email: true,
-        },
-      },
-      messages: {
-        orderBy: { createdAt: 'desc' },
-        take: 10, // Last 10 messages to check reply status
-        select: {
-          id: true,
-          direction: true,
-          createdAt: true,
-        },
-      },
-    },
-  })
-
+      }) as any
+    } else {
+      throw error
+    }
+  }
+  
   if (!conversation) {
-    throw new Error(`Conversation ${conversationId} not found`)
+    return {
+      UNREAD: false,
+      NEEDS_REPLY: false,
+      SLA_BREACH: false,
+      EXPIRY_SOON: false,
+      OVERDUE_FOLLOWUP: false,
+      HOT: false,
+      priorityScore: 0,
+      metrics: {
+        minutesSinceLastInbound: null,
+        minutesSinceLastOutbound: null,
+        minutesSinceCreated: null,
+        daysToNearestExpiry: null,
+      },
+    }
   }
 
   // Get last inbound and outbound messages
