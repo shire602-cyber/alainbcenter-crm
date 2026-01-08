@@ -815,7 +815,7 @@ and let me know the best time for our consultant to call you.`;
     // Step 2: Check if this is first message (CRITICAL: First message bypasses retriever)
     // Note: Field extraction already done above (Step 1.4)
     const outboundCount = conversation.messages.filter(
-      (m) => m.direction === "OUTBOUND",
+      (m: any) => m.direction === "OUTBOUND",
     ).length;
     const isFirstMessage = outboundCount === 0;
     
