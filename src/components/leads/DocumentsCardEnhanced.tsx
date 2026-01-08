@@ -6,7 +6,7 @@
 
 'use client'
 
-import { useState, useEffect } from 'react'
+import { useState, useEffect, useCallback, useRef } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
@@ -76,23 +76,24 @@ export function DocumentsCardEnhanced({
   const [compliance, setCompliance] = useState<ComplianceStatus | null>(null)
   const [loading, setLoading] = useState(true)
   const [uploading, setUploading] = useState(false)
+  const [uploadProgress, setUploadProgress] = useState(0)
+  
+  // Stable modal state - prevent flicker
+  const [showUploadModal, setShowUploadModal] = useState(false)
+  const modalMountedRef = useRef(false)
+  
   // Toast notifications - using window events or direct showToast if available
-  const showToast = (message: string, type: 'success' | 'error' | 'info' = 'info') => {
+  const showToast = useCallback((message: string, type: 'success' | 'error' | 'info' = 'info') => {
     if (typeof window !== 'undefined') {
       // Try to use global toast if available
       const event = new CustomEvent('toast', { detail: { message, type } })
       window.dispatchEvent(event)
     }
     console.log(`[${type.toUpperCase()}] ${message}`)
-  }
+  }, [])
 
-  useEffect(() => {
-    loadDocuments()
-    loadRequirements()
-    loadCompliance()
-  }, [leadId, serviceType])
-
-  async function loadDocuments() {
+  // Stable load functions
+  const loadDocuments = useCallback(async () => {
     try {
       const res = await fetch(`/api/leads/${leadId}/documents`)
       if (res.ok) {
@@ -108,9 +109,9 @@ export function DocumentsCardEnhanced({
     } finally {
       setLoading(false)
     }
-  }
+  }, [leadId])
 
-  async function loadRequirements() {
+  const loadRequirements = useCallback(async () => {
     if (!serviceType) return
     
     try {
@@ -122,9 +123,9 @@ export function DocumentsCardEnhanced({
     } catch (err) {
       console.error('Failed to load requirements:', err)
     }
-  }
+  }, [serviceType])
 
-  async function loadCompliance() {
+  const loadCompliance = useCallback(async () => {
     try {
       const res = await fetch(`/api/leads/${leadId}/compliance`)
       if (res.ok) {
@@ -134,43 +135,89 @@ export function DocumentsCardEnhanced({
     } catch (err) {
       console.error('Failed to load compliance:', err)
     }
-  }
+  }, [leadId])
 
-  const [showUploadModal, setShowUploadModal] = useState(false)
-  const [selectedFile, setSelectedFile] = useState<File | null>(null)
-  const [selectedDocType, setSelectedDocType] = useState<string>('OTHER')
-  const [selectedExpiryDate, setSelectedExpiryDate] = useState<string>('')
+  // Load data only when leadId or serviceType changes (not on every render)
+  useEffect(() => {
+    setLoading(true)
+    loadDocuments()
+    loadRequirements()
+    loadCompliance()
+  }, [loadDocuments, loadRequirements, loadCompliance])
 
-  async function handleFileUpload(e?: React.ChangeEvent<HTMLInputElement>) {
-    const file = e?.target.files?.[0] || selectedFile
+  // Handle modal open/close - stable state
+  const handleOpenModal = useCallback(() => {
+    modalMountedRef.current = true
+    setShowUploadModal(true)
+  }, [])
+
+  const handleCloseModal = useCallback(() => {
+    // Only close if not uploading
+    if (!uploading) {
+      setShowUploadModal(false)
+      modalMountedRef.current = false
+    }
+  }, [uploading])
+
+  // Stable upload handler - only refetch after success
+  const handleFileUpload = useCallback(async (file: File, docType: string, expiryDate: string) => {
     if (!file) return
 
     setUploading(true)
+    setUploadProgress(0)
+    
     try {
       const formData = new FormData()
       formData.append('file', file)
-      formData.append('category', selectedDocType)
+      formData.append('category', docType)
 
-      const res = await fetch(`/api/leads/${leadId}/documents/upload`, {
-        method: 'POST',
-        body: formData,
+      // Use XMLHttpRequest for progress tracking
+      const xhr = new XMLHttpRequest()
+      
+      const uploadPromise = new Promise<any>((resolve, reject) => {
+        xhr.upload.addEventListener('progress', (e) => {
+          if (e.lengthComputable) {
+            const percentComplete = (e.loaded / e.total) * 100
+            setUploadProgress(percentComplete)
+          }
+        })
+
+        xhr.addEventListener('load', () => {
+          if (xhr.status >= 200 && xhr.status < 300) {
+            try {
+              const response = JSON.parse(xhr.responseText)
+              resolve(response)
+            } catch (err) {
+              reject(new Error('Invalid response'))
+            }
+          } else {
+            try {
+              const error = JSON.parse(xhr.responseText)
+              reject(new Error(error.error || 'Upload failed'))
+            } catch {
+              reject(new Error('Upload failed'))
+            }
+          }
+        })
+
+        xhr.addEventListener('error', () => {
+          reject(new Error('Network error'))
+        })
+
+        xhr.open('POST', `/api/leads/${leadId}/documents/upload`)
+        xhr.send(formData)
       })
 
-      if (!res.ok) {
-        const error = await res.json()
-        throw new Error(error.error || 'Upload failed')
-      }
-
-      const uploadedDoc = await res.json()
+      const uploadedDoc = await uploadPromise
 
       // If expiry date was provided, update the document
-      if (selectedExpiryDate) {
+      if (expiryDate) {
         try {
           await fetch(`/api/leads/${leadId}/documents/${uploadedDoc.id}`, {
             method: 'PATCH',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
-              expiryDate: selectedExpiryDate,
+              expiryDate: expiryDate,
             }),
           })
         } catch (err) {
@@ -179,21 +226,22 @@ export function DocumentsCardEnhanced({
       }
 
       showToast('Document uploaded successfully', 'success')
+      
+      // Close modal and reset state
       setShowUploadModal(false)
-      setSelectedFile(null)
-      setSelectedDocType('OTHER')
-      setSelectedExpiryDate('')
+      modalMountedRef.current = false
+      setUploadProgress(0)
+      
+      // Refetch documents ONLY after successful upload
       await loadDocuments()
       await loadCompliance()
     } catch (err: any) {
       showToast(err.message || 'Failed to upload document', 'error')
     } finally {
       setUploading(false)
-      if (e?.target) {
-        e.target.value = ''
-      }
+      setUploadProgress(0)
     }
-  }
+  }, [leadId, showToast, loadDocuments, loadCompliance])
 
   async function handleDeleteDocument(docId: number) {
     if (!confirm('Delete this document?')) return
@@ -290,7 +338,7 @@ export function DocumentsCardEnhanced({
             <Button
               variant="default"
               size="sm"
-              onClick={() => setShowUploadModal(true)}
+              onClick={handleOpenModal}
               className="h-8 px-3 rounded-full shadow-md hover:shadow-lg transition-all gap-1.5"
               title="Upload Document or Media"
             >
@@ -388,7 +436,7 @@ export function DocumentsCardEnhanced({
                           variant="outline"
                           size="sm"
                           className="h-6 px-2.5 text-[10px] rounded-full shadow-sm hover:shadow-md transition-all"
-                          onClick={() => setShowUploadModal(true)}
+                          onClick={handleOpenModal}
                         >
                           <Upload className="h-3 w-3 mr-1" />
                           Upload
@@ -531,144 +579,218 @@ export function DocumentsCardEnhanced({
         )}
       </CardContent>
 
-      {/* Upload Modal */}
-      <Dialog open={showUploadModal} onOpenChange={setShowUploadModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle className="text-2xl font-semibold">Upload Document or Media</DialogTitle>
-            <DialogDescription className="text-base">
-              Upload documents, images, PDFs, or other media files
-            </DialogDescription>
-          </DialogHeader>
-          <div className="px-6 pb-6 pt-4 space-y-6">
-            {/* File Upload Area */}
-            <div>
-              <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
-                File <span className="text-red-500">*</span>
-              </Label>
-              <div className="relative">
-                <input
-                  type="file"
-                  id="file-upload"
-                  onChange={(e) => {
-                    const file = e.target.files?.[0]
-                    setSelectedFile(file || null)
-                  }}
-                  accept="image/*,application/pdf,.doc,.docx"
-                  disabled={uploading}
-                  className="hidden"
-                />
-                <label
-                  htmlFor="file-upload"
-                  className={cn(
-                    "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200",
-                    selectedFile
-                      ? "border-primary bg-primary/5 hover:bg-primary/10"
-                      : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50",
-                    uploading && "opacity-50 cursor-not-allowed"
-                  )}
-                >
-                  {selectedFile ? (
-                    <>
-                      <FileText className="h-8 w-8 text-primary mb-2" />
-                      <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
-                        {selectedFile.name}
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        {(selectedFile.size / 1024).toFixed(1)} KB
-                      </p>
-                    </>
-                  ) : (
-                    <>
-                      <Upload className="h-8 w-8 text-slate-400 dark:text-slate-500 mb-2" />
-                      <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
-                        Click to browse or drag and drop
-                      </p>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
-                        PDF, Images, Word documents
-                      </p>
-                    </>
-                  )}
-                </label>
-              </div>
-            </div>
+      {/* Upload Modal - Stable mount, local state */}
+      {showUploadModal && (
+        <UploadModal
+          isOpen={showUploadModal}
+          onClose={handleCloseModal}
+          onUpload={handleFileUpload}
+          uploading={uploading}
+          uploadProgress={uploadProgress}
+        />
+      )}
+    </Card>
+  )
+}
 
-            {/* Document Type */}
-            <div>
-              <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
-                Document Type <span className="text-red-500">*</span>
-              </Label>
-              <select
-                value={selectedDocType}
-                onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDocType(e.target.value)}
-                className="flex h-11 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-background px-4 py-2 text-sm font-medium transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none hover:border-slate-300 dark:hover:border-slate-600"
-              >
-                <option value="PASSPORT">Passport</option>
-                <option value="EID">Emirates ID</option>
-                <option value="PHOTO">Photo</option>
-                <option value="EJARI">Ejari</option>
-                <option value="COMPANY_LICENSE">Company License</option>
-                <option value="BANK_STATEMENT">Bank Statement</option>
-                <option value="TENANCY_CONTRACT">Tenancy Contract</option>
-                <option value="VISA_PAGE">Visa Page</option>
-                <option value="OTHER">Other</option>
-              </select>
-            </div>
+// Separate Upload Modal Component - Prevents flicker with local state
+interface UploadModalProps {
+  isOpen: boolean
+  onClose: () => void
+  onUpload: (file: File, docType: string, expiryDate: string) => Promise<void>
+  uploading: boolean
+  uploadProgress: number
+}
 
-            {/* Expiry Date */}
-            <div>
-              <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
-                Expiry Date <span className="text-slate-400 text-xs font-normal">(Optional)</span>
-              </Label>
-              <Input
-                type="date"
-                value={selectedExpiryDate}
-                onChange={(e) => setSelectedExpiryDate(e.target.value)}
-                className="h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all hover:border-slate-300 dark:hover:border-slate-600"
-              />
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
-                <Calendar className="h-3 w-3" />
-                Set if this document expires (e.g., EID, Visa)
-              </p>
-            </div>
+function UploadModal({ isOpen, onClose, onUpload, uploading, uploadProgress }: UploadModalProps) {
+  // Local state inside modal - prevents parent re-renders from affecting it
+  const [selectedFile, setSelectedFile] = useState<File | null>(null)
+  const [selectedDocType, setSelectedDocType] = useState<string>('OTHER')
+  const [selectedExpiryDate, setSelectedExpiryDate] = useState<string>('')
+  const fileInputRef = useRef<HTMLInputElement>(null)
 
-            {/* Action Buttons */}
-            <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
-              <Button
-                variant="outline"
-                onClick={() => {
-                  setShowUploadModal(false)
-                  setSelectedFile(null)
-                  setSelectedDocType('OTHER')
-                  setSelectedExpiryDate('')
-                }}
-                className="px-6 h-11 rounded-xl font-medium"
+  // Reset state when modal closes
+  useEffect(() => {
+    if (!isOpen) {
+      setSelectedFile(null)
+      setSelectedDocType('OTHER')
+      setSelectedExpiryDate('')
+      if (fileInputRef.current) {
+        fileInputRef.current.value = ''
+      }
+    }
+  }, [isOpen])
+
+  const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0]
+    if (file) {
+      setSelectedFile(file)
+    }
+  }
+
+  const handleUpload = async () => {
+    if (!selectedFile) return
+    await onUpload(selectedFile, selectedDocType, selectedExpiryDate)
+  }
+
+  const handleCancel = () => {
+    if (!uploading) {
+      onClose()
+    }
+  }
+
+  return (
+    <Dialog open={isOpen} onOpenChange={(open) => {
+      if (!open && !uploading) {
+        onClose()
+      }
+    }}>
+      <DialogContent className="max-w-md">
+        <DialogHeader>
+          <DialogTitle className="text-2xl font-semibold">Upload Document or Media</DialogTitle>
+          <DialogDescription className="text-base">
+            Upload documents, images, PDFs, or other media files
+          </DialogDescription>
+        </DialogHeader>
+        <div className="px-6 pb-6 pt-4 space-y-6">
+          {/* File Upload Area */}
+          <div>
+            <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+              File <span className="text-red-500">*</span>
+            </Label>
+            <div className="relative">
+              <input
+                ref={fileInputRef}
+                type="file"
+                id="file-upload-modal"
+                onChange={handleFileSelect}
+                accept="image/*,application/pdf,.doc,.docx"
                 disabled={uploading}
+                className="hidden"
+              />
+              <label
+                htmlFor="file-upload-modal"
+                className={cn(
+                  "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200",
+                  selectedFile
+                    ? "border-primary bg-primary/5 hover:bg-primary/10"
+                    : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50",
+                  uploading && "opacity-50 cursor-not-allowed"
+                )}
               >
-                Cancel
-              </Button>
-              <Button
-                onClick={() => handleFileUpload()}
-                disabled={!selectedFile || uploading}
-                className="px-6 h-11 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all"
-              >
-                {uploading ? (
+                {selectedFile ? (
                   <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
+                    <FileText className="h-8 w-8 text-primary mb-2" />
+                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                      {selectedFile.name}
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      {(selectedFile.size / 1024).toFixed(1)} KB
+                    </p>
                   </>
                 ) : (
                   <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload
+                    <Upload className="h-8 w-8 text-slate-400 dark:text-slate-500 mb-2" />
+                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                      Click to browse or drag and drop
+                    </p>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                      PDF, Images, Word documents
+                    </p>
                   </>
                 )}
-              </Button>
+              </label>
             </div>
           </div>
-        </DialogContent>
-      </Dialog>
-    </Card>
+
+          {/* Upload Progress */}
+          {uploading && uploadProgress > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between text-xs text-muted-foreground">
+                <span>Uploading...</span>
+                <span>{Math.round(uploadProgress)}%</span>
+              </div>
+              <div className="w-full bg-muted rounded-full h-2">
+                <div
+                  className="h-2 bg-primary rounded-full transition-all duration-300"
+                  style={{ width: `${uploadProgress}%` }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Document Type */}
+          <div>
+            <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+              Document Type <span className="text-red-500">*</span>
+            </Label>
+            <select
+              value={selectedDocType}
+              onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDocType(e.target.value)}
+              disabled={uploading}
+              className="flex h-11 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-background px-4 py-2 text-sm font-medium transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              <option value="PASSPORT">Passport</option>
+              <option value="EID">Emirates ID</option>
+              <option value="PHOTO">Photo</option>
+              <option value="EJARI">Ejari</option>
+              <option value="COMPANY_LICENSE">Company License</option>
+              <option value="BANK_STATEMENT">Bank Statement</option>
+              <option value="TENANCY_CONTRACT">Tenancy Contract</option>
+              <option value="VISA_PAGE">Visa Page</option>
+              <option value="OTHER">Other</option>
+            </select>
+          </div>
+
+          {/* Expiry Date */}
+          <div>
+            <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+              Expiry Date <span className="text-slate-400 text-xs font-normal">(Optional)</span>
+            </Label>
+            <Input
+              type="date"
+              value={selectedExpiryDate}
+              onChange={(e) => setSelectedExpiryDate(e.target.value)}
+              disabled={uploading}
+              className="h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-50"
+            />
+            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+              <Calendar className="h-3 w-3" />
+              Set if this document expires (e.g., EID, Visa)
+            </p>
+          </div>
+
+          {/* Action Buttons */}
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+            <Button
+              variant="outline"
+              onClick={handleCancel}
+              className="px-6 h-11 rounded-xl font-medium"
+              disabled={uploading}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={handleUpload}
+              disabled={!selectedFile || uploading}
+              className="px-6 h-11 rounded-xl font-medium shadow-lg hover:shadow-xl transition-all disabled:opacity-50 disabled:cursor-not-allowed"
+            >
+              {uploading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Uploading...
+                </>
+              ) : (
+                <>
+                  <Upload className="h-4 w-4 mr-2" />
+                  Upload
+                </>
+              )}
+            </Button>
+          </div>
+        </div>
+      </DialogContent>
+    </Dialog>
   )
 }
 
