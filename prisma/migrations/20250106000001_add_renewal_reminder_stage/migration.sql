@@ -33,32 +33,36 @@ END $$;
 
 -- Add channel and stage to RenewalNotification
 -- Note: For existing records, we need to handle NOT NULL columns
+-- Wrapped in DO block to check if table exists first
 DO $$ 
 BEGIN
-    -- Add channel column if it doesn't exist
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'RenewalNotification' AND column_name = 'channel'
-    ) THEN
-        ALTER TABLE "RenewalNotification" ADD COLUMN "channel" TEXT DEFAULT 'whatsapp';
-        -- Update existing records
-        UPDATE "RenewalNotification" SET "channel" = 'whatsapp' WHERE "channel" IS NULL;
-        -- Now make it NOT NULL
-        ALTER TABLE "RenewalNotification" ALTER COLUMN "channel" SET NOT NULL;
-        ALTER TABLE "RenewalNotification" ALTER COLUMN "channel" SET DEFAULT 'whatsapp';
-    END IF;
-    
-    -- Add stage column if it doesn't exist
-    IF NOT EXISTS (
-        SELECT 1 FROM information_schema.columns 
-        WHERE table_name = 'RenewalNotification' AND column_name = 'stage'
-    ) THEN
-        ALTER TABLE "RenewalNotification" ADD COLUMN "stage" INTEGER DEFAULT 1;
-        -- Update existing records (default to stage 1)
-        UPDATE "RenewalNotification" SET "stage" = 1 WHERE "stage" IS NULL;
-        -- Now make it NOT NULL
-        ALTER TABLE "RenewalNotification" ALTER COLUMN "stage" SET NOT NULL;
-        ALTER TABLE "RenewalNotification" ALTER COLUMN "stage" SET DEFAULT 1;
+    -- Only proceed if RenewalNotification table exists
+    IF EXISTS (SELECT FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'RenewalNotification') THEN
+        -- Add channel column if it doesn't exist
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'RenewalNotification' AND column_name = 'channel'
+        ) THEN
+            ALTER TABLE "RenewalNotification" ADD COLUMN "channel" TEXT DEFAULT 'whatsapp';
+            -- Update existing records
+            UPDATE "RenewalNotification" SET "channel" = 'whatsapp' WHERE "channel" IS NULL;
+            -- Now make it NOT NULL
+            ALTER TABLE "RenewalNotification" ALTER COLUMN "channel" SET NOT NULL;
+            ALTER TABLE "RenewalNotification" ALTER COLUMN "channel" SET DEFAULT 'whatsapp';
+        END IF;
+        
+        -- Add stage column if it doesn't exist
+        IF NOT EXISTS (
+            SELECT 1 FROM information_schema.columns 
+            WHERE table_name = 'RenewalNotification' AND column_name = 'stage'
+        ) THEN
+            ALTER TABLE "RenewalNotification" ADD COLUMN "stage" INTEGER DEFAULT 1;
+            -- Update existing records (default to stage 1)
+            UPDATE "RenewalNotification" SET "stage" = 1 WHERE "stage" IS NULL;
+            -- Now make it NOT NULL
+            ALTER TABLE "RenewalNotification" ALTER COLUMN "stage" SET NOT NULL;
+            ALTER TABLE "RenewalNotification" ALTER COLUMN "stage" SET DEFAULT 1;
+        END IF;
     END IF;
 END $$;
 
