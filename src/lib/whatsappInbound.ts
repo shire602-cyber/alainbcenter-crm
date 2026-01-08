@@ -135,17 +135,30 @@ export async function findOrCreateConversation(
 
   if (!conversation) {
     // Create new conversation
-    conversation = await prisma.conversation.create({
-      data: {
-        contactId,
-        leadId, // CRITICAL: Always link to lead
-        channel: channel.toLowerCase(),
-        externalId: externalId || null,
-        status: 'open',
-        lastMessageAt: new Date(),
-        unreadCount: 0,
-      },
+    // CRITICAL: Use upsertConversation instead of direct create to handle missing columns
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { id: conversationId } = await upsertConversation({
+      contactId,
+      channel: channel.toLowerCase(),
+      leadId,
+      externalId: externalId || null,
+      status: 'open',
+      timestamp: new Date(),
     })
+    // Fetch the conversation with select to avoid missing columns
+    conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: {
+        id: true,
+        contactId: true,
+        leadId: true,
+        channel: true,
+        externalId: true,
+        status: true,
+        lastMessageAt: true,
+        unreadCount: true,
+      },
+    }) as any
     console.log(`✅ [CONV] Created conversation ${conversation.id} for contact ${contactId}, lead ${leadId}`)
   } else {
     // CRITICAL FIX: Update leadId if it's null or different (link to current lead)

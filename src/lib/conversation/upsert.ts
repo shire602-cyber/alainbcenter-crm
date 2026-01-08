@@ -308,19 +308,54 @@ export async function upsertConversation(
         }
       } else {
         // Create new conversation
-        const created = await prisma.conversation.create({
-          data: {
-            contactId: input.contactId,
-            leadId: input.leadId ?? null,
-            channel: channelLower,
-            externalThreadId: effectiveThreadId,
-            externalId: input.externalId ?? null,
-            status: input.status || 'open',
-            lastMessageAt: timestamp,
-            lastInboundAt: timestamp,
-            language: input.language ?? null,
-          },
-        })
+        // CRITICAL: Wrap create in try-catch to handle missing lastProcessedInboundMessageId column
+        let created
+        try {
+          created = await prisma.conversation.create({
+            data: {
+              contactId: input.contactId,
+              leadId: input.leadId ?? null,
+              channel: channelLower,
+              externalThreadId: effectiveThreadId,
+              externalId: input.externalId ?? null,
+              status: input.status || 'open',
+              lastMessageAt: timestamp,
+              lastInboundAt: timestamp,
+              language: input.language ?? null,
+            },
+          })
+        } catch (createError: any) {
+          // Handle missing column error - create will fail if Prisma tries to return missing column
+          const createErrorMessage = String(createError?.message || '')
+          if (createError?.code === 'P2022' || 
+              createErrorMessage.includes('lastProcessedInboundMessageId') || 
+              createErrorMessage.includes('lastProcessedInboundMessageld') || 
+              createErrorMessage.includes('does not exist')) {
+            console.warn('[DB] lastProcessedInboundMessageId column not found in conversation.create, fetching created record with select')
+            // Create succeeded but Prisma can't return it - fetch it manually
+            created = await prisma.conversation.findFirst({
+              where: {
+                contactId: input.contactId,
+                channel: channelLower,
+              },
+              select: {
+                id: true,
+                contactId: true,
+                channel: true,
+                externalThreadId: true,
+                leadId: true,
+              },
+              orderBy: {
+                createdAt: 'desc',
+              },
+            })
+            if (!created) {
+              throw new Error('Failed to create conversation and could not fetch it')
+            }
+          } else {
+            throw createError
+          }
+        }
         conversation = { 
           id: created.id, 
           contactId: input.contactId, 
