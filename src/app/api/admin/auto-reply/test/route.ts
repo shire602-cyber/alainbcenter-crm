@@ -60,12 +60,66 @@ export async function POST(req: NextRequest) {
 
     // Get or create conversation
     const normalizedChannel = channel.toLowerCase()
-    let conversation = await prisma.conversation.findFirst({
-      where: {
-        contactId: lead.contact.id,
-        channel: normalizedChannel,
-      },
-    })
+    let conversation
+    try {
+      conversation = await prisma.conversation.findFirst({
+        where: {
+          contactId: lead.contact.id,
+          channel: normalizedChannel,
+        },
+        select: {
+          id: true,
+          contactId: true,
+          leadId: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          updatedAt: true,
+          aiState: true,
+          aiLockUntil: true,
+          lastAiOutboundAt: true,
+          ruleEngineMemory: true,
+          deletedAt: true,
+        },
+      }) as any
+    } catch (error: any) {
+      // Gracefully handle missing lastProcessedInboundMessageId column
+      if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.warn('[DB] lastProcessedInboundMessageId column not found, querying with select (this is OK if migration not yet applied)')
+        conversation = await prisma.conversation.findFirst({
+          where: {
+            contactId: lead.contact.id,
+            channel: normalizedChannel,
+          },
+          select: {
+            id: true,
+            contactId: true,
+            leadId: true,
+            channel: true,
+            status: true,
+            lastMessageAt: true,
+            lastInboundAt: true,
+            lastOutboundAt: true,
+            unreadCount: true,
+            priorityScore: true,
+            createdAt: true,
+            updatedAt: true,
+            aiState: true,
+            aiLockUntil: true,
+            lastAiOutboundAt: true,
+            ruleEngineMemory: true,
+            deletedAt: true,
+          },
+        }) as any
+      } else {
+        throw error
+      }
+    }
 
     if (!conversation) {
       // Create conversation if it doesn't exist
