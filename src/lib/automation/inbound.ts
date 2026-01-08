@@ -238,7 +238,7 @@ export async function runInboundAutomationsForMessage(
 
           // Update lead if we have better info
           if (extracted.serviceType && !lead.leadType && !lead.serviceTypeId) {
-            // Use contains for text search (works for both SQLite and PostgreSQL)
+            // Use contains for text search (PostgreSQL)
             const serviceType = await prisma.serviceType.findFirst({
               where: {
                 OR: [
