@@ -1203,14 +1203,26 @@ export async function sendAiReply(
     }
   }
 
-  // Step 1.6: Check cooldown (60-120 seconds)
+  // Step 1.6: Check cooldown (30 seconds hard throttling)
   const conversation = await prisma.conversation.findUnique({
     where: { id: conversationId },
-    select: { lastAiOutboundAt: true },
+    select: { lastAiOutboundAt: true, lastProcessedInboundMessageId: true },
   });
 
+  // CRITICAL FIX: Check inbound message idempotency (prevent duplicate webhook processing)
+  if (inboundProviderMessageId && conversation?.lastProcessedInboundMessageId === inboundProviderMessageId) {
+    console.log(
+      `[ORCHESTRATOR] AI_OUTBOUND_BLOCKED_IDEMPOTENCY conversationId=${conversationId} inboundProviderMessageId=${inboundProviderMessageId} (already processed)`,
+    );
+    return {
+      success: false,
+      skipped: true,
+      skipReason: "Inbound message already processed (idempotency)",
+    };
+  }
+
   if (conversation?.lastAiOutboundAt) {
-    const cooldownSeconds = 90; // 90 seconds cooldown (between 60-120)
+    const cooldownSeconds = 30; // 30 seconds hard throttling (user requirement)
     const cooldownMs = cooldownSeconds * 1000;
     const timeSinceLastOutbound = Date.now() - conversation.lastAiOutboundAt.getTime();
     
@@ -1415,11 +1427,14 @@ export async function sendAiReply(
         });
       }
 
-      // Update conversation: lastAiOutboundAt (for cooldown) and aiState
+      // Update conversation: lastAiOutboundAt (for cooldown), lastProcessedInboundMessageId (for idempotency), and aiState
       await prisma.conversation.update({
         where: { id: conversationId },
         data: {
           lastAiOutboundAt: new Date(),
+          ...(inboundProviderMessageId && {
+            lastProcessedInboundMessageId: inboundProviderMessageId,
+          }),
           ...(orchestratorResult.nextStepKey && {
             aiState: `WAITING_FOR_${orchestratorResult.nextStepKey}`,
           }),

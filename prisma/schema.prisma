@@ -464,66 +464,67 @@ model RenewalNotification {
 }
 
 model Conversation {
-  id                     Int       @id @default(autoincrement())
-  contact                Contact   @relation(fields: [contactId], references: [id])
-  contactId              Int
-  lead                   Lead?     @relation(fields: [leadId], references: [id])
-  leadId                 Int?
-  channel                String    @default("whatsapp") // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
-  externalId             String? // Provider conversation/thread ID (generic, works for all channels)
-  externalThreadId       String? // Legacy field - kept for backward compatibility
-  waConversationId       String? // WhatsApp-specific conversation ID from Meta (legacy)
-  waUserWaId             String? // WhatsApp user ID (phone/waid)
-  status                 String    @default("open") // open | closed
-  lastMessageAt          DateTime  @default(now())
-  lastInboundAt          DateTime? // Last inbound message timestamp
-  lastOutboundAt         DateTime? // Last outbound message timestamp
-  needsReplySince        DateTime? // When conversation started needing reply
-  slaBreachAt            DateTime? // When SLA was breached
-  priorityScore          Int       @default(0) // Computed priority (0-100)
-  assignedUserId         Int?
-  assignedUser           User?     @relation(fields: [assignedUserId], references: [id])
-  unreadCount            Int       @default(0)
-  lockedService          String? // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
-  ruleEngineMemory       String? // JSON: Rule engine conversation memory (name, service, nationality, etc.)
+  id                            Int       @id @default(autoincrement())
+  contact                       Contact   @relation(fields: [contactId], references: [id])
+  contactId                     Int
+  lead                          Lead?     @relation(fields: [leadId], references: [id])
+  leadId                        Int?
+  channel                       String    @default("whatsapp") // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+  externalId                    String? // Provider conversation/thread ID (generic, works for all channels)
+  externalThreadId              String? // Legacy field - kept for backward compatibility
+  waConversationId              String? // WhatsApp-specific conversation ID from Meta (legacy)
+  waUserWaId                    String? // WhatsApp user ID (phone/waid)
+  status                        String    @default("open") // open | closed
+  lastMessageAt                 DateTime  @default(now())
+  lastInboundAt                 DateTime? // Last inbound message timestamp
+  lastOutboundAt                DateTime? // Last outbound message timestamp
+  needsReplySince               DateTime? // When conversation started needing reply
+  slaBreachAt                   DateTime? // When SLA was breached
+  priorityScore                 Int       @default(0) // Computed priority (0-100)
+  assignedUserId                Int?
+  assignedUser                  User?     @relation(fields: [assignedUserId], references: [id])
+  unreadCount                   Int       @default(0)
+  lockedService                 String? // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
+  ruleEngineMemory              String? // JSON: Rule engine conversation memory (name, service, nationality, etc.)
   // Conversation Flow State Machine (persisted)
-  flowKey                String? // e.g., "family_visa", "freelance_visa", "business_setup"
-  flowStep               String? // e.g., "WAIT_SPONSOR_VISA_TYPE", "WAIT_FAMILY_LOCATION", "PRICING"
-  lastQuestionKey        String? // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
-  lastQuestionAt         DateTime? // When we last asked a question
-  collectedData          String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
-  lastAutoReplyKey       String? // PROBLEM D FIX: Hash of (ruleEngineVersion + leadId/contactId + lastInboundExternalId + nextQuestionKey) for dedupe
-  aiStateJson            String? // JSON: Reply Engine FSM state (serviceKey, stage, collected, askedQuestionKeys, etc.)
+  flowKey                       String? // e.g., "family_visa", "freelance_visa", "business_setup"
+  flowStep                      String? // e.g., "WAIT_SPONSOR_VISA_TYPE", "WAIT_FAMILY_LOCATION", "PRICING"
+  lastQuestionKey               String? // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
+  lastQuestionAt                DateTime? // When we last asked a question
+  collectedData                 String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
+  lastAutoReplyKey              String? // PROBLEM D FIX: Hash of (ruleEngineVersion + leadId/contactId + lastInboundExternalId + nextQuestionKey) for dedupe
+  aiStateJson                   String? // JSON: Reply Engine FSM state (serviceKey, stage, collected, askedQuestionKeys, etc.)
   // Fail-proof dedupe and state machine fields
-  stateVersion           Int       @default(0) // Optimistic concurrency control
-  lastAssistantMessageAt DateTime? // Last AI-generated message timestamp
-  qualificationStage     String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
-  questionsAskedCount    Int       @default(0) // Track total questions asked (max 5 for business setup)
-  knownFields            String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
-  language               String? // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.) for multilingual support
-  aiState                String? // Conversation state for AI gating: WAITING_FOR_EXIT_CONFIRMATION, WAITING_FOR_PASSPORT, etc.
-  aiLockUntil            DateTime? // Per-conversation lock expiration timestamp (prevents concurrent processing)
-  lastAiOutboundAt       DateTime? // Last AI auto-reply timestamp (for cooldown/throttling)
-  deletedAt              DateTime? // Soft delete timestamp
-  createdAt              DateTime  @default(now())
-  updatedAt              DateTime  @updatedAt
+  stateVersion                  Int       @default(0) // Optimistic concurrency control
+  lastAssistantMessageAt        DateTime? // Last AI-generated message timestamp
+  qualificationStage            String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
+  questionsAskedCount           Int       @default(0) // Track total questions asked (max 5 for business setup)
+  knownFields                   String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
+  language                      String? // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.) for multilingual support
+  aiState                       String? // Conversation state for AI gating: WAITING_FOR_EXIT_CONFIRMATION, WAITING_FOR_PASSPORT, etc.
+  aiLockUntil                   DateTime? // Per-conversation lock expiration timestamp (prevents concurrent processing)
+  lastAiOutboundAt              DateTime? // Last AI auto-reply timestamp (for cooldown/throttling)
+  lastProcessedInboundMessageId String? // Provider message ID of last processed inbound message (for idempotency)
+  deletedAt                     DateTime? // Soft delete timestamp
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
 
-  messages             Message[]
-  communicationLogs    CommunicationLog[]
-  aiDrafts             AIDraft[]
-  attachments          LeadAttachment[]
-  aiActionLogs         AIActionLog[]
-  statusEvents         MessageStatusEvent[]
-  tasks                Task[]                @relation("ConversationTasks")
-  notifications        Notification[]
-  autoReplyLogs        AutoReplyLog[]
-  inboundMessageDedups InboundMessageDedup[]
-  outboundMessageLogs  OutboundMessageLog[]
-  replyEngineLogs      ReplyEngineLog[]
-  outboundJobs         OutboundJob[]
-  aiReplyDedups        AiReplyDedup[]
+  messages              Message[]
+  communicationLogs     CommunicationLog[]
+  aiDrafts              AIDraft[]
+  attachments           LeadAttachment[]
+  aiActionLogs          AIActionLog[]
+  statusEvents          MessageStatusEvent[]
+  tasks                 Task[]                 @relation("ConversationTasks")
+  notifications         Notification[]
+  autoReplyLogs         AutoReplyLog[]
+  inboundMessageDedups  InboundMessageDedup[]
+  outboundMessageLogs   OutboundMessageLog[]
+  replyEngineLogs       ReplyEngineLog[]
+  outboundJobs          OutboundJob[]
+  aiReplyDedups         AiReplyDedup[]
   outboundMessageDedups OutboundMessageDedup[]
-  renewals             Renewal[]
+  renewals              Renewal[]
   // Note: Partial unique index for externalThreadId will be added via migration
 
   // C) CONVERSATION UNIQUENESS: One conversation per (contactId, channel, externalThreadId)
@@ -1129,16 +1130,16 @@ model AiReplyDedup {
 
 // Outbound Message Deduplication (for auto-replies using inboundProviderMessageId)
 model OutboundMessageDedup {
-  id                      Int       @id @default(autoincrement())
-  conversation            Conversation @relation(fields: [conversationId], references: [id])
-  conversationId          Int
+  id                       Int          @id @default(autoincrement())
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  conversationId           Int
   inboundProviderMessageId String? // External WhatsApp message ID that triggered this auto-reply
-  dedupeKey               String   @unique // Format: auto:{conversationId}:{inboundProviderMessageId}
-  status                  String   @default("PENDING") // PENDING | SENT | FAILED
-  createdAt               DateTime @default(now())
-  sentAt                  DateTime? // When message was actually sent
-  providerMessageId       String? // WhatsApp provider message ID of the sent outbound message
-  lastError               String? // Last error message if failed
+  dedupeKey                String       @unique // Format: auto:{conversationId}:{inboundProviderMessageId}
+  status                   String       @default("PENDING") // PENDING | SENT | FAILED
+  createdAt                DateTime     @default(now())
+  sentAt                   DateTime? // When message was actually sent
+  providerMessageId        String? // WhatsApp provider message ID of the sent outbound message
+  lastError                String? // Last error message if failed
 
   @@index([conversationId, createdAt])
   @@index([inboundProviderMessageId])

@@ -516,6 +516,8 @@ export interface ConversationMemory {
   investor_type?: string
   service_variant?: string
   pro_scope?: string
+  // CRITICAL FIX: Persistent state flags (NOT substring heuristics)
+  greetingSent?: boolean // Track if greeting was sent (replaces brittle "hello/hamdi" check)
   // State flags to track which questions have been asked
   has_asked_name?: boolean
   has_asked_service?: boolean
@@ -1067,28 +1069,30 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
   }
   
   // Step 2: Determine current state
+  // CRITICAL FIX: Use persistent greetingSent flag instead of brittle string matching
+  const greetingSent = updatedMemory.greetingSent === true
+  
   let currentState = 'S0_GREETING'
   
-  // Check if we've sent greeting
-  const hasGreeting = context.conversationHistory.some(m => 
-    m.direction === 'OUTBOUND' && 
-    (m.body || '').toLowerCase().includes('hello') && 
-    (m.body || '').toLowerCase().includes('hamdi')
-  )
-  
-  if (hasGreeting) {
+  // If greeting was already sent (persistent flag), skip S0
+  if (greetingSent) {
     currentState = 'S1_CAPTURE_NAME'
   }
   
   // CRITICAL FIX: Always ask for name FIRST before service flow
   // Even if service is detected, we must capture name first
-  if (!updatedMemory.name && hasGreeting) {
+  if (!updatedMemory.name && greetingSent) {
     currentState = 'S1_CAPTURE_NAME'
   } else if (updatedMemory.name && !updatedMemory.service) {
     currentState = 'S2_IDENTIFY_SERVICE'
   } else if (updatedMemory.name && updatedMemory.service) {
     currentState = 'S3_SERVICE_FLOW'
   }
+  
+  // Log state transition
+  console.log(
+    `[RULE-ENGINE] State transition conversationId=${context.conversationId} currentState=${currentState} greetingSent=${greetingSent} isFirstMessage=${context.isFirstMessage}`
+  )
   
   // Step 3: Execute state actions
   // CRITICAL FIX C: Use structured output
@@ -1097,12 +1101,24 @@ export async function executeRuleEngine(context: RuleEngineContext): Promise<Rul
   const states = RULE_ENGINE_JSON.state_machine.states
   const currentStateDef = states.find(s => s.id === currentState)
   
-  if (currentState === 'S0_GREETING' && context.isFirstMessage) {
+  if (currentState === 'S0_GREETING' && context.isFirstMessage && !greetingSent) {
     const action = currentStateDef?.actions[0] as any
     if (action?.type === 'send_message' && action?.template) {
       const text = renderTemplate(action.template, updatedMemory)
+      // CRITICAL FIX: Mark greeting as sent in memory
+      memoryUpdates.greetingSent = true
+      updatedMemory.greetingSent = true
       result = { kind: 'REPLY', text, needsHuman: false, memoryUpdates, service: updatedMemory.service }
+      console.log(
+        `[RULE-ENGINE] S0_GREETING fired - sending greeting and setting greetingSent=true conversationId=${context.conversationId}`
+      )
     }
+  } else if (currentState === 'S0_GREETING' && greetingSent) {
+    // Greeting already sent - skip to next state
+    console.log(
+      `[RULE-ENGINE] S0_GREETING skipped - greeting already sent conversationId=${context.conversationId}`
+    )
+    currentState = 'S1_CAPTURE_NAME'
   } else if (currentState === 'S1_CAPTURE_NAME' && !updatedMemory.name) {
     // CRITICAL: Always ask for name if missing, even if service is detected
     const action = currentStateDef?.actions[0] as any
