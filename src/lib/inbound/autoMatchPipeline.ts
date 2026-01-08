@@ -1394,6 +1394,8 @@ async function createCommunicationLog(input: {
   }
 
   // Check for existing message first (idempotency - prevent duplicates from webhook retries)
+  // NOTE: This check happens AFTER contact, conversation, and lead are already created/found
+  // So we use those entities in the return value
   let message
   if (input.providerMessageId) {
     try {
@@ -1402,20 +1404,16 @@ async function createCommunicationLog(input: {
           channel: normalizedChannel,
           providerMessageId: input.providerMessageId,
         },
-        include: {
-          contact: true,
-          conversation: true,
-          lead: true,
-        },
       })
       if (message) {
         console.log(`[AUTO-MATCH] Message already exists (idempotency): ${message.id} for providerMessageId ${input.providerMessageId}`)
-        // Return full result with existing entities - don't create duplicate
+        // Return full result using entities already created/found in this function call
+        // This ensures consistency with the current processing context
         return {
-          contact: message.contact,
-          conversation: message.conversation,
-          lead: message.lead,
-          message: message,
+          contact: contact, // Use contact already in scope
+          conversation: conversation, // Use conversation already in scope
+          lead: lead, // Use lead already in scope
+          message: message, // Use the existing message
           extractedFields: {},
           tasksCreated: 0,
           autoReplied: false,
