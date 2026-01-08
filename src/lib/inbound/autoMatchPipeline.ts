@@ -1395,25 +1395,29 @@ async function createCommunicationLog(input: {
 
   // Check for existing message first (idempotency - prevent duplicates from webhook retries)
   // NOTE: This check happens AFTER contact, conversation, and lead are already created/found
-  // So we use those entities in the return value
-  let message
+  // Fetch related entities from existing message to ensure we return complete result
+  let existingMessage
   if (input.providerMessageId) {
     try {
-      message = await prisma.message.findFirst({
+      existingMessage = await prisma.message.findFirst({
         where: {
           channel: normalizedChannel,
           providerMessageId: input.providerMessageId,
         },
+        include: {
+          contact: true,
+          conversation: true,
+          lead: true,
+        },
       })
-      if (message) {
-        console.log(`[AUTO-MATCH] Message already exists (idempotency): ${message.id} for providerMessageId ${input.providerMessageId}`)
-        // Return full result using entities already created/found in this function call
-        // This ensures consistency with the current processing context
+      if (existingMessage) {
+        console.log(`[AUTO-MATCH] Message already exists (idempotency): ${existingMessage.id} for providerMessageId ${input.providerMessageId}`)
+        // Return full result with entities from existing message
         return {
-          contact: contact, // Use contact already in scope
-          conversation: conversation, // Use conversation already in scope
-          lead: lead, // Use lead already in scope
-          message: message, // Use the existing message
+          contact: existingMessage.contact || contact, // Use contact from message or fallback to scope
+          conversation: existingMessage.conversation || conversation, // Use conversation from message or fallback to scope
+          lead: existingMessage.lead || lead, // Use lead from message or fallback to scope
+          message: existingMessage, // Use the existing message
           extractedFields: {},
           tasksCreated: 0,
           autoReplied: false,
@@ -1436,22 +1440,27 @@ async function createCommunicationLog(input: {
     // Handle unique constraint violation (duplicate message)
     if (err.code === 'P2002' || msg.includes('Unique constraint') || msg.includes('duplicate key') || msg.includes('already exists')) {
       console.log(`[AUTO-MATCH] Duplicate message detected (idempotency), fetching existing: channel=${normalizedChannel}, providerMessageId=${input.providerMessageId}`)
-      // Message already exists, fetch it
+      // Message already exists, fetch it with related entities
       if (input.providerMessageId) {
-        message = await prisma.message.findFirst({
+        const duplicateMessage = await prisma.message.findFirst({
           where: {
             channel: normalizedChannel,
             providerMessageId: input.providerMessageId,
           },
+          include: {
+            contact: true,
+            conversation: true,
+            lead: true,
+          },
         })
-        if (message) {
-          console.log(`[AUTO-MATCH] Found existing message: ${message.id}`)
-          // Return full result using entities already created/found in this function call
+        if (duplicateMessage) {
+          console.log(`[AUTO-MATCH] Found existing message: ${duplicateMessage.id}`)
+          // Return full result with entities from existing message
           return {
-            contact: contact, // Use contact already in scope
-            conversation: conversation, // Use conversation already in scope
-            lead: lead, // Use lead already in scope
-            message: message, // Use the existing message
+            contact: duplicateMessage.contact || contact, // Use contact from message or fallback to scope
+            conversation: duplicateMessage.conversation || conversation, // Use conversation from message or fallback to scope
+            lead: duplicateMessage.lead || lead, // Use lead from message or fallback to scope
+            message: duplicateMessage, // Use the existing message
             extractedFields: {},
             tasksCreated: 0,
             autoReplied: false,
@@ -1492,19 +1501,24 @@ async function createCommunicationLog(input: {
         // Handle unique constraint in fallback too
         if (fallbackErr.code === 'P2002' || fallbackErr.message?.includes('Unique constraint') || fallbackErr.message?.includes('duplicate key')) {
           if (input.providerMessageId) {
-            message = await prisma.message.findFirst({
+            const fallbackDuplicateMessage = await prisma.message.findFirst({
               where: {
                 channel: normalizedChannel,
                 providerMessageId: input.providerMessageId,
               },
+              include: {
+                contact: true,
+                conversation: true,
+                lead: true,
+              },
             })
-            if (message) {
-              // Return full result using entities already created/found in this function call
+            if (fallbackDuplicateMessage) {
+              // Return full result with entities from existing message
               return {
-                contact: contact, // Use contact already in scope
-                conversation: conversation, // Use conversation already in scope
-                lead: lead, // Use lead already in scope
-                message: message, // Use the existing message
+                contact: fallbackDuplicateMessage.contact || contact, // Use contact from message or fallback to scope
+                conversation: fallbackDuplicateMessage.conversation || conversation, // Use conversation from message or fallback to scope
+                lead: fallbackDuplicateMessage.lead || lead, // Use lead from message or fallback to scope
+                message: fallbackDuplicateMessage, // Use the existing message
                 extractedFields: {},
                 tasksCreated: 0,
                 autoReplied: false,
