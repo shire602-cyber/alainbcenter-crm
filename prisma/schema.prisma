@@ -136,7 +136,7 @@ model Lead {
   serviceTypeId Int? // New relation to ServiceType
   serviceType   ServiceType? @relation(fields: [serviceTypeId], references: [id])
 
-  // Locked enums per spec (stored as strings - works for both SQLite and PostgreSQL)
+  // Locked enums per spec (stored as strings in PostgreSQL)
   stage              String  @default("NEW") // NEW | CONTACTED | ENGAGED | QUALIFIED | PROPOSAL_SENT | IN_PROGRESS | COMPLETED_WON | LOST | ON_HOLD
   serviceTypeEnum    String? // Direct enum field: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | etc.
   priority           String? @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
@@ -175,7 +175,7 @@ model Lead {
   isRenewal             Boolean     @default(false)
   originalExpiryItemId  Int? // If this lead came from a renewal
   originalExpiryItem    ExpiryItem? @relation("OriginalExpiryLeads", fields: [originalExpiryItemId], references: [id])
-  estimatedValue        String? // Decimal stored as string (works for both SQLite and PostgreSQL)
+  estimatedValue        String? // Decimal stored as string (PostgreSQL)
   estimatedRenewalValue String? // Renewal revenue estimate
   renewalProbability    Int? // 0-100 probability of renewal
   renewalNotes          String? // AI-generated renewal insights
@@ -293,7 +293,7 @@ model ExpiryItem {
   leadId                  Int?
   type                    String // VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | TRADE_LICENSE_EXPIRY | ESTABLISHMENT_CARD_EXPIRY | INSURANCE_EXPIRY | etc.
   expiryDate              DateTime
-  reminderScheduleDays    String    @default("[90,60,30,7,3,1]") // JSON array as string (works for both SQLite and PostgreSQL)
+  reminderScheduleDays    String    @default("[90,60,30,7,3,1]") // JSON array as string (PostgreSQL)
   remindersEnabled        Boolean   @default(true) // Enable/disable reminders for this expiry
   stopRemindersAfterReply Boolean   @default(true) // Stop reminders after customer replies
   lastReminderSentAt      DateTime?
@@ -562,7 +562,7 @@ model Message {
   providerMediaId   String? // REQUIRED FOR WHATSAPP: Meta Graph API media ID (e.g., "882580977660655") - used to fetch download URL on demand
   providerMessageId String? // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
   status            String       @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED | PENDING
-  payload           String? // JSON: Provider-specific payload/metadata (stored as string - works for both SQLite and PostgreSQL)
+  payload           String? // JSON: Provider-specific payload/metadata (stored as string in PostgreSQL)
   meta              String? // Legacy field - JSON for provider IDs and metadata (kept for backward compatibility)
   rawPayload        String? // JSON: Full webhook payload for debugging
   sentAt            DateTime? // When message was sent (for outbound)
@@ -945,7 +945,7 @@ model StaffSettings {
 model AutomationJob {
   id          String    @id @default(cuid())
   type        String // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
-  data        String // Job payload (JSON stored as string - works for both SQLite and PostgreSQL)
+  data        String // Job payload (JSON stored as string in PostgreSQL)
   status      String    @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
   priority    Int       @default(0)
   error       String?
