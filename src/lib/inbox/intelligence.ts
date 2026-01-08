@@ -237,10 +237,10 @@ export async function computeConversationFlags(
   const firstInbound = conversation.messages
     .slice()
     .reverse()
-    .find((m) => m.direction === 'inbound' || m.direction === 'IN' || m.direction === 'INBOUND')
+    .find((m: any) => m.direction === 'inbound' || m.direction === 'IN' || m.direction === 'INBOUND')
   const firstOutboundAfterInbound = firstInbound
     ? conversation.messages.find(
-        (m) => (m.direction === 'outbound' || m.direction === 'OUT' || m.direction === 'OUTBOUND') && m.createdAt > firstInbound.createdAt
+        (m: any) => (m.direction === 'outbound' || m.direction === 'OUT' || m.direction === 'OUTBOUND') && m.createdAt > firstInbound.createdAt
       )
     : null
 
