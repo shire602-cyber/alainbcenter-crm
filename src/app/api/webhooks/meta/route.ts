@@ -141,7 +141,11 @@ async function processWebhookPayload(payload: any) {
     const normalizedEvents = normalizeWebhookEvent(payload)
 
     for (const event of normalizedEvents) {
-      if (event.eventType === 'message' && event.senderId && event.text) {
+      // Process messages with text OR attachments (media messages have no text)
+      const hasText = !!event.text
+      const hasAttachments = !!(event.rawPayload?.message?.attachments && event.rawPayload.message.attachments.length > 0)
+      
+      if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
         // Determine channel based on page or event context
         const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
 
@@ -151,7 +155,11 @@ async function processWebhookPayload(payload: any) {
             pageId,
             workspaceId: workspaceId ?? 1,
             senderId: event.senderId,
-            message: { text: event.text, mid: event.messageId },
+            message: { 
+              text: event.text, 
+              mid: event.messageId,
+              attachments: event.rawPayload?.message?.attachments || null,
+            },
             timestamp: event.timestamp || new Date(),
             channel,
           })

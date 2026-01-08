@@ -117,7 +117,7 @@ export async function GET(req: NextRequest) {
             igBusinessId: igAccount?.id || null,
             igUsername: igAccount?.username || null,
             scopes: JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']),
-            status: 'active',
+            status: 'connected',
             updatedAt: new Date(),
           },
           create: {
@@ -128,7 +128,7 @@ export async function GET(req: NextRequest) {
             igBusinessId: igAccount?.id || null,
             igUsername: igAccount?.username || null,
             scopes: JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']),
-            status: 'active',
+            status: 'connected',
           },
         })
 
