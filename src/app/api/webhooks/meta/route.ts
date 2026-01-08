@@ -5,12 +5,11 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
-import { decryptToken } from '@/lib/integrations/meta/encryption'
 import crypto from 'crypto'
+import { storeWebhookEvent } from '@/server/integrations/meta/storage'
+import { normalizeWebhookEvent } from '@/server/integrations/meta/normalize'
 import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
-
-const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN
-const META_APP_SECRET = process.env.META_APP_SECRET
+import { getWebhookVerifyToken, getAppSecret } from '@/server/integrations/meta/config'
 
 /**
  * GET /api/webhooks/meta
@@ -23,15 +22,18 @@ export async function GET(req: NextRequest) {
     const token = searchParams.get('hub.verify_token')
     const challenge = searchParams.get('hub.challenge')
 
-    if (!META_VERIFY_TOKEN) {
-      console.error('META_VERIFY_TOKEN not configured')
+    // Get verify token from database (or fallback to env var)
+    const verifyToken = await getWebhookVerifyToken()
+
+    if (!verifyToken) {
+      console.error('Webhook verify token not configured')
       return NextResponse.json(
         { error: 'Webhook not configured' },
         { status: 500 }
       )
     }
 
-    if (mode === 'subscribe' && token === META_VERIFY_TOKEN) {
+    if (mode === 'subscribe' && token === verifyToken) {
       console.log('✅ Meta webhook verified successfully')
       return new NextResponse(challenge, {
         status: 200,
@@ -55,13 +57,14 @@ export async function POST(req: NextRequest) {
   const response = NextResponse.json({ success: true })
 
   try {
-    // Verify webhook signature if app secret is configured
+    // Verify webhook signature if app secret is configured (optional)
     const signature = req.headers.get('x-hub-signature-256')
     const body = await req.text()
 
-    if (META_APP_SECRET && signature) {
+    const appSecret = getAppSecret()
+    if (appSecret && signature) {
       const expectedSignature = `sha256=${crypto
-        .createHmac('sha256', META_APP_SECRET)
+        .createHmac('sha256', appSecret)
         .update(body)
         .digest('hex')}`
 
@@ -70,8 +73,10 @@ export async function POST(req: NextRequest) {
         // Still return 200 to avoid retries, but log the error
         return response
       }
-    } else if (!META_APP_SECRET) {
-      console.warn('⚠️ META_APP_SECRET not configured - skipping signature verification')
+    } else if (!appSecret) {
+      // Signature verification is optional for internal apps
+      // Log at debug level only
+      console.log('ℹ️ META_APP_SECRET not configured - skipping signature verification (optional)')
     }
 
     const payload = JSON.parse(body)
@@ -104,75 +109,56 @@ async function processWebhookPayload(payload: any) {
   for (const entry of entries) {
     const pageId = entry.id
 
-    // Resolve workspace_id from page_id
-    const connection = await prisma.$queryRaw<Array<{
-      workspace_id: number
-      page_access_token: string
-    }>>`
-      SELECT workspace_id, page_access_token
-      FROM meta_connections
-      WHERE page_id = ${pageId}
-      AND status = 'active'
-      LIMIT 1
-    `
+    // Resolve connection by page_id
+    const connection = await prisma.metaConnection.findFirst({
+      where: {
+        pageId,
+        status: 'connected',
+      },
+      select: {
+        id: true,
+        workspaceId: true,
+      },
+    })
 
-    const workspaceId = connection.length > 0 ? connection[0].workspace_id : 1
+    const connectionId = connection?.id ?? null
+    const workspaceId = connection?.workspaceId ?? null
 
     // Store raw webhook event
-    // After running migration and regenerating Prisma client, you can use:
-    // await prisma.metaWebhookEvent.create({ ... })
     try {
-      await prisma.$executeRaw`
-        INSERT INTO meta_webhook_events (workspace_id, page_id, event_type, payload, received_at)
-        VALUES (${workspaceId}, ${pageId || null}, ${payload.object || 'unknown'}, ${JSON.stringify(payload)}, NOW())
-      `
+      await storeWebhookEvent({
+        connectionId,
+        workspaceId,
+        pageId: pageId || null,
+        eventType: payload.object || 'unknown',
+        payload,
+      })
     } catch (error: any) {
       console.error('Failed to store webhook event:', error)
     }
 
-    // Process messaging events
-    const messagingEvents = entry.messaging || []
-    const instagramMessagingEvents = entry.messaging || []
+    // Normalize and process events (optional - only if safe inbox function exists)
+    const normalizedEvents = normalizeWebhookEvent(payload)
 
-    // Process Facebook Messenger messages
-    for (const event of messagingEvents) {
-      if (event.message && event.sender) {
-        await processInboundMessage({
-          pageId,
-          workspaceId,
-          senderId: event.sender.id,
-          message: event.message,
-          timestamp: event.timestamp ? new Date(event.timestamp * 1000) : new Date(),
-          channel: 'FACEBOOK',
-        }).catch((error) => {
-          console.error('Error processing Facebook message:', error)
-        })
-      }
-    }
+    for (const event of normalizedEvents) {
+      if (event.eventType === 'message' && event.senderId && event.text) {
+        // Determine channel based on page or event context
+        const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
 
-    // Process Instagram messages
-    for (const event of instagramMessagingEvents) {
-      if (event.message && event.sender) {
-        await processInboundMessage({
-          pageId,
-          workspaceId,
-          senderId: event.sender.id,
-          message: event.message,
-          timestamp: event.timestamp ? new Date(event.timestamp * 1000) : new Date(),
-          channel: 'INSTAGRAM',
-        }).catch((error) => {
-          console.error('Error processing Instagram message:', error)
-        })
-      }
-    }
-
-    // Process leadgen events (store for manual processing)
-    const changes = entry.changes || []
-    for (const change of changes) {
-      if (change.field === 'leadgen' && change.value) {
-        console.log('Leadgen event received:', change.value.leadgen_id)
-        // Store in webhook_events for manual processing
-        // TODO: Implement lead processing if needed
+        // Optionally insert into inbox using safe function
+        try {
+          await processInboundMessage({
+            pageId,
+            workspaceId: workspaceId ?? 1,
+            senderId: event.senderId,
+            message: { text: event.text, mid: event.messageId },
+            timestamp: event.timestamp || new Date(),
+            channel,
+          })
+        } catch (error: any) {
+          console.error(`Error processing ${channel} message:`, error)
+          // Event is already stored, can be processed manually
+        }
       }
     }
   }

@@ -225,7 +225,7 @@ model Lead {
   automationRunLogs  AutomationRunLog[]
   aiDrafts           AIDraft[]
   aiActionLogs       AIActionLog[]
-  notifications      Notification[] @relation("LeadNotifications")
+  notifications      Notification[]     @relation("LeadNotifications")
   reminders          Reminder[]
   autoReplyLogs      AutoReplyLog[]
   attachments        LeadAttachment[]
@@ -712,31 +712,31 @@ model CommunicationLog {
 }
 
 model Task {
-  id              Int           @id @default(autoincrement())
-  lead            Lead          @relation(fields: [leadId], references: [id])
+  id              Int            @id @default(autoincrement())
+  lead            Lead           @relation(fields: [leadId], references: [id])
   leadId          Int
-  conversation    Conversation? @relation("ConversationTasks", fields: [conversationId], references: [id])
+  conversation    Conversation?  @relation("ConversationTasks", fields: [conversationId], references: [id])
   conversationId  Int?
-  expiryItem      ExpiryItem?   @relation(fields: [expiryItemId], references: [id])
+  expiryItem      ExpiryItem?    @relation(fields: [expiryItemId], references: [id])
   expiryItemId    Int? // Task may be tied to a specific expiry
   title           String
   description     String? // Task description/details
   type            String // CALL | WHATSAPP | EMAIL | MEETING | DOCUMENT_REQUEST | REPLY_WHATSAPP | ESCALATION | RENEWAL_OUTREACH | RENEWAL_FOLLOWUP | RENEWAL_INTERNAL | OTHER
-  priority        String        @default("MEDIUM") // LOW | MEDIUM | HIGH
+  priority        String         @default("MEDIUM") // LOW | MEDIUM | HIGH
   dueAt           DateTime? // Due date + time
-  status          String        @default("OPEN") // OPEN | DONE | SNOOZED
+  status          String         @default("OPEN") // OPEN | DONE | SNOOZED
   doneAt          DateTime?
   assignedUserId  Int? // Legacy single assignee (keep for backward compatibility)
-  assignedUser    User?         @relation("AssignedTasks", fields: [assignedUserId], references: [id])
+  assignedUser    User?          @relation("AssignedTasks", fields: [assignedUserId], references: [id])
   assignees       TaskAssignee[] // Many-to-many assignees
   createdByUserId Int?
-  createdByUser   User?         @relation("CreatedTasks", fields: [createdByUserId], references: [id])
-  aiSuggested     Boolean       @default(false)
-  idempotencyKey  String?       @unique // For preventing duplicate auto-created tasks
+  createdByUser   User?          @relation("CreatedTasks", fields: [createdByUserId], references: [id])
+  aiSuggested     Boolean        @default(false)
+  idempotencyKey  String?        @unique // For preventing duplicate auto-created tasks
   lastNudgedAt    DateTime? // When task was last nudged (for rate limiting)
   notifications   Notification[] @relation("TaskNotifications")
-  createdAt       DateTime      @default(now())
-  updatedAt       DateTime      @updatedAt
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
 
   @@index([expiryItemId])
   @@index([status, dueAt])
@@ -744,12 +744,12 @@ model Task {
 }
 
 model TaskAssignee {
-  id        Int      @id @default(autoincrement())
-  task      Task     @relation(fields: [taskId], references: [id], onDelete: Cascade)
-  taskId    Int
-  user      User     @relation("TaskAssignees", fields: [userId], references: [id])
-  userId    Int
-  assignedAt DateTime @default(now())
+  id         Int       @id @default(autoincrement())
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId     Int
+  user       User      @relation("TaskAssignees", fields: [userId], references: [id])
+  userId     Int
+  assignedAt DateTime  @default(now())
   notifiedAt DateTime? // When assignee was last notified about this task
 
   @@unique([taskId, userId])
@@ -1177,33 +1177,44 @@ model OutboundMessageDedup {
 
 // Meta Integration Tables
 model MetaConnection {
-  id              Int      @id @default(autoincrement())
-  workspaceId     Int      @default(1) @map("workspace_id")
-  pageId          String   @map("page_id")
-  pageName        String?  @map("page_name")
-  pageAccessToken String   @map("page_access_token") // Encrypted
-  igBusinessId    String?  @map("ig_business_id")
-  igUsername      String?  @map("ig_username")
-  scopes          String? // JSON array
-  status          String   @default("active")
-  createdAt       DateTime @default(now()) @map("created_at")
-  updatedAt       DateTime @updatedAt @map("updated_at")
+  id                Int       @id @default(autoincrement())
+  workspaceId       Int?      @default(1) @map("workspace_id")
+  provider          String    @default("meta")
+  metaUserId        String?   @map("meta_user_id")
+  pageId            String    @map("page_id")
+  pageName           String?  @map("page_name")
+  pageAccessToken    String   @map("page_access_token") // Encrypted
+  igBusinessId       String?  @map("ig_business_id")
+  igUsername         String?  @map("ig_username")
+  scopes             String? // JSON array
+  triggerSubscribed  Boolean   @default(false) @map("trigger_subscribed")
+  status             String   @default("connected") // 'connected' | 'error'
+  lastError          String?  @map("last_error")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  webhookEvents      MetaWebhookEvent[]
 
   @@unique([workspaceId, pageId])
   @@index([workspaceId])
   @@index([pageId])
   @@index([status])
+  @@index([provider])
+  @@index([metaUserId])
   @@map("meta_connections")
 }
 
 model MetaWebhookEvent {
-  id         Int      @id @default(autoincrement())
-  workspaceId Int     @default(1) @map("workspace_id")
-  pageId     String?  @map("page_id")
-  eventType  String   @map("event_type")
-  payload    String   // JSON
-  receivedAt DateTime @default(now()) @map("received_at")
+  id           Int            @id @default(autoincrement())
+  connectionId Int?           @map("connection_id")
+  connection   MetaConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  workspaceId  Int?           @default(1) @map("workspace_id")
+  pageId       String?        @map("page_id")
+  eventType    String         @map("event_type")
+  payload      String // JSON
+  receivedAt   DateTime       @default(now()) @map("received_at")
 
+  @@index([connectionId])
   @@index([workspaceId])
   @@index([pageId])
   @@index([eventType])

@@ -103,30 +103,34 @@ export async function GET(req: NextRequest) {
         // Encrypt and store connection
         const encryptedToken = encryptToken(pageAccessToken)
 
-        // Upsert connection using raw SQL (works before Prisma client regeneration)
-        // After running migration and regenerating Prisma client, you can use:
-        // await prisma.metaConnection.upsert({ ... })
-        await prisma.$executeRaw`
-          INSERT INTO meta_connections (
-            workspace_id, page_id, page_name, page_access_token,
-            ig_business_id, ig_username, scopes, status, created_at, updated_at
-          )
-          VALUES (
-            ${workspaceId}, ${page.id}, ${page.name || null}, ${encryptedToken},
-            ${igAccount?.id || null}, ${igAccount?.username || null},
-            ${JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen'])},
-            'active', NOW(), NOW()
-          )
-          ON CONFLICT (workspace_id, page_id)
-          DO UPDATE SET
-            page_name = EXCLUDED.page_name,
-            page_access_token = EXCLUDED.page_access_token,
-            ig_business_id = EXCLUDED.ig_business_id,
-            ig_username = EXCLUDED.ig_username,
-            scopes = EXCLUDED.scopes,
-            status = 'active',
-            updated_at = NOW()
-        `
+        // Upsert connection using Prisma models
+        await prisma.metaConnection.upsert({
+          where: {
+            workspaceId_pageId: {
+              workspaceId,
+              pageId: page.id,
+            },
+          },
+          update: {
+            pageName: page.name || null,
+            pageAccessToken: encryptedToken,
+            igBusinessId: igAccount?.id || null,
+            igUsername: igAccount?.username || null,
+            scopes: JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']),
+            status: 'active',
+            updatedAt: new Date(),
+          },
+          create: {
+            workspaceId,
+            pageId: page.id,
+            pageName: page.name || null,
+            pageAccessToken: encryptedToken,
+            igBusinessId: igAccount?.id || null,
+            igUsername: igAccount?.username || null,
+            scopes: JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']),
+            status: 'active',
+          },
+        })
 
         connections.push({
           pageId: page.id,

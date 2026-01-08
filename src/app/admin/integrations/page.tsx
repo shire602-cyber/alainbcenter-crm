@@ -6,6 +6,8 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { IntegrationSettings } from '@/components/admin/IntegrationSettings'
 import { IntegrationIcon } from '@/components/admin/IntegrationIcon'
+import { MetaTesterIntegration } from '@/components/admin/MetaTesterIntegration'
+import { MetaTesterIntegration } from '@/components/admin/MetaTesterIntegration'
 import { 
   Settings,
   CheckCircle2,
@@ -94,18 +96,24 @@ export default async function IntegrationsPage() {
     orderBy: { name: 'asc' }
   }).catch(() => [])
 
-  // Check Meta connections
-  const metaConnections = await prisma.$queryRaw<Array<{
-    page_id: string
-    page_name: string | null
-    ig_username: string | null
-    status: string
-  }>>`
-    SELECT page_id, page_name, ig_username, status
-    FROM meta_connections
-    WHERE status = 'active'
-    ORDER BY created_at DESC
-  `.catch(() => [])
+  // Check Meta connections using Prisma models
+  const metaConnections = await prisma.metaConnection.findMany({
+    where: {
+      status: 'connected',
+    },
+    select: {
+      id: true,
+      pageId: true,
+      pageName: true,
+      igUsername: true,
+      triggerSubscribed: true,
+      status: true,
+      lastError: true,
+    },
+    orderBy: {
+      createdAt: 'desc',
+    },
+  }).catch(() => [])
 
   const hasMetaConnection = metaConnections.length > 0
 
@@ -142,16 +150,9 @@ export default async function IntegrationsPage() {
       name: 'instagram-messaging',
       label: 'Instagram Direct Messages',
       iconName: 'Instagram',
-      description: 'Connect Instagram Messaging API for DMs',
+      description: 'Connect Instagram Messaging API for DMs using Meta tester token',
       providers: ['Meta Messaging API'],
-    },
-    {
-      name: 'meta',
-      label: 'Meta (FB/IG)',
-      iconName: 'Facebook',
-      description: 'Connect Meta Business for Instagram DMs, Facebook Messenger, and Lead Ads',
-      providers: ['Meta Business'],
-      isOAuth: true,
+      isMetaTester: true,
     },
     {
       name: 'openai',
@@ -203,8 +204,8 @@ export default async function IntegrationsPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {integrationTypes.map((type) => {
             const integration = integrations.find((i) => i.name === type.name)
-            // For Meta OAuth integration, check if we have active connections
-            const isEnabled = type.name === 'meta' 
+            // For Meta tester integration, check if we have active connections
+            const isEnabled = type.name === 'instagram-messaging' && (type as any).isMetaTester
               ? hasMetaConnection 
               : (integration?.isEnabled || false)
 
@@ -235,40 +236,11 @@ export default async function IntegrationsPage() {
               >
                 <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{type.description}</p>
                 
-                {type.name === 'meta' && (type as any).isOAuth ? (
-                  <div className="space-y-2">
-                    {hasMetaConnection ? (
-                      <>
-                        <div className="text-xs text-slate-600 dark:text-slate-400 mb-2">
-                          <p className="font-medium text-green-600 dark:text-green-400 mb-1">Connected Pages:</p>
-                          <ul className="list-disc list-inside space-y-0.5">
-                            {metaConnections.map((conn, idx) => (
-                              <li key={idx}>
-                                {conn.page_name || conn.page_id}
-                                {conn.ig_username && ` (@${conn.ig_username})`}
-                              </li>
-                            ))}
-                          </ul>
-                        </div>
-                        <Link href="/api/integrations/meta/start?workspace_id=1">
-                          <Button variant="outline" size="sm" className="w-full gap-2 text-xs h-8">
-                            Reconnect Meta
-                          </Button>
-                        </Link>
-                      </>
-                    ) : (
-                      <>
-                        <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
-                          Connect your Meta Business account to enable Instagram DMs, Facebook Messenger, and Lead Ads.
-                        </p>
-                        <Link href="/api/integrations/meta/start?workspace_id=1">
-                          <Button variant="default" size="sm" className="w-full gap-2 text-xs h-8">
-                            Connect Meta (FB/IG)
-                          </Button>
-                        </Link>
-                      </>
-                    )}
-                  </div>
+                {type.name === 'instagram-messaging' && (type as any).isMetaTester ? (
+                  <MetaTesterIntegration 
+                    connections={metaConnections}
+                    hasConnection={hasMetaConnection}
+                  />
                 ) : type.name === 'openai' && type.settingsUrl ? (
                   <div className="space-y-2">
                     <p className="text-xs text-slate-600 dark:text-slate-400">
