@@ -1393,13 +1393,54 @@ async function createCommunicationLog(input: {
     data.payload = typeof finalPayload === "string" ? finalPayload : JSON.stringify(finalPayload)
   }
 
+  // Check for existing message first (idempotency - prevent duplicates from webhook retries)
+  let message
+  if (input.providerMessageId) {
+    try {
+      message = await prisma.message.findFirst({
+        where: {
+          channel: normalizedChannel,
+          providerMessageId: input.providerMessageId,
+        },
+      })
+      if (message) {
+        console.log(`[AUTO-MATCH] Message already exists (idempotency): ${message.id} for providerMessageId ${input.providerMessageId}`)
+        // Return existing message - don't create duplicate
+        return message
+      }
+    } catch (findError: any) {
+      // If findFirst fails, continue to create (shouldn't happen, but handle gracefully)
+      console.warn('[AUTO-MATCH] Error checking for existing message:', findError)
+    }
+  }
+
   // HOTFIX: Fallback retry for Prisma schema mismatch (temporary safety during Vercel deploys)
   // If Prisma Client doesn't recognize providerMediaId/media fields, retry without them
-  let message
   try {
     message = await prisma.message.create({ data })
   } catch (err: any) {
     const msg = String(err?.message ?? err)
+    
+    // Handle unique constraint violation (duplicate message)
+    if (err.code === 'P2002' || msg.includes('Unique constraint') || msg.includes('duplicate key') || msg.includes('already exists')) {
+      console.log(`[AUTO-MATCH] Duplicate message detected (idempotency), fetching existing: channel=${normalizedChannel}, providerMessageId=${input.providerMessageId}`)
+      // Message already exists, fetch it
+      if (input.providerMessageId) {
+        message = await prisma.message.findFirst({
+          where: {
+            channel: normalizedChannel,
+            providerMessageId: input.providerMessageId,
+          },
+        })
+        if (message) {
+          console.log(`[AUTO-MATCH] Found existing message: ${message.id}`)
+          return message
+        }
+      }
+      // If we can't find it, log and return null (shouldn't happen)
+      console.error('[AUTO-MATCH] Unique constraint violation but couldn\'t find existing message')
+      throw new Error('Duplicate message but existing message not found')
+    }
     
     // If prod Prisma client is stale and rejects providerMediaId/media fields:
     if (msg.includes("Unknown argument `providerMediaId`") || msg.includes("Unknown argument providerMediaId")) {
@@ -1423,7 +1464,25 @@ async function createCommunicationLog(input: {
       })
       
       // Still save the TEXT message row
-      message = await prisma.message.create({ data: fallback })
+      try {
+        message = await prisma.message.create({ data: fallback })
+      } catch (fallbackErr: any) {
+        // Handle unique constraint in fallback too
+        if (fallbackErr.code === 'P2002' || fallbackErr.message?.includes('Unique constraint') || fallbackErr.message?.includes('duplicate key')) {
+          if (input.providerMessageId) {
+            message = await prisma.message.findFirst({
+              where: {
+                channel: normalizedChannel,
+                providerMessageId: input.providerMessageId,
+              },
+            })
+            if (message) {
+              return message
+            }
+          }
+        }
+        throw fallbackErr
+      }
     } else {
       throw err
     }
