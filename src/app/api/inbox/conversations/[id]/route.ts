@@ -125,12 +125,29 @@ export async function GET(
       // Gracefully handle missing columns (deletedAt, lastProcessedInboundMessageId, etc.) - query works without them
       if (error.code === 'P2022' || error.message?.includes('does not exist') || error.message?.includes('Unknown column') || 
           error.message?.includes('deletedAt') || error.message?.includes('lastProcessedInboundMessageId')) {
-        console.warn('[DB] Missing column detected, querying without it (this is OK if migration not yet applied):', error.message?.substring(0, 100))
-        // Retry without deletedAt - the query should work fine
+        console.warn('[DB] Missing column detected, querying with select to exclude problematic columns (this is OK if migration not yet applied):', error.message?.substring(0, 100))
+        // Retry with explicit select to exclude lastProcessedInboundMessageId and other missing columns
         try {
           conversation = await prisma.conversation.findUnique({
             where: { id: conversationId },
-            include: {
+            select: {
+              id: true,
+              contactId: true,
+              leadId: true,
+              channel: true,
+              status: true,
+              lastMessageAt: true,
+              lastInboundAt: true,
+              lastOutboundAt: true,
+              unreadCount: true,
+              priorityScore: true,
+              createdAt: true,
+              updatedAt: true,
+              aiState: true,
+              aiLockUntil: true,
+              lastAiOutboundAt: true,
+              ruleEngineMemory: true,
+              deletedAt: true,
               contact: {
                 select: {
                   id: true,
@@ -195,7 +212,21 @@ export async function GET(
               messages: {
                 orderBy: { createdAt: 'asc' },
                 take: 500,
-                include: {
+                select: {
+                  id: true,
+                  direction: true,
+                  channel: true,
+                  type: true,
+                  body: true,
+                  providerMediaId: true,
+                  mediaUrl: true,
+                  mediaMimeType: true,
+                  mediaFilename: true,
+                  mediaSize: true,
+                  status: true,
+                  providerMessageId: true,
+                  sentAt: true,
+                  createdAt: true,
                   createdByUser: {
                     select: {
                       id: true,
@@ -219,7 +250,7 @@ export async function GET(
                 },
               },
             },
-          })
+          }) as any
         } catch (retryError: any) {
           console.error('[DB] Failed to query conversation:', retryError)
           throw retryError
