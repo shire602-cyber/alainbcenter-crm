@@ -1,5 +1,18 @@
 -- Add lastAiOutboundAt to Conversation for cooldown tracking
-ALTER TABLE "Conversation" ADD COLUMN IF NOT EXISTS "lastAiOutboundAt" TIMESTAMP(3);
+DO $$
+BEGIN
+  IF EXISTS (
+    SELECT 1
+    FROM information_schema.tables
+    WHERE table_schema = 'public'
+      AND table_name = 'Conversation'
+  ) THEN
+    ALTER TABLE "Conversation"
+      ADD COLUMN IF NOT EXISTS "lastAiOutboundAt" TIMESTAMP(3);
+  END IF;
+END
+$$;
+
 
 -- Create OutboundMessageDedup table for provider-level deduplication
 CREATE TABLE IF NOT EXISTS "OutboundMessageDedup" (
