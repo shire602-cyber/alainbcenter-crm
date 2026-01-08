@@ -119,8 +119,12 @@ export async function processRenewalReminders(
         }
 
         // Calculate next reminder date from expiry date and next stage
+        // computeNextReminderAt expects the stage index (0-based) for the offset array
+        // If currentStage = 0, nextStage = 1, we want offset for stage 1 (index 0 in array)
+        // If currentStage = 1, nextStage = 2, we want offset for stage 2 (index 1 in array)
+        // If currentStage = 2, nextStage = 3, we want offset for stage 3 (index 2 in array)
         const nextStage = currentStage + 1;
-        const nextReminderAt = computeNextReminderAt(renewal.expiryDate, nextStage - 1);
+        const nextReminderAt = computeNextReminderAt(renewal.expiryDate, nextStage - 1); // nextStage - 1 = array index
         
         // Skip if next reminder is not due yet
         if (!nextReminderAt || nextReminderAt > now) {
@@ -322,9 +326,10 @@ export async function processRenewalReminders(
         if (allChannelsSucceeded || channelResults.some(r => r.success)) {
           // Calculate next reminder date for the next stage
           // After sending stage N, the current stage becomes N, so next reminder is for stage N+1
+          // computeNextReminderAt expects the stage index (0-based) for the offset array
           const currentStage = renewal.currentStage
           const nextStage = currentStage + 1
-          const nextReminderAt = computeNextReminderAt(renewal.expiryDate, nextStage)
+          const nextReminderAt = computeNextReminderAt(renewal.expiryDate, nextStage - 1) // nextStage - 1 = array index
           
           await prisma.renewal.update({
             where: { id: renewal.id },
