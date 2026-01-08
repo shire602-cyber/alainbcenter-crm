@@ -1,8 +1,8 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/authApi'
-import { sendTextMessage } from '@/lib/whatsapp'
 import { normalizeToE164 } from '@/lib/phone'
 import { prisma } from '@/lib/prisma'
+import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
 
 /**
  * POST /api/whatsapp/test-send
@@ -82,21 +82,77 @@ export async function POST(req: NextRequest) {
       }
     }
 
-    // Send test message
-    // PRODUCTION GUARD: Disable direct sends in production
-    if (process.env.NODE_ENV === 'production') {
+    // Find or create contact for test message
+    let contact = await prisma.contact.findFirst({
+      where: { phone: normalizedPhone },
+    })
+
+    if (!contact) {
+      // Create a temporary contact for testing
+      contact = await prisma.contact.create({
+        data: {
+          phone: normalizedPhone,
+          fullName: contactName,
+          source: 'test',
+        },
+      })
+    }
+
+    // Find or create lead for contact
+    let lead = await prisma.lead.findFirst({
+      where: {
+        contactId: contact.id,
+        stage: { notIn: ['COMPLETED_WON', 'LOST'] },
+      },
+      orderBy: { createdAt: 'desc' },
+    })
+
+    if (!lead) {
+      lead = await prisma.lead.create({
+        data: {
+          contactId: contact.id,
+          leadType: 'INQUIRY',
+          stage: 'NEW',
+          source: 'test',
+        },
+      })
+    }
+
+    // Find or create conversation
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+    
+    const { id: conversationId } = await upsertConversation({
+      contactId: contact.id,
+      channel: 'whatsapp',
+      leadId: lead.id,
+      externalThreadId: getExternalThreadId('whatsapp', contact),
+    })
+
+    // Send test message using proper idempotency method
+    const result = await sendOutboundWithIdempotency({
+      conversationId,
+      contactId: contact.id,
+      leadId: lead.id,
+      phone: normalizedPhone,
+      text: message,
+      provider: 'whatsapp',
+      triggerProviderMessageId: null, // Test send
+      replyType: 'answer',
+      lastQuestionKey: null,
+      flowStep: null,
+    })
+
+    if (!result.success) {
       return NextResponse.json(
-        { error: 'Direct WhatsApp send disabled in production. Use sendOutboundWithIdempotency() via proper endpoints.' },
-        { status: 403 }
+        { error: result.error || 'Failed to send test message' },
+        { status: 500 }
       )
     }
-    
-    const result = await sendTextMessage(normalizedPhone, message)
 
     return NextResponse.json({
       ok: true,
       messageId: result.messageId,
-      waId: result.waId,
       phone: normalizedPhone,
       contactName,
       message: 'Test message sent successfully!',
