@@ -213,7 +213,6 @@ model Lead {
 
   communicationLogs  CommunicationLog[]
   tasks              Task[]
-  taskNotifications  Notification[]
   documents          Document[]
   checklistItems     ChecklistItem[]
   chatMessages       ChatMessage[]
@@ -226,7 +225,7 @@ model Lead {
   automationRunLogs  AutomationRunLog[]
   aiDrafts           AIDraft[]
   aiActionLogs       AIActionLog[]
-  notifications      Notification[]
+  notifications      Notification[] @relation("LeadNotifications")
   reminders          Reminder[]
   autoReplyLogs      AutoReplyLog[]
   attachments        LeadAttachment[]
@@ -964,9 +963,9 @@ model Notification {
   type           String // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'task_due_soon' | 'task_overdue' | 'task_completed' | 'system'
   title          String
   message        String
-  lead           Lead?         @relation(fields: [leadId], references: [id])
+  lead           Lead?         @relation("LeadNotifications", fields: [leadId], references: [id])
   leadId         Int?
-  task           Task?         @relation(fields: [taskId], references: [id])
+  task           Task?         @relation("TaskNotifications", fields: [taskId], references: [id])
   taskId         Int?
   conversation   Conversation? @relation(fields: [conversationId], references: [id])
   conversationId Int?
