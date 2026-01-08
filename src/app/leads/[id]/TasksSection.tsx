@@ -12,6 +12,7 @@ import { Label } from '@/components/ui/label'
 import { 
   Plus, 
   CheckCircle2, 
+  Circle,
   Clock, 
   AlertCircle, 
   Users, 
