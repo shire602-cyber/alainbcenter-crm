@@ -2,13 +2,13 @@
 
 /**
  * REDESIGNED LEAD DETAIL PAGE
- * Clean, modern, task-oriented layout like respond.io
+ * Clean, modern, editable layout with sticky header
  */
 
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react'
 import { useRouter } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
-import { Card } from '@/components/ui/card'
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Select } from '@/components/ui/select'
@@ -20,6 +20,8 @@ import { InlineEditableField } from '@/components/leads/InlineEditableField'
 import { ActivityTimeline } from '@/components/leads/ActivityTimeline'
 import { AIRecommendationsCard } from '@/components/leads/AIRecommendationsCard'
 import { DocumentsCardEnhanced } from '@/components/leads/DocumentsCardEnhanced'
+import TasksSection from './TasksSection'
+import ChecklistSection from './ChecklistSection'
 import {
   ArrowLeft,
   Phone,
@@ -34,6 +36,9 @@ import {
   Circle,
   RefreshCw,
   ExternalLink,
+  ChevronDown,
+  Check,
+  X,
 } from 'lucide-react'
 import { format, formatDistanceToNow, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -61,21 +66,23 @@ export default function LeadDetailPageNew({
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
   const [users, setUsers] = useState<Array<{ id: number; name: string; email: string }>>([])
+  const [serviceTypes, setServiceTypes] = useState<Array<{ id: number; name: string }>>([])
   
   // Conversation scroll container ref
   const messagesEndRef = useRef<HTMLDivElement>(null)
   const messagesContainerRef = useRef<HTMLDivElement>(null)
+  const conversationSectionRef = useRef<HTMLDivElement>(null)
 
-  // Load users for owner dropdown
+  // Load users and service types
   useEffect(() => {
-    fetch('/api/admin/users')
-      .then(res => res.json())
-      .then(data => {
-        if (Array.isArray(data)) {
-          setUsers(data)
-        }
-      })
-      .catch(() => {})
+    Promise.all([
+      fetch('/api/admin/users').then(res => res.json()).then(data => {
+        if (Array.isArray(data)) setUsers(data)
+      }).catch(() => {}),
+      fetch('/api/service-types').then(res => res.json()).then(data => {
+        if (Array.isArray(data)) setServiceTypes(data)
+      }).catch(() => {}),
+    ])
   }, [])
 
   // Resolve params
@@ -134,7 +141,7 @@ export default function LeadDetailPageNew({
 
   // Auto-scroll to bottom on new messages
   useEffect(() => {
-    if (messages.length > 0) {
+    if (messages.length > 0 && messagesContainerRef.current) {
       messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' })
     }
   }, [messages.length])
@@ -258,17 +265,22 @@ export default function LeadDetailPageNew({
     )
   }, [lead, messages])
 
+  // Jump to conversation
+  const scrollToConversation = () => {
+    conversationSectionRef.current?.scrollIntoView({ behavior: 'smooth' })
+  }
+
   // Loading state
   if (loading || !leadId) {
     return (
       <MainLayout>
         <div className="space-y-6 p-6">
-          <Skeleton className="h-16 w-full" />
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-            <Skeleton className="h-96" />
+          <Skeleton className="h-20 w-full" />
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            <Skeleton className="h-96 lg:col-span-2" />
             <Skeleton className="h-96" />
           </div>
-          <Skeleton className="h-[520px]" />
+          <Skeleton className="h-[45vh]" />
         </div>
       </MainLayout>
     )
@@ -297,381 +309,440 @@ export default function LeadDetailPageNew({
   const contact = lead.contact || {}
   const scoreCategory = getAiScoreCategory(lead.aiScore)
 
+  // Get last inbound/outbound timestamps
+  const lastInboundAt = lead.lastInboundAt ? formatDistanceToNow(new Date(lead.lastInboundAt), { addSuffix: true }) : 'Never'
+  const lastOutboundAt = lead.lastOutboundAt ? formatDistanceToNow(new Date(lead.lastOutboundAt), { addSuffix: true }) : 'Never'
+
   return (
     <MainLayout>
-      <div className="space-y-6 p-6">
-        {/* Header */}
-        <div className="flex items-start justify-between gap-4 pb-6 border-b">
-          <div className="flex-1">
-            <div className="flex items-center gap-4 mb-4">
+      <div className="relative">
+        {/* Sticky Top Header */}
+        <div className="sticky top-0 z-50 bg-background/95 backdrop-blur-sm border-b border-border/50 shadow-sm">
+          <div className="p-4 lg:p-6">
+            <div className="flex items-center justify-between gap-4">
+              {/* Left: Back + Lead Info */}
+              <div className="flex items-center gap-4 flex-1 min-w-0">
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => router.push('/leads')}
+                  className="shrink-0"
+                >
+                  <ArrowLeft className="h-5 w-5" />
+                </Button>
+                <div className="min-w-0 flex-1">
+                  <h1 className="text-xl font-bold truncate">{contact.fullName || 'Unnamed Lead'}</h1>
+                  <p className="text-sm text-muted-foreground truncate">{contact.phone || 'No phone'}</p>
+                </div>
+              </div>
+
+              {/* Center: Stage + Owner Dropdowns */}
+              <div className="flex items-center gap-3 shrink-0">
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">Stage:</label>
+                  <Select
+                    value={lead.pipelineStage || 'new'}
+                    onChange={(e) => updateLeadField('pipelineStage', e.target.value)}
+                    className="h-9 min-w-[140px]"
+                  >
+                    {PIPELINE_STAGES.map(stage => (
+                      <option key={stage} value={stage}>
+                        {PIPELINE_STAGE_LABELS[stage]}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  <label className="text-xs text-muted-foreground whitespace-nowrap">Owner:</label>
+                  <Select
+                    value={lead.assignedUserId?.toString() || ''}
+                    onChange={(e) => updateLeadField('assignedUserId', e.target.value ? parseInt(e.target.value) : null)}
+                    className="h-9 min-w-[140px]"
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map(user => (
+                      <option key={user.id} value={user.id.toString()}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+              </div>
+
+              {/* Right: Primary Actions */}
+              <div className="flex items-center gap-2 shrink-0">
+                {contact.phone && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`tel:${contact.phone}`)}
+                      className="h-9"
+                    >
+                      <Phone className="h-4 w-4 mr-2" />
+                      Call
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => router.push(`/inbox?phone=${encodeURIComponent(contact.phone)}`)}
+                      className="h-9"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Inbox
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        const whatsappUrl = `https://wa.me/${contact.phone.replace(/[^0-9]/g, '')}`
+                        window.open(whatsappUrl, '_blank')
+                      }}
+                      className="h-9"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      WhatsApp
+                    </Button>
+                  </>
+                )}
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    // Create task - you can implement this
+                    showToast('Create task feature coming soon', 'info')
+                  }}
+                  className="h-9"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Task
+                </Button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Main Content */}
+        <div className="p-4 lg:p-6 space-y-6">
+          {/* General Info Section - 2 Column Grid */}
+          <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+            {/* Left Column: General Info */}
+            <div className="lg:col-span-2 space-y-6">
+              <Card>
+                <CardHeader>
+                  <CardTitle>General Info</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    {/* Identity Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Identity</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Full Name</label>
+                          <InlineEditableField
+                            value={contact.fullName || ''}
+                            onSave={(v) => updateLeadField('fullName', v)}
+                            placeholder="Click to edit"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Phone</label>
+                          <InlineEditableField
+                            value={contact.phone || ''}
+                            onSave={(v) => updateLeadField('phone', v)}
+                            placeholder="Click to edit"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Email</label>
+                          <Input
+                            value={contact.email || ''}
+                            onChange={(e) => {
+                              setLead({ ...lead, contact: { ...contact, email: e.target.value } })
+                            }}
+                            onBlur={(e) => updateLeadField('email', e.target.value)}
+                            placeholder="Enter email"
+                            type="email"
+                            className="w-full"
+                          />
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Nationality</label>
+                          <InlineEditableField
+                            value={contact.nationality || ''}
+                            onSave={(v) => updateLeadField('nationality', v)}
+                            placeholder="Click to edit"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Lead Metadata Section */}
+                    <div className="space-y-4">
+                      <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Lead Metadata</h3>
+                      <div className="space-y-4">
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Source / Channel</label>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="secondary">
+                              {LEAD_SOURCE_LABELS[contact.source as keyof typeof LEAD_SOURCE_LABELS] || contact.source || 'Manual'}
+                            </Badge>
+                            {lead.lastContactChannel && (
+                              <Badge variant="outline">{lead.lastContactChannel}</Badge>
+                            )}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Created</label>
+                          <span className="text-sm text-foreground">
+                            {format(new Date(lead.createdAt), 'MMM dd, yyyy')}
+                          </span>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Last Inbound</label>
+                          <span className="text-sm text-foreground">{lastInboundAt}</span>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Last Outbound</label>
+                          <span className="text-sm text-foreground">{lastOutboundAt}</span>
+                        </div>
+                        <div>
+                          <label className="text-xs text-muted-foreground mb-1.5 block">Service</label>
+                          <Select
+                            value={lead.serviceTypeId?.toString() || ''}
+                            onChange={(e) => updateLeadField('serviceTypeId', e.target.value ? parseInt(e.target.value) : null)}
+                            className="w-full"
+                          >
+                            <option value="">Not specified</option>
+                            {serviceTypes.map(st => (
+                              <option key={st.id} value={st.id.toString()}>{st.name}</option>
+                            ))}
+                          </Select>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Notes Section - Full Width */}
+                  <div className="mt-6 pt-6 border-t">
+                    <label className="text-xs text-muted-foreground mb-1.5 block">Notes</label>
+                    <Textarea
+                      value={lead.notes || ''}
+                      onChange={(e) => {
+                        setLead({ ...lead, notes: e.target.value })
+                      }}
+                      onBlur={(e) => updateLeadField('notes', e.target.value)}
+                      placeholder="Add notes about this lead..."
+                      className="min-h-[120px] resize-none"
+                    />
+                  </div>
+                </CardContent>
+              </Card>
+
+              {/* Qualification Checklist */}
+              {leadId && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Qualification Checklist</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <ChecklistSection leadId={leadId} />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+
+            {/* Right Column: Cards */}
+            <div className="space-y-6">
+              {/* AI Recommendations */}
+              {lead && leadId && (
+                <AIRecommendationsCard
+                  leadId={leadId}
+                  lead={{
+                    aiScore: lead.aiScore,
+                    aiNotes: lead.aiNotes,
+                    stage: lead.stage,
+                  }}
+                  onRescore={async () => loadLead(leadId!)}
+                />
+              )}
+
+              {/* Activity Timeline */}
+              <Card>
+                <CardHeader>
+                  <CardTitle>Activity Timeline</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <ActivityTimeline activities={activities} />
+                </CardContent>
+              </Card>
+
+              {/* Tasks */}
+              {leadId && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Tasks</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <TasksSection leadId={leadId} />
+                  </CardContent>
+                </Card>
+              )}
+
+              {/* Documents */}
+              {leadId && (
+                <Card>
+                  <CardHeader>
+                    <CardTitle>Documents</CardTitle>
+                  </CardHeader>
+                  <CardContent>
+                    <DocumentsCardEnhanced
+                      leadId={leadId}
+                      serviceType={lead.serviceTypeEnum || undefined}
+                    />
+                  </CardContent>
+                </Card>
+              )}
+            </div>
+          </div>
+
+          {/* Conversation Section - Fixed Height Panel */}
+          <div ref={conversationSectionRef} className="space-y-2">
+            <div className="flex items-center justify-between">
+              <h2 className="text-lg font-semibold">Conversation</h2>
               <Button
                 variant="ghost"
-                size="icon"
-                onClick={() => router.push('/leads')}
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <div>
-                <h1 className="text-2xl font-bold">{contact.fullName || 'Unnamed Lead'}</h1>
-                <p className="text-muted-foreground">{contact.phone || 'No phone'}</p>
-              </div>
-            </div>
-            
-            <div className="flex items-center gap-4 flex-wrap">
-              {/* Stage */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Stage:</label>
-                <Select
-                  value={lead.pipelineStage || 'new'}
-                  onChange={(e) => updateLeadField('pipelineStage', e.target.value)}
-                  className="w-[150px]"
-                >
-                  {PIPELINE_STAGES.map(stage => (
-                    <option key={stage} value={stage}>
-                      {PIPELINE_STAGE_LABELS[stage]}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* Owner */}
-              <div className="flex items-center gap-2">
-                <label className="text-sm font-medium">Owner:</label>
-                <Select
-                  value={lead.assignedUserId?.toString() || ''}
-                  onChange={(e) => updateLeadField('assignedUserId', e.target.value ? parseInt(e.target.value) : null)}
-                  className="w-[150px]"
-                >
-                  <option value="">Unassigned</option>
-                  {users.map(user => (
-                    <option key={user.id} value={user.id}>
-                      {user.name}
-                    </option>
-                  ))}
-                </Select>
-              </div>
-
-              {/* AI Score Badge */}
-              {lead.aiScore !== null && (
-                <Badge className={cn(
-                  scoreCategory === 'hot' && 'bg-red-500',
-                  scoreCategory === 'warm' && 'bg-orange-500',
-                  scoreCategory === 'cold' && 'bg-blue-500',
-                )}>
-                  AI Score: {lead.aiScore}
-                </Badge>
-              )}
-            </div>
-          </div>
-
-          {/* Quick Actions */}
-          <div className="flex items-center gap-2">
-            {contact.phone && (
-              <>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => window.open(`tel:${contact.phone}`)}
-                >
-                  <Phone className="h-4 w-4 mr-2" />
-                  Call
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => router.push(`/inbox?phone=${encodeURIComponent(contact.phone)}`)}
-                >
-                  <MessageSquare className="h-4 w-4 mr-2" />
-                  Open in Inbox
-                </Button>
-              </>
-            )}
-            {contact.email && (
-              <Button
-                variant="outline"
                 size="sm"
-                onClick={() => window.open(`mailto:${contact.email}`)}
+                onClick={scrollToConversation}
+                className="text-xs"
               >
-                <Mail className="h-4 w-4 mr-2" />
-                Email
+                <ChevronDown className="h-3 w-3 mr-1" />
+                Jump to conversation
               </Button>
-            )}
-          </div>
-        </div>
-
-        {/* Main Content: 2-Column Grid */}
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* LEFT COLUMN */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Overview Card */}
-            <Card>
-              <div className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Overview</h2>
-                <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Full Name</label>
-                    <InlineEditableField
-                      value={contact.fullName || ''}
-                      onSave={(v) => updateLeadField('fullName', v)}
-                      placeholder="Click to edit"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Phone</label>
-                    <InlineEditableField
-                      value={contact.phone || ''}
-                      onSave={(v) => updateLeadField('phone', v)}
-                      placeholder="Click to edit"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Email</label>
-                    <InlineEditableField
-                      value={contact.email || ''}
-                      onSave={(v) => updateLeadField('email', v)}
-                      placeholder="Click to edit"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Nationality</label>
-                    <InlineEditableField
-                      value={contact.nationality || ''}
-                      onSave={(v) => updateLeadField('nationality', v)}
-                      placeholder="Click to edit"
-                    />
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Source</label>
-                    <span className="text-sm">
-                      {LEAD_SOURCE_LABELS[contact.source as keyof typeof LEAD_SOURCE_LABELS] || contact.source || 'Manual'}
-                    </span>
-                  </div>
-                  <div>
-                    <label className="text-xs text-muted-foreground mb-1 block">Service</label>
-                    <span className="text-sm">
-                      {lead.serviceType?.name || lead.serviceTypeEnum || 'Not specified'}
-                    </span>
-                  </div>
-                </div>
-                
-                {/* Notes */}
-                <div className="mt-4">
-                  <label className="text-xs text-muted-foreground mb-1 block">Notes</label>
-                  <Textarea
-                    value={lead.notes || ''}
-                    onChange={(e) => setLead({ ...lead, notes: e.target.value })}
-                    onBlur={(e) => updateLeadField('notes', e.target.value)}
-                    placeholder="Add notes..."
-                    className="min-h-[100px]"
-                  />
-                </div>
-              </div>
-            </Card>
-
-            {/* Qualification Card */}
-            <Card>
-              <div className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Qualification</h2>
-                <div className="space-y-2">
-                  {['Passport', 'Photo', 'Emirates ID', 'Visa Copy', 'Sponsor Letter'].map((item) => (
-                    <div key={item} className="flex items-center gap-2">
-                      <Circle className="h-4 w-4 text-muted-foreground" />
-                      <span className="text-sm">{item}</span>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </Card>
-
-            {/* Renewals/Expiry Card */}
-            <Card>
-              <div className="p-6">
-                <div className="flex items-center justify-between mb-4">
-                  <h2 className="text-lg font-semibold">Renewals & Expiry</h2>
-                  <Button size="sm" variant="outline">
-                    <Plus className="h-4 w-4 mr-2" />
-                    Create Renewal
-                  </Button>
-                </div>
-                {lead.expiryItems && lead.expiryItems.length > 0 ? (
-                  <div className="space-y-2">
-                    {lead.expiryItems.slice(0, 5).map((expiry: any) => (
-                      <div key={expiry.id} className="flex items-center justify-between p-3 border rounded-lg">
-                        <div>
-                          <p className="text-sm font-medium">{expiry.type}</p>
-                          <p className="text-xs text-muted-foreground">
-                            {format(parseISO(expiry.expiryDate), 'MMM dd, yyyy')}
-                          </p>
-                        </div>
-                        <Badge variant="outline">{expiry.renewalStatus || 'Active'}</Badge>
-                      </div>
-                    ))}
-                  </div>
-                ) : (
-                  <p className="text-sm text-muted-foreground">No renewals or expiry items</p>
-                )}
-              </div>
-            </Card>
-          </div>
-
-          {/* RIGHT COLUMN */}
-          <div className="space-y-6">
-            {/* AI Recommendations */}
-            {lead && (
-              <AIRecommendationsCard
-                leadId={leadId}
-                lead={{
-                  aiScore: lead.aiScore,
-                  aiNotes: lead.aiNotes,
-                  stage: lead.stage,
-                }}
-                onRescore={async () => loadLead(leadId!)}
-              />
-            )}
-
-            {/* Activity Timeline */}
-            <Card>
-              <div className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Activity Timeline</h2>
-                <ActivityTimeline activities={activities} />
-              </div>
-            </Card>
-
-            {/* Documents */}
-            <Card>
-              <div className="p-6">
-                <h2 className="text-lg font-semibold mb-4">Documents</h2>
-                {leadId && (
-                  <DocumentsCardEnhanced
-                    leadId={leadId}
-                    serviceType={lead.serviceTypeEnum || undefined}
-                  />
-                )}
-              </div>
-            </Card>
-          </div>
-        </div>
-
-        {/* Conversation Section - FULL WIDTH BELOW */}
-        <Card>
-          <div className="p-6">
-            <h2 className="text-lg font-semibold mb-4">Conversation</h2>
+            </div>
             
-            {/* Messages Thread */}
-            <div
-              ref={messagesContainerRef}
-              className="h-[520px] overflow-y-auto border rounded-lg p-4 mb-4 bg-muted/30"
-            >
-              {messages.length === 0 ? (
-                <div className="flex items-center justify-center h-full">
-                  <EmptyState
-                    icon={MessageSquare}
-                    title="No messages yet"
-                    description="Start the conversation by sending a message"
-                  />
-                </div>
-              ) : (
-                <div className="space-y-4">
-                  {messages.map((msg: any) => {
-                    const isOutbound = msg.direction === 'OUTBOUND' || msg.direction === 'OUT'
-                    const hasMedia = msg.mediaProxyUrl || msg.attachments?.length > 0
-                    
-                    return (
-                      <div
-                        key={msg.id}
-                        className={cn(
-                          'flex',
-                          isOutbound ? 'justify-end' : 'justify-start'
-                        )}
-                      >
-                        <div
-                          className={cn(
-                            'max-w-[70%] rounded-lg p-3',
-                            isOutbound
-                              ? 'bg-primary text-primary-foreground'
-                              : 'bg-background border'
-                          )}
-                        >
-                          {hasMedia && (
-                            <div className="mb-2">
-                              {msg.type === 'image' && msg.mediaProxyUrl && (
-                                <img
-                                  src={msg.mediaProxyUrl}
-                                  alt="Attachment"
-                                  className="max-w-full rounded"
-                                  onClick={() => window.open(msg.mediaProxyUrl, '_blank')}
-                                  style={{ cursor: 'pointer', maxHeight: '200px' }}
-                                />
+            <Card>
+              <CardContent className="p-0">
+                {/* Messages Thread - Fixed Height with Scroll */}
+                <div
+                  ref={messagesContainerRef}
+                  className="h-[45vh] overflow-y-auto p-4 space-y-4 bg-muted/20"
+                >
+                  {messages.length === 0 ? (
+                    <div className="flex items-center justify-center h-full">
+                      <EmptyState
+                        icon={MessageSquare}
+                        title="No messages yet"
+                        description="Start the conversation by sending a message"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      {messages.map((msg: any) => {
+                        const isOutbound = msg.direction === 'OUTBOUND' || msg.direction === 'OUT'
+                        const hasMedia = msg.mediaProxyUrl || msg.attachments?.length > 0
+                        
+                        return (
+                          <div
+                            key={msg.id}
+                            className={cn(
+                              'flex',
+                              isOutbound ? 'justify-end' : 'justify-start'
+                            )}
+                          >
+                            <div
+                              className={cn(
+                                'max-w-[75%] rounded-lg p-3 shadow-sm',
+                                isOutbound
+                                  ? 'bg-primary text-primary-foreground'
+                                  : 'bg-background border border-border'
                               )}
-                              {msg.type === 'document' && (
-                                <a
-                                  href={msg.mediaProxyUrl || '#'}
-                                  target="_blank"
-                                  rel="noopener noreferrer"
-                                  className="flex items-center gap-2 p-2 bg-background/50 rounded"
-                                >
-                                  <FileText className="h-4 w-4" />
-                                  <span className="text-xs">{msg.mediaFilename || 'Document'}</span>
-                                </a>
+                            >
+                              {hasMedia && (
+                                <div className="mb-2">
+                                  {msg.type === 'image' && msg.mediaProxyUrl && (
+                                    <img
+                                      src={msg.mediaProxyUrl}
+                                      alt="Attachment"
+                                      className="max-w-full rounded-lg cursor-pointer"
+                                      onClick={() => window.open(msg.mediaProxyUrl, '_blank')}
+                                      style={{ maxHeight: '200px' }}
+                                    />
+                                  )}
+                                  {msg.type === 'document' && (
+                                    <a
+                                      href={msg.mediaProxyUrl || '#'}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-2 bg-background/50 rounded"
+                                    >
+                                      <FileText className="h-4 w-4" />
+                                      <span className="text-xs">{msg.mediaFilename || 'Document'}</span>
+                                    </a>
+                                  )}
+                                  {msg.type === 'audio' && msg.mediaProxyUrl && (
+                                    <audio controls className="w-full">
+                                      <source src={msg.mediaProxyUrl} />
+                                    </audio>
+                                  )}
+                                  {msg.type === 'video' && msg.mediaProxyUrl && (
+                                    <video controls className="max-w-full rounded-lg" style={{ maxHeight: '200px' }}>
+                                      <source src={msg.mediaProxyUrl} />
+                                    </video>
+                                  )}
+                                </div>
                               )}
-                              {msg.type === 'audio' && msg.mediaProxyUrl && (
-                                <audio controls className="w-full">
-                                  <source src={msg.mediaProxyUrl} />
-                                </audio>
+                              {msg.body && (
+                                <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
                               )}
-                              {msg.type === 'video' && msg.mediaProxyUrl && (
-                                <video controls className="max-w-full rounded" style={{ maxHeight: '200px' }}>
-                                  <source src={msg.mediaProxyUrl} />
-                                </video>
-                              )}
+                              <p className={cn(
+                                'text-xs mt-1.5',
+                                isOutbound
+                                  ? 'text-primary-foreground/70'
+                                  : 'text-muted-foreground'
+                              )}>
+                                {format(parseISO(msg.createdAt), 'HH:mm')}
+                              </p>
                             </div>
-                          )}
-                          {msg.body && (
-                            <p className="text-sm whitespace-pre-wrap">{msg.body}</p>
-                          )}
-                          <p className={cn(
-                            'text-xs mt-1',
-                            isOutbound
-                              ? 'text-primary-foreground/70'
-                              : 'text-muted-foreground'
-                          )}>
-                            {format(parseISO(msg.createdAt), 'HH:mm')}
-                          </p>
-                        </div>
-                      </div>
-                    )
-                  })}
-                  <div ref={messagesEndRef} />
+                          </div>
+                        )
+                      })}
+                      <div ref={messagesEndRef} />
+                    </>
+                  )}
                 </div>
-              )}
-            </div>
 
-            {/* Sticky Composer */}
-            <div className="flex gap-2">
-              <Textarea
-                value={messageText}
-                onChange={(e) => setMessageText(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && !e.shiftKey) {
-                    e.preventDefault()
-                    handleSendMessage()
-                  }
-                }}
-                placeholder="Type a message..."
-                className="min-h-[80px] resize-none"
-              />
-              <Button
-                onClick={handleSendMessage}
-                disabled={!messageText.trim() || sending}
-                size="lg"
-              >
-                <Send className="h-4 w-4" />
-              </Button>
-            </div>
+                {/* Composer - Sticky at bottom of panel */}
+                <div className="p-4 border-t bg-background">
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={messageText}
+                      onChange={(e) => setMessageText(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && !e.shiftKey) {
+                          e.preventDefault()
+                          handleSendMessage()
+                        }
+                      }}
+                      placeholder="Type a message..."
+                      className="min-h-[80px] resize-none"
+                    />
+                    <Button
+                      onClick={handleSendMessage}
+                      disabled={!messageText.trim() || sending}
+                      size="lg"
+                      className="self-end"
+                    >
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
           </div>
-        </Card>
+        </div>
       </div>
     </MainLayout>
   )
 }
-
