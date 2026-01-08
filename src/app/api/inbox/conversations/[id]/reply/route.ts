@@ -132,25 +132,70 @@ export async function POST(
     }
 
     // Create outbound message with new schema fields
-    const messageStatus = whatsappMessageId ? 'SENT' : 'FAILED'
-    const message = await prisma.message.create({
-      data: {
-        conversationId: conversation.id,
-        leadId: conversation.leadId,
-        contactId: conversation.contactId,
-        direction: 'OUTBOUND', // OUTBOUND for outbound
-        channel: 'whatsapp',
-        type: 'text',
-        body: text.trim(),
-        providerMessageId: whatsappMessageId || null, // Store WhatsApp message ID
-        status: messageStatus,
-        sentAt: sentAt,
-        createdByUserId: user.id,
-        rawPayload: sendError 
-          ? JSON.stringify({ error: sendError.message, stack: sendError.stack })
-          : null,
-      },
-    })
+    // Check for duplicate first (idempotency)
+    let message
+    if (whatsappMessageId) {
+      try {
+        message = await prisma.message.findFirst({
+          where: {
+            channel: 'whatsapp',
+            providerMessageId: whatsappMessageId,
+          },
+        })
+        if (message) {
+          console.log(`[INBOX-REPLY] Message already exists (idempotency): ${message.id} for providerMessageId ${whatsappMessageId}`)
+          // Return existing message - don't create duplicate
+        }
+      } catch (findError: any) {
+        console.warn('[INBOX-REPLY] Error checking for existing message:', findError)
+      }
+    }
+
+    if (!message) {
+      const messageStatus = whatsappMessageId ? 'SENT' : 'FAILED'
+      try {
+        message = await prisma.message.create({
+          data: {
+            conversationId: conversation.id,
+            leadId: conversation.leadId,
+            contactId: conversation.contactId,
+            direction: 'OUTBOUND', // OUTBOUND for outbound
+            channel: 'whatsapp',
+            type: 'text',
+            body: text.trim(),
+            providerMessageId: whatsappMessageId || null, // Store WhatsApp message ID
+            status: messageStatus,
+            sentAt: sentAt,
+            createdByUserId: user.id,
+            rawPayload: sendError 
+              ? JSON.stringify({ error: sendError.message, stack: sendError.stack })
+              : null,
+          },
+        })
+      } catch (createError: any) {
+        // Handle unique constraint violation (duplicate message)
+        if (createError.code === 'P2002' || createError.message?.includes('Unique constraint') || createError.message?.includes('duplicate key')) {
+          console.log(`[INBOX-REPLY] Duplicate message detected, fetching existing: providerMessageId=${whatsappMessageId}`)
+          if (whatsappMessageId) {
+            message = await prisma.message.findFirst({
+              where: {
+                channel: 'whatsapp',
+                providerMessageId: whatsappMessageId,
+              },
+            })
+            if (message) {
+              console.log(`[INBOX-REPLY] Found existing message: ${message.id}`)
+            } else {
+              throw new Error('Duplicate message but existing message not found')
+            }
+          } else {
+            throw createError
+          }
+        } else {
+          throw createError
+        }
+      }
+    }
 
     // Create initial status event
     if (whatsappMessageId) {
