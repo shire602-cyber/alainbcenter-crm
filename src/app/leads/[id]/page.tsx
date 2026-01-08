@@ -23,6 +23,7 @@ import { DocumentsCardEnhanced } from '@/components/leads/DocumentsCardEnhanced'
 import TasksSection from './TasksSection'
 import ChecklistSection from './ChecklistSection'
 import { ServiceSelector } from '@/components/leads/ServiceSelector'
+import { normalizeService } from '@/lib/services/normalizeService'
 import {
   ArrowLeft,
   Phone,
