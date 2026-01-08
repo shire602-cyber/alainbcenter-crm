@@ -23,9 +23,61 @@ export async function POST(
       )
     }
 
-    const conversation = await prisma.conversation.findUnique({
-      where: { id: conversationId },
-    })
+    // Use select to avoid missing columns (lastProcessedInboundMessageId, etc.)
+    let conversation
+    try {
+      conversation = await prisma.conversation.findUnique({
+        where: { id: conversationId },
+        select: {
+          id: true,
+          contactId: true,
+          leadId: true,
+          channel: true,
+          status: true,
+          lastMessageAt: true,
+          lastInboundAt: true,
+          lastOutboundAt: true,
+          unreadCount: true,
+          priorityScore: true,
+          createdAt: true,
+          updatedAt: true,
+          aiState: true,
+          aiLockUntil: true,
+          lastAiOutboundAt: true,
+          ruleEngineMemory: true,
+          deletedAt: true,
+        },
+      }) as any
+    } catch (error: any) {
+      // Gracefully handle missing lastProcessedInboundMessageId column
+      if (error.code === 'P2022' || error.message?.includes('lastProcessedInboundMessageId') || error.message?.includes('does not exist') || error.message?.includes('Unknown column')) {
+        console.warn('[DB] lastProcessedInboundMessageId column not found, querying with select (this is OK if migration not yet applied)')
+        conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: {
+            id: true,
+            contactId: true,
+            leadId: true,
+            channel: true,
+            status: true,
+            lastMessageAt: true,
+            lastInboundAt: true,
+            lastOutboundAt: true,
+            unreadCount: true,
+            priorityScore: true,
+            createdAt: true,
+            updatedAt: true,
+            aiState: true,
+            aiLockUntil: true,
+            lastAiOutboundAt: true,
+            ruleEngineMemory: true,
+            deletedAt: true,
+          },
+        }) as any
+      } else {
+        throw error
+      }
+    }
 
     if (!conversation) {
       return NextResponse.json(
