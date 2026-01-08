@@ -191,7 +191,7 @@ export async function computeConversationFlags(
       metrics: {
         minutesSinceLastInbound: null,
         minutesSinceLastOutbound: null,
-        minutesSinceCreated: null,
+        minutesSinceCreated: 0,
         daysToNearestExpiry: null,
       },
     }
