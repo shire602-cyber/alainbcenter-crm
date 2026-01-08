@@ -1459,12 +1459,37 @@ export async function POST(req: NextRequest) {
               return NextResponse.json({ success: true, message: 'Duplicate message', requestId })
             }
             
+            // CRITICAL: Check if error is database-related (missing column)
+            const errorMessage = String(error?.message || '')
+            const isDatabaseError = 
+              error?.code === 'P2022' || 
+              errorMessage.includes('lastProcessedInboundMessageId') || 
+              errorMessage.includes('lastProcessedInboundMessageld') || 
+              errorMessage.includes('does not exist') ||
+              errorMessage.includes('Unknown column')
+            
+            if (isDatabaseError) {
+              console.error(`❌ [WEBHOOK] Database error processing message requestId=${requestId} - this should be fixed by upsertConversation fallback:`, {
+                error: error.message,
+                errorCode: error.code,
+                messageId,
+                from,
+                elapsed: `${Date.now() - webhookStartTime}ms`,
+                stack: error.stack?.substring(0, 500),
+              })
+              // This error should not happen if upsertConversation fix is working
+              // Log it prominently for debugging
+            }
+            
             // Other errors - log but still return 200 (don't cause webhook retries)
             console.error(`❌ [WEBHOOK] Error processing message requestId=${requestId}:`, {
               error: error.message,
+              errorCode: error.code,
               messageId,
               from,
               elapsed: `${Date.now() - webhookStartTime}ms`,
+              isDatabaseError,
+              stack: error.stack?.substring(0, 500),
             })
             
             // Log error
@@ -1475,9 +1500,11 @@ export async function POST(req: NextRequest) {
                   externalId: `error-${Date.now()}-${messageId}`,
                   payload: JSON.stringify({ 
                     error: error.message, 
+                    errorCode: error.code,
                     messageId,
                     from,
                     requestId,
+                    isDatabaseError,
                     timestamp: new Date().toISOString(),
                   }).substring(0, 20000),
                 },
