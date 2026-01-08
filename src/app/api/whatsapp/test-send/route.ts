@@ -113,7 +113,6 @@ export async function POST(req: NextRequest) {
           contactId: contact.id,
           leadType: 'INQUIRY',
           stage: 'NEW',
-          source: 'test',
         },
       })
     }
