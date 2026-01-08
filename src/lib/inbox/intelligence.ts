@@ -198,8 +198,8 @@ export async function computeConversationFlags(
   }
 
   // Get last inbound and outbound messages
-  const lastInbound = conversation.messages.find((m) => m.direction === 'inbound' || m.direction === 'IN' || m.direction === 'INBOUND')
-  const lastOutbound = conversation.messages.find((m) => m.direction === 'outbound' || m.direction === 'OUT' || m.direction === 'OUTBOUND')
+  const lastInbound = conversation.messages.find((m: any) => m.direction === 'inbound' || m.direction === 'IN' || m.direction === 'INBOUND')
+  const lastOutbound = conversation.messages.find((m: any) => m.direction === 'outbound' || m.direction === 'OUT' || m.direction === 'OUTBOUND')
 
   const lastInboundAt = lastInbound?.createdAt || conversation.lastInboundAt || conversation.lastMessageAt
   const lastOutboundAt = lastOutbound?.createdAt || conversation.lastOutboundAt || null
