@@ -212,36 +212,114 @@ export async function upsertConversation(
     return { id: restored.id }
   }
   
-  const conversation = await prisma.conversation.upsert({
-    where: {
-      contactId_channel: {
-        contactId: input.contactId,
-        channel: channelLower,
+  // CRITICAL FIX: Wrap upsert in try-catch to handle missing lastProcessedInboundMessageId column
+  // Since upsert doesn't support select, we need to fall back to manual findUnique + create/update
+  let conversation
+  try {
+    conversation = await prisma.conversation.upsert({
+      where: {
+        contactId_channel: {
+          contactId: input.contactId,
+          channel: channelLower,
+        },
       },
-    },
-    update: {
-      leadId: input.leadId ?? undefined,
-      externalThreadId: effectiveThreadId, // Use effective thread ID (may be fallback)
-      externalId: input.externalId ?? undefined,
-      lastMessageAt: timestamp,
-      lastInboundAt: timestamp,
-      status: input.status || 'open',
-      channel: channelLower, // Ensure normalized
-      language: input.language ?? undefined, // CRITICAL FIX 4: Update language if provided
-      deletedAt: null, // CRITICAL FIX: Restore if soft-deleted (upsert update path)
-    },
-    create: {
-      contactId: input.contactId,
-      leadId: input.leadId ?? null,
-      channel: channelLower,
-      externalThreadId: effectiveThreadId, // Use effective thread ID (may be fallback)
-      externalId: input.externalId ?? null,
-      status: input.status || 'open',
-      lastMessageAt: timestamp,
-      lastInboundAt: timestamp,
-      language: input.language ?? null, // CRITICAL FIX 4: Store detected language
-    },
-  })
+      update: {
+        leadId: input.leadId ?? undefined,
+        externalThreadId: effectiveThreadId, // Use effective thread ID (may be fallback)
+        externalId: input.externalId ?? undefined,
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        status: input.status || 'open',
+        channel: channelLower, // Ensure normalized
+        language: input.language ?? undefined, // CRITICAL FIX 4: Update language if provided
+        deletedAt: null, // CRITICAL FIX: Restore if soft-deleted (upsert update path)
+      },
+      create: {
+        contactId: input.contactId,
+        leadId: input.leadId ?? null,
+        channel: channelLower,
+        externalThreadId: effectiveThreadId, // Use effective thread ID (may be fallback)
+        externalId: input.externalId ?? null,
+        status: input.status || 'open',
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        language: input.language ?? null, // CRITICAL FIX 4: Store detected language
+      },
+    })
+  } catch (error: any) {
+    // Gracefully handle missing lastProcessedInboundMessageId column
+    // Also handle typo in error message: "lastProcessedInboundMessageld" (lowercase 'd')
+    if (error.code === 'P2022' || 
+        error.message?.includes('lastProcessedInboundMessageId') || 
+        error.message?.includes('lastProcessedInboundMessageld') || 
+        error.message?.includes('does not exist') || 
+        error.message?.includes('Unknown column') ||
+        (error.message?.includes('column') && error.message?.includes('Conversation'))) {
+      console.warn('[DB] lastProcessedInboundMessageId column not found in upsertConversation upsert, falling back to manual findUnique + create/update (this is OK if migration not yet applied)')
+      
+      // Fallback: Manual findUnique + create/update pattern
+      const existingConv = await prisma.conversation.findUnique({
+        where: {
+          contactId_channel: {
+            contactId: input.contactId,
+            channel: channelLower,
+          },
+        },
+        select: {
+          id: true,
+        },
+      })
+      
+      if (existingConv) {
+        // Update existing conversation
+        await prisma.conversation.update({
+          where: { id: existingConv.id },
+          data: {
+            leadId: input.leadId ?? undefined,
+            externalThreadId: effectiveThreadId,
+            externalId: input.externalId ?? undefined,
+            lastMessageAt: timestamp,
+            lastInboundAt: timestamp,
+            status: input.status || 'open',
+            channel: channelLower,
+            language: input.language ?? undefined,
+            deletedAt: null,
+          },
+        })
+        conversation = { 
+          id: existingConv.id, 
+          contactId: input.contactId, 
+          channel: channelLower, 
+          externalThreadId: effectiveThreadId, 
+          leadId: input.leadId 
+        }
+      } else {
+        // Create new conversation
+        const created = await prisma.conversation.create({
+          data: {
+            contactId: input.contactId,
+            leadId: input.leadId ?? null,
+            channel: channelLower,
+            externalThreadId: effectiveThreadId,
+            externalId: input.externalId ?? null,
+            status: input.status || 'open',
+            lastMessageAt: timestamp,
+            lastInboundAt: timestamp,
+            language: input.language ?? null,
+          },
+        })
+        conversation = { 
+          id: created.id, 
+          contactId: input.contactId, 
+          channel: channelLower, 
+          externalThreadId: effectiveThreadId, 
+          leadId: input.leadId 
+        }
+      }
+    } else {
+      throw error
+    }
+  }
   
   // DIAGNOSTIC LOG: created/upserted conversation
   console.log(`[UPSERT-CONV] RESULT`, JSON.stringify({
