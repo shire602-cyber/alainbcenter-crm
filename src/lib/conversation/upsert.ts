@@ -214,6 +214,7 @@ export async function upsertConversation(
   
   // CRITICAL FIX: Wrap upsert in try-catch to handle missing lastProcessedInboundMessageId column
   // Since upsert doesn't support select, we need to fall back to manual findUnique + create/update
+  // IMPORTANT: Always use fallback pattern to avoid Prisma Client schema validation errors
   let conversation
   try {
     conversation = await prisma.conversation.upsert({
@@ -249,13 +250,23 @@ export async function upsertConversation(
   } catch (error: any) {
     // Gracefully handle missing lastProcessedInboundMessageId column
     // Also handle typo in error message: "lastProcessedInboundMessageld" (lowercase 'd')
-    if (error.code === 'P2022' || 
-        error.message?.includes('lastProcessedInboundMessageId') || 
-        error.message?.includes('lastProcessedInboundMessageld') || 
-        error.message?.includes('does not exist') || 
-        error.message?.includes('Unknown column') ||
-        (error.message?.includes('column') && error.message?.includes('Conversation'))) {
-      console.warn('[DB] lastProcessedInboundMessageId column not found in upsertConversation upsert, falling back to manual findUnique + create/update (this is OK if migration not yet applied)')
+    const errorMessage = String(error?.message || '')
+    const errorCode = error?.code || ''
+    
+    // Check if this is a column missing error (P2022 or any error mentioning the column)
+    const isColumnMissingError = 
+      errorCode === 'P2022' || 
+      errorMessage.includes('lastProcessedInboundMessageId') || 
+      errorMessage.includes('lastProcessedInboundMessageld') || 
+      errorMessage.includes('does not exist') || 
+      errorMessage.includes('Unknown column') ||
+      (errorMessage.includes('column') && errorMessage.includes('Conversation'))
+    
+    if (isColumnMissingError) {
+      console.warn('[DB] lastProcessedInboundMessageId column not found in upsertConversation upsert, falling back to manual findUnique + create/update (this is OK if migration not yet applied)', {
+        errorCode,
+        errorMessage: errorMessage.substring(0, 200),
+      })
       
       // Fallback: Manual findUnique + create/update pattern
       const existingConv = await prisma.conversation.findUnique({
@@ -317,6 +328,12 @@ export async function upsertConversation(
         }
       }
     } else {
+      // Log unexpected error for debugging
+      console.error('[DB] Unexpected error in upsertConversation upsert:', {
+        errorCode,
+        errorMessage: errorMessage.substring(0, 500),
+        errorStack: error?.stack?.substring(0, 500),
+      })
       throw error
     }
   }
