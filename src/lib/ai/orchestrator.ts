@@ -838,7 +838,7 @@ and let me know the best time for our consultant to call you.`;
         leadId: lead.id,
         contactId: lead.contact.id,
         currentMessage: input.inboundText,
-        conversationHistory: conversation.messages.map((m) => ({
+        conversationHistory: conversation.messages.map((m: any) => ({
           direction: m.direction,
           body: m.body || "",
           createdAt: m.createdAt,
