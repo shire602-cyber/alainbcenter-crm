@@ -146,13 +146,14 @@ model Lead {
   pipelineStage String  @default("new")
   urgency       String?
 
-  notes               String?
-  priorityScore       Int?
-  aiScore             Int? // AI-generated score (0-100)
-  aiNotes             String? // AI-generated qualification notes
-  dataJson            String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
-  businessActivityRaw String? // Raw business activity mentioned by customer (e.g., "marketing license", "general trading") - stored as-is without questioning
-  requestedServiceRaw String? // PROBLEM B FIX: Raw service text mentioned by customer (e.g., "freelance visa", "business setup") - stored exactly as mentioned
+  notes                   String?
+  priorityScore           Int?
+  aiScore                 Int? // AI-generated score (0-100)
+  aiNotes                 String? // AI-generated qualification notes
+  dataJson                String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
+  businessActivityRaw     String? // Raw business activity mentioned by customer (e.g., "marketing license", "general trading") - stored as-is without questioning
+  requestedServiceRaw     String? // PROBLEM B FIX: Raw service text mentioned by customer (e.g., "freelance visa", "business setup") - stored exactly as mentioned
+  serviceOtherDescription String? // When serviceTypeEnum = OTHER, store the original user input here
 
   // Assignment and follow-up
   assignedUserId Int?

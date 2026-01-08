@@ -551,8 +551,22 @@ export async function PATCH(
       updateData.stage = body.stage
     }
     
-    if (body.serviceTypeEnum !== undefined) {
-      updateData.serviceTypeEnum = body.serviceTypeEnum || null
+    // Normalize service if provided
+    if (body.serviceTypeEnum !== undefined || body.service !== undefined) {
+      const serviceInput = body.serviceTypeEnum || body.service
+      if (serviceInput) {
+        const { normalizeService } = await import('@/lib/services/normalizeService')
+        const normalized = normalizeService(serviceInput)
+        updateData.serviceTypeEnum = normalized.service
+        updateData.serviceOtherDescription = normalized.serviceOtherDescription
+        // Also store raw input for reference
+        if (normalized.service === 'OTHER') {
+          updateData.requestedServiceRaw = serviceInput
+        }
+      } else {
+        updateData.serviceTypeEnum = null
+        updateData.serviceOtherDescription = null
+      }
     }
     
     if (body.priority !== undefined) {

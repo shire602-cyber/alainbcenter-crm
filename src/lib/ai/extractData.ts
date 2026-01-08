@@ -219,7 +219,16 @@ Return JSON in this exact format:
       phone: extracted.phone && typeof extracted.phone === 'string' ? extracted.phone.trim() : null,
       nationality: extracted.nationality && typeof extracted.nationality === 'string' ? extracted.nationality.trim() : null,
       serviceType: extracted.serviceType && typeof extracted.serviceType === 'string' ? extracted.serviceType.trim() : null,
-      serviceTypeEnum: extracted.serviceTypeEnum && typeof extracted.serviceTypeEnum === 'string' ? extracted.serviceTypeEnum.trim() : null,
+      // Normalize serviceTypeEnum - use raw input if serviceTypeEnum not provided
+      serviceTypeEnum: (() => {
+        const rawService = extracted.serviceTypeEnum || extracted.serviceType
+        if (!rawService || typeof rawService !== 'string') return null
+        
+        // Normalize the service
+        const { normalizeService } = require('../services/normalizeService')
+        const normalized = normalizeService(rawService.trim())
+        return normalized.service
+      })(),
       urgency: extracted.urgency && ['low', 'medium', 'high'].includes(extracted.urgency.toLowerCase()) ? extracted.urgency.toLowerCase() as 'low' | 'medium' | 'high' : null,
       expiryDate: extracted.expiryDate && typeof extracted.expiryDate === 'string' ? extracted.expiryDate.trim() : null,
       notes: extracted.notes && typeof extracted.notes === 'string' ? extracted.notes.trim() : null,
@@ -272,7 +281,10 @@ function extractBasicData(
   for (const [keyword, enumValue] of Object.entries(serviceKeywords)) {
     if (text.includes(keyword) && !existingLead?.serviceType && !existingLead?.leadType) {
       extracted.serviceType = keyword
-      extracted.serviceTypeEnum = enumValue
+      // Normalize the service enum
+      const { normalizeService } = require('../services/normalizeService')
+      const normalized = normalizeService(enumValue)
+      extracted.serviceTypeEnum = normalized.service
       break
     }
   }

@@ -1436,7 +1436,12 @@ async function extractFields(
   const serviceDetection = await detectServiceFromText(text)
   
   // Use detected service or fallback to legacy extractService
-  const service = serviceDetection.serviceTypeEnum || extractService(text)
+  const rawService = serviceDetection.serviceTypeEnum || extractService(text)
+  
+  // Normalize the service to canonical list
+  const { normalizeService } = await import('../services/normalizeService')
+  const normalized = normalizeService(rawService || null)
+  const service = normalized.service
   
   // STEP 4: Extract business activity (for business_setup services)
   // Store immediately without questioning

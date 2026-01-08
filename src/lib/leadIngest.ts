@@ -28,6 +28,20 @@ export type IngestLeadData = {
  * Handles: contact lookup/creation, lead creation, AI qualification, communication logging
  */
 export async function ingestLead(data: IngestLeadData) {
+  // Normalize service input to canonical service
+  const { normalizeService } = await import('./services/normalizeService')
+  
+  // Get raw service input (from service, leadType, or serviceTypeEnum)
+  const rawServiceInput = data.serviceTypeEnum || data.service || data.leadType
+  
+  // Normalize the service
+  const normalized = normalizeService(rawServiceInput)
+  const normalizedServiceEnum = normalized.service
+  const serviceOtherDescription = normalized.serviceOtherDescription
+  
+  // Store raw input for reference
+  const requestedServiceRaw = normalizedServiceEnum === 'OTHER' ? rawServiceInput : null
+  
   // Handle serviceTypeId or fallback to legacy leadType/service
   let serviceTypeId: number | null = null
   let leadType: string | null = null
@@ -47,8 +61,8 @@ export async function ingestLead(data: IngestLeadData) {
     serviceTypeId = data.serviceTypeId
     leadType = serviceType.name // Sync leadType with ServiceType name
   } else {
-    // Legacy way: use string leadType/service
-    leadType = data.service || data.leadType || null
+    // Legacy way: use normalized service enum for leadType
+    leadType = normalizedServiceEnum !== 'OTHER' ? normalizedServiceEnum : (data.service || data.leadType || null)
   }
 
   // Map source for Contact.source
@@ -111,7 +125,9 @@ export async function ingestLead(data: IngestLeadData) {
     data: {
       contactId: contact.id,
       serviceTypeId: serviceTypeId,
-      serviceTypeEnum: data.serviceTypeEnum || null,
+      serviceTypeEnum: normalizedServiceEnum, // Use normalized service
+      serviceOtherDescription: serviceOtherDescription, // Store original if OTHER
+      requestedServiceRaw: requestedServiceRaw, // Store raw input for reference
       leadType: leadType, // Keep for backward compatibility
       notes: data.notes || data.message || null,
       expiryDate: expiryDate,

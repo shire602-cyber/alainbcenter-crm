@@ -83,9 +83,18 @@ export function buildLeadUpdateFromExtracted(extracted: {
 }): Prisma.LeadUpdateInput {
   const update: Prisma.LeadUpdateInput = {}
 
-  // Service
+  // Service - normalize to canonical list
   if (extracted.service) {
-    update.serviceTypeEnum = extracted.service
+    const { normalizeService } = require('../services/normalizeService')
+    const normalized = normalizeService(extracted.service)
+    update.serviceTypeEnum = normalized.service
+    if (normalized.serviceOtherDescription) {
+      update.serviceOtherDescription = normalized.serviceOtherDescription
+    }
+    // Store raw input for reference if OTHER
+    if (normalized.service === 'OTHER') {
+      update.requestedServiceRaw = extracted.service
+    }
   }
   if (extracted.serviceRaw) {
     update.requestedServiceRaw = extracted.serviceRaw

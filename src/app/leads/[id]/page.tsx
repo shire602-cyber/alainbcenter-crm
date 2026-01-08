@@ -22,6 +22,7 @@ import { AIRecommendationsCard } from '@/components/leads/AIRecommendationsCard'
 import { DocumentsCardEnhanced } from '@/components/leads/DocumentsCardEnhanced'
 import TasksSection from './TasksSection'
 import ChecklistSection from './ChecklistSection'
+import { ServiceSelector } from '@/components/leads/ServiceSelector'
 import {
   ArrowLeft,
   Phone,
@@ -509,16 +510,22 @@ export default function LeadDetailPageNew({
                         </div>
                         <div>
                           <label className="text-xs text-muted-foreground mb-1.5 block">Service</label>
-                          <Select
-                            value={lead.serviceTypeId?.toString() || ''}
-                            onChange={(e) => updateLeadField('serviceTypeId', e.target.value ? parseInt(e.target.value) : null)}
-                            className="w-full"
-                          >
-                            <option value="">Not specified</option>
-                            {serviceTypes.map(st => (
-                              <option key={st.id} value={st.id.toString()}>{st.name}</option>
-                            ))}
-                          </Select>
+                          <ServiceSelector
+                            value={lead.serviceTypeEnum || ''}
+                            onChange={async (value) => {
+                              // Normalize the service before saving
+                              const normalized = normalizeService(value)
+                              await updateLeadField('serviceTypeEnum', normalized.service)
+                              if (normalized.serviceOtherDescription) {
+                                await updateLeadField('serviceOtherDescription', normalized.serviceOtherDescription)
+                              } else if (normalized.service !== 'OTHER') {
+                                // Clear other description if not OTHER
+                                await updateLeadField('serviceOtherDescription', null)
+                              }
+                            }}
+                            serviceOtherDescription={lead.serviceOtherDescription || ''}
+                            onOtherDescriptionChange={(value) => updateLeadField('serviceOtherDescription', value)}
+                          />
                         </div>
                       </div>
                     </div>
