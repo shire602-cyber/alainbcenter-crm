@@ -13,7 +13,11 @@ import { getWebhookVerifyToken, getAppSecret } from '@/server/integrations/meta/
 
 /**
  * GET /api/webhooks/meta
- * Webhook verification handshake
+ * Webhook verification handshake + healthcheck
+ * 
+ * Supports two modes:
+ * 1. Healthcheck: No hub.* params → returns 200 JSON { ok: true, mode: "healthcheck" }
+ * 2. Verification: hub.mode=subscribe + hub.verify_token + hub.challenge → returns 200 text/plain challenge
  */
 export async function GET(req: NextRequest) {
   try {
@@ -22,15 +26,33 @@ export async function GET(req: NextRequest) {
     const token = searchParams.get('hub.verify_token')
     const challenge = searchParams.get('hub.challenge')
 
-    // Get verify token from database (or fallback to env var)
-    const verifyToken = await getWebhookVerifyToken()
-
     // Helper to redact token for logging (show first 4 and last 4 chars)
     const redactToken = (t: string | null): string => {
       if (!t) return 'null'
       if (t.length <= 8) return '***' // Too short to redact meaningfully
       return `${t.substring(0, 4)}...${t.substring(t.length - 4)}`
     }
+
+    // STEP 1: Healthcheck mode - no hub params
+    // This allows the app UI to test if the webhook endpoint is reachable
+    if (!mode && !token && !challenge) {
+      console.log('✅ [META-WEBHOOK] Healthcheck request (no hub params)')
+      return NextResponse.json(
+        { ok: true, mode: 'healthcheck' },
+        { status: 200 }
+      )
+    }
+
+    // STEP 2: Verification mode - hub params present
+    // This is a genuine Meta webhook verification attempt
+    console.log('📥 [META-WEBHOOK-VERIFY] Verification request received', {
+      mode,
+      hasToken: !!token,
+      hasChallenge: !!challenge,
+    })
+
+    // Get verify token from database (or fallback to env var)
+    const verifyToken = await getWebhookVerifyToken()
 
     // Structured logging for webhook verification
     const tokenSource = verifyToken ? 'db' : 'env'
@@ -46,32 +68,39 @@ export async function GET(req: NextRequest) {
       tokenMatch,
     })
 
-    if (!verifyToken) {
-      console.error('❌ [META-WEBHOOK-VERIFY] Webhook verify token not configured')
+    // Validate verification mode parameters
+    if (mode !== 'subscribe') {
+      console.warn('⚠️ [META-WEBHOOK-VERIFY] Invalid mode (expected "subscribe")', { mode })
       return NextResponse.json(
-        { error: 'Webhook not configured' },
-        { status: 500 }
-      )
-    }
-
-    // Validate required parameters
-    if (!mode || !token) {
-      console.warn('⚠️ [META-WEBHOOK-VERIFY] Missing required parameters', {
-        hasMode: !!mode,
-        hasToken: !!token,
-        hasChallenge: !!challenge,
-      })
-      return NextResponse.json(
-        { error: 'Missing required parameters', hint: 'Meta requires hub.mode and hub.verify_token' },
+        { error: 'Invalid mode', hint: 'Meta webhook verification requires hub.mode=subscribe' },
         { status: 400 }
       )
     }
 
+    // Challenge is required for verification
     if (!challenge) {
       console.warn('⚠️ [META-WEBHOOK-VERIFY] Challenge parameter missing')
       return NextResponse.json(
-        { error: 'Missing challenge parameter', hint: 'Meta requires hub.challenge for verification' },
+        { error: 'Missing hub.challenge', hint: 'Meta requires hub.challenge for webhook verification' },
         { status: 400 }
+      )
+    }
+
+    // Verify token is required for verification
+    if (!token) {
+      console.warn('⚠️ [META-WEBHOOK-VERIFY] Verify token parameter missing')
+      return NextResponse.json(
+        { error: 'Missing hub.verify_token', hint: 'Meta requires hub.verify_token for webhook verification' },
+        { status: 400 }
+      )
+    }
+
+    // Verify token must be configured in system
+    if (!verifyToken) {
+      console.error('❌ [META-WEBHOOK-VERIFY] Webhook verify token not configured in system')
+      return NextResponse.json(
+        { error: 'Webhook not configured', hint: 'Verify token must be set in Integration settings or META_VERIFY_TOKEN environment variable' },
+        { status: 500 }
       )
     }
 
@@ -79,7 +108,8 @@ export async function GET(req: NextRequest) {
     const cleanedToken = token.trim()
     const cleanedVerifyToken = verifyToken.trim()
 
-    if (mode === 'subscribe' && cleanedToken === cleanedVerifyToken) {
+    // Compare tokens
+    if (cleanedToken === cleanedVerifyToken) {
       console.log('✅ [META-WEBHOOK-VERIFY] Webhook verified successfully', {
         mode,
         tokenSource,

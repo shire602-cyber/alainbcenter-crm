@@ -256,21 +256,29 @@ export function MetaTesterIntegration({
   }
 
   const handleTestWebhook = async () => {
-    // Simple ping to verify webhook URL is reachable
-    // Note: This tests if the endpoint is reachable, but actual verification requires META_VERIFY_TOKEN
+    // Healthcheck: Call webhook endpoint without hub params to verify it's reachable
+    // This uses the healthcheck mode which returns 200 JSON { ok: true, mode: "healthcheck" }
     try {
-      const res = await fetch('/api/webhooks/meta?hub.mode=subscribe&hub.verify_token=test', {
+      const res = await fetch('/api/webhooks/meta', {
         method: 'GET',
       })
       
-      // Even if verification fails, if we get a response, the endpoint is reachable
-      if (res.status === 200 || res.status === 403) {
-        setSuccess('Webhook endpoint is reachable (verification requires correct token)')
+      if (res.status === 200) {
+        const data = await res.json()
+        if (data.ok && data.mode === 'healthcheck') {
+          setSuccess('✅ Webhook endpoint is reachable and healthy')
+          setError(null)
+        } else {
+          setSuccess('✅ Webhook endpoint is reachable')
+          setError(null)
+        }
       } else {
-        setError('Webhook endpoint returned unexpected status: ' + res.status)
+        setError(`Webhook endpoint returned status ${res.status}`)
+        setSuccess(null)
       }
     } catch (err: any) {
       setError('Failed to test webhook: ' + err.message)
+      setSuccess(null)
     }
   }
 

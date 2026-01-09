@@ -9,9 +9,13 @@ export async function middleware(req: NextRequest) {
   // CRITICAL: Hard bypass for cron, webhooks, jobs, and health endpoints
   // These MUST bypass auth checks BEFORE any session validation
   // Path-based bypass (does not rely on headers which may vary)
+  // Note: /api/webhooks bypass includes:
+  //   - /api/webhooks/meta (Instagram/Facebook webhooks)
+  //   - /api/webhooks/whatsapp (WhatsApp webhooks)
+  //   - /api/webhooks/* (all other webhook routes)
   const bypassPaths = [
     '/api/cron',      // All cron endpoints (including /api/cron/run-outbound-jobs, /api/cron/debug)
-    '/api/webhooks',  // All webhook endpoints
+    '/api/webhooks',  // All webhook endpoints (meta, whatsapp, facebook, instagram, etc.)
     '/api/jobs',      // All job runner endpoints
     '/api/health',   // Health check endpoints
   ]
