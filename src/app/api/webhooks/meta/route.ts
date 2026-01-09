@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 import { storeWebhookEvent, getConnectionByPageId, getConnectionByIgBusinessId } from '@/server/integrations/meta/storage'
-import { normalizeWebhookEvent } from '@/server/integrations/meta/normalize'
+import { normalizeWebhookEvent, type NormalizedWebhookEvent } from '@/server/integrations/meta/normalize'
 import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 import { getWebhookVerifyToken, getAppSecret } from '@/server/integrations/meta/config'
 
@@ -207,21 +207,74 @@ async function processWebhookPayload(payload: any) {
   // CRITICAL: Log raw payload structure for debugging
   // This helps diagnose what Meta is actually sending
   const firstEntry = payload.entry?.[0]
-  console.log('📥 [META-WEBHOOK] Raw payload structure:', {
-    object: payload.object,
-    hasEntry: !!payload.entry,
-    entryCount: payload.entry?.length || 0,
-    firstEntryKeys: firstEntry ? Object.keys(firstEntry) : [],
-    firstEntryId: firstEntry?.id || 'N/A',
-    hasMessaging: !!firstEntry?.messaging,
-    messagingCount: firstEntry?.messaging?.length || 0,
-    hasChanges: !!firstEntry?.changes,
-    changesCount: firstEntry?.changes?.length || 0,
-    firstChangeField: firstEntry?.changes?.[0]?.field || 'N/A',
-    hasValueMessages: !!firstEntry?.changes?.[0]?.value?.messages,
-    messagesCount: firstEntry?.changes?.[0]?.value?.messages?.length || 0,
-    firstMessageKeys: firstEntry?.changes?.[0]?.value?.messages?.[0] ? Object.keys(firstEntry.changes[0].value.messages[0]) : [],
-  })
+  const isInstagram = payload.object === 'instagram'
+  
+  if (isInstagram) {
+    // Comprehensive logging for Instagram webhooks
+    console.log('📥 [META-WEBHOOK-INSTAGRAM-DEBUG] RAW PAYLOAD STRUCTURE:', JSON.stringify({
+      object: payload.object,
+      hasEntry: !!payload.entry,
+      entryCount: payload.entry?.length || 0,
+      firstEntryKeys: firstEntry ? Object.keys(firstEntry) : [],
+      firstEntryId: firstEntry?.id || 'N/A',
+      firstEntryStructure: firstEntry ? {
+        id: firstEntry.id,
+        hasMessaging: !!firstEntry.messaging,
+        messagingCount: firstEntry.messaging?.length || 0,
+        hasChanges: !!firstEntry.changes,
+        changesCount: firstEntry.changes?.length || 0,
+        changesFields: firstEntry.changes?.map((c: any) => c.field) || [],
+        // Detailed change structure
+        firstChange: firstEntry.changes?.[0] ? {
+          field: firstEntry.changes[0].field,
+          valueKeys: firstEntry.changes[0].value ? Object.keys(firstEntry.changes[0].value) : [],
+          hasMessages: !!firstEntry.changes[0].value?.messages,
+          messagesCount: firstEntry.changes[0].value?.messages?.length || 0,
+          messageStructure: firstEntry.changes[0].value?.messages?.[0] ? {
+            keys: Object.keys(firstEntry.changes[0].value.messages[0]),
+            hasFrom: !!firstEntry.changes[0].value.messages[0].from,
+            fromType: typeof firstEntry.changes[0].value.messages[0].from,
+            fromValue: firstEntry.changes[0].value.messages[0].from,
+            hasText: !!firstEntry.changes[0].value.messages[0].text,
+            textValue: firstEntry.changes[0].value.messages[0].text,
+            hasId: !!firstEntry.changes[0].value.messages[0].id,
+            idValue: firstEntry.changes[0].value.messages[0].id,
+            hasMid: !!firstEntry.changes[0].value.messages[0].mid,
+            midValue: firstEntry.changes[0].value.messages[0].mid,
+            hasTimestamp: !!firstEntry.changes[0].value.messages[0].timestamp,
+            timestampValue: firstEntry.changes[0].value.messages[0].timestamp,
+            hasAttachments: !!firstEntry.changes[0].value.messages[0].attachments,
+            attachmentsCount: firstEntry.changes[0].value.messages[0].attachments?.length || 0,
+          } : null,
+        } : null,
+        // Check if messaging array exists (Facebook Page style)
+        firstMessaging: firstEntry.messaging?.[0] ? {
+          keys: Object.keys(firstEntry.messaging[0]),
+          hasSender: !!firstEntry.messaging[0].sender,
+          hasRecipient: !!firstEntry.messaging[0].recipient,
+          hasMessage: !!firstEntry.messaging[0].message,
+          messageKeys: firstEntry.messaging[0].message ? Object.keys(firstEntry.messaging[0].message) : [],
+        } : null,
+      } : null,
+    }, null, 2))
+  } else {
+    // Basic logging for non-Instagram webhooks
+    console.log('📥 [META-WEBHOOK] Raw payload structure:', {
+      object: payload.object,
+      hasEntry: !!payload.entry,
+      entryCount: payload.entry?.length || 0,
+      firstEntryKeys: firstEntry ? Object.keys(firstEntry) : [],
+      firstEntryId: firstEntry?.id || 'N/A',
+      hasMessaging: !!firstEntry?.messaging,
+      messagingCount: firstEntry?.messaging?.length || 0,
+      hasChanges: !!firstEntry?.changes,
+      changesCount: firstEntry?.changes?.length || 0,
+      firstChangeField: firstEntry?.changes?.[0]?.field || 'N/A',
+      hasValueMessages: !!firstEntry?.changes?.[0]?.value?.messages,
+      messagesCount: firstEntry?.changes?.[0]?.value?.messages?.length || 0,
+      firstMessageKeys: firstEntry?.changes?.[0]?.value?.messages?.[0] ? Object.keys(firstEntry.changes[0].value.messages[0]) : [],
+    })
+  }
 
   // Log webhook entry for debugging
   console.log(`📥 [META-WEBHOOK] Received webhook: object=${payload.object}, entries=${payload.entry?.length || 0}`)
@@ -310,26 +363,141 @@ async function processWebhookPayload(payload: any) {
       console.error('Failed to store webhook event:', error)
     }
 
+    // Log normalization input for Instagram
+    if (payload.object === 'instagram') {
+      console.log('📥 [META-WEBHOOK-INSTAGRAM-DEBUG] NORMALIZATION INPUT:', {
+        entryId: entry.id,
+        entryKeys: Object.keys(entry),
+        hasChanges: !!entry.changes,
+        changesCount: entry.changes?.length || 0,
+        changesFields: entry.changes?.map((c: any) => c.field) || [],
+        hasMessaging: !!entry.messaging,
+        messagingCount: entry.messaging?.length || 0,
+        fullEntryStructure: JSON.stringify(entry, null, 2).substring(0, 2000), // First 2000 chars
+      })
+    }
+
     // Normalize and process events (optional - only if safe inbox function exists)
     const normalizedEvents = normalizeWebhookEvent(payload)
 
     // Post-normalization validation logging
-    console.log(`📊 [META-WEBHOOK] Normalization results:`, {
-      object: payload.object,
-      entryId: entry.id,
-      normalizedEventCount: normalizedEvents.length,
-      eventTypes: normalizedEvents.map(e => e.eventType),
-      hasInstagramMessages: normalizedEvents.some(e => e.eventType === 'message' && payload.object === 'instagram'),
-    })
+    if (payload.object === 'instagram') {
+      console.log('📊 [META-WEBHOOK-INSTAGRAM-DEBUG] NORMALIZATION OUTPUT:', {
+        entryId: entry.id,
+        normalizedEventCount: normalizedEvents.length,
+        eventTypes: normalizedEvents.map(e => e.eventType),
+        events: normalizedEvents.map(e => ({
+          eventType: e.eventType,
+          senderId: e.senderId || 'N/A',
+          recipientId: e.recipientId || 'N/A',
+          messageId: e.messageId || 'N/A',
+          hasText: !!e.text,
+          textLength: e.text?.length || 0,
+          textPreview: e.text ? `${e.text.substring(0, 50)}${e.text.length > 50 ? '...' : ''}` : '[no text]',
+          hasTimestamp: !!e.timestamp,
+          timestamp: e.timestamp?.toISOString() || 'N/A',
+          rawPayloadKeys: e.rawPayload ? Object.keys(e.rawPayload) : [],
+        })),
+      })
+    } else {
+      console.log(`📊 [META-WEBHOOK] Normalization results:`, {
+        object: payload.object,
+        entryId: entry.id,
+        normalizedEventCount: normalizedEvents.length,
+        eventTypes: normalizedEvents.map(e => e.eventType),
+        hasInstagramMessages: normalizedEvents.some(e => e.eventType === 'message' && payload.object === 'instagram'),
+      })
+    }
 
     if (normalizedEvents.length === 0 && payload.object === 'instagram') {
-      console.warn(`⚠️ [META-WEBHOOK] Normalization produced zero events for Instagram webhook. Payload structure may be unexpected.`, {
+      console.warn('⚠️ [META-WEBHOOK-INSTAGRAM-DEBUG] Normalization produced ZERO events for Instagram webhook', {
         entryId: entry.id,
+        entryKeys: Object.keys(entry),
         hasChanges: !!entry.changes,
         changesCount: entry.changes?.length || 0,
-        firstChangeField: entry.changes?.[0]?.field,
-        hasValueMessages: !!entry.changes?.[0]?.value?.messages,
+        changesFields: entry.changes?.map((c: any) => c.field) || [],
+        firstChange: entry.changes?.[0] ? {
+          field: entry.changes[0].field,
+          valueKeys: entry.changes[0].value ? Object.keys(entry.changes[0].value) : [],
+          hasMessages: !!entry.changes[0].value?.messages,
+          messagesCount: entry.changes[0].value?.messages?.length || 0,
+        } : null,
+        hasMessaging: !!entry.messaging,
+        messagingCount: entry.messaging?.length || 0,
+        fullPayloadPreview: JSON.stringify(payload).substring(0, 1000), // First 1000 chars for debugging
       })
+      
+      // FALLBACK: Attempt direct parsing if normalization failed
+      console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Attempting fallback direct parsing...')
+      try {
+        // Try parsing from entry.changes[].value.messages[]
+        if (entry.changes) {
+          for (const change of entry.changes) {
+            if (change.value?.messages && Array.isArray(change.value.messages)) {
+              console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback: Found messages in change.value.messages', {
+                messageCount: change.value.messages.length,
+              })
+              for (const msg of change.value.messages) {
+                const fallbackEvent: NormalizedWebhookEvent = {
+                  pageId: entry.id,
+                  eventType: 'message',
+                  rawPayload: msg,
+                  senderId: msg.from?.id || msg.from || undefined,
+                  recipientId: msg.to?.id || msg.to || undefined,
+                  messageId: msg.mid || msg.id || undefined,
+                  text: msg.text || '',
+                  timestamp: msg.timestamp ? new Date(typeof msg.timestamp === 'string' ? parseInt(msg.timestamp, 10) * 1000 : msg.timestamp * 1000) : undefined,
+                }
+                normalizedEvents.push(fallbackEvent)
+                console.log('✅ [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback: Created event from direct parsing', {
+                  senderId: fallbackEvent.senderId,
+                  messageId: fallbackEvent.messageId,
+                  hasText: !!fallbackEvent.text,
+                })
+              }
+            }
+          }
+        }
+        
+        // Try parsing from entry.messaging[] (Facebook Page style)
+        if (normalizedEvents.length === 0 && entry.messaging) {
+          console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback: Trying entry.messaging[] structure', {
+            messagingCount: entry.messaging.length,
+          })
+          for (const msgEvent of entry.messaging) {
+            if (msgEvent.message && !msgEvent.message.is_echo) {
+              const fallbackEvent: NormalizedWebhookEvent = {
+                pageId: entry.id,
+                eventType: 'message',
+                rawPayload: msgEvent,
+                senderId: msgEvent.sender?.id || undefined,
+                recipientId: msgEvent.recipient?.id || undefined,
+                messageId: msgEvent.message?.mid || msgEvent.message?.id || undefined,
+                text: msgEvent.message?.text || '',
+                timestamp: msgEvent.timestamp ? new Date(msgEvent.timestamp * 1000) : undefined,
+              }
+              normalizedEvents.push(fallbackEvent)
+              console.log('✅ [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback: Created event from messaging[] structure', {
+                senderId: fallbackEvent.senderId,
+                messageId: fallbackEvent.messageId,
+                hasText: !!fallbackEvent.text,
+              })
+            }
+          }
+        }
+        
+        if (normalizedEvents.length > 0) {
+          console.log('✅ [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback parsing succeeded', {
+            eventCount: normalizedEvents.length,
+          })
+        } else {
+          console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback parsing also produced zero events', {
+            entryStructure: JSON.stringify(entry).substring(0, 500),
+          })
+        }
+      } catch (fallbackError: any) {
+        console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Fallback parsing error:', fallbackError.message, fallbackError.stack)
+      }
       // Continue - still store webhook event for debugging
     }
 
@@ -346,10 +514,32 @@ async function processWebhookPayload(payload: any) {
       const hasAttachments = hasInstagramAttachments || hasFacebookAttachments
       const hasText = !!event.text
 
+      // Diagnostic logging for Instagram events - log ALL events, not just those that pass conditions
+      if (channelLower === 'instagram') {
+        console.log('🔍 [META-WEBHOOK-INSTAGRAM-DEBUG] Evaluating event for processing:', {
+          eventType: event.eventType,
+          senderId: event.senderId || 'MISSING',
+          hasSenderId: !!event.senderId,
+          hasText: !!event.text,
+          textValue: event.text || '[no text]',
+          textLength: event.text?.length || 0,
+          hasAttachments: hasAttachments,
+          attachmentsCount: event.rawPayload?.attachments?.length || 0,
+          passesCondition: event.eventType === 'message' && event.senderId && (hasText || hasAttachments),
+          conditionBreakdown: {
+            isMessage: event.eventType === 'message',
+            hasSender: !!event.senderId,
+            hasTextOrAttachments: (hasText || hasAttachments),
+            allConditions: event.eventType === 'message' && event.senderId && (hasText || hasAttachments),
+          },
+          rawPayloadPreview: JSON.stringify(event.rawPayload).substring(0, 500),
+        })
+      }
+
       if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
         // Defensive logging for Instagram message ingestion
         if (channelLower === 'instagram') {
-          console.log('📥 [META-WEBHOOK-INSTAGRAM] Instagram messaging event received', {
+          console.log('📥 [META-WEBHOOK-INSTAGRAM] Instagram messaging event received - PASSING conditions', {
             object: payload.object,
             entryId: entry.id, // IG Business Account ID
             pageId: pageId || 'N/A',
@@ -377,13 +567,73 @@ async function processWebhookPayload(payload: any) {
 
         try {
           // Extract attachments based on message structure
-          // Instagram: rawPayload.attachments[] directly
+          // Instagram: rawPayload.attachments[] directly OR rawPayload.payload.attachments[] (check both)
           // Facebook: rawPayload.message.attachments[]
           let attachments = null
           if (isInstagramMessage) {
-            attachments = event.rawPayload?.attachments || null
+            // Try multiple possible locations for Instagram attachments
+            if (event.rawPayload?.attachments && Array.isArray(event.rawPayload.attachments)) {
+              attachments = event.rawPayload.attachments
+            } else if (event.rawPayload?.payload?.attachments && Array.isArray(event.rawPayload.payload.attachments)) {
+              attachments = event.rawPayload.payload.attachments
+            } else if (event.rawPayload?.image || event.rawPayload?.video) {
+              // Convert image/video objects to attachments array format
+              attachments = []
+              if (event.rawPayload.image) {
+                attachments.push({ 
+                  type: 'image', 
+                  url: event.rawPayload.image.url || event.rawPayload.image.uri || null,
+                  payload: event.rawPayload.image.payload || null,
+                  ...event.rawPayload.image 
+                })
+              }
+              if (event.rawPayload.video) {
+                attachments.push({ 
+                  type: 'video', 
+                  url: event.rawPayload.video.url || event.rawPayload.video.uri || null,
+                  payload: event.rawPayload.video.payload || null,
+                  ...event.rawPayload.video 
+                })
+              }
+            }
+            
+            if (channelLower === 'instagram') {
+              console.log('📎 [META-WEBHOOK-INSTAGRAM-DEBUG] Extracted attachments:', {
+                hasAttachments: !!attachments,
+                attachmentsCount: attachments?.length || 0,
+                checkedLocations: {
+                  rawPayloadAttachments: !!event.rawPayload?.attachments,
+                  rawPayloadPayloadAttachments: !!event.rawPayload?.payload?.attachments,
+                  rawPayloadImage: !!event.rawPayload?.image,
+                  rawPayloadVideo: !!event.rawPayload?.video,
+                },
+                attachmentStructure: attachments?.[0] ? {
+                  keys: Object.keys(attachments[0]),
+                  type: attachments[0].type,
+                  hasUrl: !!attachments[0].url,
+                  hasPayload: !!attachments[0].payload,
+                  payloadKeys: attachments[0].payload ? Object.keys(attachments[0].payload) : [],
+                } : null,
+                fullRawPayloadKeys: event.rawPayload ? Object.keys(event.rawPayload) : [],
+              })
+            }
           } else {
             attachments = event.rawPayload?.message?.attachments || null
+          }
+
+          // Log what we're passing to processInboundMessage
+          if (channelLower === 'instagram') {
+            console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Calling processInboundMessage with:', {
+              pageId: pageId || 'N/A',
+              workspaceId: workspaceId ?? 1,
+              senderId: event.senderId || 'N/A',
+              messageText: event.text || '[no text]',
+              messageId: event.messageId || 'N/A',
+              hasAttachments: !!attachments,
+              attachmentsCount: attachments?.length || 0,
+              timestamp: event.timestamp?.toISOString() || new Date().toISOString(),
+              channel: channel, // Should be 'INSTAGRAM'
+            })
           }
 
           await processInboundMessage({
@@ -401,18 +651,26 @@ async function processWebhookPayload(payload: any) {
 
           // Defensive logging: Log successful Instagram message storage
           if (channelLower === 'instagram') {
-            console.log('✅ [META-WEBHOOK-INSTAGRAM] Instagram message stored to database', {
+            console.log('✅ [META-WEBHOOK-INSTAGRAM] processInboundMessage call completed (check logs above for actual storage)', {
               senderId: event.senderId || 'N/A',
               recipientId: event.recipientId || 'N/A',
               channel: 'instagram',
               igBusinessId: entry.id,
               pageId: pageId,
               messageId: event.messageId || 'N/A',
-              textPreview: event.text ? `${event.text.substring(0, 30)}${event.text.length > 30 ? '...' : ''}` : '[no text]',
-              timestamp: event.timestamp?.toISOString() || new Date().toISOString(),
             })
           }
         } catch (error: any) {
+          // Log detailed error information
+          if (channelLower === 'instagram') {
+            console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in processInboundMessage call', {
+              error: error.message,
+              errorStack: error.stack?.substring(0, 500),
+              senderId: event.senderId || 'N/A',
+              messageId: event.messageId || 'N/A',
+              pageId: pageId || 'N/A',
+            })
+          }
           if (error.message === 'DUPLICATE_MESSAGE') {
             if (channelLower === 'instagram') {
               console.log('ℹ️ [META-WEBHOOK-INSTAGRAM] Duplicate Instagram message detected - skipping', {
@@ -460,6 +718,23 @@ async function processInboundMessage(data: {
   channel: 'INSTAGRAM' | 'FACEBOOK'
 }) {
   const { senderId, message, timestamp, channel } = data
+  const isInstagram = channel === 'INSTAGRAM'
+
+  // Defensive logging at start of processInboundMessage
+  if (isInstagram) {
+    console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] processInboundMessage called', {
+      pageId: data.pageId,
+      workspaceId: data.workspaceId,
+      senderId: senderId || 'MISSING',
+      messageKeys: message ? Object.keys(message) : [],
+      messageText: message?.text || '[no text]',
+      messageMid: message?.mid || '[no mid]',
+      hasAttachments: !!message?.attachments,
+      attachmentsCount: message?.attachments?.length || 0,
+      timestamp: timestamp.toISOString(),
+      channel: channel,
+    })
+  }
 
   // Extract message text
   let text = message.text || ''
@@ -470,11 +745,24 @@ async function processInboundMessage(data: {
 
   if (!text && !message.attachments) {
     // Skip empty messages
+    if (isInstagram) {
+      console.warn('⚠️ [META-WEBHOOK-INSTAGRAM-DEBUG] Skipping empty message (no text and no attachments)', {
+        senderId,
+        messageKeys: message ? Object.keys(message) : [],
+      })
+    }
     return
   }
 
   // Use senderId as fromAddress (Instagram/Facebook user ID)
   const fromAddress = senderId
+
+  if (!senderId) {
+    console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] processInboundMessage: senderId is missing, cannot process', {
+      message: message,
+    })
+    return
+  }
 
   // Check if we have a safe function to insert messages
   // Use the autoMatchPipeline which is the safe, isolated function
@@ -500,9 +788,17 @@ async function processInboundMessage(data: {
       
       // MIME type: attachment.type (both) or attachment.mimeType (Instagram files)
       mediaMimeType = attachment.type || attachment.mimeType || null
+      
+      if (isInstagram) {
+        console.log('📎 [META-WEBHOOK-INSTAGRAM-DEBUG] Extracted attachment metadata', {
+          mediaUrl: mediaUrl || 'N/A',
+          providerMediaId: providerMediaId || 'N/A',
+          mediaMimeType: mediaMimeType || 'N/A',
+        })
+      }
     }
 
-    await handleInboundMessageAutoMatch({
+    const autoMatchInput = {
       channel: data.channel, // 'INSTAGRAM' or 'FACEBOOK' (will be normalized to lowercase by normalizeChannel)
       providerMessageId: providerMessageId,
       fromPhone: null, // Instagram/Facebook use user IDs, not phone numbers
@@ -517,11 +813,29 @@ async function processInboundMessage(data: {
         senderId: senderId,
         pageId: data.pageId,
       },
-    })
+    }
+
+    if (isInstagram) {
+      console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Calling handleInboundMessageAutoMatch', {
+        channel: autoMatchInput.channel,
+        providerMessageId: autoMatchInput.providerMessageId,
+        textLength: autoMatchInput.text.length,
+        textPreview: autoMatchInput.text.substring(0, 50),
+        timestamp: autoMatchInput.timestamp.toISOString(),
+        metadata: autoMatchInput.metadata,
+      })
+    }
+
+    await handleInboundMessageAutoMatch(autoMatchInput)
 
     // Defensive logging for Instagram message processing
-    const isInstagram = data.channel === 'INSTAGRAM'
     if (isInstagram) {
+      console.log('✅ [META-WEBHOOK-INSTAGRAM-DEBUG] handleInboundMessageAutoMatch completed successfully', {
+        senderId: senderId,
+        providerMessageId: providerMessageId,
+        channel: 'instagram', // Stored as lowercase in DB
+        textLength: text.length,
+      })
       console.log('✅ [META-WEBHOOK-INSTAGRAM] Instagram message processed and stored to database', {
         senderId: senderId,
         messageId: providerMessageId,
@@ -531,8 +845,18 @@ async function processInboundMessage(data: {
       console.log(`✅ Processed ${data.channel} message from ${senderId}`)
     }
   } catch (error: any) {
+    if (isInstagram) {
+      console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in handleInboundMessageAutoMatch', {
+        error: error.message,
+        errorStack: error.stack?.substring(0, 500),
+        senderId: senderId,
+        providerMessageId: message.mid || 'N/A',
+        channel: channel,
+      })
+    }
     console.error(`Error inserting ${channel} message into inbox:`, error)
     // Event is already stored in meta_webhook_events, so it can be processed manually
+    throw error // Re-throw to allow caller to handle
   }
 }
 

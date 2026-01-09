@@ -42,11 +42,43 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
       const changes = entry.changes || []
       const messaging = entry.messaging || []
       
+      console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing Instagram entry', {
+        pageId,
+        changesCount: changes.length,
+        changesFields: changes.map((c: any) => c.field),
+        messagingCount: messaging.length,
+      })
+      
       // Primary structure: entry.changes[].value.messages[]
       for (const change of changes) {
+        console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing change', {
+          field: change.field,
+          valueKeys: change.value ? Object.keys(change.value) : [],
+          hasMessages: !!change.value?.messages,
+          messagesCount: change.value?.messages?.length || 0,
+        })
+        
         // Instagram messages come in changes with field: "messages"
         if (change.field === 'messages' && change.value?.messages) {
+          console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Found messages in changes', {
+            messageCount: change.value.messages.length,
+          })
+          
           for (const message of change.value.messages) {
+            console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing message', {
+              messageKeys: Object.keys(message),
+              hasFrom: !!message.from,
+              fromValue: message.from,
+              hasText: !!message.text,
+              textPreview: message.text ? `${message.text.substring(0, 30)}...` : '[no text]',
+              hasId: !!message.id,
+              idValue: message.id,
+              hasMid: !!message.mid,
+              midValue: message.mid,
+              hasTimestamp: !!message.timestamp,
+              timestampValue: message.timestamp,
+            })
+            
             const normalizedEvent: NormalizedWebhookEvent = {
               pageId,
               eventType: 'message',
@@ -58,6 +90,14 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
               normalizedEvent.senderId = typeof message.from === 'string' 
                 ? message.from 
                 : (message.from.id || message.from)
+              console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Extracted senderId', {
+                original: message.from,
+                extracted: normalizedEvent.senderId,
+              })
+            } else {
+              console.warn('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Message missing "from" field', {
+                messageKeys: Object.keys(message),
+              })
             }
 
             // Extract recipient ID: message.to.id or message.to (if string)
@@ -81,8 +121,22 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
             // Extract text: message.text (direct property for Instagram)
             normalizedEvent.text = message.text || ''
 
+            console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Created normalized event', {
+              eventType: normalizedEvent.eventType,
+              senderId: normalizedEvent.senderId || 'MISSING',
+              messageId: normalizedEvent.messageId || 'MISSING',
+              hasText: !!normalizedEvent.text,
+              textLength: normalizedEvent.text?.length || 0,
+            })
+
             normalized.push(normalizedEvent)
           }
+        } else if (change.field === 'messages' && !change.value?.messages) {
+          console.warn('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Change field is "messages" but value.messages is missing', {
+            field: change.field,
+            valueKeys: change.value ? Object.keys(change.value) : [],
+            value: change.value,
+          })
         }
 
         // Handle Instagram postbacks
@@ -98,9 +152,21 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
       }
 
       // Fallback structure: entry.messaging[] (if changes structure not found)
-      // This handles alternate Instagram webhook formats
+      // This handles alternate Instagram webhook formats (similar to Facebook Page)
       if (normalized.length === 0 && messaging.length > 0) {
+        console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: No events from changes, trying messaging[] fallback', {
+          messagingCount: messaging.length,
+        })
+        
         for (const event of messaging) {
+          console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing messaging event', {
+            eventKeys: Object.keys(event),
+            hasSender: !!event.sender,
+            hasRecipient: !!event.recipient,
+            hasMessage: !!event.message,
+            hasTimestamp: !!event.timestamp,
+          })
+          
           const normalizedEvent: NormalizedWebhookEvent = {
             pageId,
             eventType: 'message',
@@ -110,6 +176,10 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
           // Extract sender ID: event.sender.id
           if (event.sender) {
             normalizedEvent.senderId = event.sender.id || event.sender
+            console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Extracted senderId from messaging', {
+              sender: event.sender,
+              extracted: normalizedEvent.senderId,
+            })
           }
 
           // Extract recipient ID: event.recipient.id
@@ -126,60 +196,75 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
           if (event.message) {
             normalizedEvent.messageId = event.message.mid || event.message.id
             normalizedEvent.text = event.message.text || ''
+            console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Extracted message from messaging', {
+              messageId: normalizedEvent.messageId,
+              hasText: !!normalizedEvent.text,
+              textPreview: normalizedEvent.text ? `${normalizedEvent.text.substring(0, 30)}...` : '[no text]',
+            })
+          } else {
+            console.warn('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Messaging event missing "message" field', {
+              eventKeys: Object.keys(event),
+            })
           }
 
           normalized.push(normalizedEvent)
         }
+      } else if (normalized.length === 0) {
+        console.warn('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: No events normalized and no messaging array available', {
+          changesCount: changes.length,
+          messagingCount: messaging.length,
+          entryKeys: Object.keys(entry),
+        })
       }
     } else {
       // FACEBOOK PAGE STRUCTURE: entry.messaging[]
       // This is the original structure - keep unchanged for backward compatibility
-      const messagingEvents = entry.messaging || []
+    const messagingEvents = entry.messaging || []
 
-      for (const event of messagingEvents) {
-        const normalizedEvent: NormalizedWebhookEvent = {
-          pageId,
-          eventType: 'unknown',
-          rawPayload: event,
-        }
-
-        if (event.sender) {
-          normalizedEvent.senderId = event.sender.id
-        }
-
-        if (event.recipient) {
-          normalizedEvent.recipientId = event.recipient.id
-        }
-
-        if (event.timestamp) {
-          normalizedEvent.timestamp = new Date(event.timestamp * 1000)
-        }
-
-        // Determine event type
-        if (event.message) {
-          normalizedEvent.eventType = 'message'
-          normalizedEvent.messageId = event.message.mid
-          normalizedEvent.text = event.message.text
-        } else if (event.postback) {
-          normalizedEvent.eventType = 'postback'
-        } else if (event.delivery) {
-          normalizedEvent.eventType = 'delivery'
-        } else if (event.read) {
-          normalizedEvent.eventType = 'read'
-        }
-
-        normalized.push(normalizedEvent)
+    for (const event of messagingEvents) {
+      const normalizedEvent: NormalizedWebhookEvent = {
+        pageId,
+        eventType: 'unknown',
+        rawPayload: event,
       }
 
+      if (event.sender) {
+        normalizedEvent.senderId = event.sender.id
+      }
+
+      if (event.recipient) {
+        normalizedEvent.recipientId = event.recipient.id
+      }
+
+      if (event.timestamp) {
+        normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+      }
+
+      // Determine event type
+      if (event.message) {
+        normalizedEvent.eventType = 'message'
+        normalizedEvent.messageId = event.message.mid
+        normalizedEvent.text = event.message.text
+      } else if (event.postback) {
+        normalizedEvent.eventType = 'postback'
+      } else if (event.delivery) {
+        normalizedEvent.eventType = 'delivery'
+      } else if (event.read) {
+        normalizedEvent.eventType = 'read'
+      }
+
+      normalized.push(normalizedEvent)
+    }
+
       // Process leadgen events for Facebook Page webhooks
-      const changes = entry.changes || []
-      for (const change of changes) {
-        if (change.field === 'leadgen' && change.value) {
-          normalized.push({
-            pageId,
-            eventType: 'leadgen',
-            rawPayload: change.value,
-          })
+    const changes = entry.changes || []
+    for (const change of changes) {
+      if (change.field === 'leadgen' && change.value) {
+        normalized.push({
+          pageId,
+          eventType: 'leadgen',
+          rawPayload: change.value,
+        })
         }
       }
     }
