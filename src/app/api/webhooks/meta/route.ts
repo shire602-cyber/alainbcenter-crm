@@ -204,6 +204,25 @@ async function processWebhookPayload(payload: any) {
     return
   }
 
+  // CRITICAL: Log raw payload structure for debugging
+  // This helps diagnose what Meta is actually sending
+  const firstEntry = payload.entry?.[0]
+  console.log('📥 [META-WEBHOOK] Raw payload structure:', {
+    object: payload.object,
+    hasEntry: !!payload.entry,
+    entryCount: payload.entry?.length || 0,
+    firstEntryKeys: firstEntry ? Object.keys(firstEntry) : [],
+    firstEntryId: firstEntry?.id || 'N/A',
+    hasMessaging: !!firstEntry?.messaging,
+    messagingCount: firstEntry?.messaging?.length || 0,
+    hasChanges: !!firstEntry?.changes,
+    changesCount: firstEntry?.changes?.length || 0,
+    firstChangeField: firstEntry?.changes?.[0]?.field || 'N/A',
+    hasValueMessages: !!firstEntry?.changes?.[0]?.value?.messages,
+    messagesCount: firstEntry?.changes?.[0]?.value?.messages?.length || 0,
+    firstMessageKeys: firstEntry?.changes?.[0]?.value?.messages?.[0] ? Object.keys(firstEntry.changes[0].value.messages[0]) : [],
+  })
+
   // Log webhook entry for debugging
   console.log(`📥 [META-WEBHOOK] Received webhook: object=${payload.object}, entries=${payload.entry?.length || 0}`)
 
@@ -222,13 +241,25 @@ async function processWebhookPayload(payload: any) {
       igBusinessId = entryId
       console.log(`📸 [META-WEBHOOK] Instagram event - entry.id=${entryId} (IG Business Account ID)`)
       
+      // Query for connection using IG Business Account ID
+      // Note: workspaceId null is converted to 1 in getConnectionByIgBusinessId (single-tenant)
       connection = await getConnectionByIgBusinessId(entryId, null)
       
       if (connection) {
         pageId = connection.pageId
-        console.log(`✅ [META-WEBHOOK] Resolved connection by igBusinessId: connection=${connection.id}, pageId=${pageId}, igUsername=${connection.igUsername || 'N/A'}`)
+        console.log(`✅ [META-WEBHOOK] Resolved connection by igBusinessId:`, {
+          connectionId: connection.id,
+          pageId: pageId,
+          igBusinessId: connection.igBusinessId,
+          igUsername: connection.igUsername || 'N/A',
+          workspaceId: connection.workspaceId,
+          status: connection.status,
+        })
       } else {
-        console.warn(`⚠️ [META-WEBHOOK] No connection found for IG Business Account ID: ${entryId}`)
+        console.warn(`⚠️ [META-WEBHOOK] No connection found for IG Business Account ID: ${entryId}`, {
+          searchedIgBusinessId: entryId,
+          hint: 'Verify the connection was created with the correct igBusinessId during setup',
+        })
       }
     } else if (payload.object === 'page') {
       // For Page events, entry.id is the Facebook Page ID
@@ -282,15 +313,38 @@ async function processWebhookPayload(payload: any) {
     // Normalize and process events (optional - only if safe inbox function exists)
     const normalizedEvents = normalizeWebhookEvent(payload)
 
-    for (const event of normalizedEvents) {
-      // Process messages with text OR attachments (media messages have no text)
-      const hasText = !!event.text
-      const hasAttachments = !!(event.rawPayload?.message?.attachments && event.rawPayload.message.attachments.length > 0)
-      
-      if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
-        // Determine channel based on page or event context
-        const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
+    // Post-normalization validation logging
+    console.log(`📊 [META-WEBHOOK] Normalization results:`, {
+      object: payload.object,
+      entryId: entry.id,
+      normalizedEventCount: normalizedEvents.length,
+      eventTypes: normalizedEvents.map(e => e.eventType),
+      hasInstagramMessages: normalizedEvents.some(e => e.eventType === 'message' && payload.object === 'instagram'),
+    })
 
+    if (normalizedEvents.length === 0 && payload.object === 'instagram') {
+      console.warn(`⚠️ [META-WEBHOOK] Normalization produced zero events for Instagram webhook. Payload structure may be unexpected.`, {
+        entryId: entry.id,
+        hasChanges: !!entry.changes,
+        changesCount: entry.changes?.length || 0,
+        firstChangeField: entry.changes?.[0]?.field,
+        hasValueMessages: !!entry.changes?.[0]?.value?.messages,
+      })
+      // Continue - still store webhook event for debugging
+    }
+
+    for (const event of normalizedEvents) {
+      // Determine channel based on page or event context
+      const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
+      
+      // Detect message structure: Instagram has attachments directly, Facebook has nested message.attachments
+      const isInstagramMessage = payload.object === 'instagram'
+      const hasInstagramAttachments = isInstagramMessage && !!(event.rawPayload?.attachments && event.rawPayload.attachments.length > 0)
+      const hasFacebookAttachments = !isInstagramMessage && !!(event.rawPayload?.message?.attachments && event.rawPayload.message.attachments.length > 0)
+      const hasAttachments = hasInstagramAttachments || hasFacebookAttachments
+      const hasText = !!event.text
+
+      if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
         // Log structured information for Instagram message ingestion
         if (channel === 'INSTAGRAM') {
           console.log('📥 [META-WEBHOOK] Instagram message received', {
@@ -300,7 +354,8 @@ async function processWebhookPayload(payload: any) {
             igBusinessId: entry.id,
             senderId: event.senderId,
             hasText: !!event.text,
-            hasAttachments: !!(event.rawPayload?.message?.attachments?.length),
+            hasAttachments: hasInstagramAttachments,
+            attachmentsCount: event.rawPayload?.attachments?.length || 0,
             connectionId: connection?.id || 'NONE',
             workspaceId: workspaceId || 'NONE',
             messageId: event.messageId || 'N/A',
@@ -315,6 +370,16 @@ async function processWebhookPayload(payload: any) {
         }
 
         try {
+          // Extract attachments based on message structure
+          // Instagram: rawPayload.attachments[] directly
+          // Facebook: rawPayload.message.attachments[]
+          let attachments = null
+          if (isInstagramMessage) {
+            attachments = event.rawPayload?.attachments || null
+          } else {
+            attachments = event.rawPayload?.message?.attachments || null
+          }
+
           await processInboundMessage({
             pageId,
             workspaceId: workspaceId ?? 1,
@@ -322,7 +387,7 @@ async function processWebhookPayload(payload: any) {
             message: { 
               text: event.text, 
               mid: event.messageId,
-              attachments: event.rawPayload?.message?.attachments || null,
+              attachments: attachments,
             },
             timestamp: event.timestamp || new Date(),
             channel,
@@ -389,6 +454,27 @@ async function processInboundMessage(data: {
   try {
     const providerMessageId = message.mid || `meta_${channel.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 
+    // Extract attachment metadata - handle both Instagram and Facebook structures
+    // Instagram: attachment.url or attachment.payload.url
+    // Facebook: attachment.payload.url
+    let mediaUrl: string | null = null
+    let mediaMimeType: string | null = null
+    let providerMediaId: string | null = null
+
+    if (message.attachments && message.attachments.length > 0) {
+      const attachment = message.attachments[0]
+      
+      // Instagram structure: attachment.url or attachment.payload.url
+      // Facebook structure: attachment.payload.url
+      mediaUrl = attachment.url || attachment.payload?.url || null
+      
+      // Media ID can be in payload.media_id (Facebook) or payload.id (Instagram)
+      providerMediaId = attachment.payload?.media_id || attachment.payload?.id || null
+      
+      // MIME type: attachment.type (both) or attachment.mimeType (Instagram files)
+      mediaMimeType = attachment.type || attachment.mimeType || null
+    }
+
     await handleInboundMessageAutoMatch({
       channel: channel,
       providerMessageId: providerMessageId,
@@ -398,9 +484,9 @@ async function processInboundMessage(data: {
       text: text,
       timestamp: timestamp,
       metadata: {
-        providerMediaId: message.attachments?.[0]?.payload?.media_id || null,
-        mediaUrl: message.attachments?.[0]?.payload?.url || null,
-        mediaMimeType: message.attachments?.[0]?.type || null,
+        providerMediaId: providerMediaId,
+        mediaUrl: mediaUrl,
+        mediaMimeType: mediaMimeType,
         senderId: senderId,
         pageId: data.pageId,
       },
