@@ -64,6 +64,7 @@ export function MetaTesterIntegration({
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
   const [webhookVerifyTokenConfigured, setWebhookVerifyTokenConfigured] = useState(false)
   const [storedWebhookVerifyToken, setStoredWebhookVerifyToken] = useState<string | null>(null)
+  const [checkingSubscription, setCheckingSubscription] = useState(false)
   
   // Page selection state
   const [pages, setPages] = useState<MetaPage[]>([])
@@ -85,8 +86,10 @@ export function MetaTesterIntegration({
           setWebhookUrl(data.webhookUrl || null)
           setWebhookVerifyTokenConfigured(data.webhookVerifyTokenConfigured || false)
           
-          // Get verify token if available (from Integration config)
-          if (data.persistedConfig && data.persistedConfig.webhookVerifyToken) {
+          // Get verify token from top-level response or persisted config
+          if (data.webhookVerifyToken) {
+            setStoredWebhookVerifyToken(data.webhookVerifyToken)
+          } else if (data.persistedConfig && data.persistedConfig.webhookVerifyToken) {
             setStoredWebhookVerifyToken(data.persistedConfig.webhookVerifyToken)
           }
           
@@ -213,6 +216,11 @@ export function MetaTesterIntegration({
         return
       }
 
+      // Store verify token from response (auto-generated or provided)
+      if (data.webhookVerifyToken) {
+        setStoredWebhookVerifyToken(data.webhookVerifyToken)
+      }
+
       // Show warnings if Instagram subscription failed
       if (data.warnings && data.warnings.length > 0) {
         setConnectionWarnings(data.warnings)
@@ -229,7 +237,7 @@ export function MetaTesterIntegration({
       setError(null)
       setErrorDetails(null)
       setToken('')
-      setWebhookVerifyToken('') // Clear after successful connection
+      setWebhookVerifyToken('') // Clear input after successful connection
       setPages([])
       setSelectedPageId('')
       
@@ -240,6 +248,10 @@ export function MetaTesterIntegration({
         setConnectionStatus(statusData.activeConnections || statusData.connections || [])
         setWebhookUrl(statusData.webhookUrl || null)
         setWebhookVerifyTokenConfigured(statusData.webhookVerifyTokenConfigured || false)
+        // Update stored verify token from persisted config
+        if (statusData.persistedConfig?.webhookVerifyToken) {
+          setStoredWebhookVerifyToken(statusData.persistedConfig.webhookVerifyToken)
+        }
       }
 
       // Reload page after 2 seconds to show updated state
@@ -317,6 +329,40 @@ export function MetaTesterIntegration({
     }
   }
 
+  const handleCheckSubscriptionStatus = async () => {
+    setCheckingSubscription(true)
+    setError(null)
+    setSuccess(null)
+    
+    try {
+      const res = await fetch('/api/integrations/meta/diagnostics')
+      if (res.ok) {
+        const data = await res.json()
+        
+        if (data.instagramSubscriptionStatus?.subscribed) {
+          setSuccess('✅ Instagram Business Account is subscribed to webhooks!')
+        } else if (data.instagramSubscriptionStatus === null) {
+          setSuccess('⚠️ Subscription status cannot be verified via API. Please verify manually in Meta Developer Console or by sending a test DM.')
+        } else {
+          setError('❌ Instagram Business Account is not subscribed. Please complete manual setup in Meta Developer Console.')
+        }
+        
+        // Refresh status to show updated subscription info
+        const statusRes = await fetch('/api/integrations/meta/status')
+        if (statusRes.ok) {
+          const statusData = await statusRes.json()
+          setConnectionStatus(statusData.activeConnections || statusData.connections || [])
+        }
+      } else {
+        setError('Failed to check subscription status')
+      }
+    } catch (err: any) {
+      setError('Failed to check subscription status: ' + err.message)
+    } finally {
+      setCheckingSubscription(false)
+    }
+  }
+
   if (hasConnection && connectionStatus.length > 0) {
     return (
       <div className="space-y-3">
@@ -338,9 +384,35 @@ export function MetaTesterIntegration({
           <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-xs">
             <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">⚠️ Instagram Webhook Setup Required:</p>
             <ul className="list-disc list-inside space-y-1 text-yellow-700 dark:text-yellow-300">
-              {connectionWarnings.map((warning, idx) => (
-                <li key={idx}>{warning}</li>
-              ))}
+              {connectionWarnings.map((warning, idx) => {
+                // If warning contains verify token, make it copyable
+                if (warning.includes('Verify Token:')) {
+                  const parts = warning.split('Verify Token: ')
+                  return (
+                    <li key={idx}>
+                      {parts[0]}Verify Token:{' '}
+                      {parts[1] && (
+                        <span className="inline-flex items-center gap-1">
+                          <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded font-mono">
+                            {parts[1]}
+                          </code>
+                          <button
+                            onClick={() => {
+                              navigator.clipboard.writeText(parts[1])
+                              setSuccess('Verify token copied!')
+                              setTimeout(() => setSuccess(null), 2000)
+                            }}
+                            className="text-xs px-1 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                          >
+                            Copy
+                          </button>
+                        </span>
+                      )}
+                    </li>
+                  )
+                }
+                return <li key={idx}>{warning}</li>
+              })}
             </ul>
           </div>
         )}
@@ -353,9 +425,11 @@ export function MetaTesterIntegration({
             const displayIgUsername = persistedConfig?.igUsername || conn.igUsername
             
             const pageSubscribed = conn.pageSubscriptionStatus?.subscribed ?? conn.triggerSubscribed
-            const igSubscribed = conn.igSubscriptionStatus?.subscribed ?? false
+            const igSubscriptionStatus = conn.igSubscriptionStatus
+            const igSubscribed = igSubscriptionStatus?.subscribed === true
+            const igStatusUnknown = igSubscriptionStatus === null || igSubscriptionStatus === undefined // API check not supported
             const pageFields = conn.pageSubscriptionStatus?.fields || []
-            const igFields = conn.igSubscriptionStatus?.fields || []
+            const igFields = igSubscriptionStatus?.fields || []
             
             return (
               <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800 space-y-2">
@@ -383,27 +457,121 @@ export function MetaTesterIntegration({
 
                 {/* Instagram Subscription Status */}
                 {conn.igBusinessId && (
-                  <div className="space-y-1">
+                  <div className="space-y-2">
                     <div className="flex items-center gap-2">
-                      <span className={`text-xs font-medium ${igSubscribed ? 'text-green-600' : 'text-red-600'}`}>
-                        {igSubscribed ? '✓' : '❌'} Instagram Business Account:
+                      <span className={`text-xs font-medium ${
+                        igSubscribed ? 'text-green-600' : 
+                        igStatusUnknown ? 'text-yellow-600' : 
+                        'text-red-600'
+                      }`}>
+                        {igSubscribed ? '✓' : igStatusUnknown ? '⚠' : '❌'} Instagram Business Account:
                       </span>
-                      <span className={`text-xs ${igSubscribed ? 'text-green-600' : 'text-red-600'}`}>
-                        {igSubscribed ? `Subscribed (${igFields.length} fields)` : 'NOT SUBSCRIBED - DMs will not be received'}
+                      <span className={`text-xs ${
+                        igSubscribed ? 'text-green-600' : 
+                        igStatusUnknown ? 'text-yellow-600' : 
+                        'text-red-600'
+                      }`}>
+                        {igSubscribed 
+                          ? `Subscribed (${igFields.length} fields)` 
+                          : igStatusUnknown
+                          ? 'Status unknown - verify manually or check if DMs are received'
+                          : 'NOT SUBSCRIBED - DMs will not be received'}
                       </span>
                     </div>
                     {igFields.length > 0 && (
                       <p className="text-xs text-slate-500 pl-4">Fields: {igFields.join(', ')}</p>
                     )}
-                    {!igSubscribed && (
-                      <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
-                        <p className="font-medium text-red-800 dark:text-red-200 mb-1">Manual Setup Required:</p>
-                        <ol className="list-decimal list-inside space-y-0.5 text-red-700 dark:text-red-300">
-                          <li>Go to Meta Developers → Your App → Instagram → Webhooks</li>
-                          <li>Add Webhook URL: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">{webhookUrl || '[your webhook URL]'}</code></li>
-                          <li>Set Verify Token: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">{storedWebhookVerifyToken || webhookVerifyToken || '[your verify token]'}</code></li>
-                          <li>Subscribe to: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">messages, messaging_postbacks</code></li>
+                    {(!igSubscribed || igStatusUnknown) && (
+                      <div className={`mt-2 p-3 border rounded text-xs ${
+                        igStatusUnknown 
+                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' 
+                          : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                      }`}>
+                        <p className={`font-medium mb-2 ${
+                          igStatusUnknown
+                            ? 'text-yellow-800 dark:text-yellow-200'
+                            : 'text-red-800 dark:text-red-200'
+                        }`}>
+                          {igStatusUnknown ? '⚠️ Manual Verification Required:' : 'Manual Setup Required:'}
+                        </p>
+                        <ol className={`list-decimal list-inside space-y-1 ${
+                          igStatusUnknown
+                            ? 'text-yellow-700 dark:text-yellow-300'
+                            : 'text-red-700 dark:text-red-300'
+                        }`}>
+                          <li>
+                            Go to{' '}
+                            <a 
+                              href="https://developers.facebook.com/apps/" 
+                              target="_blank" 
+                              rel="noopener noreferrer"
+                              className="underline font-medium"
+                            >
+                              Meta Developers → Your App → Instagram → Webhooks
+                            </a>
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span>Add Webhook URL:</span>
+                            <code className={`px-2 py-0.5 rounded font-mono text-xs ${
+                              igStatusUnknown
+                                ? 'bg-yellow-100 dark:bg-yellow-900'
+                                : 'bg-red-100 dark:bg-red-900'
+                            }`}>
+                              {webhookUrl || '[your webhook URL]'}
+                            </code>
+                            {webhookUrl && (
+                              <button
+                                onClick={() => {
+                                  navigator.clipboard.writeText(webhookUrl)
+                                  setSuccess('Webhook URL copied to clipboard!')
+                                  setTimeout(() => setSuccess(null), 2000)
+                                }}
+                                className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                              >
+                                Copy
+                              </button>
+                            )}
+                          </li>
+                          <li className="flex items-center gap-2">
+                            <span>Set Verify Token:</span>
+                            <code className={`px-2 py-0.5 rounded font-mono text-xs ${
+                              igStatusUnknown
+                                ? 'bg-yellow-100 dark:bg-yellow-900'
+                                : 'bg-red-100 dark:bg-red-900'
+                            }`}>
+                              {storedWebhookVerifyToken || webhookVerifyToken || '[your verify token]'}
+                            </code>
+                            {(storedWebhookVerifyToken || webhookVerifyToken) && (
+                              <button
+                                onClick={() => {
+                                  const tokenToCopy = storedWebhookVerifyToken || webhookVerifyToken
+                                  if (tokenToCopy) {
+                                    navigator.clipboard.writeText(tokenToCopy)
+                                    setSuccess('Verify token copied to clipboard!')
+                                    setTimeout(() => setSuccess(null), 2000)
+                                  }
+                                }}
+                                className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                              >
+                                Copy
+                              </button>
+                            )}
+                          </li>
+                          <li>Subscribe to: <code className={`px-1 rounded ${
+                            igStatusUnknown
+                              ? 'bg-yellow-100 dark:bg-yellow-900'
+                              : 'bg-red-100 dark:bg-red-900'
+                          }`}>messages, messaging_postbacks</code></li>
                           <li>Click &quot;Verify and Save&quot;</li>
+                          <li>
+                            <button
+                              onClick={handleCheckSubscriptionStatus}
+                              disabled={checkingSubscription}
+                              className="mt-1 text-xs px-2 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 disabled:cursor-not-allowed"
+                            >
+                              {checkingSubscription ? 'Checking...' : 'Verify Setup After Manual Configuration'}
+                            </button>
+                          </li>
                         </ol>
                       </div>
                     )}
@@ -443,27 +611,64 @@ export function MetaTesterIntegration({
                     {webhookUrl}
                   </code>
                 </p>
-                <p className="text-slate-600 dark:text-slate-400">
-                  <span className="font-medium">Verify Token:</span>{' '}
-                  {webhookVerifyTokenConfigured ? (
-                    <span className="text-green-600 dark:text-green-400">✓ Configured</span>
-                  ) : (
-                    <span className="text-yellow-600 dark:text-yellow-400">⚠ Not set</span>
+                <div className="space-y-1">
+                  <p className="text-slate-600 dark:text-slate-400">
+                    <span className="font-medium">Verify Token:</span>{' '}
+                    {webhookVerifyTokenConfigured || storedWebhookVerifyToken ? (
+                      <span className="text-green-600 dark:text-green-400">✓ Configured</span>
+                    ) : (
+                      <span className="text-yellow-600 dark:text-yellow-400">⚠ Not set</span>
+                    )}
+                  </p>
+                  {storedWebhookVerifyToken && (
+                    <div className="flex items-center gap-2">
+                      <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-mono flex-1 truncate">
+                        {storedWebhookVerifyToken}
+                      </code>
+                      <button
+                        onClick={() => {
+                          navigator.clipboard.writeText(storedWebhookVerifyToken)
+                          setSuccess('Verify token copied to clipboard!')
+                          setTimeout(() => setSuccess(null), 2000)
+                        }}
+                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                      >
+                        Copy
+                      </button>
+                    </div>
                   )}
-                </p>
+                </div>
                 <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
                   Copy the Callback URL above and paste it in Meta Developers → Instagram → API Setup → Webhooks → Callback URL
                 </p>
               </div>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              className="w-full text-xs h-7"
-              onClick={handleTestWebhook}
-            >
-              Test Webhook
-            </Button>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs h-7"
+                onClick={handleTestWebhook}
+              >
+                Test Webhook
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="flex-1 text-xs h-7"
+                onClick={handleCheckSubscriptionStatus}
+                disabled={checkingSubscription}
+              >
+                {checkingSubscription ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Checking...
+                  </>
+                ) : (
+                  'Check Subscription'
+                )}
+              </Button>
+            </div>
           </div>
         )}
       </div>

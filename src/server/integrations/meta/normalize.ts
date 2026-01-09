@@ -36,10 +36,13 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
     const pageId = entry.id
 
     if (payload.object === 'instagram') {
-      // INSTAGRAM STRUCTURE: entry.changes[0].value.messages[]
-      // Instagram webhooks use the same structure as WhatsApp: entry.changes[].value.messages[]
+      // INSTAGRAM STRUCTURE: entry.changes[].value.messages[]
+      // Instagram webhooks use changes structure (similar to WhatsApp)
+      // Also check for entry.messaging[] as fallback (some Instagram webhook formats may use this)
       const changes = entry.changes || []
+      const messaging = entry.messaging || []
       
+      // Primary structure: entry.changes[].value.messages[]
       for (const change of changes) {
         // Instagram messages come in changes with field: "messages"
         if (change.field === 'messages' && change.value?.messages) {
@@ -50,21 +53,21 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
               rawPayload: message, // Store full message object for attachment extraction
             }
 
-            // Extract sender ID (can be object with id property or string)
+            // Extract sender ID: message.from.id or message.from (if string)
             if (message.from) {
               normalizedEvent.senderId = typeof message.from === 'string' 
                 ? message.from 
-                : message.from.id
+                : (message.from.id || message.from)
             }
 
-            // Extract recipient ID (if present)
+            // Extract recipient ID: message.to.id or message.to (if string)
             if (message.to) {
               normalizedEvent.recipientId = typeof message.to === 'string'
                 ? message.to
-                : message.to.id
+                : (message.to.id || message.to)
             }
 
-            // Extract timestamp (Instagram uses Unix timestamp in seconds as string)
+            // Extract timestamp (Instagram uses Unix timestamp in seconds as string or number)
             if (message.timestamp) {
               const timestampValue = typeof message.timestamp === 'string' 
                 ? parseInt(message.timestamp, 10) 
@@ -75,7 +78,7 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
             // Extract message ID (can be 'id' or 'mid')
             normalizedEvent.messageId = message.mid || message.id
 
-            // Extract text (Instagram messages have text directly, not nested)
+            // Extract text: message.text (direct property for Instagram)
             normalizedEvent.text = message.text || ''
 
             normalized.push(normalizedEvent)
@@ -91,6 +94,41 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
               rawPayload: postback,
             })
           }
+        }
+      }
+
+      // Fallback structure: entry.messaging[] (if changes structure not found)
+      // This handles alternate Instagram webhook formats
+      if (normalized.length === 0 && messaging.length > 0) {
+        for (const event of messaging) {
+          const normalizedEvent: NormalizedWebhookEvent = {
+            pageId,
+            eventType: 'message',
+            rawPayload: event,
+          }
+
+          // Extract sender ID: event.sender.id
+          if (event.sender) {
+            normalizedEvent.senderId = event.sender.id || event.sender
+          }
+
+          // Extract recipient ID: event.recipient.id
+          if (event.recipient) {
+            normalizedEvent.recipientId = event.recipient.id || event.recipient
+          }
+
+          // Extract timestamp
+          if (event.timestamp) {
+            normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+          }
+
+          // Extract message ID and text from event.message
+          if (event.message) {
+            normalizedEvent.messageId = event.message.mid || event.message.id
+            normalizedEvent.text = event.message.text || ''
+          }
+
+          normalized.push(normalizedEvent)
         }
       }
     } else {

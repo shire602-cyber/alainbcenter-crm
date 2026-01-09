@@ -126,6 +126,10 @@ export async function checkPageWebhookSubscription(
 /**
  * Check if an Instagram Business Account is subscribed to webhooks
  * 
+ * Note: Instagram Business Accounts (IGUser) do NOT support the `subscribed_apps` field via Graph API.
+ * The subscription status can only be verified manually in Meta Developer Console or by checking if
+ * webhook events are actually being received. This function attempts the check but will fail gracefully.
+ * 
  * @param igBusinessAccountId - The Instagram Business Account ID
  * @param pageAccessToken - Page access token (works because Page and IG are linked)
  * @returns Object with subscription status and subscribed fields, or null if check fails
@@ -135,6 +139,7 @@ export async function checkInstagramWebhookSubscription(
   pageAccessToken: string
 ): Promise<{ subscribed: boolean; fields: string[] } | null> {
   try {
+    // Attempt to check subscription - this will likely fail as IGUser doesn't support subscribed_apps
     const result = await graphAPIGet<{
       data: Array<{ subscribed_fields: string[] }>
     }>(`/${igBusinessAccountId}/subscribed_apps`, pageAccessToken)
@@ -154,6 +159,14 @@ export async function checkInstagramWebhookSubscription(
     }
     return { subscribed: false, fields: [] }
   } catch (error: any) {
+    // Expected error: IGUser node type doesn't support subscribed_apps field
+    if (error.message?.includes('nonexisting field') || error.message?.includes('IGUser')) {
+      console.warn(`⚠️ Instagram Business Account ${igBusinessAccountId} subscription status cannot be checked via API`)
+      console.warn(`⚠️ Instagram Business Accounts do not support subscribed_apps field`)
+      console.warn(`⚠️ Subscription must be verified manually in Meta Developer Console or by receiving webhook events`)
+      // Return null to indicate status is unknown (requires manual verification)
+      return null
+    }
     console.error(`❌ Failed to check Instagram Business Account ${igBusinessAccountId} webhook subscription:`, error.message)
     return null
   }

@@ -8,7 +8,7 @@ import { requireAdmin } from '@/lib/auth-server'
 import { getAllConnections, getDecryptedPageToken } from '@/server/integrations/meta/storage'
 import { getWebhookVerifyToken } from '@/server/integrations/meta/config'
 import { getWebhookUrl } from '@/lib/publicUrl'
-import { checkPageWebhookSubscription, checkInstagramWebhookSubscription } from '@/server/integrations/meta/subscribe'
+import { checkPageWebhookSubscription } from '@/server/integrations/meta/subscribe'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
@@ -57,7 +57,7 @@ export async function GET(req: NextRequest) {
         try {
           const pageAccessToken = await getDecryptedPageToken(conn.id)
           if (pageAccessToken) {
-            // Check Page webhook subscription
+            // Check Page webhook subscription (Facebook Page only)
             if (conn.pageId) {
               pageSubscriptionStatus = await checkPageWebhookSubscription(
                 conn.pageId,
@@ -65,12 +65,12 @@ export async function GET(req: NextRequest) {
               )
             }
 
-            // Check Instagram Business Account webhook subscription
+            // Instagram Business Account subscription status cannot be checked via Graph API
+            // Instagram Business Accounts (IGUser) do NOT support subscribed_apps field
+            // Subscription status must be verified by actual webhook delivery (POST events received)
+            // Set status to null to indicate "unknown" - subscription is confirmed when webhooks arrive
             if (conn.igBusinessId) {
-              igSubscriptionStatus = await checkInstagramWebhookSubscription(
-                conn.igBusinessId,
-                pageAccessToken
-              )
+              igSubscriptionStatus = null // API check not supported - use webhook delivery as truth
             }
           }
         } catch (error: any) {
@@ -98,6 +98,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.json({
       success: true,
       webhookUrl,
+      webhookVerifyToken: webhookVerifyToken || null, // Include actual token for UI display
       webhookVerifyTokenConfigured: !!webhookVerifyToken,
       persistedConfig, // Config from Integration table (which page/IG was selected)
       activeConnections: connectionsWithSubscriptionStatus,

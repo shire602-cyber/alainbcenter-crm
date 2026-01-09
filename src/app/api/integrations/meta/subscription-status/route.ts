@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-server'
 import { getAllConnections, getDecryptedPageToken } from '@/server/integrations/meta/storage'
-import { checkPageWebhookSubscription, checkInstagramWebhookSubscription } from '@/server/integrations/meta/subscribe'
+import { checkPageWebhookSubscription } from '@/server/integrations/meta/subscribe'
 
 export async function GET(req: NextRequest) {
   try {
@@ -57,16 +57,11 @@ export async function GET(req: NextRequest) {
             }
           }
 
-          // Check Instagram subscription
+          // Instagram Business Account subscription cannot be checked via Graph API
+          // IGUser node type does not support subscribed_apps field
+          // Subscription is verified by actual webhook delivery (POST events received)
           if (conn.igBusinessId) {
-            try {
-              instagramSubscription = await checkInstagramWebhookSubscription(
-                conn.igBusinessId,
-                pageAccessToken
-              )
-            } catch (error: any) {
-              errors.push(`Instagram subscription check failed: ${error.message}`)
-            }
+            instagramSubscription = null // API check not supported - webhook delivery is the proof
           }
         } catch (error: any) {
           errors.push(`Subscription check error: ${error.message}`)

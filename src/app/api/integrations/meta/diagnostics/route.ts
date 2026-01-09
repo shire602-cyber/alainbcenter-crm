@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-server'
 import { getAllConnections, getDecryptedPageToken } from '@/server/integrations/meta/storage'
 import { getWebhookVerifyToken } from '@/server/integrations/meta/config'
-import { checkPageWebhookSubscription, checkInstagramWebhookSubscription } from '@/server/integrations/meta/subscribe'
+import { checkPageWebhookSubscription } from '@/server/integrations/meta/subscribe'
 import { getWebhookUrl } from '@/lib/publicUrl'
 import { prisma } from '@/lib/prisma'
 
@@ -94,30 +94,17 @@ export async function GET(req: NextRequest) {
       diagnostics.errors.push('Connection missing pageId')
     }
 
-    // 3. Check Instagram Business Account webhook subscription status
+    // 3. Instagram Business Account webhook subscription status
+    // NOTE: Instagram Business Accounts (IGUser) do NOT support subscribed_apps field via Graph API
+    // Subscription status can only be verified by actual webhook delivery (POST events received)
+    // Do not attempt Graph API check - it will always fail with 400 error
     if (connection.igBusinessId) {
-      try {
-        const pageAccessToken = await getDecryptedPageToken(connection.id)
-        if (pageAccessToken) {
-          diagnostics.instagramSubscriptionStatus = await checkInstagramWebhookSubscription(
-            connection.igBusinessId,
-            pageAccessToken
-          )
-          if (diagnostics.instagramSubscriptionStatus?.subscribed) {
-            diagnostics.metaConsoleChecklist.instagramWebhookConfigured = true
-          } else {
-            diagnostics.warnings.push('Instagram Business Account is not subscribed to webhooks. Instagram DMs will NOT be received.')
-            diagnostics.warnings.push('⚠️ CRITICAL: Instagram webhook subscription is required for receiving Instagram DMs.')
-          }
-        } else {
-          diagnostics.errors.push('Failed to decrypt page access token. Cannot check Instagram subscription status.')
-        }
-      } catch (error: any) {
-        diagnostics.warnings.push(`Failed to check Instagram subscription status: ${error.message}`)
-        diagnostics.warnings.push('This may indicate that API-based subscription is not supported. Manual setup in Meta Developer Console may be required.')
-      }
+      diagnostics.instagramSubscriptionStatus = null // API check not supported
+      diagnostics.warnings.push('⚠️ Instagram Business Account subscription status cannot be checked via Graph API.')
+      diagnostics.warnings.push('⚠️ Subscription is verified by actual webhook delivery - if POST events are received, subscription is active.')
+      diagnostics.warnings.push('⚠️ If no Instagram DMs are received, verify webhook is configured in Meta Developer Console.')
     } else {
-      diagnostics.errors.push('Connection missing igBusinessId. Cannot check Instagram subscription status.')
+      diagnostics.errors.push('Connection missing igBusinessId.')
     }
 
     // 4. Check webhook URL accessibility (healthcheck)

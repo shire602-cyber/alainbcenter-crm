@@ -334,8 +334,10 @@ async function processWebhookPayload(payload: any) {
     }
 
     for (const event of normalizedEvents) {
-      // Determine channel based on page or event context
+      // Determine channel based on payload object
+      // Pass uppercase to match AutoMatchInput interface - normalizeChannel will convert to lowercase
       const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
+      const channelLower = payload.object === 'instagram' ? 'instagram' : 'facebook' // For logging
       
       // Detect message structure: Instagram has attachments directly, Facebook has nested message.attachments
       const isInstagramMessage = payload.object === 'instagram'
@@ -345,20 +347,24 @@ async function processWebhookPayload(payload: any) {
       const hasText = !!event.text
 
       if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
-        // Log structured information for Instagram message ingestion
-        if (channel === 'INSTAGRAM') {
-          console.log('📥 [META-WEBHOOK] Instagram message received', {
+        // Defensive logging for Instagram message ingestion
+        if (channelLower === 'instagram') {
+          console.log('📥 [META-WEBHOOK-INSTAGRAM] Instagram messaging event received', {
             object: payload.object,
             entryId: entry.id, // IG Business Account ID
             pageId: pageId || 'N/A',
             igBusinessId: entry.id,
-            senderId: event.senderId,
+            senderId: event.senderId || 'N/A',
+            recipientId: event.recipientId || 'N/A',
+            messageId: event.messageId || 'N/A',
+            text: event.text ? `${event.text.substring(0, 50)}${event.text.length > 50 ? '...' : ''}` : '[no text]',
             hasText: !!event.text,
+            textLength: event.text?.length || 0,
             hasAttachments: hasInstagramAttachments,
             attachmentsCount: event.rawPayload?.attachments?.length || 0,
             connectionId: connection?.id || 'NONE',
             workspaceId: workspaceId || 'NONE',
-            messageId: event.messageId || 'N/A',
+            timestamp: event.timestamp?.toISOString() || 'N/A',
           })
         }
 
@@ -393,26 +399,47 @@ async function processWebhookPayload(payload: any) {
             channel,
           })
 
-          // Log successful ingestion (after processInboundMessage completes)
-          if (channel === 'INSTAGRAM') {
-            console.log('✅ [META-WEBHOOK] Instagram message ingested', {
-              senderId: event.senderId,
-              channel: 'INSTAGRAM',
+          // Defensive logging: Log successful Instagram message storage
+          if (channelLower === 'instagram') {
+            console.log('✅ [META-WEBHOOK-INSTAGRAM] Instagram message stored to database', {
+              senderId: event.senderId || 'N/A',
+              recipientId: event.recipientId || 'N/A',
+              channel: 'instagram',
               igBusinessId: entry.id,
               pageId: pageId,
               messageId: event.messageId || 'N/A',
+              textPreview: event.text ? `${event.text.substring(0, 30)}${event.text.length > 30 ? '...' : ''}` : '[no text]',
+              timestamp: event.timestamp?.toISOString() || new Date().toISOString(),
             })
           }
         } catch (error: any) {
           if (error.message === 'DUPLICATE_MESSAGE') {
-            console.log(`ℹ️ [META-WEBHOOK] Duplicate ${channel} message detected - skipping`)
+            if (channelLower === 'instagram') {
+              console.log('ℹ️ [META-WEBHOOK-INSTAGRAM] Duplicate Instagram message detected - skipping', {
+                messageId: event.messageId || 'N/A',
+                senderId: event.senderId || 'N/A',
+              })
+            } else {
+              console.log(`ℹ️ [META-WEBHOOK] Duplicate ${channel} message detected - skipping`)
+            }
           } else {
-            console.error(`❌ [META-WEBHOOK] Error processing ${channel} message:`, {
-              error: error.message,
-              senderId: event.senderId,
-              channel,
-              pageId,
-            })
+            if (channelLower === 'instagram') {
+              console.error('❌ [META-WEBHOOK-INSTAGRAM] Error processing Instagram message:', {
+                error: error.message,
+                errorStack: error.stack?.substring(0, 200),
+                senderId: event.senderId || 'N/A',
+                messageId: event.messageId || 'N/A',
+                pageId: pageId || 'N/A',
+                igBusinessId: entry.id,
+              })
+            } else {
+              console.error(`❌ [META-WEBHOOK] Error processing ${channel} message:`, {
+                error: error.message,
+                senderId: event.senderId,
+                channel,
+                pageId,
+              })
+            }
           }
           // Event is already stored, can be processed manually
         }
@@ -476,7 +503,7 @@ async function processInboundMessage(data: {
     }
 
     await handleInboundMessageAutoMatch({
-      channel: channel,
+      channel: data.channel, // 'INSTAGRAM' or 'FACEBOOK' (will be normalized to lowercase by normalizeChannel)
       providerMessageId: providerMessageId,
       fromPhone: null, // Instagram/Facebook use user IDs, not phone numbers
       fromEmail: null,
@@ -492,7 +519,17 @@ async function processInboundMessage(data: {
       },
     })
 
-    console.log(`✅ Processed ${channel} message from ${senderId}`)
+    // Defensive logging for Instagram message processing
+    const isInstagram = data.channel === 'INSTAGRAM'
+    if (isInstagram) {
+      console.log('✅ [META-WEBHOOK-INSTAGRAM] Instagram message processed and stored to database', {
+        senderId: senderId,
+        messageId: providerMessageId,
+        channel: 'instagram', // Stored as lowercase in DB
+      })
+    } else {
+      console.log(`✅ Processed ${data.channel} message from ${senderId}`)
+    }
   } catch (error: any) {
     console.error(`Error inserting ${channel} message into inbox:`, error)
     // Event is already stored in meta_webhook_events, so it can be processed manually

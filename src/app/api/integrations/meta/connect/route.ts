@@ -10,6 +10,7 @@ import { subscribePageToWebhook, subscribeInstagramAccountToWebhook } from '@/se
 import { upsertConnection } from '@/server/integrations/meta/storage'
 import { setWebhookVerifyToken } from '@/server/integrations/meta/config'
 import { prisma } from '@/lib/prisma'
+import crypto from 'crypto'
 
 export async function POST(req: NextRequest) {
   try {
@@ -25,14 +26,22 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Store webhook verify token if provided
-    if (webhookVerifyToken && typeof webhookVerifyToken === 'string') {
-      try {
-        await setWebhookVerifyToken(webhookVerifyToken)
-      } catch (error: any) {
-        console.error('Failed to store webhook verify token:', error)
-        // Continue - token might be set later
-      }
+    // Auto-generate verify token if not provided
+    let finalVerifyToken = webhookVerifyToken
+    if (!finalVerifyToken || typeof finalVerifyToken !== 'string' || finalVerifyToken.trim() === '') {
+      // Generate a secure random token
+      const randomBytes = crypto.randomBytes(16).toString('hex')
+      finalVerifyToken = `meta-verify-${randomBytes}`
+      console.log('🔑 Auto-generated webhook verify token')
+    }
+
+    // Always store verify token (either provided or auto-generated)
+    try {
+      await setWebhookVerifyToken(finalVerifyToken)
+      console.log('✅ Stored webhook verify token (redacted for security)')
+    } catch (error: any) {
+      console.error('Failed to store webhook verify token:', error)
+      // Continue - connection can still succeed, token can be set later
     }
 
     // Validate token
@@ -206,7 +215,7 @@ export async function POST(req: NextRequest) {
         pageAccessToken: page.access_token, // Required for API calls
         igBusinessId: igAccount.id,
         igUsername: igAccount.username,
-        webhookVerifyToken: webhookVerifyToken || null,
+        webhookVerifyToken: finalVerifyToken, // Always store (auto-generated or provided)
         connectedAt: new Date().toISOString(),
       }
 
@@ -244,11 +253,13 @@ export async function POST(req: NextRequest) {
         igSubscribed,
         subscribed, // Legacy: true if page is subscribed (for backward compatibility)
       },
+      webhookVerifyToken: finalVerifyToken, // Return token so UI can display it
       warnings: !igSubscribed ? [
         'Instagram Business Account webhook subscription via API failed or is not supported.',
         'You may need to configure the webhook manually in Meta Developer Console:',
         'Meta Developers → Your App → Instagram → Webhooks',
         `Webhook URL: ${process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com'}/api/webhooks/meta`,
+        `Verify Token: ${finalVerifyToken}`,
       ] : [],
     })
   } catch (error: any) {
