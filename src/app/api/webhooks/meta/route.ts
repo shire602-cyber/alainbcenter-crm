@@ -25,26 +25,96 @@ export async function GET(req: NextRequest) {
     // Get verify token from database (or fallback to env var)
     const verifyToken = await getWebhookVerifyToken()
 
+    // Helper to redact token for logging (show first 4 and last 4 chars)
+    const redactToken = (t: string | null): string => {
+      if (!t) return 'null'
+      if (t.length <= 8) return '***' // Too short to redact meaningfully
+      return `${t.substring(0, 4)}...${t.substring(t.length - 4)}`
+    }
+
+    // Structured logging for webhook verification
+    const tokenSource = verifyToken ? 'db' : 'env'
+    const tokenMatch = mode === 'subscribe' && token && verifyToken && token.trim() === verifyToken.trim()
+
+    console.log('📥 [META-WEBHOOK-VERIFY]', {
+      mode,
+      hasToken: !!token,
+      hasChallenge: !!challenge,
+      tokenSource,
+      tokenLength: verifyToken?.length || 0,
+      receivedTokenLength: token?.length || 0,
+      tokenMatch,
+    })
+
     if (!verifyToken) {
-      console.error('Webhook verify token not configured')
+      console.error('❌ [META-WEBHOOK-VERIFY] Webhook verify token not configured')
       return NextResponse.json(
         { error: 'Webhook not configured' },
         { status: 500 }
       )
     }
 
-    if (mode === 'subscribe' && token === verifyToken) {
-      console.log('✅ Meta webhook verified successfully')
+    // Validate required parameters
+    if (!mode || !token) {
+      console.warn('⚠️ [META-WEBHOOK-VERIFY] Missing required parameters', {
+        hasMode: !!mode,
+        hasToken: !!token,
+        hasChallenge: !!challenge,
+      })
+      return NextResponse.json(
+        { error: 'Missing required parameters', hint: 'Meta requires hub.mode and hub.verify_token' },
+        { status: 400 }
+      )
+    }
+
+    if (!challenge) {
+      console.warn('⚠️ [META-WEBHOOK-VERIFY] Challenge parameter missing')
+      return NextResponse.json(
+        { error: 'Missing challenge parameter', hint: 'Meta requires hub.challenge for verification' },
+        { status: 400 }
+      )
+    }
+
+    // Trim whitespace from tokens for comparison
+    const cleanedToken = token.trim()
+    const cleanedVerifyToken = verifyToken.trim()
+
+    if (mode === 'subscribe' && cleanedToken === cleanedVerifyToken) {
+      console.log('✅ [META-WEBHOOK-VERIFY] Webhook verified successfully', {
+        mode,
+        tokenSource,
+        challengeLength: challenge.length,
+        tokenLength: cleanedToken.length,
+      })
+      
+      // Return challenge as plain text (Meta requires this format)
       return new NextResponse(challenge, {
         status: 200,
         headers: { 'Content-Type': 'text/plain' },
       })
     }
 
-    return NextResponse.json({ error: 'Invalid verification' }, { status: 403 })
+    // Token mismatch - log detailed information for debugging
+    console.error('❌ [META-WEBHOOK-VERIFY] Token mismatch', {
+      mode,
+      tokenReceived: redactToken(token),
+      tokenExpected: redactToken(verifyToken),
+      tokenSource,
+      receivedLength: token?.length || 0,
+      expectedLength: verifyToken?.length || 0,
+      tokensEqual: cleanedToken === cleanedVerifyToken,
+    })
+
+    return NextResponse.json(
+      { 
+        error: 'Invalid verification',
+        hint: 'Verify token does not match. Check that the token configured in Meta Developer Console matches the token stored in Integration settings.'
+      },
+      { status: 403 }
+    )
   } catch (error: any) {
-    console.error('Meta webhook verification error:', error)
-    return NextResponse.json({ error: 'Verification failed' }, { status: 500 })
+    console.error('❌ [META-WEBHOOK-VERIFY] Verification error:', error)
+    return NextResponse.json({ error: 'Verification failed', details: error.message }, { status: 500 })
   }
 }
 
@@ -191,6 +261,22 @@ async function processWebhookPayload(payload: any) {
         // Determine channel based on page or event context
         const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
 
+        // Log structured information for Instagram message ingestion
+        if (channel === 'INSTAGRAM') {
+          console.log('📥 [META-WEBHOOK] Instagram message received', {
+            object: payload.object,
+            entryId: entry.id, // IG Business Account ID
+            pageId: pageId || 'N/A',
+            igBusinessId: entry.id,
+            senderId: event.senderId,
+            hasText: !!event.text,
+            hasAttachments: !!(event.rawPayload?.message?.attachments?.length),
+            connectionId: connection?.id || 'NONE',
+            workspaceId: workspaceId || 'NONE',
+            messageId: event.messageId || 'N/A',
+          })
+        }
+
         // Optionally insert into inbox using safe function
         // pageId should be set from connection at this point
         if (!pageId) {
@@ -211,8 +297,28 @@ async function processWebhookPayload(payload: any) {
             timestamp: event.timestamp || new Date(),
             channel,
           })
+
+          // Log successful ingestion (after processInboundMessage completes)
+          if (channel === 'INSTAGRAM') {
+            console.log('✅ [META-WEBHOOK] Instagram message ingested', {
+              senderId: event.senderId,
+              channel: 'INSTAGRAM',
+              igBusinessId: entry.id,
+              pageId: pageId,
+              messageId: event.messageId || 'N/A',
+            })
+          }
         } catch (error: any) {
-          console.error(`Error processing ${channel} message:`, error)
+          if (error.message === 'DUPLICATE_MESSAGE') {
+            console.log(`ℹ️ [META-WEBHOOK] Duplicate ${channel} message detected - skipping`)
+          } else {
+            console.error(`❌ [META-WEBHOOK] Error processing ${channel} message:`, {
+              error: error.message,
+              senderId: event.senderId,
+              channel,
+              pageId,
+            })
+          }
           // Event is already stored, can be processed manually
         }
       }

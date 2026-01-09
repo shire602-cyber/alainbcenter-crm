@@ -17,12 +17,20 @@ interface MetaConnection {
 }
 
 interface MetaPage {
-  pageId: string
-  pageName: string
-  pageAccessToken: string
-  hasIg: boolean
+  id: string
+  name: string
+  instagram_business_account: {
+    id: string
+    username: string
+  } | null
+}
+
+interface PersistedConfig {
+  pageId: string | null
+  pageName: string | null
   igBusinessId: string | null
   igUsername: string | null
+  connectedAt: string | null
 }
 
 export function MetaTesterIntegration({
@@ -47,6 +55,7 @@ export function MetaTesterIntegration({
   const [pages, setPages] = useState<MetaPage[]>([])
   const [selectedPageId, setSelectedPageId] = useState<string>('')
   const [fetchingPages, setFetchingPages] = useState(false)
+  const [persistedConfig, setPersistedConfig] = useState<PersistedConfig | null>(null)
 
   // Load status on mount and refresh periodically
   useEffect(() => {
@@ -58,6 +67,15 @@ export function MetaTesterIntegration({
           setConnectionStatus(data.connections || [])
           setWebhookUrl(data.webhookUrl || null)
           setWebhookVerifyTokenConfigured(data.webhookVerifyTokenConfigured || false)
+          
+          // Load persisted config and pre-select page
+          if (data.persistedConfig) {
+            setPersistedConfig(data.persistedConfig)
+            // Pre-select the persisted page if we have one
+            if (data.persistedConfig.pageId && !selectedPageId) {
+              setSelectedPageId(data.persistedConfig.pageId)
+            }
+          }
         }
       } catch (err) {
         // Silent fail
@@ -70,7 +88,7 @@ export function MetaTesterIntegration({
       const interval = setInterval(loadStatus, 30000) // Every 30 seconds
       return () => clearInterval(interval)
     }
-  }, [hasConnection])
+  }, [hasConnection, selectedPageId])
 
   const handleFetchPages = async () => {
     if (!token.trim()) {
@@ -82,10 +100,10 @@ export function MetaTesterIntegration({
     setError(null)
     setErrorDetails(null)
     setPages([])
-    setSelectedPageId('')
+    // Don't clear selectedPageId - preserve user selection or persisted config
 
     try {
-      const res = await fetch('/api/integrations/meta/pages', {
+      const res = await fetch('/api/integrations/meta/assets', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ accessToken: token.trim() }),
@@ -101,13 +119,18 @@ export function MetaTesterIntegration({
 
       if (data.pages && Array.isArray(data.pages) && data.pages.length > 0) {
         setPages(data.pages)
-        // Auto-select first page with IG if available
-        const pageWithIg = data.pages.find((p: MetaPage) => p.hasIg)
-        if (pageWithIg) {
-          setSelectedPageId(pageWithIg.pageId)
-        } else {
-          setError('No pages with Instagram Business Account found. Please connect an Instagram account to your Facebook Page first.')
+        
+        // Pre-select persisted page if available, otherwise don't auto-select
+        if (persistedConfig?.pageId) {
+          const persistedPageExists = data.pages.find((p: MetaPage) => p.id === persistedConfig.pageId)
+          if (persistedPageExists) {
+            setSelectedPageId(persistedConfig.pageId)
+          } else {
+            // Persisted page no longer exists, clear selection
+            setSelectedPageId('')
+          }
         }
+        // No auto-selection - user must explicitly select a page
       } else {
         setError('No Facebook pages found. Please create a page first.')
       }
@@ -126,16 +149,20 @@ export function MetaTesterIntegration({
     }
 
     // Require page selection for IG DM integration
-    if (pages.length > 0 && !selectedPageId) {
-      setError('Please select a page with Instagram Business Account')
+    if (!selectedPageId) {
+      setError('Please select a Facebook Page with Instagram Business Account')
       return
     }
 
-    // If pages fetched but selected page has no IG, show error
+    // Validate selected page has IG account
     if (selectedPageId && pages.length > 0) {
-      const selectedPage = pages.find((p) => p.pageId === selectedPageId)
-      if (selectedPage && !selectedPage.hasIg) {
-        setError('Selected page does not have an Instagram Business Account connected')
+      const selectedPage = pages.find((p) => p.id === selectedPageId)
+      if (!selectedPage) {
+        setError('Selected page not found. Please fetch pages again.')
+        return
+      }
+      if (!selectedPage.instagram_business_account) {
+        setError('Selected page does not have an Instagram Business Account connected. Please connect an Instagram account to this page in Meta Business Manager.')
         return
       }
     }
@@ -266,11 +293,16 @@ export function MetaTesterIntegration({
 
         <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
           <p className="font-medium text-green-600 dark:text-green-400">Connected:</p>
-          {connectionStatus.map((conn) => (
+          {connectionStatus.map((conn) => {
+            // Use persisted config for display if available (preferred source)
+            const displayPageName = persistedConfig?.pageName || conn.pageName || conn.pageId
+            const displayIgUsername = persistedConfig?.igUsername || conn.igUsername
+            
+            return (
             <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800">
-              <p className="font-medium">{conn.pageName || conn.pageId}</p>
-              {conn.igUsername && (
-                <p className="text-slate-500">Instagram: @{conn.igUsername}</p>
+              <p className="font-medium">{displayPageName}</p>
+              {displayIgUsername && (
+                <p className="text-slate-500">Instagram: @{displayIgUsername}</p>
               )}
               <div className="flex items-center gap-2 mt-1">
                 <span className={`text-xs ${conn.triggerSubscribed ? 'text-green-600' : 'text-yellow-600'}`}>
@@ -394,14 +426,14 @@ export function MetaTesterIntegration({
             >
               <option value="">-- Select a page --</option>
               {pages.map((page) => (
-                <option key={page.pageId} value={page.pageId}>
-                  {page.pageName} — IG: {page.igUsername || 'None'}
+                <option key={page.id} value={page.id}>
+                  {page.name} — IG: {page.instagram_business_account?.username || 'None'}
                 </option>
               ))}
             </Select>
             {selectedPageId && (() => {
-              const selectedPage = pages.find((p) => p.pageId === selectedPageId)
-              if (selectedPage && !selectedPage.hasIg) {
+              const selectedPage = pages.find((p) => p.id === selectedPageId)
+              if (selectedPage && !selectedPage.instagram_business_account) {
                 return (
                   <p className="text-xs text-red-600 dark:text-red-400">
                     ⚠️ Selected page does not have an Instagram Business Account connected. Instagram DM integration requires a page with IG connected.
