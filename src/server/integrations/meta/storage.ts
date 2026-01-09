@@ -93,6 +93,23 @@ export async function getConnectionByPageId(
 }
 
 /**
+ * Get connection by Instagram Business Account ID
+ * Used to resolve Instagram webhook events (payload.object === "instagram")
+ */
+export async function getConnectionByIgBusinessId(
+  igBusinessId: string,
+  workspaceId?: number | null
+) {
+  return prisma.metaConnection.findFirst({
+    where: {
+      igBusinessId,
+      workspaceId: workspaceId ?? 1,
+      status: 'connected',
+    },
+  })
+}
+
+/**
  * Get all active connections
  */
 export async function getAllConnections(workspaceId?: number | null) {

@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
+import { Select } from '@/components/ui/select'
 import { CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
 
 interface MetaConnection {
@@ -13,6 +14,15 @@ interface MetaConnection {
   triggerSubscribed: boolean
   status: string
   lastError: string | null
+}
+
+interface MetaPage {
+  pageId: string
+  pageName: string
+  pageAccessToken: string
+  hasIg: boolean
+  igBusinessId: string | null
+  igUsername: string | null
 }
 
 export function MetaTesterIntegration({
@@ -32,6 +42,11 @@ export function MetaTesterIntegration({
   const [connectionStatus, setConnectionStatus] = useState(connections)
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
   const [webhookVerifyTokenConfigured, setWebhookVerifyTokenConfigured] = useState(false)
+  
+  // Page selection state
+  const [pages, setPages] = useState<MetaPage[]>([])
+  const [selectedPageId, setSelectedPageId] = useState<string>('')
+  const [fetchingPages, setFetchingPages] = useState(false)
 
   // Load status on mount and refresh periodically
   useEffect(() => {
@@ -57,10 +72,72 @@ export function MetaTesterIntegration({
     }
   }, [hasConnection])
 
+  const handleFetchPages = async () => {
+    if (!token.trim()) {
+      setError('Please enter a Meta tester token first')
+      return
+    }
+
+    setFetchingPages(true)
+    setError(null)
+    setErrorDetails(null)
+    setPages([])
+    setSelectedPageId('')
+
+    try {
+      const res = await fetch('/api/integrations/meta/pages', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ accessToken: token.trim() }),
+      })
+
+      const data = await res.json()
+
+      if (!res.ok) {
+        setError(data.error || 'Failed to fetch pages')
+        setErrorDetails(data.details || data.hint || null)
+        return
+      }
+
+      if (data.pages && Array.isArray(data.pages) && data.pages.length > 0) {
+        setPages(data.pages)
+        // Auto-select first page with IG if available
+        const pageWithIg = data.pages.find((p: MetaPage) => p.hasIg)
+        if (pageWithIg) {
+          setSelectedPageId(pageWithIg.pageId)
+        } else {
+          setError('No pages with Instagram Business Account found. Please connect an Instagram account to your Facebook Page first.')
+        }
+      } else {
+        setError('No Facebook pages found. Please create a page first.')
+      }
+    } catch (err: any) {
+      setError(err.message || 'Failed to fetch pages')
+      setErrorDetails('Network error or server unavailable')
+    } finally {
+      setFetchingPages(false)
+    }
+  }
+
   const handleConnect = async () => {
     if (!token.trim()) {
       setError('Please enter a Meta tester token')
       return
+    }
+
+    // Require page selection for IG DM integration
+    if (pages.length > 0 && !selectedPageId) {
+      setError('Please select a page with Instagram Business Account')
+      return
+    }
+
+    // If pages fetched but selected page has no IG, show error
+    if (selectedPageId && pages.length > 0) {
+      const selectedPage = pages.find((p) => p.pageId === selectedPageId)
+      if (selectedPage && !selectedPage.hasIg) {
+        setError('Selected page does not have an Instagram Business Account connected')
+        return
+      }
     }
 
     setConnecting(true)
@@ -73,6 +150,7 @@ export function MetaTesterIntegration({
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ 
           token: token.trim(),
+          pageId: selectedPageId || undefined,
           webhookVerifyToken: webhookVerifyToken.trim() || undefined,
         }),
       })
@@ -90,6 +168,8 @@ export function MetaTesterIntegration({
       setErrorDetails(null)
       setToken('')
       setWebhookVerifyToken('') // Clear after successful connection
+      setPages([])
+      setSelectedPageId('')
       
       // Refresh status
       const statusRes = await fetch('/api/integrations/meta/status')
@@ -282,7 +362,59 @@ export function MetaTesterIntegration({
           <p className="text-xs text-slate-500">
             Generate a tester token in Meta Developers → Tools → Graph API Explorer
           </p>
+          {token.trim() && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full text-xs h-7 mt-2"
+              onClick={handleFetchPages}
+              disabled={fetchingPages}
+            >
+              {fetchingPages ? (
+                <>
+                  <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                  Fetching Pages...
+                </>
+              ) : (
+                'Fetch Pages'
+              )}
+            </Button>
+          )}
         </div>
+
+        {pages.length > 0 && (
+          <div className="space-y-2">
+            <label className="block text-xs font-medium">
+              Select Facebook Page <span className="text-red-500">*</span>
+            </label>
+            <Select
+              value={selectedPageId}
+              onChange={(e) => setSelectedPageId(e.target.value)}
+              className="text-xs h-8"
+            >
+              <option value="">-- Select a page --</option>
+              {pages.map((page) => (
+                <option key={page.pageId} value={page.pageId}>
+                  {page.pageName} — IG: {page.igUsername || 'None'}
+                </option>
+              ))}
+            </Select>
+            {selectedPageId && (() => {
+              const selectedPage = pages.find((p) => p.pageId === selectedPageId)
+              if (selectedPage && !selectedPage.hasIg) {
+                return (
+                  <p className="text-xs text-red-600 dark:text-red-400">
+                    ⚠️ Selected page does not have an Instagram Business Account connected. Instagram DM integration requires a page with IG connected.
+                  </p>
+                )
+              }
+              return null
+            })()}
+            <p className="text-xs text-slate-500">
+              Select the Facebook Page and Instagram account you want to connect
+            </p>
+          </div>
+        )}
 
         <div className="space-y-2">
           <label className="block text-xs font-medium">
@@ -318,7 +450,7 @@ export function MetaTesterIntegration({
         size="sm"
         className="w-full text-xs h-8"
         onClick={handleConnect}
-        disabled={connecting || !token.trim()}
+        disabled={connecting || !token.trim() || (pages.length > 0 && !selectedPageId)}
       >
         {connecting ? (
           <>

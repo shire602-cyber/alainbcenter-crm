@@ -4,7 +4,7 @@
  */
 
 export interface NormalizedWebhookEvent {
-  pageId: string
+  pageId: string // Note: For Instagram events, this is actually the IG Business Account ID
   eventType: 'message' | 'postback' | 'delivery' | 'read' | 'leadgen' | 'unknown'
   senderId?: string
   recipientId?: string
@@ -27,6 +27,8 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
   const entries = payload.entry || []
 
   for (const entry of entries) {
+    // Note: entry.id is pageId for object='page', but IG Business Account ID for object='instagram'
+    // The connection resolution happens in the webhook handler, so we just pass it through here
     const pageId = entry.id
 
     // Process messaging events

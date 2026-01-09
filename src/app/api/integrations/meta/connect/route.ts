@@ -15,7 +15,7 @@ export async function POST(req: NextRequest) {
     await requireAdmin()
 
     const body = await req.json()
-    const { token, webhookVerifyToken } = body
+    const { token, webhookVerifyToken, pageId, igBusinessId } = body
 
     if (!token || typeof token !== 'string') {
       return NextResponse.json(
@@ -80,8 +80,24 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Use the first page (or allow page_id to be passed in the future)
-    const page = pages[0]
+    // Select page: use provided pageId if available, otherwise use first page
+    let page = pages[0]
+    if (pageId && typeof pageId === 'string') {
+      const selectedPage = pages.find((p) => p.id === pageId)
+      if (!selectedPage) {
+        return NextResponse.json(
+          { 
+            error: 'Specified page not found', 
+            hint: `Page ID "${pageId}" not found in available pages. Available page IDs: ${pages.map((p) => p.id).join(', ')}`
+          },
+          { status: 400 }
+        )
+      }
+      page = selectedPage
+      console.log(`✅ Using selected page: ${page.name} (${page.id})`)
+    } else {
+      console.warn('⚠️ No pageId provided - using first page. This behavior is deprecated. Please select a specific page from the UI.')
+    }
 
     // Get Instagram Business Account
     let igAccount = null

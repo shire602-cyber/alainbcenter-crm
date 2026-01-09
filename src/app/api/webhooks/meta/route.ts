@@ -6,7 +6,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
-import { storeWebhookEvent } from '@/server/integrations/meta/storage'
+import { storeWebhookEvent, getConnectionByPageId, getConnectionByIgBusinessId } from '@/server/integrations/meta/storage'
 import { normalizeWebhookEvent } from '@/server/integrations/meta/normalize'
 import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 import { getWebhookVerifyToken, getAppSecret } from '@/server/integrations/meta/config'
@@ -104,25 +104,67 @@ async function processWebhookPayload(payload: any) {
     return
   }
 
+  // Log webhook entry for debugging
+  console.log(`📥 [META-WEBHOOK] Received webhook: object=${payload.object}, entries=${payload.entry?.length || 0}`)
+
   const entries = payload.entry || []
 
   for (const entry of entries) {
-    const pageId = entry.id
+    const entryId = entry.id
 
-    // Resolve connection by page_id
-    const connection = await prisma.metaConnection.findFirst({
-      where: {
-        pageId,
-        status: 'connected',
-      },
-      select: {
-        id: true,
-        workspaceId: true,
-      },
-    })
+    // Determine lookup key based on payload.object
+    let connection = null
+    let pageId: string | null = null
+    let igBusinessId: string | null = null
 
-    const connectionId = connection?.id ?? null
-    const workspaceId = connection?.workspaceId ?? null
+    if (payload.object === 'instagram') {
+      // For Instagram events, entry.id is the IG Business Account ID
+      igBusinessId = entryId
+      console.log(`📸 [META-WEBHOOK] Instagram event - entry.id=${entryId} (IG Business Account ID)`)
+      
+      connection = await getConnectionByIgBusinessId(entryId, null)
+      
+      if (connection) {
+        pageId = connection.pageId
+        console.log(`✅ [META-WEBHOOK] Resolved connection by igBusinessId: connection=${connection.id}, pageId=${pageId}, igUsername=${connection.igUsername || 'N/A'}`)
+      } else {
+        console.warn(`⚠️ [META-WEBHOOK] No connection found for IG Business Account ID: ${entryId}`)
+      }
+    } else if (payload.object === 'page') {
+      // For Page events, entry.id is the Facebook Page ID
+      pageId = entryId
+      console.log(`📘 [META-WEBHOOK] Page event - entry.id=${entryId} (Page ID)`)
+      
+      connection = await getConnectionByPageId(entryId, null)
+      
+      if (connection) {
+        igBusinessId = connection.igBusinessId || null
+        console.log(`✅ [META-WEBHOOK] Resolved connection by pageId: connection=${connection.id}, igUsername=${connection.igUsername || 'N/A'}, igBusinessId=${igBusinessId || 'N/A'}`)
+      } else {
+        console.warn(`⚠️ [META-WEBHOOK] No connection found for Page ID: ${entryId}`)
+      }
+    }
+
+    // If no connection found, log detailed warning
+    if (!connection) {
+      console.warn(`❌ [META-WEBHOOK] No connection found for object=${payload.object}, entry.id=${entryId}, igBusinessId=${igBusinessId || 'N/A'}, pageId=${pageId || 'N/A'}`)
+      // Still store event without connection for debugging
+      try {
+        await storeWebhookEvent({
+          connectionId: null,
+          workspaceId: null,
+          pageId: pageId || null,
+          eventType: payload.object || 'unknown',
+          payload,
+        })
+      } catch (error: any) {
+        console.error('Failed to store webhook event without connection:', error)
+      }
+      continue
+    }
+
+    const connectionId = connection.id
+    const workspaceId = connection.workspaceId ?? null
 
     // Store raw webhook event
     try {
@@ -150,6 +192,12 @@ async function processWebhookPayload(payload: any) {
         const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
 
         // Optionally insert into inbox using safe function
+        // pageId should be set from connection at this point
+        if (!pageId) {
+          console.warn(`⚠️ [META-WEBHOOK] Cannot process message - pageId is null for connection ${connectionId}`)
+          continue
+        }
+
         try {
           await processInboundMessage({
             pageId,
