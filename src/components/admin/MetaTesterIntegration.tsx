@@ -299,32 +299,33 @@ export function MetaTesterIntegration({
             const displayIgUsername = persistedConfig?.igUsername || conn.igUsername
             
             return (
-            <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800">
-              <p className="font-medium">{displayPageName}</p>
-              {displayIgUsername && (
-                <p className="text-slate-500">Instagram: @{displayIgUsername}</p>
-              )}
-              <div className="flex items-center gap-2 mt-1">
-                <span className={`text-xs ${conn.triggerSubscribed ? 'text-green-600' : 'text-yellow-600'}`}>
-                  {conn.triggerSubscribed ? '✓ Subscribed' : '⚠ Not subscribed'}
-                </span>
-                {conn.status === 'error' && conn.lastError && (
-                  <span className="text-xs text-red-600" title={conn.lastError}>
-                    <AlertCircle className="h-3 w-3 inline" />
-                  </span>
+              <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800">
+                <p className="font-medium">{displayPageName}</p>
+                {displayIgUsername && (
+                  <p className="text-slate-500">Instagram: @{displayIgUsername}</p>
                 )}
+                <div className="flex items-center gap-2 mt-1">
+                  <span className={`text-xs ${conn.triggerSubscribed ? 'text-green-600' : 'text-yellow-600'}`}>
+                    {conn.triggerSubscribed ? '✓ Subscribed' : '⚠ Not subscribed'}
+                  </span>
+                  {conn.status === 'error' && conn.lastError && (
+                    <span className="text-xs text-red-600" title={conn.lastError}>
+                      <AlertCircle className="h-3 w-3 inline" />
+                    </span>
+                  )}
+                </div>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="mt-2 h-6 text-xs"
+                  onClick={() => handleDisconnect(conn.id)}
+                  disabled={disconnecting}
+                >
+                  {disconnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
+                </Button>
               </div>
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2 h-6 text-xs"
-                onClick={() => handleDisconnect(conn.id)}
-                disabled={disconnecting}
-              >
-                {disconnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
-              </Button>
-            </div>
-          ))}
+            )
+          })}
         </div>
 
         {webhookUrl && (

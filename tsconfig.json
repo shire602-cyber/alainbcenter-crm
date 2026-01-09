@@ -46,6 +46,7 @@
     "**/*.test.ts",
     "**/__tests__/**",
     "media-code-audit/**/*",
-    "media_audit/**/*"
+    "media_audit/**/*",
+    "debug_bundle/**/*"
   ]
 }
