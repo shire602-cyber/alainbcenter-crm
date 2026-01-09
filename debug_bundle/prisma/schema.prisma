@@ -1,0 +1,1223 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  // Use DIRECT_URL for migrations (non-pooled connection avoids advisory lock timeouts)
+  // If not set, Prisma will use url (pooled connection) which may timeout
+  directUrl = env("DIRECT_URL")
+}
+
+// ============================================
+// ENUM VALUES (documented for reference)
+// UserRole: ADMIN | MANAGER | AGENT
+// LeadStage: NEW | CONTACTED | ENGAGED | QUALIFIED | PROPOSAL_SENT | IN_PROGRESS | COMPLETED_WON | LOST | ON_HOLD
+// LeadServiceType: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | OFFSHORE_COMPANY | BRANCH_SUBSIDIARY_SETUP | BANK_ACCOUNT_ASSISTANCE | ACCOUNTING_VAT_SERVICES | EMPLOYMENT_VISA | FAMILY_VISA | FREELANCE_VISA | INVESTOR_PARTNER_VISA | GOLDEN_VISA | DOMESTIC_WORKER_VISA | EMIRATES_ID | MEDICAL_BIOMETRICS | VISA_RENEWAL | VISA_CANCELLATION | STATUS_CHANGE_INSIDE_UAE
+// LeadPriority: LOW | NORMAL | HIGH | URGENT
+// ContactChannel: whatsapp | instagram | facebook | website | email | internal
+// ExpiryType: VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | MEDICAL_FITNESS_EXPIRY | TRADE_LICENSE_EXPIRY | ESTABLISHMENT_CARD_EXPIRY | IMMIGRATION_FILE_EXPIRY | MOHRE_LABOUR_CARD_EXPIRY | EJARI_OFFICE_LEASE_EXPIRY | BANK_KYC_REVIEW_DATE | VAT_RETURN_DUE | CORPORATE_TAX_FILING_DUE | AUDIT_DUE_DATE
+// ConversationChannel: WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+// ConversationStatus: open | closed
+// MessageDirection: INBOUND | OUTBOUND (legacy: "IN" | "OUT" still supported)
+// MessageStatus: PENDING | RECEIVED | SENT | DELIVERED | READ | FAILED
+// AutomationTrigger: NEW_LEAD | FOLLOWUP_DUE | FOLLOWUP_OVERDUE | EXPIRY_WINDOW | INBOUND_MESSAGE | NO_REPLY_SLA
+// ============================================
+
+model User {
+  id        Int      @id @default(autoincrement())
+  name      String
+  email     String   @unique
+  password  String
+  role      String   @default("AGENT") // ADMIN | MANAGER | AGENT
+  createdAt DateTime @default(now())
+
+  assignedLeads         Lead[]
+  assignedExpiryItems   ExpiryItem[]
+  assignedConversations Conversation[]
+  createdMessages       Message[]
+  createdAIDrafts       AIDraft[]
+  automationRunLogs     AutomationRunLog[]
+  assignedTasks         Task[]               @relation("AssignedTasks")
+  createdTasks          Task[]               @relation("CreatedTasks")
+  taskAssignments       TaskAssignee[]       @relation("TaskAssignees")
+  uploadedDocuments     Document[]           @relation("UploadedDocuments")
+  createdAITrainingDocs AITrainingDocument[]
+  createdAttachments    LeadAttachment[]     @relation("CreatedAttachments")
+  staffSettings         StaffSettings?
+  assignedRenewalItems  RenewalItem[]        @relation("AssignedRenewalItems")
+  createdRenewalEvents  RenewalEventLog[]    @relation("CreatedRenewalEvents")
+  assignedRenewals      Renewal[]            @relation("AssignedRenewals")
+}
+
+model ServiceType {
+  id        Int             @id @default(autoincrement())
+  name      String
+  code      String?         @unique
+  isActive  Boolean         @default(true)
+  createdAt DateTime        @default(now())
+  leads     Lead[]
+  pricing   ServicePricing? // One-to-one relationship with pricing
+}
+
+model ServicePricing {
+  id            Int          @id @default(autoincrement())
+  serviceKey    String       @unique // Service key (e.g., "FREELANCE_VISA", "MAINLAND_BUSINESS_SETUP")
+  defaultFeeAED Int // Default service fee in AED
+  minFeeAED     Int? // Minimum fee (optional)
+  maxFeeAED     Int? // Maximum fee (optional)
+  serviceType   ServiceType? @relation(fields: [serviceTypeId], references: [id])
+  serviceTypeId Int?         @unique // Optional link to ServiceType (unique for one-to-one relation)
+  isActive      Boolean      @default(true)
+  createdAt     DateTime     @default(now())
+  updatedAt     DateTime     @updatedAt
+
+  @@index([serviceKey])
+}
+
+model Contact {
+  id               Int      @id @default(autoincrement())
+  fullName         String
+  phone            String
+  phoneNormalized  String?  @unique // E.164 normalized phone number (e.g., +971501234567)
+  waId             String?  @unique // WhatsApp user ID (wa_id from Meta webhook)
+  email            String?
+  nationality      String?
+  source           String?
+  localSponsorName String? // Searchable sponsor name
+  companyName      String? // Optional company name
+  createdAt        DateTime @default(now())
+
+  leads             Lead[]
+  chatMessages      ChatMessage[]
+  conversations     Conversation[]
+  expiryItems       ExpiryItem[]
+  renewals          Renewal[]
+  messages          Message[]
+  automationRunLogs AutomationRunLog[]
+  aiActionLogs      AIActionLog[]
+  aiDrafts          AIDraft[]
+  autoReplyLogs     AutoReplyLog[]
+
+  @@index([phone])
+  @@index([phoneNormalized])
+  @@index([waId])
+  @@index([email])
+  @@index([localSponsorName])
+  @@index([companyName])
+}
+
+model Reminder {
+  id          Int       @id @default(autoincrement())
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  leadId      Int
+  type        String // FOLLOW_UP | EXPIRY | DOCUMENT_REQUEST | CUSTOM
+  scheduledAt DateTime // When to send the reminder
+  channel     String    @default("WHATSAPP") // WHATSAPP | EMAIL
+  templateKey String? // WhatsApp template key (if using template)
+  message     String? // Custom message (if not using template)
+  sent        Boolean   @default(false)
+  sentAt      DateTime?
+  error       String? // Error message if send failed
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  @@index([leadId, scheduledAt])
+  @@index([sent, scheduledAt])
+  @@index([type, scheduledAt])
+}
+
+model Lead {
+  id            Int          @id @default(autoincrement())
+  contact       Contact      @relation(fields: [contactId], references: [id])
+  contactId     Int
+  leadType      String? // Legacy field for backward compatibility
+  serviceTypeId Int? // New relation to ServiceType
+  serviceType   ServiceType? @relation(fields: [serviceTypeId], references: [id])
+
+  // Locked enums per spec (stored as strings in PostgreSQL)
+  stage              String  @default("NEW") // NEW | CONTACTED | ENGAGED | QUALIFIED | PROPOSAL_SENT | IN_PROGRESS | COMPLETED_WON | LOST | ON_HOLD
+  serviceTypeEnum    String? // Direct enum field: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | etc.
+  priority           String? @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
+  lastContactChannel String? // whatsapp | instagram | facebook | website | email | internal
+
+  // Legacy string fields (for backward compatibility during migration)
+  status        String  @default("new")
+  pipelineStage String  @default("new")
+  urgency       String?
+
+  notes                   String?
+  priorityScore           Int?
+  aiScore                 Int? // AI-generated score (0-100)
+  aiNotes                 String? // AI-generated qualification notes
+  dataJson                String? // JSON: Extracted structured fields (service, nationality, expiry hints, counts, etc.)
+  businessActivityRaw     String? // Raw business activity mentioned by customer (e.g., "marketing license", "general trading") - stored as-is without questioning
+  requestedServiceRaw     String? // PROBLEM B FIX: Raw service text mentioned by customer (e.g., "freelance visa", "business setup") - stored exactly as mentioned
+  serviceOtherDescription String? // When serviceTypeEnum = OTHER, store the original user input here
+
+  // Assignment and follow-up
+  assignedUserId Int?
+  assignedUser   User?     @relation(fields: [assignedUserId], references: [id])
+  nextFollowUpAt DateTime?
+  lastContactAt  DateTime? // Last communication timestamp
+  lastInboundAt  DateTime? // Last inbound message timestamp (for lead)
+  lastOutboundAt DateTime? // Last outbound message timestamp (for lead)
+  valueEstimate  String? // Revenue estimate (decimal as string)
+
+  // Legacy expiry tracking (kept for backward compatibility)
+  expiryDate         DateTime?
+  autoWorkflowStatus String?
+  expiry90Sent       Boolean   @default(false)
+  expiry30Sent       Boolean   @default(false)
+
+  // Renewal tracking fields
+  isRenewal             Boolean     @default(false)
+  originalExpiryItemId  Int? // If this lead came from a renewal
+  originalExpiryItem    ExpiryItem? @relation("OriginalExpiryLeads", fields: [originalExpiryItemId], references: [id])
+  estimatedValue        String? // Decimal stored as string (PostgreSQL)
+  estimatedRenewalValue String? // Renewal revenue estimate
+  renewalProbability    Int? // 0-100 probability of renewal
+  renewalNotes          String? // AI-generated renewal insights
+
+  // Automation control
+  autopilotEnabled Boolean @default(true) // Lead-level autopilot toggle
+
+  // Auto-reply settings (simplified autopilot)
+  autoReplyEnabled  Boolean   @default(true) // Enable auto-reply for this lead
+  autoReplyMode     String? // AI_ONLY | TEMPLATES_FIRST | OFF
+  mutedUntil        DateTime? // Mute auto-replies until this date
+  lastAutoReplyAt   DateTime? // Last auto-reply timestamp (for rate limiting)
+  allowOutsideHours Boolean   @default(false) // Allow replies outside business hours
+
+  // AI Agent Profile assignment
+  aiAgentProfileId Int?
+  aiAgentProfile   AIAgentProfile? @relation(fields: [aiAgentProfileId], references: [id])
+
+  // Info/Quotation sharing tracking (Phase 2)
+  infoSharedAt       DateTime? // When information was shared with customer
+  quotationSentAt    DateTime? // When quotation was sent to customer
+  lastInfoSharedType String? // Type of info shared: "pricing" | "brochure" | "document" | "details" | "quotation"
+
+  // Deal Probability & Revenue Forecasting (Deterministic)
+  dealProbability          Int? // 0-100 probability of closing the deal
+  expectedRevenueAED       Int? // Expected revenue in AED (nullable if service unknown)
+  forecastReasonJson       String? // JSON array of factor strings explaining the probability
+  serviceFeeAED            Int? // Optional: Staff-entered service fee override
+  stageProbabilityOverride Int? // Optional: Manual override for stage-based probability
+  forecastModelVersion     String? // Version of forecast model used (e.g., "forecast_v1")
+  forecastLastComputedAt   DateTime? // When forecast was last computed
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  communicationLogs  CommunicationLog[]
+  tasks              Task[]
+  documents          Document[]
+  checklistItems     ChecklistItem[]
+  chatMessages       ChatMessage[]
+  sentAutomations    SentAutomation[]
+  expiryItems        ExpiryItem[]       @relation("LeadExpiryItems")
+  renewalExpiryLeads ExpiryItem[]       @relation("RenewalExpiryLeads")
+  renewals           Renewal[] // First-class renewals linked to lead
+  messages           Message[]
+  conversations      Conversation[]
+  automationRunLogs  AutomationRunLog[]
+  aiDrafts           AIDraft[]
+  aiActionLogs       AIActionLog[]
+  notifications      Notification[]     @relation("LeadNotifications")
+  reminders          Reminder[]
+  autoReplyLogs      AutoReplyLog[]
+  attachments        LeadAttachment[]
+  renewalItems       RenewalItem[]      @relation("RenewalItems")
+}
+
+model AIAgentProfile {
+  id          Int     @id @default(autoincrement())
+  name        String  @unique // e.g., "Sales Agent", "Customer Support Agent", "Follow-up Agent"
+  description String? // Optional description
+  isActive    Boolean @default(true)
+  isDefault   Boolean @default(false) // Only one can be default
+
+  // Training document associations (which training docs this agent uses)
+  trainingDocumentIds String? // JSON array of training document IDs this agent should use
+
+  // Response Behavior Settings
+  systemPrompt           String? // Custom system prompt (overrides default)
+  tone                   String  @default("friendly") // professional | friendly | short
+  maxMessageLength       Int     @default(300) // Max characters for first message
+  maxTotalLength         Int     @default(600) // Max characters total
+  maxQuestionsPerMessage Int     @default(2) // Max questions to ask
+
+  // What to say / What not to say
+  allowedPhrases    String? // JSON array of phrases/topics to emphasize
+  prohibitedPhrases String? // JSON array of phrases/topics to avoid
+  customGreeting    String? // Custom greeting template
+  customSignoff     String? // Custom signoff template
+
+  // Timing Controls
+  responseDelayMin      Int     @default(0) // Minimum seconds before replying
+  responseDelayMax      Int     @default(5) // Maximum seconds before replying
+  rateLimitMinutes      Int     @default(2) // Minutes between auto-replies
+  businessHoursStart    String  @default("07:00") // HH:mm format
+  businessHoursEnd      String  @default("21:30") // HH:mm format
+  timezone              String  @default("Asia/Dubai")
+  allowOutsideHours     Boolean @default(false) // Allow replies outside business hours
+  firstMessageImmediate Boolean @default(true) // Reply immediately to first message
+
+  // Response Rules
+  similarityThreshold  Float   @default(0.7) // Training document similarity threshold
+  confidenceThreshold  Int     @default(50) // Minimum confidence to auto-reply
+  escalateToHumanRules String? // JSON array of patterns that trigger human escalation
+  skipAutoReplyRules   String? // JSON array of patterns that skip auto-reply
+
+  // Language Settings
+  defaultLanguage    String  @default("en") // en | ar
+  autoDetectLanguage Boolean @default(true)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  // Relations
+  leads Lead[] // Leads assigned to this agent
+
+  @@index([isActive, isDefault])
+  @@index([name])
+}
+
+model ExpiryItem {
+  id                      Int       @id @default(autoincrement())
+  contact                 Contact   @relation(fields: [contactId], references: [id])
+  contactId               Int
+  lead                    Lead?     @relation("LeadExpiryItems", fields: [leadId], references: [id])
+  leadId                  Int?
+  type                    String // VISA_EXPIRY | EMIRATES_ID_EXPIRY | PASSPORT_EXPIRY | TRADE_LICENSE_EXPIRY | ESTABLISHMENT_CARD_EXPIRY | INSURANCE_EXPIRY | etc.
+  expiryDate              DateTime
+  reminderScheduleDays    String    @default("[90,60,30,7,3,1]") // JSON array as string (PostgreSQL)
+  remindersEnabled        Boolean   @default(true) // Enable/disable reminders for this expiry
+  stopRemindersAfterReply Boolean   @default(true) // Stop reminders after customer replies
+  lastReminderSentAt      DateTime?
+  nextReminderAt          DateTime? // Next reminder due date (computed from reminderScheduleDays)
+  notes                   String? // Optional notes about the expiry
+  assignedUserId          Int?
+  assignedUser            User?     @relation(fields: [assignedUserId], references: [id])
+
+  // Renewal tracking fields
+  renewalStatus       String  @default("NOT_STARTED") // NOT_STARTED | IN_PROGRESS | RENEWED | NOT_RENEWING
+  renewalLeadId       Int? // Link to renewal Lead when they sign again
+  renewalLead         Lead?   @relation("RenewalExpiryLeads", fields: [renewalLeadId], references: [id])
+  lastReminderChannel String? // WHATSAPP | EMAIL | INTERNAL
+  reminderCount       Int     @default(0)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tasks               Task[]
+  automationRunLogs   AutomationRunLog[]
+  originalExpiryLeads Lead[]             @relation("OriginalExpiryLeads")
+
+  @@index([renewalStatus, expiryDate])
+  @@index([renewalLeadId])
+  @@index([leadId, expiryDate])
+}
+
+// Renewal V2: Revenue-first renewal items (RenewalItem model)
+enum RenewalServiceType {
+  TRADE_LICENSE
+  EMIRATES_ID
+  RESIDENCY
+  VISIT_VISA
+  CHANGE_STATUS
+}
+
+enum RenewalItemStatus {
+  UPCOMING
+  ACTION_REQUIRED
+  URGENT
+  EXPIRED
+  CONTACTED
+  QUOTED
+  IN_PROGRESS
+  RENEWED
+  LOST
+}
+
+enum RenewalEventType {
+  CONTACTED
+  TEMPLATE_SENT
+  QUOTED
+  PAID
+  RENEWED
+  LOST
+  NOTE
+  AUTO_RULE_RUN
+}
+
+model RenewalItem {
+  id               Int                @id @default(autoincrement())
+  leadId           Int
+  contactId        Int?
+  serviceType      RenewalServiceType
+  serviceName      String?
+  expiresAt        DateTime
+  status           RenewalItemStatus  @default(UPCOMING)
+  expectedValue    Int? // Expected revenue in AED
+  probability      Int                @default(70) // 0-100 probability of renewal
+  assignedToUserId Int?
+  lastContactedAt  DateTime?
+  nextActionAt     DateTime?
+  lastTemplateName String?
+  notes            String?
+  metadata         Json? // Flexible JSON for additional data
+  createdAt        DateTime           @default(now())
+  updatedAt        DateTime           @updatedAt
+
+  lead       Lead  @relation("RenewalItems", fields: [leadId], references: [id])
+  assignedTo User? @relation("AssignedRenewalItems", fields: [assignedToUserId], references: [id])
+
+  events RenewalEventLog[]
+
+  @@index([expiresAt])
+  @@index([status, expiresAt])
+  @@index([leadId])
+  @@index([assignedToUserId, status, expiresAt])
+}
+
+model RenewalEventLog {
+  id              Int              @id @default(autoincrement())
+  renewalItemId   Int
+  type            RenewalEventType
+  channel         String? // WHATSAPP | EMAIL | PHONE | INTERNAL
+  messageId       Int? // Reference to Message.id if applicable
+  payload         Json? // Flexible JSON for event-specific data
+  createdByUserId Int?
+  createdAt       DateTime         @default(now())
+
+  renewalItem RenewalItem @relation(fields: [renewalItemId], references: [id])
+  createdBy   User?       @relation("CreatedRenewalEvents", fields: [createdByUserId], references: [id])
+
+  @@index([renewalItemId, createdAt])
+}
+
+// Renewal Type Enum (for first-class Renewal model)
+enum RenewalType {
+  TRADE_LICENSE
+  EMIRATES_ID
+  RESIDENCY
+  VISIT_VISA
+}
+
+// Renewal Status Lifecycle Enum (for first-class Renewal model)
+enum RenewalStatus {
+  ACTIVE
+  CONTACTED
+  IN_PROGRESS
+  RENEWED
+  EXPIRED
+  LOST
+}
+
+model Renewal {
+  id              Int           @id @default(autoincrement())
+  lead            Lead          @relation(fields: [leadId], references: [id])
+  leadId          Int
+  type            RenewalType
+  expiryDate      DateTime
+  status          RenewalStatus @default(ACTIVE)
+  estimatedValue  Int? // Estimated renewal value in AED
+  assignedUserId  Int?
+  assignedUser    User?         @relation("AssignedRenewals", fields: [assignedUserId], references: [id])
+  lastContactedAt DateTime?
+  nextFollowUpAt  DateTime?
+  notes           String?
+  createdAt       DateTime      @default(now())
+  updatedAt       DateTime      @updatedAt
+
+  notifications  RenewalNotification[]
+  Contact        Contact?              @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  Conversation   Conversation?         @relation(fields: [conversationId], references: [id])
+  conversationId Int?
+
+  @@index([leadId, expiryDate])
+  @@index([status, expiryDate])
+  @@index([assignedUserId, status, expiryDate])
+  @@index([expiryDate])
+}
+
+model RenewalNotification {
+  id             Int      @id @default(autoincrement())
+  renewal        Renewal  @relation(fields: [renewalId], references: [id], onDelete: Cascade)
+  renewalId      Int
+  channel        String   @default("whatsapp") // whatsapp | facebook
+  stage          Int // Reminder stage: 1, 2, or 3
+  templateName   String // Template name used (e.g., "renewal_notification_r1")
+  reminderDate   DateTime // Date when reminder was sent (YYYY-MM-DD)
+  idempotencyKey String   @unique // Format: renewal:{channel}:{renewalId}:stage:{stage}
+  sentAt         DateTime @default(now())
+  status         String   @default("SENT") // SENT | FAILED
+  error          String?
+  messageId      String? // WhatsApp/Facebook message ID if successful
+  createdAt      DateTime @default(now())
+
+  @@index([renewalId, reminderDate])
+  @@index([idempotencyKey])
+  @@index([channel, renewalId, stage])
+}
+
+model Conversation {
+  id                            Int       @id @default(autoincrement())
+  contact                       Contact   @relation(fields: [contactId], references: [id])
+  contactId                     Int
+  lead                          Lead?     @relation(fields: [leadId], references: [id])
+  leadId                        Int?
+  channel                       String    @default("whatsapp") // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+  externalId                    String? // Provider conversation/thread ID (generic, works for all channels)
+  externalThreadId              String? // Legacy field - kept for backward compatibility
+  waConversationId              String? // WhatsApp-specific conversation ID from Meta (legacy)
+  waUserWaId                    String? // WhatsApp user ID (phone/waid)
+  status                        String    @default("open") // open | closed
+  lastMessageAt                 DateTime  @default(now())
+  lastInboundAt                 DateTime? // Last inbound message timestamp
+  lastOutboundAt                DateTime? // Last outbound message timestamp
+  needsReplySince               DateTime? // When conversation started needing reply
+  slaBreachAt                   DateTime? // When SLA was breached
+  priorityScore                 Int       @default(0) // Computed priority (0-100)
+  assignedUserId                Int?
+  assignedUser                  User?     @relation(fields: [assignedUserId], references: [id])
+  unreadCount                   Int       @default(0)
+  lockedService                 String? // Service type locked for this conversation (visit_visa, freelance_visa, etc.)
+  ruleEngineMemory              String? // JSON: Rule engine conversation memory (name, service, nationality, etc.)
+  // Conversation Flow State Machine (persisted)
+  flowKey                       String? // e.g., "family_visa", "freelance_visa", "business_setup"
+  flowStep                      String? // e.g., "WAIT_SPONSOR_VISA_TYPE", "WAIT_FAMILY_LOCATION", "PRICING"
+  lastQuestionKey               String? // e.g., "SPONSOR_VISA_TYPE", "FAMILY_LOCATION" - prevents asking same question
+  lastQuestionAt                DateTime? // When we last asked a question
+  collectedData                 String? // JSON: Collected data (sponsorVisaType, familyLocation, dependentsCount, etc.)
+  lastAutoReplyKey              String? // PROBLEM D FIX: Hash of (ruleEngineVersion + leadId/contactId + lastInboundExternalId + nextQuestionKey) for dedupe
+  aiStateJson                   String? // JSON: Reply Engine FSM state (serviceKey, stage, collected, askedQuestionKeys, etc.)
+  // Fail-proof dedupe and state machine fields
+  stateVersion                  Int       @default(0) // Optimistic concurrency control
+  lastAssistantMessageAt        DateTime? // Last AI-generated message timestamp
+  qualificationStage            String? // 'GREETING' | 'COLLECTING_NAME' | 'COLLECTING_SERVICE' | 'COLLECTING_DETAILS' | 'READY_FOR_QUOTE'
+  questionsAskedCount           Int       @default(0) // Track total questions asked (max 5 for business setup)
+  knownFields                   String? // JSON: { name, service, nationality, expiry, businessActivity, etc. }
+  language                      String? // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.) for multilingual support
+  aiState                       String? // Conversation state for AI gating: WAITING_FOR_EXIT_CONFIRMATION, WAITING_FOR_PASSPORT, etc.
+  aiLockUntil                   DateTime? // Per-conversation lock expiration timestamp (prevents concurrent processing)
+  lastAiOutboundAt              DateTime? // Last AI auto-reply timestamp (for cooldown/throttling)
+  lastProcessedInboundMessageId String? // Provider message ID of last processed inbound message (for idempotency)
+  deletedAt                     DateTime? // Soft delete timestamp
+  createdAt                     DateTime  @default(now())
+  updatedAt                     DateTime  @updatedAt
+
+  messages              Message[]
+  communicationLogs     CommunicationLog[]
+  aiDrafts              AIDraft[]
+  attachments           LeadAttachment[]
+  aiActionLogs          AIActionLog[]
+  statusEvents          MessageStatusEvent[]
+  tasks                 Task[]                 @relation("ConversationTasks")
+  notifications         Notification[]
+  autoReplyLogs         AutoReplyLog[]
+  inboundMessageDedups  InboundMessageDedup[]
+  outboundMessageLogs   OutboundMessageLog[]
+  replyEngineLogs       ReplyEngineLog[]
+  outboundJobs          OutboundJob[]
+  aiReplyDedups         AiReplyDedup[]
+  outboundMessageDedups OutboundMessageDedup[]
+  renewals              Renewal[]
+  // Note: Partial unique index for externalThreadId will be added via migration
+
+  // C) CONVERSATION UNIQUENESS: One conversation per (contactId, channel, externalThreadId)
+  // PostgreSQL handles NULL in unique constraints: multiple NULLs are allowed
+  // So: (contactId=1, channel='whatsapp', externalThreadId=NULL) can exist multiple times
+  // But: (contactId=1, channel='whatsapp', externalThreadId='thread123') must be unique
+  // For null externalThreadId, we use a fallback key in upsertConversation()
+  @@unique([contactId, channel])
+  @@index([channel, lastMessageAt])
+  @@index([contactId])
+  @@index([assignedUserId, lastMessageAt])
+  @@index([externalId])
+  @@index([channel, contactId, externalThreadId]) // For upsert logic with externalThreadId
+}
+
+model Message {
+  id                Int          @id @default(autoincrement())
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  conversationId    Int
+  lead              Lead?        @relation(fields: [leadId], references: [id])
+  leadId            Int?
+  contact           Contact?     @relation(fields: [contactId], references: [id])
+  contactId         Int?
+  direction         String // INBOUND | OUTBOUND (stored as "IN" or "OUT" in legacy data, new code uses "INBOUND"/"OUTBOUND")
+  channel           String // WHATSAPP | EMAIL | INSTAGRAM | FACEBOOK | WEBCHAT | INTERNAL_NOTE
+  type              String       @default("text") // text | image | document | audio | video | location | etc
+  body              String? // Text content (nullable for media-only messages)
+  mediaUrl          String? // DEPRECATED: Legacy field - use providerMediaId instead. May contain temporary download URLs.
+  mediaMimeType     String? // MIME type for media (e.g., "image/jpeg", "audio/ogg", "application/pdf")
+  mediaFilename     String? // Filename for documents (e.g., "invoice.pdf")
+  mediaSize         Int? // Media file size in bytes
+  mediaSha256       String? // SHA256 hash of media file (optional, for verification)
+  providerMediaId   String? // REQUIRED FOR WHATSAPP: Meta Graph API media ID (e.g., "882580977660655") - used to fetch download URL on demand
+  providerMessageId String? // External provider message ID (e.g., WhatsApp message ID) - used for deduplication
+  status            String       @default("RECEIVED") // RECEIVED | SENT | DELIVERED | READ | FAILED | PENDING
+  payload           String? // JSON: Provider-specific payload/metadata (stored as string in PostgreSQL)
+  meta              String? // Legacy field - JSON for provider IDs and metadata (kept for backward compatibility)
+  rawPayload        String? // JSON: Full webhook payload for debugging
+  sentAt            DateTime? // When message was sent (for outbound)
+  deliveredAt       DateTime? // When message was delivered (populated from status events)
+  readAt            DateTime? // When message was read (populated from status events)
+  createdByUserId   Int?
+  createdByUser     User?        @relation(fields: [createdByUserId], references: [id])
+  createdAt         DateTime     @default(now())
+
+  statusEvents               MessageStatusEvent[]
+  autoReplyLogs              AutoReplyLog[]
+  replyEngineLogs            ReplyEngineLog[]
+  replyEngineLogsAsInbound   ReplyEngineLog[]     @relation("ReplyEngineLogInboundMessage")
+  attachments                LeadAttachment[]
+  outboundJobs               OutboundJob[]        @relation("OutboundJobInboundMessage")
+  aiReplyDedupInboundMessage AiReplyDedup[]       @relation("AiReplyDedupInboundMessage")
+
+  @@unique([channel, providerMessageId]) // Prevent duplicate messages when webhooks retry (composite unique)
+  @@index([conversationId, createdAt])
+  @@index([leadId])
+  @@index([contactId])
+  @@index([providerMessageId])
+  @@index([status, createdAt])
+}
+
+// Keep ChatMessage for backward compatibility (can be deprecated later)
+model ChatMessage {
+  id          Int       @id @default(autoincrement())
+  lead        Lead?     @relation(fields: [leadId], references: [id])
+  leadId      Int?
+  contact     Contact?  @relation(fields: [contactId], references: [id])
+  contactId   Int?
+  channel     String // 'whatsapp' | 'email' | 'facebook' | 'instagram' | 'internal'
+  direction   String // 'inbound' | 'outbound'
+  message     String
+  senderName  String? // For inbound messages
+  senderPhone String? // For WhatsApp
+  senderEmail String? // For email
+  attachments String? // JSON array of attachment URLs
+  metadata    String? // JSON for additional data
+  readAt      DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model AutomationRule {
+  id       Int     @id @default(autoincrement())
+  name     String
+  isActive Boolean @default(true)
+  enabled  Boolean @default(true)
+  key      String? @unique
+  schedule String? @default("daily")
+  template String?
+
+  // Legacy fields
+  type              String? // 'expiry_reminder' | 'followup_due'
+  channel           String? // 'whatsapp' | 'email'
+  daysBeforeExpiry  Int?
+  followupAfterDays Int?
+
+  // New fields per spec
+  trigger    String? // NEW_LEAD | FOLLOWUP_DUE | FOLLOWUP_OVERDUE | EXPIRY_WINDOW | INBOUND_MESSAGE | NO_REPLY_SLA
+  conditions String? // JSON
+  actions    String? // JSON
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  sentAutomations SentAutomation[]
+  runLogs         AutomationRunLog[]
+}
+
+model AutomationRunLog {
+  id             Int             @id @default(autoincrement())
+  rule           AutomationRule? @relation(fields: [ruleId], references: [id])
+  ruleId         Int?
+  ruleKey        String?
+  lead           Lead?           @relation(fields: [leadId], references: [id])
+  leadId         Int?
+  contact        Contact?        @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  expiryItem     ExpiryItem?     @relation(fields: [expiryItemId], references: [id])
+  expiryItemId   Int? // For renewal automation logs
+  user           User?           @relation(fields: [userId], references: [id])
+  userId         Int?
+  status         String? // 'success' | 'failed' | 'skipped' | 'SUCCESS' | 'FAILED' | 'SKIPPED'
+  reason         String?
+  message        String?
+  details        String? // JSON
+  idempotencyKey String?         @unique
+  dateKey        String?
+  actionKey      String?
+  ranAt          DateTime        @default(now())
+  createdAt      DateTime        @default(now())
+
+  @@unique([dateKey, ruleId, leadId, actionKey])
+  @@index([ruleKey, leadId, createdAt])
+  @@index([ruleKey, expiryItemId, createdAt])
+  @@index([status, createdAt])
+  @@index([expiryItemId])
+}
+
+model ExternalEventLog {
+  id         Int      @id @default(autoincrement())
+  provider   String // 'meta' | 'whatsapp' | 'website'
+  externalId String
+  payload    String? // JSON
+  receivedAt DateTime @default(now())
+
+  @@unique([provider, externalId])
+  @@index([provider, receivedAt])
+}
+
+model SentAutomation {
+  id        Int            @id @default(autoincrement())
+  lead      Lead           @relation(fields: [leadId], references: [id])
+  leadId    Int
+  rule      AutomationRule @relation(fields: [ruleId], references: [id])
+  ruleId    Int
+  sentAt    DateTime       @default(now())
+  createdAt DateTime       @default(now())
+}
+
+model CommunicationLog {
+  id                Int           @id @default(autoincrement())
+  lead              Lead          @relation(fields: [leadId], references: [id])
+  leadId            Int
+  conversation      Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId    Int?
+  channel           String // 'whatsapp' | 'email' | 'phone' | 'internal'
+  direction         String // 'outbound' | 'inbound'
+  messageSnippet    String?
+  body              String?
+  externalId        String?       @unique
+  from              String?
+  to                String?
+  meta              String? // JSON
+  whatsappMessageId String?       @unique
+  deliveryStatus    String?
+  deliveredAt       DateTime?
+  readAt            DateTime?
+  failedAt          DateTime?
+  failureReason     String?
+  isRead            Boolean       @default(false)
+  createdAt         DateTime      @default(now())
+
+  @@index([conversationId, createdAt])
+}
+
+model Task {
+  id              Int            @id @default(autoincrement())
+  lead            Lead           @relation(fields: [leadId], references: [id])
+  leadId          Int
+  conversation    Conversation?  @relation("ConversationTasks", fields: [conversationId], references: [id])
+  conversationId  Int?
+  expiryItem      ExpiryItem?    @relation(fields: [expiryItemId], references: [id])
+  expiryItemId    Int? // Task may be tied to a specific expiry
+  title           String
+  description     String? // Task description/details
+  type            String // CALL | WHATSAPP | EMAIL | MEETING | DOCUMENT_REQUEST | REPLY_WHATSAPP | ESCALATION | RENEWAL_OUTREACH | RENEWAL_FOLLOWUP | RENEWAL_INTERNAL | OTHER
+  priority        String         @default("MEDIUM") // LOW | MEDIUM | HIGH
+  dueAt           DateTime? // Due date + time
+  status          String         @default("OPEN") // OPEN | DONE | SNOOZED
+  doneAt          DateTime?
+  assignedUserId  Int? // Legacy single assignee (keep for backward compatibility)
+  assignedUser    User?          @relation("AssignedTasks", fields: [assignedUserId], references: [id])
+  assignees       TaskAssignee[] // Many-to-many assignees
+  createdByUserId Int?
+  createdByUser   User?          @relation("CreatedTasks", fields: [createdByUserId], references: [id])
+  aiSuggested     Boolean        @default(false)
+  idempotencyKey  String?        @unique // For preventing duplicate auto-created tasks
+  lastNudgedAt    DateTime? // When task was last nudged (for rate limiting)
+  notifications   Notification[] @relation("TaskNotifications")
+  createdAt       DateTime       @default(now())
+  updatedAt       DateTime       @updatedAt
+
+  @@index([expiryItemId])
+  @@index([status, dueAt])
+  @@index([priority, dueAt])
+}
+
+model TaskAssignee {
+  id         Int       @id @default(autoincrement())
+  task       Task      @relation(fields: [taskId], references: [id], onDelete: Cascade)
+  taskId     Int
+  user       User      @relation("TaskAssignees", fields: [userId], references: [id])
+  userId     Int
+  assignedAt DateTime  @default(now())
+  notifiedAt DateTime? // When assignee was last notified about this task
+
+  @@unique([taskId, userId])
+  @@index([userId, taskId])
+  @@index([taskId])
+}
+
+model Document {
+  id               Int       @id @default(autoincrement())
+  lead             Lead      @relation(fields: [leadId], references: [id])
+  leadId           Int
+  fileName         String
+  fileType         String? // MIME type
+  fileSize         Int? // Size in bytes
+  storageProvider  String    @default("local") // local | s3 | r2
+  storagePath      String? // Server path or S3 key
+  url              String? // Public URL if available
+  type             String? // PASSPORT | EID | VISA | PHOTO | TRADE_LICENSE | ESTABLISHMENT_CARD | TENANCY_CONTRACT | INSURANCE | OTHER
+  category         String? // Legacy field - passport | eid | visa | photo | trade_license | other (kept for backward compatibility)
+  status           String    @default("MISSING") // MISSING | RECEIVED | APPROVED | REJECTED
+  expiryDate       DateTime? // Some documents expire
+  notes            String? // Optional notes about the document
+  uploadedByUserId Int?
+  uploadedByUser   User?     @relation("UploadedDocuments", fields: [uploadedByUserId], references: [id])
+  uploadedAt       DateTime? // When document was uploaded (if status = RECEIVED)
+  createdAt        DateTime  @default(now())
+  updatedAt        DateTime  @updatedAt
+}
+
+// PHASE 5: LeadAttachment for general file attachments (images, audio, documents) linked to leads/conversations/messages
+model LeadAttachment {
+  id              Int           @id @default(autoincrement())
+  lead            Lead          @relation(fields: [leadId], references: [id])
+  leadId          Int
+  conversation    Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId  Int?
+  message         Message?      @relation(fields: [messageId], references: [id])
+  messageId       Int?
+  type            String // image | document | audio | video
+  url             String // Public URL or storage path
+  mimeType        String? // MIME type (e.g., image/jpeg, application/pdf, audio/mpeg)
+  filename        String // Original filename
+  sizeBytes       Int? // File size in bytes
+  thumbnailUrl    String? // Thumbnail URL for images/videos
+  durationSec     Int? // Duration in seconds (for audio/video)
+  storageProvider String        @default("local") // local | s3 | r2 | meta
+  storagePath     String? // Server path or storage key
+  createdById     Int?
+  createdBy       User?         @relation("CreatedAttachments", fields: [createdById], references: [id])
+  createdAt       DateTime      @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([conversationId])
+  @@index([messageId])
+  @@index([type])
+}
+
+model ChecklistItem {
+  id          Int       @id @default(autoincrement())
+  lead        Lead      @relation(fields: [leadId], references: [id])
+  leadId      Int
+  label       String
+  required    Boolean   @default(true)
+  completed   Boolean   @default(false)
+  completedAt DateTime?
+  createdAt   DateTime  @default(now())
+}
+
+model ServiceDocumentRequirement {
+  id           Int      @id @default(autoincrement())
+  serviceType  String // Match serviceTypeEnum values (e.g., MAINLAND_BUSINESS_SETUP, FAMILY_VISA)
+  documentType String // PASSPORT | EID | PHOTO | EJARI | COMPANY_LICENSE | BANK_STATEMENT | OTHER
+  label        String // Display name (e.g., "Passport Copy (All Pages)")
+  isMandatory  Boolean  @default(true)
+  order        Int      @default(0) // Display order
+  description  String? // Optional description/instructions
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@index([serviceType, order])
+}
+
+model Integration {
+  id              Int       @id @default(autoincrement())
+  name            String    @unique // 'whatsapp', 'email', 'facebook', 'instagram', 'openai'
+  provider        String // e.g., '360dialog', 'twilio', 'gmail', 'meta', 'openai'
+  isEnabled       Boolean   @default(false)
+  apiKey          String? // Encrypted/stored securely
+  apiSecret       String? // For OAuth flows
+  webhookUrl      String? // For receiving webhooks
+  accessToken     String? // For OAuth tokens
+  refreshToken    String? // For token refresh
+  config          String? // JSON config for provider-specific settings
+  lastTestedAt    DateTime?
+  lastTestStatus  String? // 'success' | 'failed' | null
+  lastTestMessage String? // Last test error or success message
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+}
+
+model AIDraft {
+  id              Int          @id @default(autoincrement())
+  conversation    Conversation @relation(fields: [conversationId], references: [id])
+  conversationId  Int
+  lead            Lead?        @relation(fields: [leadId], references: [id])
+  leadId          Int?
+  contact         Contact?     @relation(fields: [contactId], references: [id])
+  contactId       Int?
+  tone            String
+  language        String       @default("en")
+  promptVersion   String       @default("v1")
+  inputSummary    String?
+  draftText       String
+  createdByUserId Int?
+  createdByUser   User?        @relation(fields: [createdByUserId], references: [id])
+  createdAt       DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([leadId])
+  @@index([contactId])
+}
+
+model AIActionLog {
+  id             Int          @id @default(autoincrement())
+  kind           String
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId Int
+  lead           Lead?        @relation(fields: [leadId], references: [id])
+  leadId         Int?
+  contact        Contact?     @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  ok             Boolean      @default(true)
+  error          String?
+  meta           String? // JSON
+  createdAt      DateTime     @default(now())
+
+  @@index([conversationId, createdAt])
+  @@index([kind, createdAt])
+}
+
+model MessageStatusEvent {
+  id             Int          @id @default(autoincrement())
+  message        Message      @relation(fields: [messageId], references: [id])
+  messageId      Int
+  conversation   Conversation @relation(fields: [conversationId], references: [id])
+  conversationId Int
+  status         String // RECEIVED | SENT | DELIVERED | READ | FAILED
+  providerStatus String? // Raw status from provider (e.g., "sent", "delivered", "read")
+  errorMessage   String? // Error details if status is FAILED
+  rawPayload     String? // JSON: Full webhook payload for this status update
+  receivedAt     DateTime     @default(now())
+
+  @@index([messageId, receivedAt])
+  @@index([conversationId, receivedAt])
+  @@index([status, receivedAt])
+}
+
+model AITrainingDocument {
+  id              Int      @id @default(autoincrement())
+  title           String
+  content         String // Long text content for AI training
+  type            String // guidance | examples | policies | scripts
+  language        String? // 'en' | 'ar' | null (null = all languages)
+  stage           String? // 'GREETING' | 'QUALIFICATION' | 'PRICING' | 'OBJECTIONS' | 'CLOSING' | 'POLICIES' | 'GENERAL' | null (null = all stages)
+  serviceTypeId   Int? // Optional: link to specific service type
+  serviceKey      String? // Optional: service key (e.g., 'FREELANCE_VISA', 'BUSINESS_SETUP') for filtering
+  createdByUserId Int
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  createdBy User @relation(fields: [createdByUserId], references: [id])
+
+  @@index([type])
+  @@index([createdAt])
+  @@index([language, stage])
+  @@index([serviceKey])
+  @@index([serviceTypeId])
+}
+
+model StaffSettings {
+  id                     Int      @id @default(autoincrement())
+  user                   User     @relation(fields: [userId], references: [id])
+  userId                 Int      @unique
+  personalWhatsappNumber String? // Personal WhatsApp number for reminders
+  remindersEnabled       Boolean  @default(true) // Enable/disable reminders
+  timezone               String   @default("Asia/Dubai") // User timezone
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
+
+  @@index([userId])
+}
+
+model AutomationJob {
+  id          String    @id @default(cuid())
+  type        String // 'inbound_message' | 'scheduled_autopilot' | 'followup_due' | 'expiry_reminder'
+  data        String // Job payload (JSON stored as string in PostgreSQL)
+  status      String    @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  priority    Int       @default(0)
+  error       String?
+  retryCount  Int       @default(0)
+  maxRetries  Int       @default(3)
+  createdAt   DateTime  @default(now())
+  startedAt   DateTime?
+  completedAt DateTime?
+
+  @@index([status, priority, createdAt])
+  @@map("automation_jobs")
+}
+
+model Notification {
+  id             Int           @id @default(autoincrement())
+  type           String // 'ai_untrained' | 'unreplied_message' | 'task_assigned' | 'task_due_soon' | 'task_overdue' | 'task_completed' | 'system'
+  title          String
+  message        String
+  lead           Lead?         @relation("LeadNotifications", fields: [leadId], references: [id])
+  leadId         Int?
+  task           Task?         @relation("TaskNotifications", fields: [taskId], references: [id])
+  taskId         Int?
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId Int?
+  userId         Int? // Target user for this notification (if null, applies to all users)
+  isRead         Boolean       @default(false)
+  readAt         DateTime?
+  snoozedUntil   DateTime? // When to show notification again (for snooze feature)
+  createdAt      DateTime      @default(now())
+
+  @@index([isRead, createdAt])
+  @@index([leadId])
+  @@index([taskId])
+  @@index([conversationId])
+  @@index([type, createdAt])
+  @@index([userId, isRead])
+  @@index([snoozedUntil])
+}
+
+model AutoReplyLog {
+  id             Int           @id @default(autoincrement())
+  lead           Lead          @relation(fields: [leadId], references: [id])
+  leadId         Int
+  conversation   Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId Int?
+  contact        Contact?      @relation(fields: [contactId], references: [id])
+  contactId      Int?
+  message        Message?      @relation(fields: [messageId], references: [id])
+  messageId      Int?
+  channel        String // 'whatsapp' | 'email' | etc.
+
+  // Inbound message details
+  inboundParsed String? // JSON: Parsed inbound message details
+  messageText   String? // Inbound message text (truncated)
+
+  // Decision tracking
+  autoReplyEnabled Boolean @default(true)
+  decision         String // 'replied' | 'notified_human' | 'skipped'
+  decisionReason   String? // Exact reason for decision
+  skippedReason    String? // If skipped, why
+
+  // Retrieval results
+  retrievalDocsCount  Int? // Number of documents retrieved
+  retrievalSimilarity Float? // Highest similarity score
+  retrievalReason     String? // Retrieval result reason
+  hasUsefulContext    Boolean @default(false)
+
+  // Reply details
+  replySent    Boolean @default(false)
+  replyText    String? // Reply text sent (truncated)
+  replyStatus  String? // 'sent' | 'failed' | 'pending'
+  replyError   String? // Error message if send failed
+  usedFallback Boolean @default(false) // Whether fallback reply was used
+
+  // Human task
+  humanTaskCreated Boolean @default(false)
+  humanTaskReason  String? // Why human task was created
+
+  createdAt DateTime @default(now())
+
+  @@index([leadId, createdAt])
+  @@index([conversationId, createdAt])
+  @@index([contactId, createdAt])
+  @@index([decision, createdAt])
+  @@index([channel, createdAt])
+}
+
+// Inbound message deduplication (hard idempotency)
+model InboundMessageDedup {
+  id                Int           @id @default(autoincrement())
+  provider          String // 'whatsapp' | 'email' | etc.
+  providerMessageId String        @unique // External provider message ID (e.g., WhatsApp message ID)
+  conversation      Conversation? @relation(fields: [conversationId], references: [id])
+  conversationId    Int?
+  receivedAt        DateTime      @default(now())
+  processedAt       DateTime? // When processing completed
+  processingStatus  String        @default("PENDING") // PENDING | PROCESSING | COMPLETED | FAILED
+  error             String? // Error message if processing failed
+
+  @@index([provider, providerMessageId])
+  @@index([conversationId, receivedAt])
+  @@index([processingStatus, receivedAt])
+}
+
+// Outbound message deduplication (hard idempotency)
+model OutboundMessageLog {
+  id                       Int          @id @default(autoincrement())
+  provider                 String // 'whatsapp' | 'email' | etc.
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  conversationId           Int
+  triggerProviderMessageId String? // The inbound message ID that triggered this outbound
+  outboundTextHash         String // SHA256 hash of outbound message text for deduplication
+  outboundDedupeKey        String?      @unique // Hard idempotency key: hash(conversationId + replyType + normalizedQuestionKey + dayBucket OR inboundMessageId)
+  status                   String       @default("PENDING") // PENDING | SENT | FAILED
+  error                    String? // Error message if status is FAILED
+  outboundMessageId        Int? // Reference to Message.id if created
+  providerMessageId        String? // WhatsApp/email provider message ID
+  flowStep                 String? // Conversation flow step when sent
+  lastQuestionKey          String? // Last question key when sent
+  replyType                String? // 'greeting' | 'question' | 'answer' | 'closing'
+  dayBucket                String? // YYYY-MM-DD for day-based deduplication
+  createdAt                DateTime     @default(now())
+  sentAt                   DateTime? // When message was actually sent
+  failedAt                 DateTime? // When send failed
+
+  @@unique([provider, triggerProviderMessageId]) // One outbound per inbound message
+  @@index([conversationId, createdAt])
+  @@index([triggerProviderMessageId])
+  @@index([flowStep, createdAt])
+  @@index([status, createdAt])
+  @@index([outboundDedupeKey])
+}
+
+model ReplyEngineLog {
+  id               Int          @id @default(autoincrement())
+  conversation     Conversation @relation(fields: [conversationId], references: [id])
+  conversationId   Int
+  inboundMessage   Message?     @relation("ReplyEngineLogInboundMessage", fields: [inboundMessageId], references: [id])
+  inboundMessageId Int
+  action           String // 'ASK' | 'INFO' | 'OFFER' | 'HANDOVER' | 'STOP'
+  templateKey      String
+  questionKey      String?
+  reason           String
+  extractedFields  String? // JSON: Extracted fields from inbound message
+  replyKey         String       @unique // SHA256 hash for idempotency
+  replyText        String? // Final reply text (truncated)
+  createdAt        DateTime     @default(now())
+  Message          Message?     @relation(fields: [messageId], references: [id])
+  messageId        Int?
+
+  @@index([conversationId, createdAt])
+  @@index([replyKey])
+  @@index([action, createdAt])
+}
+
+// Outbound job queue for async orchestration (webhook returns fast, job runner processes)
+model OutboundJob {
+  id                       Int          @id @default(autoincrement())
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  conversationId           Int
+  inboundMessage           Message?     @relation("OutboundJobInboundMessage", fields: [inboundMessageId], references: [id])
+  inboundMessageId         Int
+  inboundProviderMessageId String? // WhatsApp message ID for idempotency
+  idempotencyKey           String?      @unique // Unified idempotency key: hash(conversationId + inboundProviderMessageId + channel + purpose=auto_reply)
+  status                   String       @default("PENDING") // PENDING | GENERATING | READY_TO_SEND | SENT | FAILED
+  runAt                    DateTime     @default(now()) // When to run (for retries with backoff)
+  attempts                 Int          @default(0) // Number of attempts
+  maxAttempts              Int          @default(3) // Max attempts before marking failed
+  error                    String? // Error message if failed
+  errorLog                 String? // Detailed error log (Meta/AI error details)
+  content                  String? // AI-generated reply content (stored before sending)
+  requestId                String? // Request ID for tracing
+  createdAt                DateTime     @default(now())
+  startedAt                DateTime? // When job started processing
+  completedAt              DateTime? // When job completed
+  lastAttemptAt            DateTime? // Last attempt timestamp (updated on every retry)
+  claimedAt                DateTime? // Timestamp when job was claimed by a worker (for optimistic locking)
+
+  @@unique([inboundProviderMessageId]) // Prevent duplicate jobs for same inbound message
+  @@index([status, runAt]) // For job runner to pick queued jobs
+  @@index([conversationId, createdAt])
+  @@index([requestId])
+  @@index([claimedAt]) // For stale job recovery
+  @@index([status, claimedAt]) // For finding stale jobs
+  @@index([idempotencyKey]) // For idempotency lookups
+}
+
+// AI Reply Deduplication (hard idempotency for AI outbound messages)
+model AiReplyDedup {
+  id                Int          @id @default(autoincrement())
+  conversation      Conversation @relation(fields: [conversationId], references: [id])
+  conversationId    Int
+  inboundMessage    Message?     @relation("AiReplyDedupInboundMessage", fields: [inboundMessageId], references: [id])
+  inboundMessageId  Int
+  aiActionType      String       @default("auto_reply") // 'auto_reply' | 'question' | 'handoff' | etc.
+  idempotencyKey    String       @unique // Format: wa_ai:{conversationId}:{inboundMessageId}:{aiActionType}
+  status            String       @default("PENDING") // PENDING | SENT | FAILED
+  error             String? // Error message if failed
+  outboundMessageId Int? // Reference to Message.id if created
+  providerMessageId String? // WhatsApp provider message ID
+  createdAt         DateTime     @default(now())
+  sentAt            DateTime? // When message was actually sent
+  failedAt          DateTime? // When send failed
+
+  @@index([conversationId, createdAt])
+  @@index([inboundMessageId])
+  @@index([idempotencyKey])
+  @@index([status, createdAt])
+}
+
+// Outbound Message Deduplication (for auto-replies using inboundProviderMessageId)
+model OutboundMessageDedup {
+  id                       Int          @id @default(autoincrement())
+  conversation             Conversation @relation(fields: [conversationId], references: [id])
+  conversationId           Int
+  inboundProviderMessageId String? // External WhatsApp message ID that triggered this auto-reply
+  dedupeKey                String       @unique // Format: auto:{conversationId}:{inboundProviderMessageId}
+  status                   String       @default("PENDING") // PENDING | SENT | FAILED
+  createdAt                DateTime     @default(now())
+  sentAt                   DateTime? // When message was actually sent
+  providerMessageId        String? // WhatsApp provider message ID of the sent outbound message
+  lastError                String? // Last error message if failed
+
+  @@index([conversationId, createdAt])
+  @@index([inboundProviderMessageId])
+  @@index([dedupeKey])
+  @@index([status, createdAt])
+}
+
+// Meta Integration Tables
+model MetaConnection {
+  id                Int       @id @default(autoincrement())
+  workspaceId       Int?      @default(1) @map("workspace_id")
+  provider          String    @default("meta")
+  metaUserId        String?   @map("meta_user_id")
+  pageId            String    @map("page_id")
+  pageName           String?  @map("page_name")
+  pageAccessToken    String   @map("page_access_token") // Encrypted
+  igBusinessId       String?  @map("ig_business_id")
+  igUsername         String?  @map("ig_username")
+  scopes             String? // JSON array
+  triggerSubscribed  Boolean   @default(false) @map("trigger_subscribed")
+  status             String   @default("connected") // 'connected' | 'error'
+  lastError          String?  @map("last_error")
+  createdAt          DateTime @default(now()) @map("created_at")
+  updatedAt          DateTime @updatedAt @map("updated_at")
+
+  webhookEvents      MetaWebhookEvent[]
+
+  @@unique([workspaceId, pageId])
+  @@index([workspaceId])
+  @@index([pageId])
+  @@index([status])
+  @@index([provider])
+  @@index([metaUserId])
+  @@map("meta_connections")
+}
+
+model MetaWebhookEvent {
+  id           Int            @id @default(autoincrement())
+  connectionId Int?           @map("connection_id")
+  connection   MetaConnection? @relation(fields: [connectionId], references: [id], onDelete: SetNull)
+  workspaceId  Int?           @default(1) @map("workspace_id")
+  pageId       String?        @map("page_id")
+  eventType    String         @map("event_type")
+  payload      String // JSON
+  receivedAt   DateTime       @default(now()) @map("received_at")
+
+  @@index([connectionId])
+  @@index([workspaceId])
+  @@index([pageId])
+  @@index([eventType])
+  @@index([receivedAt])
+  @@map("meta_webhook_events")
+}

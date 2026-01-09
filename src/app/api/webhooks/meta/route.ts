@@ -36,9 +36,25 @@ export async function GET(req: NextRequest) {
     // STEP 1: Healthcheck mode - no hub params
     // This allows the app UI to test if the webhook endpoint is reachable
     if (!mode && !token && !challenge) {
-      console.log('✅ [META-WEBHOOK] Healthcheck request (no hub params)')
+      const userAgent = req.headers.get('user-agent') || 'unknown'
+      const isMetaRequest = userAgent.includes('Meta') || userAgent.includes('facebookexternalhit')
+      const source = isMetaRequest ? 'Meta' : 'Healthcheck'
+      
+      console.log(`✅ [META-WEBHOOK] Healthcheck request (no hub params)`, {
+        source,
+        userAgent,
+        ip: req.headers.get('x-forwarded-for') || req.headers.get('x-real-ip') || 'unknown',
+        timestamp: new Date().toISOString(),
+      })
+      
       return NextResponse.json(
-        { ok: true, mode: 'healthcheck' },
+        { 
+          ok: true, 
+          mode: 'healthcheck',
+          message: 'Webhook endpoint is accessible',
+          source,
+          timestamp: new Date().toISOString(),
+        },
         { status: 200 }
       )
     }

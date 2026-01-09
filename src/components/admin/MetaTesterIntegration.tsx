@@ -302,30 +302,52 @@ export function MetaTesterIntegration({
     }
   }
 
+  const [testingWebhook, setTestingWebhook] = useState(false)
+  const [webhookTestResults, setWebhookTestResults] = useState<any>(null)
+
   const handleTestWebhook = async () => {
-    // Healthcheck: Call webhook endpoint without hub params to verify it's reachable
-    // This uses the healthcheck mode which returns 200 JSON { ok: true, mode: "healthcheck" }
+    setTestingWebhook(true)
+    setError(null)
+    setSuccess(null)
+    setWebhookTestResults(null)
+
     try {
-      const res = await fetch('/api/webhooks/meta', {
-        method: 'GET',
-      })
-      
-      if (res.status === 200) {
-        const data = await res.json()
-        if (data.ok && data.mode === 'healthcheck') {
-          setSuccess('✅ Webhook endpoint is reachable and healthy')
-          setError(null)
+      // First, get comprehensive diagnostic info
+      const testRes = await fetch('/api/integrations/meta/test-webhook-url')
+      if (testRes.ok) {
+        const testData = await testRes.json()
+        setWebhookTestResults(testData)
+        
+        if (testData.webhookAccessible) {
+          setSuccess('✅ Webhook URL is accessible and responding correctly')
         } else {
-          setSuccess('✅ Webhook endpoint is reachable')
-          setError(null)
+          setError(`⚠️ Webhook URL is not accessible: ${testData.webhookError || 'Unknown error'}`)
         }
       } else {
-        setError(`Webhook endpoint returned status ${res.status}`)
-        setSuccess(null)
+        // Fallback: direct healthcheck
+        const res = await fetch('/api/webhooks/meta', {
+          method: 'GET',
+        })
+        
+        if (res.status === 200) {
+          const data = await res.json()
+          if (data.ok && data.mode === 'healthcheck') {
+            setSuccess('✅ Webhook endpoint is reachable and healthy')
+            setError(null)
+          } else {
+            setSuccess('✅ Webhook endpoint is reachable')
+            setError(null)
+          }
+        } else {
+          setError(`Webhook endpoint returned status ${res.status}`)
+          setSuccess(null)
+        }
       }
     } catch (err: any) {
       setError('Failed to test webhook: ' + err.message)
       setSuccess(null)
+    } finally {
+      setTestingWebhook(false)
     }
   }
 
@@ -649,8 +671,16 @@ export function MetaTesterIntegration({
                 size="sm"
                 className="flex-1 text-xs h-7"
                 onClick={handleTestWebhook}
+                disabled={testingWebhook}
               >
-                Test Webhook
+                {testingWebhook ? (
+                  <>
+                    <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                    Testing...
+                  </>
+                ) : (
+                  'Test Webhook URL'
+                )}
               </Button>
               <Button
                 variant="outline"
@@ -669,6 +699,30 @@ export function MetaTesterIntegration({
                 )}
               </Button>
             </div>
+            {webhookTestResults && (
+              <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900 border rounded text-xs">
+                <p className="font-medium mb-2">Webhook Diagnostic Results:</p>
+                <div className="space-y-1 text-xs">
+                  <p><span className="font-medium">URL:</span> <code className="bg-slate-200 dark:bg-slate-800 px-1 rounded">{webhookTestResults.webhookUrl}</code></p>
+                  <p><span className="font-medium">Accessible:</span> {webhookTestResults.webhookAccessible ? '✅ Yes' : '❌ No'}</p>
+                  {webhookTestResults.webhookResponse && (
+                    <p><span className="font-medium">Response Status:</span> {webhookTestResults.webhookResponse.status}</p>
+                  )}
+                  {webhookTestResults.webhookError && (
+                    <p className="text-red-600"><span className="font-medium">Error:</span> {webhookTestResults.webhookError}</p>
+                  )}
+                  <p><span className="font-medium">Verify Token:</span> {webhookTestResults.verifyTokenConfigured ? '✅ Configured' : '❌ Not Set'}</p>
+                  {webhookTestResults.environment && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs text-slate-600 dark:text-slate-400">Environment Info</summary>
+                      <pre className="mt-1 p-2 bg-slate-100 dark:bg-slate-800 rounded text-xs overflow-auto">
+                        {JSON.stringify(webhookTestResults.environment, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              </div>
+            )}
           </div>
         )}
       </div>
