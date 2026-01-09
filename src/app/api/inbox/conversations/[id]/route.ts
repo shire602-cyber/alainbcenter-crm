@@ -109,8 +109,8 @@ export async function GET(
             },
           },
           messages: {
-            orderBy: { createdAt: 'asc' },
-            take: 500, // Limit to last 500 messages to prevent memory issues
+            orderBy: { createdAt: 'desc' }, // Most recent first
+            take: 50, // Reduced from 500 to 50 to prevent PostgreSQL memory errors (code 53200)
             // NOTE: Using explicit select to include all message fields (providerMediaId, mediaFilename, mediaSize, etc.)
             // Fields are accessed later via type assertions where needed (e.g., (msg as any).mediaSize)
             select: {
@@ -241,8 +241,8 @@ export async function GET(
                 },
               },
               messages: {
-                orderBy: { createdAt: 'asc' },
-                take: 500,
+                orderBy: { createdAt: 'desc' }, // Most recent first
+                take: 50, // Reduced from 500 to 50 to prevent PostgreSQL memory errors (code 53200)
                 select: {
                   id: true,
                   direction: true,
@@ -347,8 +347,12 @@ export async function GET(
       return false
     }
 
+    // Reverse messages array if ordered desc (to get chronological order for display)
+    // We fetched most recent 50 in desc order, so reverse to show oldest first
+    const messagesInOrder = conversation.messages.slice().reverse()
+    
     // Format messages for frontend - PHASE 5A: Include attachments
-    const formattedMessages = conversation.messages.map((msg: any) => {
+    const formattedMessages = messagesInOrder.map((msg: any) => {
       // Use canonical isMedia() function
       const msgIsMedia = isMedia(msg)
       const mediaProxyUrl = msgIsMedia ? `/api/media/messages/${msg.id}` : null
@@ -403,8 +407,11 @@ export async function GET(
       return formatted
     })
 
-    // Get last message for preview
-    const lastMessage = conversation.messages[conversation.messages.length - 1]
+    // Get last message for preview (most recent message)
+    // After reversing desc-ordered messages, the last element is the most recent
+    const lastMessage = messagesInOrder.length > 0 
+      ? messagesInOrder[messagesInOrder.length - 1] 
+      : (conversation.messages.length > 0 ? conversation.messages[0] : null)
     // Compute intelligence flags
     const flags = await computeConversationFlags(conversationId)
 
