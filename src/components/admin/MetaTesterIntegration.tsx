@@ -6,12 +6,25 @@ import { Input } from '@/components/ui/input'
 import { Select } from '@/components/ui/select'
 import { CheckCircle2, XCircle, AlertCircle, Loader2 } from 'lucide-react'
 
+interface PageSubscriptionStatus {
+  subscribed: boolean
+  fields: string[]
+}
+
+interface InstagramSubscriptionStatus {
+  subscribed: boolean
+  fields: string[]
+}
+
 interface MetaConnection {
   id: number
   pageId: string
   pageName: string | null
   igUsername: string | null
+  igBusinessId?: string | null
   triggerSubscribed: boolean
+  pageSubscriptionStatus?: PageSubscriptionStatus | null
+  igSubscriptionStatus?: InstagramSubscriptionStatus | null
   status: string
   lastError: string | null
 }
@@ -50,12 +63,16 @@ export function MetaTesterIntegration({
   const [connectionStatus, setConnectionStatus] = useState(connections)
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
   const [webhookVerifyTokenConfigured, setWebhookVerifyTokenConfigured] = useState(false)
+  const [storedWebhookVerifyToken, setStoredWebhookVerifyToken] = useState<string | null>(null)
   
   // Page selection state
   const [pages, setPages] = useState<MetaPage[]>([])
   const [selectedPageId, setSelectedPageId] = useState<string>('')
   const [fetchingPages, setFetchingPages] = useState(false)
   const [persistedConfig, setPersistedConfig] = useState<PersistedConfig | null>(null)
+  
+  // Connection warnings from connect response
+  const [connectionWarnings, setConnectionWarnings] = useState<string[]>([])
 
   // Load status on mount and refresh periodically
   useEffect(() => {
@@ -64,9 +81,14 @@ export function MetaTesterIntegration({
         const res = await fetch('/api/integrations/meta/status')
         if (res.ok) {
           const data = await res.json()
-          setConnectionStatus(data.connections || [])
+          setConnectionStatus(data.activeConnections || data.connections || [])
           setWebhookUrl(data.webhookUrl || null)
           setWebhookVerifyTokenConfigured(data.webhookVerifyTokenConfigured || false)
+          
+          // Get verify token if available (from Integration config)
+          if (data.persistedConfig && data.persistedConfig.webhookVerifyToken) {
+            setStoredWebhookVerifyToken(data.persistedConfig.webhookVerifyToken)
+          }
           
           // Load persisted config and pre-select page
           if (data.persistedConfig) {
@@ -187,10 +209,23 @@ export function MetaTesterIntegration({
       if (!res.ok) {
         setError(data.error || 'Failed to connect')
         setErrorDetails(data.details || data.hint || null)
+        setConnectionWarnings([])
         return
       }
 
-      setSuccess(`Connected to ${data.connection.pageName || data.connection.pageId}${data.connection.igUsername ? ` (@${data.connection.igUsername})` : ''}`)
+      // Show warnings if Instagram subscription failed
+      if (data.warnings && data.warnings.length > 0) {
+        setConnectionWarnings(data.warnings)
+      } else {
+        setConnectionWarnings([])
+      }
+
+      const successMsg = `Connected to ${data.connection.pageName || data.connection.pageId}${data.connection.igUsername ? ` (@${data.connection.igUsername})` : ''}`
+      const subscriptionMsg = data.connection.igSubscribed 
+        ? ' Instagram webhook subscribed.' 
+        : ' ⚠️ Instagram webhook subscription failed - manual setup required.'
+      
+      setSuccess(successMsg + subscriptionMsg)
       setError(null)
       setErrorDetails(null)
       setToken('')
@@ -202,7 +237,7 @@ export function MetaTesterIntegration({
       const statusRes = await fetch('/api/integrations/meta/status')
       if (statusRes.ok) {
         const statusData = await statusRes.json()
-        setConnectionStatus(statusData.connections || [])
+        setConnectionStatus(statusData.activeConnections || statusData.connections || [])
         setWebhookUrl(statusData.webhookUrl || null)
         setWebhookVerifyTokenConfigured(statusData.webhookVerifyTokenConfigured || false)
       }
@@ -299,6 +334,17 @@ export function MetaTesterIntegration({
           </div>
         )}
 
+        {connectionWarnings.length > 0 && (
+          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-xs">
+            <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">⚠️ Instagram Webhook Setup Required:</p>
+            <ul className="list-disc list-inside space-y-1 text-yellow-700 dark:text-yellow-300">
+              {connectionWarnings.map((warning, idx) => (
+                <li key={idx}>{warning}</li>
+              ))}
+            </ul>
+          </div>
+        )}
+
         <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
           <p className="font-medium text-green-600 dark:text-green-400">Connected:</p>
           {connectionStatus.map((conn) => {
@@ -306,22 +352,72 @@ export function MetaTesterIntegration({
             const displayPageName = persistedConfig?.pageName || conn.pageName || conn.pageId
             const displayIgUsername = persistedConfig?.igUsername || conn.igUsername
             
+            const pageSubscribed = conn.pageSubscriptionStatus?.subscribed ?? conn.triggerSubscribed
+            const igSubscribed = conn.igSubscriptionStatus?.subscribed ?? false
+            const pageFields = conn.pageSubscriptionStatus?.fields || []
+            const igFields = conn.igSubscriptionStatus?.fields || []
+            
             return (
-              <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800">
-                <p className="font-medium">{displayPageName}</p>
-                {displayIgUsername && (
-                  <p className="text-slate-500">Instagram: @{displayIgUsername}</p>
-                )}
-                <div className="flex items-center gap-2 mt-1">
-                  <span className={`text-xs ${conn.triggerSubscribed ? 'text-green-600' : 'text-yellow-600'}`}>
-                    {conn.triggerSubscribed ? '✓ Subscribed' : '⚠ Not subscribed'}
-                  </span>
-                  {conn.status === 'error' && conn.lastError && (
-                    <span className="text-xs text-red-600" title={conn.lastError}>
-                      <AlertCircle className="h-3 w-3 inline" />
-                    </span>
+              <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800 space-y-2">
+                <div>
+                  <p className="font-medium">{displayPageName}</p>
+                  {displayIgUsername && (
+                    <p className="text-slate-500">Instagram: @{displayIgUsername}</p>
                   )}
                 </div>
+                
+                {/* Page Subscription Status */}
+                <div className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <span className={`text-xs font-medium ${pageSubscribed ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {pageSubscribed ? '✓' : '⚠'} Facebook Page:
+                    </span>
+                    <span className={`text-xs ${pageSubscribed ? 'text-green-600' : 'text-yellow-600'}`}>
+                      {pageSubscribed ? `Subscribed (${pageFields.length} fields)` : 'Not subscribed'}
+                    </span>
+                  </div>
+                  {pageFields.length > 0 && (
+                    <p className="text-xs text-slate-500 pl-4">Fields: {pageFields.join(', ')}</p>
+                  )}
+                </div>
+
+                {/* Instagram Subscription Status */}
+                {conn.igBusinessId && (
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <span className={`text-xs font-medium ${igSubscribed ? 'text-green-600' : 'text-red-600'}`}>
+                        {igSubscribed ? '✓' : '❌'} Instagram Business Account:
+                      </span>
+                      <span className={`text-xs ${igSubscribed ? 'text-green-600' : 'text-red-600'}`}>
+                        {igSubscribed ? `Subscribed (${igFields.length} fields)` : 'NOT SUBSCRIBED - DMs will not be received'}
+                      </span>
+                    </div>
+                    {igFields.length > 0 && (
+                      <p className="text-xs text-slate-500 pl-4">Fields: {igFields.join(', ')}</p>
+                    )}
+                    {!igSubscribed && (
+                      <div className="mt-2 p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs">
+                        <p className="font-medium text-red-800 dark:text-red-200 mb-1">Manual Setup Required:</p>
+                        <ol className="list-decimal list-inside space-y-0.5 text-red-700 dark:text-red-300">
+                          <li>Go to Meta Developers → Your App → Instagram → Webhooks</li>
+                          <li>Add Webhook URL: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">{webhookUrl || '[your webhook URL]'}</code></li>
+                          <li>Set Verify Token: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">{storedWebhookVerifyToken || webhookVerifyToken || '[your verify token]'}</code></li>
+                          <li>Subscribe to: <code className="bg-red-100 dark:bg-red-900 px-1 rounded">messages, messaging_postbacks</code></li>
+                          <li>Click &quot;Verify and Save&quot;</li>
+                        </ol>
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {conn.status === 'error' && conn.lastError && (
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-red-600" title={conn.lastError}>
+                      <AlertCircle className="h-3 w-3 inline" /> Error
+                    </span>
+                  </div>
+                )}
+                
                 <Button
                   variant="outline"
                   size="sm"

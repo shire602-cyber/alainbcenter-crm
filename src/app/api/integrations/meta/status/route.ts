@@ -5,9 +5,10 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-server'
-import { getAllConnections } from '@/server/integrations/meta/storage'
+import { getAllConnections, getDecryptedPageToken } from '@/server/integrations/meta/storage'
 import { getWebhookVerifyToken } from '@/server/integrations/meta/config'
 import { getWebhookUrl } from '@/lib/publicUrl'
+import { checkPageWebhookSubscription, checkInstagramWebhookSubscription } from '@/server/integrations/meta/subscribe'
 import { prisma } from '@/lib/prisma'
 
 export async function GET(req: NextRequest) {
@@ -34,6 +35,7 @@ export async function GET(req: NextRequest) {
             igBusinessId: config.igBusinessId || null,
             igUsername: config.igUsername || null,
             connectedAt: config.connectedAt || null,
+            webhookVerifyToken: config.webhookVerifyToken || null,
           }
         } catch (e) {
           console.warn('Failed to parse Integration config:', e)
@@ -46,25 +48,61 @@ export async function GET(req: NextRequest) {
     const webhookVerifyToken = await getWebhookVerifyToken()
     const webhookUrl = getWebhookUrl('/api/webhooks/meta', req)
 
+    // Check webhook subscription status for each connection
+    const connectionsWithSubscriptionStatus = await Promise.all(
+      connections.map(async (conn) => {
+        let pageSubscriptionStatus = null
+        let igSubscriptionStatus = null
+
+        try {
+          const pageAccessToken = await getDecryptedPageToken(conn.id)
+          if (pageAccessToken) {
+            // Check Page webhook subscription
+            if (conn.pageId) {
+              pageSubscriptionStatus = await checkPageWebhookSubscription(
+                conn.pageId,
+                pageAccessToken
+              )
+            }
+
+            // Check Instagram Business Account webhook subscription
+            if (conn.igBusinessId) {
+              igSubscriptionStatus = await checkInstagramWebhookSubscription(
+                conn.igBusinessId,
+                pageAccessToken
+              )
+            }
+          }
+        } catch (error: any) {
+          console.error(`Failed to check subscription status for connection ${conn.id}:`, error.message)
+          // Continue - subscription check failures shouldn't block status endpoint
+        }
+
+        return {
+          id: conn.id,
+          pageId: conn.pageId,
+          pageName: conn.pageName,
+          igUsername: conn.igUsername,
+          igBusinessId: conn.igBusinessId,
+          triggerSubscribed: conn.triggerSubscribed, // Legacy field (Page subscription)
+          pageSubscriptionStatus, // Detailed Page subscription status
+          igSubscriptionStatus, // Detailed Instagram subscription status
+          status: conn.status,
+          lastError: conn.lastError,
+          createdAt: conn.createdAt.toISOString(),
+          updatedAt: conn.updatedAt.toISOString(),
+        }
+      })
+    )
+
     return NextResponse.json({
       success: true,
       webhookUrl,
       webhookVerifyTokenConfigured: !!webhookVerifyToken,
       persistedConfig, // Config from Integration table (which page/IG was selected)
-      activeConnections: connections.map((conn) => ({
-        id: conn.id,
-        pageId: conn.pageId,
-        pageName: conn.pageName,
-        igUsername: conn.igUsername,
-        igBusinessId: conn.igBusinessId,
-        triggerSubscribed: conn.triggerSubscribed,
-        status: conn.status,
-        lastError: conn.lastError,
-        createdAt: conn.createdAt.toISOString(),
-        updatedAt: conn.updatedAt.toISOString(),
-      })),
+      activeConnections: connectionsWithSubscriptionStatus,
       // Legacy: keep 'connections' for backward compatibility
-      connections: connections.map((conn) => ({
+      connections: connectionsWithSubscriptionStatus.map((conn) => ({
         id: conn.id,
         pageId: conn.pageId,
         pageName: conn.pageName,
@@ -73,8 +111,8 @@ export async function GET(req: NextRequest) {
         triggerSubscribed: conn.triggerSubscribed,
         status: conn.status,
         lastError: conn.lastError,
-        createdAt: conn.createdAt.toISOString(),
-        updatedAt: conn.updatedAt.toISOString(),
+        createdAt: conn.createdAt,
+        updatedAt: conn.updatedAt,
       })),
     })
   } catch (error: any) {
