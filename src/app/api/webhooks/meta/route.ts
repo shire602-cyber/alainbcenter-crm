@@ -953,11 +953,11 @@ async function processWebhookPayload(payload: any) {
                 message: { 
                   text: event.text, 
                   attachments: attachments,
-                  mid: event.messageId || providerMessageId,
+                  mid: event.messageId || event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 },
                 timestamp: event.timestamp || new Date(),
                 instagramProfile: instagramProfile || undefined,
-                providerMessageId: providerMessageId,
+                providerMessageId: event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 metadata: {
                   mediaUrl: attachments?.[0]?.url || attachments?.[0]?.payload?.url || null,
                   mediaMimeType: attachments?.[0]?.type || attachments?.[0]?.mimeType || null,

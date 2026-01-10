@@ -27,13 +27,62 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
 
   const loadData = useCallback(async () => {
     try {
+      setLoading(true)
       const res = await fetch('/api/dashboard/command-center')
       if (res.ok) {
         const commandData = await res.json()
         setData(commandData)
+      } else {
+        console.error('Failed to load command center data: HTTP', res.status)
+        // Set default empty data structure on error
+        setData({
+          focusNow: null,
+          upNext: [],
+          signals: {
+            renewals: [],
+            waiting: [],
+            alerts: [],
+            counts: { renewalsTotal: 0, waitingTotal: 0, alertsTotal: 0 },
+          },
+          momentum: {
+            repliesToday: 0,
+            quotesToday: 0,
+            renewalsNext7Days: 0,
+            revenuePotentialToday: null,
+          },
+          completedToday: {
+            tasksDone: 0,
+            messagesSent: 0,
+            quotesSent: 0,
+          },
+          generatedAt: new Date().toISOString(),
+        })
       }
     } catch (error) {
       console.error('Failed to load command center data:', error)
+      // Set default empty data structure on error
+      setData({
+        focusNow: null,
+        upNext: [],
+        signals: {
+          renewals: [],
+          waiting: [],
+          alerts: [],
+          counts: { renewalsTotal: 0, waitingTotal: 0, alertsTotal: 0 },
+        },
+        momentum: {
+          repliesToday: 0,
+          quotesToday: 0,
+          renewalsNext7Days: 0,
+          revenuePotentialToday: null,
+        },
+        completedToday: {
+          tasksDone: 0,
+          messagesSent: 0,
+          quotesSent: 0,
+        },
+        generatedAt: new Date().toISOString(),
+      })
     } finally {
       setLoading(false)
     }
