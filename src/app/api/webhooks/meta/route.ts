@@ -1123,6 +1123,259 @@ async function processWebhookPayload(payload: any) {
 }
 
 /**
+ * Process Instagram message with robust fallback pipeline
+ * Creates conversation and message FIRST, then attempts lead creation (non-blocking)
+ * This ensures messages appear in inbox even if lead creation fails
+ */
+async function processInstagramMessageRobust(data: {
+  pageId: string
+  workspaceId: number
+  senderId: string
+  message: any
+  timestamp: Date
+  instagramProfile?: { name: string | null; username: string | null; profilePic: string | null } | null
+  providerMessageId: string
+  metadata?: {
+    mediaUrl?: string | null
+    mediaMimeType?: string | null
+    providerMediaId?: string | null
+    [key: string]: any
+  }
+}) {
+  const { senderId, message, timestamp, instagramProfile, providerMessageId, metadata } = data
+
+  console.log('🚀 [INSTAGRAM-ROBUST] Starting robust Instagram message processing', {
+    senderId,
+    providerMessageId,
+    hasText: !!message?.text,
+    textLength: message?.text?.length || 0,
+    hasAttachments: !!message?.attachments,
+    timestamp: timestamp.toISOString(),
+  })
+
+  // Extract message text
+  let text = message?.text || ''
+  if (!text && message?.attachments) {
+    text = '[Media message]'
+  }
+
+  if (!text && !message?.attachments) {
+    console.warn('⚠️ [INSTAGRAM-ROBUST] Skipping empty message (no text and no attachments)')
+    return
+  }
+
+  try {
+    // Step 1: Upsert Contact (already working)
+    const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
+    const { upsertConversation } = await import('@/lib/conversation/upsert')
+    const { createInstagramLeadMinimal } = await import('@/lib/inbound/autoMatchPipeline')
+    const { prisma } = await import('@/lib/prisma')
+    const { upsertContact } = await import('@/lib/contact/upsert')
+
+    // For Instagram, use senderId with 'ig:' prefix as phone
+    const instagramPhone = `ig:${senderId}`
+    const fromName = instagramProfile?.name || instagramProfile?.username || 'Instagram User'
+
+    console.log('👤 [INSTAGRAM-ROBUST] Step 1: Upserting contact', {
+      instagramPhone,
+      fromName,
+      senderId,
+    })
+
+    // Use the contact upsert function which requires prisma as first argument
+    const contactResult = await upsertContact(prisma, {
+      phone: instagramPhone,
+      fullName: fromName,
+      email: null,
+      waId: null,
+      webhookPayload: {
+        sender: { id: senderId },
+      },
+    })
+
+    // Fetch full contact details
+    const contact = await prisma.contact.findUnique({
+      where: { id: contactResult.id },
+      select: {
+        id: true,
+        phone: true,
+        fullName: true,
+        phoneNormalized: true,
+        waId: true,
+      },
+    })
+
+    if (!contact) {
+      throw new Error(`Failed to fetch contact after creation: ${contactResult.id}`)
+    }
+
+    console.log('✅ [INSTAGRAM-ROBUST] Contact upserted', {
+      contactId: contact.id,
+      phone: contact.phone,
+      fullName: contact.fullName,
+    })
+
+    // Step 2: Create Conversation FIRST (before lead)
+    const webhookPayloadForThreadId = {
+      senderId: senderId,
+      metadata: {
+        senderId: senderId,
+      },
+    }
+
+    const externalThreadId = getExternalThreadId(
+      'INSTAGRAM',
+      contactResult,
+      webhookPayloadForThreadId
+    )
+
+    // Store Instagram profile pic in knownFields
+    const knownFields = instagramProfile?.profilePic
+      ? JSON.stringify({ instagramProfilePic: instagramProfile.profilePic })
+      : null
+
+    console.log('💬 [INSTAGRAM-ROBUST] Step 2: Creating conversation', {
+      contactId: contactResult.id,
+      externalThreadId,
+      hasKnownFields: !!knownFields,
+    })
+
+    const conversationResult = await upsertConversation({
+      contactId: contact.id,
+      channel: 'INSTAGRAM',
+      leadId: undefined, // Create without lead initially
+      externalThreadId: externalThreadId,
+      timestamp: timestamp,
+      knownFields: knownFields,
+    })
+
+    console.log('✅ [INSTAGRAM-ROBUST] Conversation created', {
+      conversationId: conversationResult.id,
+    })
+
+    // Step 3: Create Message SECOND (before lead)
+    console.log('📨 [INSTAGRAM-ROBUST] Step 3: Creating message', {
+      conversationId: conversationResult.id,
+      providerMessageId,
+      textLength: text.length,
+      hasMedia: !!metadata?.mediaUrl || !!metadata?.providerMediaId,
+    })
+
+    // Create message directly
+    const messageRecord = await prisma.message.create({
+      data: {
+        conversationId: conversationResult.id,
+        contactId: contact.id,
+        direction: 'INBOUND',
+        channel: 'instagram', // Lowercase for database
+        body: text,
+        providerMessageId: providerMessageId,
+        mediaUrl: metadata?.mediaUrl || null,
+        mediaMimeType: metadata?.mediaMimeType || null,
+        providerMediaId: metadata?.providerMediaId || null,
+        createdAt: timestamp,
+      },
+    })
+
+    console.log('✅ [INSTAGRAM-ROBUST] Message created', {
+      messageId: messageRecord.id,
+      conversationId: messageRecord.conversationId,
+    })
+
+    // Create communication log for lead linking (create without leadId initially)
+    // Note: CommunicationLog is linked via leadId, not contactId directly
+    // We'll create it after lead is created, or skip if lead creation fails
+    let communicationLog: any = null
+
+    // Update conversation unread count and last message timestamp
+    await prisma.conversation.update({
+      where: { id: conversationResult.id },
+      data: {
+        lastMessageAt: timestamp,
+        lastInboundAt: timestamp,
+        unreadCount: {
+          increment: 1,
+        },
+      },
+    })
+
+    console.log('✅ [INSTAGRAM-ROBUST] Conversation updated with unread count')
+
+    // Step 4: Attempt Lead Creation LAST (non-blocking)
+    console.log('🎯 [INSTAGRAM-ROBUST] Step 4: Attempting lead creation (non-blocking)')
+
+    let lead = null
+    try {
+      // First try minimal lead creation
+      lead = await createInstagramLeadMinimal(contact.id)
+
+      if (lead) {
+        console.log('✅ [INSTAGRAM-ROBUST] Lead created successfully', {
+          leadId: lead.id,
+          contactId: lead.contactId,
+        })
+
+        // Link conversation to lead
+        await prisma.conversation.update({
+          where: { id: conversationResult.id },
+          data: {
+            leadId: lead.id,
+          },
+        })
+
+        // Create communication log linked to lead
+        communicationLog = await prisma.communicationLog.create({
+          data: {
+            leadId: lead.id,
+            channel: 'instagram',
+            direction: 'inbound',
+            messageSnippet: text.substring(0, 200),
+            createdAt: timestamp,
+          },
+        })
+
+        console.log('✅ [INSTAGRAM-ROBUST] Conversation and communication logs linked to lead')
+      } else {
+        console.warn('⚠️ [INSTAGRAM-ROBUST] Lead creation failed, but conversation and message are created')
+      }
+    } catch (leadError: any) {
+      console.error('❌ [INSTAGRAM-ROBUST] Lead creation error (non-blocking)', {
+        error: leadError.message,
+        errorCode: leadError.code,
+        contactId: contact.id,
+        note: 'Conversation and message are already created, inbox will show the message',
+      })
+      // Don't throw - continue processing
+    }
+
+    console.log('✅ [INSTAGRAM-ROBUST] Robust processing completed', {
+      contactId: contact.id,
+      conversationId: conversationResult.id,
+      messageId: messageRecord.id,
+      leadId: lead?.id || null,
+      messageInInbox: true,
+    })
+
+    return {
+      contact: contact,
+      conversation: { id: conversationResult.id },
+      message: messageRecord,
+      lead: lead,
+    }
+  } catch (error: any) {
+    console.error('❌ [INSTAGRAM-ROBUST] Critical error in robust processing', {
+      error: error.message,
+      errorCode: error.code,
+      errorStack: error.stack?.substring(0, 500),
+      senderId,
+      providerMessageId,
+    })
+    // Re-throw critical errors (contact/conversation/message creation failures)
+    throw error
+  }
+}
+
+/**
  * Process inbound message and optionally insert into inbox
  */
 async function processInboundMessage(data: {

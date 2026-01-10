@@ -1781,6 +1781,104 @@ async function findOrCreateLead(input: {
 }
 
 /**
+ * Create minimal Instagram lead with only required fields
+ * This is a fallback when full lead creation fails
+ */
+export async function createInstagramLeadMinimal(contactId: number): Promise<any | null> {
+  console.log('📸 [INSTAGRAM-LEAD-MINIMAL] Attempting to create minimal lead', {
+    contactId,
+    contactIdType: typeof contactId,
+  })
+
+  // Validate contactId
+  if (!contactId || typeof contactId !== 'number' || contactId <= 0 || !Number.isInteger(contactId)) {
+    console.error('❌ [INSTAGRAM-LEAD-MINIMAL] Invalid contactId', {
+      contactId,
+      contactIdType: typeof contactId,
+      isValidNumber: typeof contactId === 'number',
+      isPositive: contactId > 0,
+      isInteger: Number.isInteger(contactId),
+    })
+    return null
+  }
+
+  // Verify contact exists in database
+  try {
+    const contactExists = await prisma.contact.findUnique({
+      where: { id: contactId },
+      select: { id: true },
+    })
+    if (!contactExists) {
+      console.error('❌ [INSTAGRAM-LEAD-MINIMAL] Contact does not exist', { contactId })
+      return null
+    }
+  } catch (dbError: any) {
+    console.error('❌ [INSTAGRAM-LEAD-MINIMAL] Failed to verify contact existence', {
+      contactId,
+      error: dbError.message,
+    })
+    return null
+  }
+
+  // Prepare minimal lead data - ONLY required fields
+  const minimalLeadData = {
+    contactId: contactId, // Required
+    stage: 'NEW' as const, // Default enum value
+    status: 'new', // Default string (legacy field)
+    pipelineStage: 'new', // Default string (legacy field)
+    lastContactChannel: 'instagram', // Lowercase channel name
+  }
+
+  console.log('🔍 [INSTAGRAM-LEAD-MINIMAL] Minimal lead data prepared', {
+    contactId: minimalLeadData.contactId,
+    stage: minimalLeadData.stage,
+    status: minimalLeadData.status,
+    pipelineStage: minimalLeadData.pipelineStage,
+    lastContactChannel: minimalLeadData.lastContactChannel,
+  })
+
+  try {
+    const minimalLead = await prisma.lead.create({
+      data: minimalLeadData,
+    })
+
+    console.log('✅ [INSTAGRAM-LEAD-MINIMAL] Minimal lead created successfully', {
+      leadId: minimalLead.id,
+      contactId: minimalLead.contactId,
+      stage: minimalLead.stage,
+    })
+
+    return minimalLead
+  } catch (createError: any) {
+    // Capture full Prisma error details
+    const prismaError = {
+      message: createError.message || 'Unknown error',
+      code: createError.code || 'NO_CODE',
+      meta: createError.meta || null,
+      clientVersion: createError.clientVersion || 'unknown',
+      stack: createError.stack || 'No stack trace',
+    }
+
+    console.error('❌ [INSTAGRAM-LEAD-MINIMAL] Failed to create minimal lead', {
+      ...prismaError,
+      minimalLeadData,
+      contactId,
+    })
+
+    // Log full Prisma error as JSON
+    try {
+      const fullPrismaError = JSON.stringify(prismaError, null, 2)
+      console.error('❌ [INSTAGRAM-LEAD-MINIMAL] FULL PRISMA ERROR (JSON):', fullPrismaError)
+    } catch (jsonError) {
+      console.error('❌ [INSTAGRAM-LEAD-MINIMAL] Failed to serialize Prisma error:', jsonError)
+    }
+
+    // Return null - don't throw, allow pipeline to continue
+    return null
+  }
+}
+
+/**
  * Step 5: Create CommunicationLog (Message record + CommunicationLog)
  */
 async function createCommunicationLog(input: {

@@ -25,7 +25,11 @@ import {
   Award,
 } from 'lucide-react'
 import Link from 'next/link'
-import { Skeleton } from '@/components/ui/skeleton'
+import { Skeleton, ChartSkeleton } from '@/components/ui/skeleton'
+import { LineChart } from '@/components/charts/LineChart'
+import { BarChart } from '@/components/charts/BarChart'
+import { PieChart } from '@/components/charts/PieChart'
+import { AreaChart } from '@/components/charts/AreaChart'
 
 type KPIData = {
   conversion: {
@@ -329,23 +333,45 @@ export default function ReportsPage() {
                 </div>
 
                 {/* Recent Activity */}
-                <BentoCard 
-                  title="Recent Activity (Last 30 Days)"
-                  icon={<Calendar className="h-4 w-4" />}
-                >
-                  <div className="grid grid-cols-2 gap-4">
-                    <div>
-                      <p className="text-caption text-slate-600 mb-1 font-semibold">New Leads</p>
-                      <p className="text-headline font-semibold">{kpis.activity.recentLeads30Days}</p>
-              </div>
-                    <div>
-                      <p className="text-caption text-slate-600 mb-1 font-semibold">Won Deals</p>
-                      <p className="text-headline font-semibold text-green-600">
-                        {kpis.activity.recentWon30Days}
-                      </p>
-        </div>
-              </div>
-                </BentoCard>
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                  <BentoCard 
+                    title="Recent Activity (Last 30 Days)"
+                    icon={<Calendar className="h-4 w-4" />}
+                  >
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="text-caption text-slate-600 mb-1 font-semibold">New Leads</p>
+                        <p className="text-headline font-semibold">{kpis.activity.recentLeads30Days}</p>
+                      </div>
+                      <div>
+                        <p className="text-caption text-slate-600 mb-1 font-semibold">Won Deals</p>
+                        <p className="text-headline font-semibold text-green-600">
+                          {kpis.activity.recentWon30Days}
+                        </p>
+                      </div>
+                    </div>
+                  </BentoCard>
+                  
+                  {/* Conversion Funnel Chart */}
+                  {kpis.conversion && (
+                    <BarChart
+                      title="Conversion Funnel"
+                      description="Lead progression overview"
+                      data={[
+                        { Stage: 'Total', Leads: kpis.conversion.totalLeads },
+                        { Stage: 'In Progress', Leads: kpis.conversion.inProgressLeads },
+                        { Stage: 'Won', Leads: kpis.conversion.wonLeads },
+                        { Stage: 'Lost', Leads: kpis.conversion.lostLeads },
+                      ]}
+                      xKey="Stage"
+                      yKeys={[
+                        { key: 'Leads', name: 'Leads', color: '#3b82f6' },
+                      ]}
+                      height={200}
+                      loading={loading}
+                    />
+                  )}
+                </div>
               </>
             ) : (
               <EmptyState
@@ -440,42 +466,39 @@ export default function ReportsPage() {
           {/* Service Analytics */}
           <TabsContent value="services" className="space-y-2">
             {loading ? (
-              <Skeleton className="h-64 rounded-xl" />
+              <ChartSkeleton height={400} />
             ) : kpis && kpis.serviceTypes && kpis.serviceTypes.length > 0 ? (
-              <BentoCard
-                title="Performance by Service Type"
-                icon={<BarChart3 className="h-4 w-4" />}
-              >
-                <p className="text-xs text-slate-600 mb-3 font-medium">
-                  Conversion rates and activity by service
-                </p>
-                <div className="space-y-2">
-                  {kpis.serviceTypes.map((service) => (
-                    <div
-                      key={service.name}
-                      className="p-3 rounded-lg border border-slate-200/60 hover:bg-slate-50 transition-colors bg-white"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <h3 className="text-sm font-bold text-slate-900">{service.name}</h3>
-                          <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                            {service.total} total • {service.won} won • {service.inProgress} in progress
-                          </p>
-                        </div>
-                        <Badge variant={service.conversionRate >= 20 ? 'default' : 'secondary'} className="text-xs font-semibold">
-                          {service.conversionRate.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-slate-900 transition-all duration-500"
-                          style={{ width: `${service.conversionRate}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <BarChart
+                  title="Service Performance"
+                  description="Total leads by service type"
+                  data={kpis.serviceTypes.map((service) => ({
+                    name: service.name,
+                    Total: service.total,
+                    Won: service.won,
+                    'In Progress': service.inProgress,
+                  }))}
+                  xKey="name"
+                  yKeys={[
+                    { key: 'Total', name: 'Total', color: '#64748b' },
+                    { key: 'Won', name: 'Won', color: '#10b981' },
+                    { key: 'In Progress', name: 'In Progress', color: '#f59e0b' },
+                  ]}
+                  height={300}
+                  loading={loading}
+                />
+                <PieChart
+                  title="Service Distribution"
+                  description="Proportion of leads by service type"
+                  data={kpis.serviceTypes.map((service, index) => ({
+                    name: service.name,
+                    value: service.total,
+                    color: ['#3b82f6', '#8b5cf6', '#10b981', '#f59e0b', '#ef4444', '#06b6d4'][index % 6],
+                  }))}
+                  height={300}
+                  loading={loading}
+                />
               </div>
-              </BentoCard>
             ) : (
               <EmptyState
                 icon={BarChart3}
@@ -488,42 +511,37 @@ export default function ReportsPage() {
           {/* Channel Performance */}
           <TabsContent value="channels" className="space-y-2">
             {loading ? (
-              <Skeleton className="h-64 rounded-xl" />
+              <ChartSkeleton height={400} />
             ) : kpis && kpis.channels && kpis.channels.length > 0 ? (
-              <BentoCard
-                title="Performance by Channel"
-                icon={<MessageSquare className="h-4 w-4" />}
-              >
-                <p className="text-xs text-slate-600 mb-3 font-medium">
-                  Which channels drive the best conversions?
-                </p>
-                <div className="space-y-2">
-                  {kpis.channels.map((channel) => (
-                    <div
-                      key={channel.channel}
-                      className="p-3 rounded-lg border border-slate-200/60 hover:bg-slate-50 transition-colors bg-white"
-                    >
-                      <div className="flex items-center justify-between mb-2">
-                        <div>
-                          <h3 className="text-sm font-bold capitalize text-slate-900">{channel.channel}</h3>
-                          <p className="text-xs text-slate-600 mt-0.5 font-medium">
-                            {channel.total} leads • {channel.won} won
-                          </p>
-                        </div>
-                        <Badge variant={channel.conversionRate >= 20 ? 'default' : 'secondary'} className="text-xs font-semibold">
-                          {channel.conversionRate.toFixed(1)}%
-                        </Badge>
-                      </div>
-                      <div className="w-full bg-slate-200 rounded-full h-1.5 overflow-hidden">
-                        <div
-                          className="h-full bg-slate-900 transition-all duration-500"
-                          style={{ width: `${channel.conversionRate}%` }}
-                        />
-                      </div>
-                    </div>
-                  ))}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-2">
+                <BarChart
+                  title="Channel Performance"
+                  description="Lead volume and conversions by channel"
+                  data={kpis.channels.map((channel) => ({
+                    name: channel.channel.charAt(0).toUpperCase() + channel.channel.slice(1),
+                    Total: channel.total,
+                    Won: channel.won,
+                  }))}
+                  xKey="name"
+                  yKeys={[
+                    { key: 'Total', name: 'Total Leads', color: '#64748b' },
+                    { key: 'Won', name: 'Won Leads', color: '#10b981' },
+                  ]}
+                  height={300}
+                  loading={loading}
+                />
+                <PieChart
+                  title="Channel Distribution"
+                  description="Proportion of leads by channel"
+                  data={kpis.channels.map((channel, index) => ({
+                    name: channel.channel.charAt(0).toUpperCase() + channel.channel.slice(1),
+                    value: channel.total,
+                    color: ['#3b82f6', '#10b981', '#f59e0b', '#8b5cf6', '#ef4444'][index % 5],
+                  }))}
+                  height={300}
+                  loading={loading}
+                />
               </div>
-              </BentoCard>
             ) : (
               <EmptyState
                 icon={MessageSquare}

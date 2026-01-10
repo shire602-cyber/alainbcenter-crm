@@ -1,9 +1,11 @@
 'use client'
 
 import * as React from 'react'
+import { motion, AnimatePresence } from 'framer-motion'
 import { X } from 'lucide-react'
 import { cn } from '@/lib/utils'
 import { Button } from '@/components/ui/button'
+import { backdropVariants, slideFromBottomVariants, slideVariants } from '@/lib/animations'
 
 interface SheetContextValue {
   open: boolean
@@ -77,8 +79,6 @@ export function SheetContent({ children, className, side = 'bottom' }: SheetCont
   const context = React.useContext(SheetContext)
   if (!context) throw new Error('SheetContent must be used within Sheet')
 
-  if (!context.open) return null
-
   const sideClasses = {
     top: 'top-0 left-0 right-0 rounded-b-2xl',
     bottom: 'bottom-0 left-0 right-0 rounded-t-2xl',
@@ -86,32 +86,56 @@ export function SheetContent({ children, className, side = 'bottom' }: SheetCont
     right: 'top-0 right-0 bottom-0 rounded-l-2xl',
   }
 
+  const slideVariantsBySide = {
+    top: { hidden: { y: '-100%', opacity: 0 }, visible: { y: 0, opacity: 1 }, exit: { y: '-100%', opacity: 0 } },
+    bottom: slideFromBottomVariants,
+    left: { hidden: { x: '-100%', opacity: 0 }, visible: { x: 0, opacity: 1 }, exit: { x: '-100%', opacity: 0 } },
+    right: slideVariants,
+  }
+
   return (
-    <>
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
-        onClick={() => context.onOpenChange(false)}
-      />
-      <div className={cn(
-        "fixed z-50 bg-white shadow-2xl transition-transform duration-300",
-        sideClasses[side],
-        side === 'bottom' && "max-h-[90vh] overflow-y-auto",
-        side === 'top' && "max-h-[90vh] overflow-y-auto",
-        side === 'left' && "w-80 max-w-[90vw]",
-        side === 'right' && "w-80 max-w-[90vw]",
-        className
-      )}>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="absolute top-4 right-4 rounded-lg z-10"
-          onClick={() => context.onOpenChange(false)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-        {children}
-      </div>
-    </>
+    <AnimatePresence>
+      {context.open && (
+        <>
+          <motion.div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm z-40"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={() => context.onOpenChange(false)}
+          />
+          <motion.div
+            className={cn(
+              "fixed z-50 bg-white shadow-2xl",
+              sideClasses[side],
+              side === 'bottom' && "max-h-[90vh] overflow-y-auto",
+              side === 'top' && "max-h-[90vh] overflow-y-auto",
+              side === 'left' && "w-80 max-w-[90vw] overflow-y-auto",
+              side === 'right' && "w-80 max-w-[90vw] overflow-y-auto",
+              className
+            )}
+            variants={slideVariantsBySide[side]}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            transition={{ duration: 0.3, ease: 'easeOut' }}
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute top-4 right-4 rounded-lg z-10"
+              onClick={() => context.onOpenChange(false)}
+              aria-label="Close sheet"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            {children}
+          </motion.div>
+        </>
+      )}
+    </AnimatePresence>
   )
 }
 

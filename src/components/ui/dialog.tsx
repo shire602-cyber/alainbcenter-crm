@@ -1,9 +1,11 @@
 'use client'
 
 import * as React from "react"
+import { motion, AnimatePresence } from 'framer-motion'
 import { X } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { Button } from '@/components/ui/button'
+import { backdropVariants, scaleVariants } from '@/lib/animations'
 
 interface DialogContextValue {
   open: boolean
@@ -22,6 +24,32 @@ export function Dialog({ open: controlledOpen, onOpenChange, children }: DialogP
   const [internalOpen, setInternalOpen] = React.useState(false)
   const open = controlledOpen !== undefined ? controlledOpen : internalOpen
   const handleOpenChange = onOpenChange || setInternalOpen
+
+  // Prevent body scroll when dialog is open
+  React.useEffect(() => {
+    if (open) {
+      document.body.style.overflow = 'hidden'
+    } else {
+      document.body.style.overflow = ''
+    }
+    return () => {
+      document.body.style.overflow = ''
+    }
+  }, [open])
+
+  // Handle Escape key
+  React.useEffect(() => {
+    if (!open) return
+
+    const handleEscape = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        handleOpenChange(false)
+      }
+    }
+
+    document.addEventListener('keydown', handleEscape)
+    return () => document.removeEventListener('keydown', handleEscape)
+  }, [open, handleOpenChange])
 
   return (
     <DialogContext.Provider value={{ open, onOpenChange: handleOpenChange }}>
@@ -65,33 +93,60 @@ export function DialogContent({ children, className }: DialogContentProps) {
   const context = React.useContext(DialogContext)
   if (!context) throw new Error('DialogContent must be used within Dialog')
 
-  if (!context.open) return null
+  // Focus trap - focus first focusable element when dialog opens
+  const dialogRef = React.useRef<HTMLDivElement>(null)
+  React.useEffect(() => {
+    if (context.open && dialogRef.current) {
+      const firstFocusable = dialogRef.current.querySelector(
+        'button, [href], input, select, textarea, [tabindex]:not([tabindex="-1"])'
+      ) as HTMLElement
+      firstFocusable?.focus()
+    }
+  }, [context.open])
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center">
-      {/* Backdrop */}
-      <div 
-        className="fixed inset-0 bg-black/50 backdrop-blur-sm"
-        onClick={() => context.onOpenChange(false)}
-      />
-      {/* Content */}
-      <div className={cn(
-        "relative z-50 bg-white rounded-3xl shadow-2xl border border-slate-200/50 max-w-lg w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col",
-        className
-      )}>
-        <Button
-          variant="ghost"
-          size="sm"
-          className="absolute top-4 right-4 rounded-xl h-8 w-8 p-0 hover:bg-slate-100:bg-slate-800 z-10"
-          onClick={() => context.onOpenChange(false)}
-        >
-          <X className="h-4 w-4" />
-        </Button>
-        <div className="overflow-y-auto">
-          {children}
+    <AnimatePresence>
+      {context.open && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+          {/* Backdrop */}
+          <motion.div
+            className="fixed inset-0 bg-black/50 backdrop-blur-sm"
+            variants={backdropVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={() => context.onOpenChange(false)}
+          />
+          
+          {/* Content */}
+          <motion.div
+            ref={dialogRef}
+            className={cn(
+              "relative z-50 bg-white rounded-2xl shadow-xl border border-slate-200/60 max-w-lg w-full max-h-[90vh] overflow-hidden flex flex-col",
+              className
+            )}
+            variants={scaleVariants}
+            initial="hidden"
+            animate="visible"
+            exit="exit"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <Button
+              variant="ghost"
+              size="sm"
+              className="absolute top-4 right-4 rounded-xl h-8 w-8 p-0 hover:bg-slate-100 z-10"
+              onClick={() => context.onOpenChange(false)}
+              aria-label="Close dialog"
+            >
+              <X className="h-4 w-4" />
+            </Button>
+            <div className="overflow-y-auto">
+              {children}
+            </div>
+          </motion.div>
         </div>
-      </div>
-    </div>
+      )}
+    </AnimatePresence>
   )
 }
 
@@ -115,7 +170,7 @@ interface DialogTitleProps {
 
 export function DialogTitle({ children, className }: DialogTitleProps) {
   return (
-    <h2 className={cn("text-2xl font-semibold text-slate-900 tracking-tight", className)}>
+    <h2 className={cn("text-headline text-slate-900", className)}>
       {children}
     </h2>
   )
@@ -128,7 +183,7 @@ interface DialogDescriptionProps {
 
 export function DialogDescription({ children, className }: DialogDescriptionProps) {
   return (
-    <p className={cn("text-sm text-slate-600 mt-2 leading-relaxed", className)}>
+    <p className={cn("text-body text-slate-600 mt-2 leading-relaxed", className)}>
       {children}
     </p>
   )

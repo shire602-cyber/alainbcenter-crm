@@ -1,10 +1,13 @@
 'use client'
 
+'use client'
+
 import * as React from 'react'
 import { Sidebar } from './Sidebar'
 import { TopNavClient } from './TopNavClient'
 import { SidebarProvider, useSidebar } from './SidebarContext'
 import { MobileBottomNav } from '@/components/navigation/MobileBottomNav'
+import { PageTransition } from './PageTransition'
 import { cn } from '@/lib/utils'
 
 function MainLayoutContent({ children }: { children: React.ReactNode }) {
@@ -22,7 +25,9 @@ function MainLayoutContent({ children }: { children: React.ReactNode }) {
         
         <main className="py-4 px-4 sm:px-6 lg:px-6 bg-background pb-20 md:pb-4">
           <div className="mx-auto max-w-7xl">
-            {children}
+            <PageTransition>
+              {children}
+            </PageTransition>
           </div>
         </main>
         <MobileBottomNav />

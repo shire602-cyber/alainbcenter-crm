@@ -1,8 +1,11 @@
 'use client'
 
+'use client'
+
 import { ReactNode } from 'react'
 import { TrendingUp, TrendingDown, Minus } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import { Sparkline } from '@/components/charts/Sparkline'
 
 interface KPICardProps {
   title: string
@@ -36,7 +39,7 @@ export function KPICard({
     >
       {/* Header */}
       <div className="flex items-start justify-between mb-4">
-        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+        <span className="text-caption font-bold text-slate-700 uppercase tracking-wider">
           {title}
         </span>
         {icon && (
@@ -48,7 +51,7 @@ export function KPICard({
 
       {/* Value */}
       <div className="flex items-baseline justify-between gap-2 mb-3">
-        <span className="text-3xl font-bold text-slate-900 tracking-tight">
+        <span className="text-display font-bold text-slate-900">
           {typeof value === 'number' ? value.toLocaleString() : value}
         </span>
         
@@ -70,20 +73,14 @@ export function KPICard({
 
       {/* Sparkline */}
       {sparkline && sparkline.length > 0 && (
-        <div className="h-12 mt-4 flex items-end gap-1">
-          {sparkline.map((height, idx) => (
-            <div
-              key={idx}
-              className="flex-1 bg-slate-900 rounded-t-md transition-all duration-300 hover:bg-slate-800"
-              style={{ height: `${Math.max(20, (height / Math.max(...sparkline)) * 100)}%` }}
-            />
-          ))}
+        <div className="h-12 mt-4">
+          <Sparkline data={sparkline} color="#3b82f6" height={48} variant="area" />
         </div>
       )}
 
       {/* Period label */}
       {trend?.period && (
-        <span className="text-xs text-slate-500 mt-2 block font-medium">
+        <span className="text-caption text-slate-500 mt-2 block">
           {trend.period}
         </span>
       )}
