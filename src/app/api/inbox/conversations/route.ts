@@ -1,6 +1,30 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
+
+/**
+ * Extract Instagram profile photo from conversation knownFields
+ */
+function extractInstagramProfilePhoto(conv: any): string | null {
+  if (!conv.knownFields) {
+    return null
+  }
+  
+  try {
+    const knownFields = typeof conv.knownFields === 'string' 
+      ? JSON.parse(conv.knownFields) 
+      : conv.knownFields
+    
+    if (knownFields?.instagramProfilePic) {
+      return knownFields.instagramProfilePic
+    }
+  } catch (error) {
+    // Ignore parse errors
+  }
+  
+  return null
+}
+
 /**
  * GET /api/inbox/conversations
  * Returns list of conversations sorted by lastMessageAt (desc)
@@ -55,6 +79,7 @@ export async function GET(req: NextRequest) {
               email: true,
             },
           },
+          knownFields: true, // Include to extract Instagram profile photo
           messages: {
             orderBy: { createdAt: 'desc' },
             take: 1,
@@ -119,6 +144,7 @@ export async function GET(req: NextRequest) {
                   email: true,
                 },
               },
+              knownFields: true, // Include to extract Instagram profile photo
               messages: {
                 orderBy: { createdAt: 'desc' },
                 take: 1,
@@ -238,6 +264,8 @@ export async function GET(req: NextRequest) {
             },
           }
     
+          const instagramProfilePic = extractInstagramProfilePhoto(conv)
+          
           return {
             id: conv.id,
             contact: {
@@ -245,6 +273,7 @@ export async function GET(req: NextRequest) {
               fullName: conv.contact.fullName,
               phone: conv.contact.phone,
               email: conv.contact.email,
+              profilePhoto: instagramProfilePic, // Include Instagram profile photo if available
             },
             channel: conv.channel,
             status: conv.status,

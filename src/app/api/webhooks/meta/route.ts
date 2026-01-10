@@ -6,10 +6,11 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
-import { storeWebhookEvent, getConnectionByPageId, getConnectionByIgBusinessId } from '@/server/integrations/meta/storage'
+import { storeWebhookEvent, getConnectionByPageId, getConnectionByIgBusinessId, getDecryptedPageToken } from '@/server/integrations/meta/storage'
 import { normalizeWebhookEvent, type NormalizedWebhookEvent } from '@/server/integrations/meta/normalize'
 import { handleInboundMessageAutoMatch } from '@/lib/inbound/autoMatchPipeline'
 import { getWebhookVerifyToken, getAppSecret } from '@/server/integrations/meta/config'
+import { fetchInstagramUserProfile } from '@/server/integrations/meta/profile'
 
 /**
  * GET /api/webhooks/meta
@@ -581,6 +582,44 @@ async function processWebhookPayload(payload: any) {
           continue
         }
 
+        // For Instagram messages, fetch user profile (name, username, profile photo) from Meta Graph API
+        let instagramProfile: { name: string | null; username: string | null; profilePic: string | null } | null = null
+        if (payload.object === 'instagram' && connection) {
+          try {
+            const pageAccessToken = await getDecryptedPageToken(connection.id)
+            if (pageAccessToken && event.senderId) {
+              instagramProfile = await fetchInstagramUserProfile(event.senderId, pageAccessToken)
+              
+              if (instagramProfile) {
+                console.log('📸 [META-WEBHOOK-INSTAGRAM] Fetched Instagram user profile', {
+                  senderId: event.senderId,
+                  name: instagramProfile.name || 'N/A',
+                  username: instagramProfile.username || 'N/A',
+                  hasProfilePic: !!instagramProfile.profilePic,
+                })
+              } else {
+                console.warn('⚠️ [META-WEBHOOK-INSTAGRAM] Failed to fetch Instagram user profile', {
+                  senderId: event.senderId,
+                  connectionId: connection.id,
+                })
+              }
+            } else {
+              console.warn('⚠️ [META-WEBHOOK-INSTAGRAM] Cannot fetch profile - missing access token or senderId', {
+                hasToken: !!pageAccessToken,
+                hasSenderId: !!event.senderId,
+                connectionId: connection.id,
+              })
+            }
+          } catch (profileError: any) {
+            console.error('❌ [META-WEBHOOK-INSTAGRAM] Error fetching Instagram profile', {
+              senderId: event.senderId,
+              error: profileError.message,
+              connectionId: connection.id,
+            })
+            // Continue processing message even if profile fetch fails
+          }
+        }
+
         try {
           // Extract attachments based on message structure
           // Instagram: rawPayload.attachments[] directly OR rawPayload.payload.attachments[] (check both)
@@ -663,6 +702,7 @@ async function processWebhookPayload(payload: any) {
             },
             timestamp: event.timestamp || new Date(),
             channel,
+            instagramProfile: instagramProfile || undefined, // Pass Instagram profile if fetched
           })
 
           // Defensive logging: Log successful Instagram message storage
@@ -732,6 +772,7 @@ async function processInboundMessage(data: {
   message: any
   timestamp: Date
   channel: 'INSTAGRAM' | 'FACEBOOK'
+  instagramProfile?: { name: string | null; username: string | null; profilePic: string | null } | null
 }) {
   const { senderId, message, timestamp, channel } = data
   const isInstagram = channel === 'INSTAGRAM'
@@ -814,12 +855,20 @@ async function processInboundMessage(data: {
       }
     }
 
+    // For Instagram, use fetched profile name, or username as fallback, or "Instagram User" as last resort
+    let fromName: string | null = null
+    if (isInstagram && data.instagramProfile) {
+      fromName = data.instagramProfile.name || data.instagramProfile.username || 'Instagram User'
+    } else if (isInstagram) {
+      fromName = 'Instagram User' // Fallback if profile fetch failed
+    }
+
     const autoMatchInput = {
       channel: data.channel, // 'INSTAGRAM' or 'FACEBOOK' (will be normalized to lowercase by normalizeChannel)
       providerMessageId: providerMessageId,
       fromPhone: null, // Instagram/Facebook use user IDs, not phone numbers
       fromEmail: null,
-      fromName: null,
+      fromName: fromName, // Use fetched Instagram profile name, or fallback
       text: text,
       timestamp: timestamp,
       metadata: {
@@ -828,6 +877,12 @@ async function processInboundMessage(data: {
         mediaMimeType: mediaMimeType,
         senderId: senderId,
         pageId: data.pageId,
+        // Store Instagram profile information in metadata
+        instagramProfile: isInstagram && data.instagramProfile ? {
+          name: data.instagramProfile.name,
+          username: data.instagramProfile.username,
+          profilePic: data.instagramProfile.profilePic,
+        } : undefined,
       },
     }
 

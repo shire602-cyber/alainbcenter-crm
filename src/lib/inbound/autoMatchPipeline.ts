@@ -90,32 +90,101 @@ export async function handleInboundMessageAutoMatch(
   // Extract waId from webhook payload if available
   const webhookPayload = input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata?.rawPayload || input.metadata
   
-  // Normalize phone for WhatsApp (digits-only → E.164)
-  let normalizedPhone: string | null = null
-  if (input.fromPhone && input.channel === 'WHATSAPP') {
-    try {
-      normalizedPhone = normalizeInboundPhone(input.fromPhone)
-      console.log(`✅ [AUTO-MATCH] Normalized phone: ${input.fromPhone} → ${normalizedPhone}`)
-    } catch (normalizeError: any) {
-      // Log structured error but don't abort - use raw phone
-      console.error(`❌ [AUTO-MATCH] Failed to normalize phone`, {
-        conversationId: null, // Will be set after conversation creation
-        inboundProviderMessageId: input.providerMessageId,
-        rawFrom: input.fromPhone,
-        normalizedPhoneAttempt: null,
-        error: normalizeError.message,
-      })
-      // Continue with raw phone - upsertContact will try to normalize again
+  // For Instagram, use Instagram user ID as identifier (store in phone field with prefix)
+  const isInstagram = input.channel === 'INSTAGRAM'
+  const isFacebook = input.channel === 'FACEBOOK'
+  const isWhatsApp = input.channel === 'WHATSAPP'
+  
+  let contactPhone: string
+  let contactEmail: string | null = null
+  let contactName: string | undefined = undefined
+  let instagramUserId: string | null = null
+  let instagramProfilePic: string | null = null
+  
+  if (isInstagram) {
+    // For Instagram, use Instagram user ID with prefix in phone field
+    instagramUserId = input.metadata?.senderId || null
+    if (instagramUserId) {
+      contactPhone = `ig:${instagramUserId}` // Store Instagram user ID with prefix
+    } else {
+      contactPhone = 'ig:unknown' // Fallback if no senderId
     }
+    
+    // Use fetched Instagram profile information if available
+    if (input.metadata?.instagramProfile) {
+      const profile = input.metadata.instagramProfile
+      contactName = profile.name || profile.username || input.fromName || undefined
+      instagramProfilePic = profile.profilePic || null
+      
+      console.log(`📸 [AUTO-MATCH-INSTAGRAM] Using Instagram profile info`, {
+        instagramUserId,
+        name: contactName || 'N/A',
+        username: profile.username || 'N/A',
+        hasProfilePic: !!instagramProfilePic,
+      })
+    } else {
+      contactName = input.fromName || undefined
+    }
+    
+    console.log(`📸 [AUTO-MATCH-INSTAGRAM] Creating/finding Instagram contact`, {
+      instagramUserId,
+      contactPhone,
+      contactName: contactName || 'N/A',
+      hasProfilePic: !!instagramProfilePic,
+    })
+  } else if (isFacebook) {
+    // For Facebook, use Facebook user ID with prefix
+    const facebookUserId = input.metadata?.senderId || null
+    if (facebookUserId) {
+      contactPhone = `fb:${facebookUserId}`
+    } else {
+      contactPhone = 'fb:unknown'
+    }
+    contactName = input.fromName || undefined
+  } else if (isWhatsApp) {
+    // For WhatsApp, normalize phone number
+    let normalizedPhone: string | null = null
+    if (input.fromPhone) {
+      try {
+        normalizedPhone = normalizeInboundPhone(input.fromPhone)
+        console.log(`✅ [AUTO-MATCH] Normalized phone: ${input.fromPhone} → ${normalizedPhone}`)
+      } catch (normalizeError: any) {
+        // Log structured error but don't abort - use raw phone
+        console.error(`❌ [AUTO-MATCH] Failed to normalize phone`, {
+          conversationId: null, // Will be set after conversation creation
+          inboundProviderMessageId: input.providerMessageId,
+          rawFrom: input.fromPhone,
+          normalizedPhoneAttempt: null,
+          error: normalizeError.message,
+        })
+        // Continue with raw phone - upsertContact will try to normalize again
+      }
+    }
+    contactPhone = normalizedPhone || input.fromPhone || input.fromEmail || 'unknown'
+    contactName = input.fromName || undefined
+  } else {
+    // Default fallback
+    contactPhone = input.fromPhone || input.fromEmail || 'unknown'
+    contactName = input.fromName || undefined
+    contactEmail = input.fromEmail || null
   }
   
   const contactResult = await upsertContact(prisma, {
-    phone: normalizedPhone || input.fromPhone || input.fromEmail || 'unknown',
-    fullName: input.fromName || undefined,
-    email: input.fromEmail || null,
+    phone: contactPhone,
+    fullName: contactName,
+    email: contactEmail,
     source: input.channel.toLowerCase(),
-    webhookPayload: webhookPayload, // For extracting waId
+    webhookPayload: webhookPayload, // For extracting waId (WhatsApp only)
   })
+  
+  // For Instagram, store profile photo URL if available (we'll need to add this to Contact model or use a different approach)
+  // For now, we'll update the contact with profile photo in a separate step if needed
+  if (isInstagram && instagramProfilePic && contactResult.id) {
+    // Note: Contact model doesn't have profilePhoto field yet
+    // We'll store it in metadata or add to schema later
+    // For now, we can store it in a separate table or add to Conversation metadata
+    console.log(`📸 [AUTO-MATCH-INSTAGRAM] Profile photo URL: ${instagramProfilePic} (storage pending schema update)`)
+  }
   
   // Fetch full contact record with all fields
   const contact = await prisma.contact.findUnique({
@@ -183,6 +252,21 @@ export async function handleInboundMessageAutoMatch(
     detectedLanguage,
   }))
   
+  // For Instagram, store profile photo in knownFields JSON if available
+  let knownFields: any = undefined
+  if (isInstagram && instagramProfilePic) {
+    knownFields = {
+      instagramProfilePic: instagramProfilePic,
+      instagramUserId: instagramUserId,
+      instagramUsername: input.metadata?.instagramProfile?.username || null,
+    }
+    console.log(`📸 [AUTO-MATCH-INSTAGRAM] Storing Instagram profile info in knownFields`, {
+      instagramUserId,
+      hasProfilePic: !!instagramProfilePic,
+      instagramUsername: input.metadata?.instagramProfile?.username || 'N/A',
+    })
+  }
+
   const conversationResult = await upsertConversation({
     contactId: contactResult.id,
     channel: input.channel,
@@ -190,6 +274,7 @@ export async function handleInboundMessageAutoMatch(
     timestamp: input.timestamp, // Use actual message timestamp
     externalThreadId, // Canonical external thread ID
     language: detectedLanguage, // CRITICAL FIX 4: Store detected language
+    knownFields: knownFields ? JSON.stringify(knownFields) : undefined, // Store Instagram profile info
   })
   
   // Fetch full conversation record (exclude lastProcessedInboundMessageId if column doesn't exist)

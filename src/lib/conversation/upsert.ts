@@ -19,6 +19,7 @@ export interface UpsertConversationInput {
   status?: string
   timestamp?: Date
   language?: string | null // CRITICAL FIX 4: Detected language (en, ar, hi, ur, etc.)
+  knownFields?: string | null // JSON string: Instagram profile info, etc.
 }
 
 /**
@@ -116,6 +117,7 @@ export async function upsertConversation(
       channel: channelLower, // Ensure normalized
       externalThreadId: effectiveThreadId, // Ensure thread ID is set
       language: input.language ?? existing.language, // CRITICAL FIX 4: Update language if provided
+      knownFields: input.knownFields ?? (existing as any).knownFields, // Update Instagram profile info if provided
     }
     
     // Restore soft-deleted conversation (clear deletedAt)
@@ -235,6 +237,7 @@ export async function upsertConversation(
         status: input.status || 'open',
         channel: channelLower, // Ensure normalized
         language: input.language ?? undefined, // CRITICAL FIX 4: Update language if provided
+        knownFields: input.knownFields ?? undefined, // Store Instagram profile info
         deletedAt: null, // CRITICAL FIX: Restore if soft-deleted (upsert update path)
       },
       create: {
@@ -247,6 +250,7 @@ export async function upsertConversation(
         lastMessageAt: timestamp,
         lastInboundAt: timestamp,
         language: input.language ?? null, // CRITICAL FIX 4: Store detected language
+        knownFields: input.knownFields ?? null, // Store Instagram profile info
       },
     })
   } catch (error: any) {
@@ -296,6 +300,7 @@ export async function upsertConversation(
             status: input.status || 'open',
             channel: channelLower,
             language: input.language ?? undefined,
+            knownFields: input.knownFields ?? undefined, // Store Instagram profile info
             deletedAt: null,
           },
         })
@@ -322,6 +327,7 @@ export async function upsertConversation(
               lastMessageAt: timestamp,
               lastInboundAt: timestamp,
               language: input.language ?? null,
+              knownFields: input.knownFields ?? null, // Store Instagram profile info
             },
           })
         } catch (createError: any) {

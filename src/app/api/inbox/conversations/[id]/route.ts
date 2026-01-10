@@ -3,6 +3,30 @@ import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 import { computeConversationFlags } from '@/lib/inbox/intelligence'
 import { MEDIA_TYPES } from '@/lib/media/extractMediaId'
+
+/**
+ * Extract Instagram profile photo from conversation knownFields
+ */
+function extractInstagramProfilePhoto(knownFields: string | null): string | null {
+  if (!knownFields) {
+    return null
+  }
+  
+  try {
+    const parsed = typeof knownFields === 'string' 
+      ? JSON.parse(knownFields) 
+      : knownFields
+    
+    if (parsed?.instagramProfilePic) {
+      return parsed.instagramProfilePic
+    }
+  } catch (error) {
+    // Ignore parse errors
+  }
+  
+  return null
+}
+
 /**
  * GET /api/inbox/conversations/[id]
  * Returns full conversation details with all messages
@@ -46,6 +70,7 @@ export async function GET(
           aiLockUntil: true,
           lastAiOutboundAt: true,
           ruleEngineMemory: true,
+          knownFields: true, // Include to extract Instagram profile photo
           deletedAt: true,
           contact: {
             select: {
@@ -447,6 +472,7 @@ export async function GET(
           phone: conversation.contact.phone,
           email: conversation.contact.email,
           nationality: conversation.contact.nationality,
+          profilePhoto: extractInstagramProfilePhoto(conversation.knownFields as string | null), // Extract Instagram profile photo
         },
         
         lead: conversation.lead

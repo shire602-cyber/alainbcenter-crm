@@ -77,12 +77,36 @@ export function getExternalThreadId(
     return getEmailExternalThreadId(contact, threadId)
   }
   
+  // For Instagram, use Instagram user ID from phone field (format: ig:123456789)
+  if (channelLower === 'instagram') {
+    if (contact.phone && contact.phone.startsWith('ig:')) {
+      const instagramUserId = contact.phone.replace('ig:', '')
+      return `instagram:${instagramUserId}`
+    }
+    // Fallback: try to extract from webhook payload
+    if (webhookPayload?.metadata?.senderId) {
+      return `instagram:${webhookPayload.metadata.senderId}`
+    }
+  }
+  
+  // For Facebook, use Facebook user ID from phone field (format: fb:123456789)
+  if (channelLower === 'facebook') {
+    if (contact.phone && contact.phone.startsWith('fb:')) {
+      const facebookUserId = contact.phone.replace('fb:', '')
+      return `facebook:${facebookUserId}`
+    }
+  }
+  
   // For other channels, use contact identifier
   if (contact.email) {
     return `${channelLower}:${contact.email.toLowerCase()}`
   }
   
   if (contact.phone) {
+    // Skip phone normalization for Instagram/Facebook (they use prefixes)
+    if (contact.phone.startsWith('ig:') || contact.phone.startsWith('fb:')) {
+      return `${channelLower}:${contact.phone}`
+    }
     const normalized = contact.phone.replace(/[^0-9+]/g, '')
     return `${channelLower}:${normalized.startsWith('+') ? normalized : `+${normalized}`}`
   }
