@@ -1391,26 +1391,8 @@ async function findOrCreateLead(input: {
     // BUG FIX: Use actual message timestamp instead of webhook processing time
     const messageTimestamp = input.timestamp || new Date()
     
-    // Validate contactId exists before proceeding
-    const contactExists = await prisma.contact.findUnique({
-      where: { id: input.contactId },
-      select: { id: true },
-    })
-    
-    if (!contactExists) {
-      const errorMsg = `Contact ${input.contactId} does not exist`
-      if (isInstagram) {
-        console.error(`❌ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Validation failed`, {
-          error: errorMsg,
-          errorName: 'ValidationError',
-          ...logContext,
-        })
-      }
-      throw new Error(errorMsg)
-    }
-    
     if (isInstagram) {
-      console.log(`📸 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Contact validated`, {
+      console.log(`📸 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Starting`, {
         contactId: input.contactId,
       })
     }

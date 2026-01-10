@@ -74,7 +74,7 @@ function SignalModule({
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Icon className="h-4 w-4 text-slate-400" />
-            <h4 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+            <h4 className="text-h2 font-bold text-slate-900 tracking-tight">
               {title}
             </h4>
           </div>
@@ -91,7 +91,7 @@ function SignalModule({
           )}
         </div>
         <div className="py-6 text-center">
-          <p className="text-body muted-text">
+          <p className="text-body text-slate-600 font-medium">
             {emptyMessage}
           </p>
         </div>
@@ -106,11 +106,11 @@ function SignalModule({
     )}>
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Icon className="h-4 w-4 text-blue-600 dark:text-blue-400" />
-          <h4 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+          <Icon className="h-4 w-4 text-blue-700" />
+          <h4 className="text-h2 font-bold text-slate-900 tracking-tight">
             {title}
           </h4>
-          <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+          <Badge className="chip bg-blue-100 text-blue-700 font-semibold">
             {count}
           </Badge>
         </div>
@@ -129,7 +129,7 @@ function SignalModule({
           {total > count && (
             <Link
               href={`/leads?filter=${iconType}`}
-              className="text-meta text-blue-600 dark:text-blue-400 hover:underline flex items-center gap-1"
+              className="text-meta text-blue-700 hover:text-blue-900 hover:underline flex items-center gap-1 font-semibold"
             >
               View all ({total})
               <ChevronRight className="h-3 w-3" />
@@ -193,7 +193,7 @@ export const SignalsPanel = memo(function SignalsPanel({ signals: propSignals }:
       <div className="space-y-4">
         {[1, 2, 3].map((i) => (
           <Card key={i} className="card-premium p-4">
-            <div className="h-24 bg-slate-200 dark:bg-slate-800 rounded-[10px] animate-pulse" />
+            <div className="h-24 bg-slate-200 rounded-[10px] animate-pulse" />
           </Card>
         ))}
       </div>

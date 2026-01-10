@@ -39,15 +39,15 @@ interface UpNextItem {
 function ChannelIcon({ channel }: { channel?: string }) {
   const ch = channel?.toLowerCase() || 'whatsapp'
   if (ch.includes('whatsapp') || ch.includes('wa')) {
-    return <MessageSquare className="h-3.5 w-3.5 text-green-600 dark:text-green-400" />
+    return <MessageSquare className="h-3.5 w-3.5 text-green-700" />
   }
   if (ch.includes('phone') || ch.includes('call')) {
-    return <Phone className="h-3.5 w-3.5 text-blue-600 dark:text-blue-400" />
+    return <Phone className="h-3.5 w-3.5 text-blue-700" />
   }
   if (ch.includes('email') || ch.includes('mail')) {
-    return <Mail className="h-3.5 w-3.5 text-slate-500" />
+    return <Mail className="h-3.5 w-3.5 text-slate-600" />
   }
-  return <MessageSquare className="h-3.5 w-3.5 text-slate-500" />
+  return <MessageSquare className="h-3.5 w-3.5 text-slate-600" />
 }
 
 const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }) {
@@ -68,7 +68,7 @@ const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }
       className={cn(
         "group flex items-center gap-3 p-3 radius-xl",
         "bg-card-muted border border-subtle",
-        "hover:bg-card hover:border-slate-300 dark:hover:border-slate-700",
+        "hover:bg-white hover:border-slate-300",
         "card-pressable"
       )}
       onMouseEnter={() => setHovered(true)}
@@ -76,21 +76,21 @@ const UpNextItemRow = memo(function UpNextItemRow({ item }: { item: UpNextItem }
       onClick={handleOpen}
     >
       {/* LEFT: Channel icon in soft circle */}
-      <div className="w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center flex-shrink-0">
+      <div className="w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center flex-shrink-0">
         <ChannelIcon channel={item.channel} />
       </div>
       
       {/* MIDDLE: Name + Service + Preview */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <p className="text-body font-medium text-slate-900 dark:text-slate-100 truncate">
+          <p className="text-body font-semibold text-slate-900 truncate">
             {item.contactName || 'Unknown'}
           </p>
           {item.serviceType && (
-            <Badge className="chip text-[11px] px-2 py-0.5">{item.serviceType}</Badge>
+            <Badge className="chip text-[11px] px-2 py-0.5 font-semibold">{item.serviceType}</Badge>
           )}
         </div>
-        <p className="text-meta text-slate-600 dark:text-slate-400 line-clamp-1">
+        <p className="text-meta text-slate-600 line-clamp-1 font-medium">
           {previewText}
         </p>
       </div>
@@ -186,7 +186,7 @@ export const UpNextList = memo(function UpNextList({ items: propItems }: UpNextL
       <Card className="card-premium p-4">
         <div className="space-y-2">
           {[1, 2, 3].map((i) => (
-            <div key={i} className="h-16 bg-slate-200 dark:bg-slate-800 rounded-[12px] animate-pulse" />
+            <div key={i} className="h-16 bg-slate-200 rounded-[12px] animate-pulse" />
           ))}
         </div>
       </Card>
@@ -200,7 +200,7 @@ export const UpNextList = memo(function UpNextList({ items: propItems }: UpNextL
   return (
     <Card className="card-premium p-4">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+        <h4 className="text-body font-bold text-slate-900 tracking-tight">
           Up Next
         </h4>
         {!propItems && (

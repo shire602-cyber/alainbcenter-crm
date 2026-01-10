@@ -51,13 +51,13 @@ export const SignalRow = memo(function SignalRow({
   const [hovered, setHovered] = useState(false)
 
   const iconComponent = {
-    renewal: <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400" />,
-    waiting: <Hourglass className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
-    alert: <AlertTriangle className="h-4 w-4 text-amber-600 dark:text-amber-400" />,
+    renewal: <Calendar className="h-4 w-4 text-blue-700" />,
+    waiting: <Hourglass className="h-4 w-4 text-amber-700" />,
+    alert: <AlertTriangle className="h-4 w-4 text-amber-700" />,
   }[icon]
 
   const channelIcon = channel?.toLowerCase().includes('whatsapp') ? (
-    <MessageSquare className="h-3 w-3 text-green-600 dark:text-green-400" />
+    <MessageSquare className="h-3 w-3 text-green-700" />
   ) : null
 
   async function handleAction(e: React.MouseEvent) {
@@ -129,7 +129,7 @@ export const SignalRow = memo(function SignalRow({
       {/* Middle: Content */}
       <div className="flex-1 min-w-0">
         <div className="flex items-center gap-2 mb-1">
-          <p className="text-body font-medium text-slate-900 dark:text-slate-100 truncate">
+          <p className="text-body font-semibold text-slate-900 truncate">
             {leadName}
           </p>
           {serviceTypeName && (

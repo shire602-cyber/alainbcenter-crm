@@ -43,15 +43,15 @@ interface FocusItem {
 function ChannelIcon({ channel }: { channel?: string }) {
   const ch = channel?.toLowerCase() || 'whatsapp'
   if (ch.includes('whatsapp') || ch.includes('wa')) {
-    return <MessageSquare className="h-4 w-4 text-green-600 dark:text-green-400" />
+    return <MessageSquare className="h-4 w-4 text-green-700" />
   }
   if (ch.includes('phone') || ch.includes('call')) {
-    return <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+    return <Phone className="h-4 w-4 text-blue-700" />
   }
   if (ch.includes('email') || ch.includes('mail')) {
-    return <Mail className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+    return <Mail className="h-4 w-4 text-slate-700" />
   }
-  return <MessageSquare className="h-4 w-4 text-slate-500" />
+  return <MessageSquare className="h-4 w-4 text-slate-600" />
 }
 
 export const YourFocusNow = memo(function YourFocusNow() {
@@ -110,11 +110,11 @@ export const YourFocusNow = memo(function YourFocusNow() {
       <Card className="card-premium p-6">
         <div className="flex items-center gap-6">
           <div className="flex-1 space-y-3">
-            <div className="h-6 w-3/4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-4 w-full bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-4 w-2/3 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            <div className="h-6 w-3/4 bg-slate-200 rounded animate-pulse" />
+            <div className="h-4 w-full bg-slate-200 rounded animate-pulse" />
+            <div className="h-4 w-2/3 bg-slate-200 rounded animate-pulse" />
           </div>
-          <div className="h-11 w-32 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+          <div className="h-11 w-32 bg-slate-200 rounded-lg animate-pulse" />
         </div>
       </Card>
     )
@@ -123,13 +123,13 @@ export const YourFocusNow = memo(function YourFocusNow() {
   if (!item || completed) {
     return (
       <Card className="card-premium p-8 text-center">
-        <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
-          <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+        <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+          <CheckCircle2 className="h-8 w-8 text-green-700" />
         </div>
-        <p className="text-heading text-slate-900 dark:text-slate-100 mb-2">
+        <p className="text-heading text-slate-900 mb-2 font-bold tracking-tight">
           All caught up
         </p>
-        <p className="text-body muted-text">
+        <p className="text-body text-slate-600 font-medium">
           Enjoy the calm — we'll notify you if something comes up
         </p>
       </Card>
@@ -160,7 +160,7 @@ export const YourFocusNow = memo(function YourFocusNow() {
               {isSlaBreached && (
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                  <span className="text-meta text-red-600 dark:text-red-400">SLA breached</span>
+                  <span className="text-meta text-red-700 font-semibold">SLA breached</span>
                 </div>
               )}
             </div>
@@ -175,11 +175,11 @@ export const YourFocusNow = memo(function YourFocusNow() {
             </Button>
           </div>
           
-          <h3 className="text-heading text-slate-900 dark:text-slate-100 mb-2">
+          <h3 className="text-heading text-slate-900 mb-2 font-bold tracking-tight">
             {item.contactName || 'Unknown Contact'}
           </h3>
           
-          <p className="text-body text-slate-700 dark:text-slate-300 line-clamp-2 mb-4">
+          <p className="text-body text-slate-700 line-clamp-2 mb-4 font-medium">
             {previewLines}
           </p>
 

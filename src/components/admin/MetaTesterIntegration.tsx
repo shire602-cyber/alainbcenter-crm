@@ -441,23 +441,23 @@ export function MetaTesterIntegration({
     return (
       <div className="space-y-3">
         {error && (
-          <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-300">
-            <div className="font-medium">{error}</div>
+          <div className="p-2 bg-red-50 border border-red-200/60 rounded text-xs text-red-700 font-semibold">
+            <div className="font-bold">{error}</div>
             {errorDetails && (
-              <div className="mt-1 text-red-600 dark:text-red-400">{errorDetails}</div>
+              <div className="mt-1 text-red-600 font-medium">{errorDetails}</div>
             )}
           </div>
         )}
         {success && (
-          <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-xs text-green-700 dark:text-green-300">
+          <div className="p-2 bg-green-50 border border-green-200/60 rounded text-xs text-green-700 font-semibold">
             {success}
           </div>
         )}
 
         {connectionWarnings.length > 0 && (
-          <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded text-xs">
-            <p className="font-medium text-yellow-800 dark:text-yellow-200 mb-2">⚠️ Instagram Webhook Setup Required:</p>
-            <ul className="list-disc list-inside space-y-1 text-yellow-700 dark:text-yellow-300">
+          <div className="p-3 bg-yellow-50 border border-yellow-200/60 rounded text-xs">
+            <p className="font-bold text-yellow-800 mb-2">⚠️ Instagram Webhook Setup Required:</p>
+            <ul className="list-disc list-inside space-y-1 text-yellow-700 font-medium">
               {connectionWarnings.map((warning, idx) => {
                 // If warning contains verify token, make it copyable
                 if (warning.includes('Verify Token:')) {
@@ -467,7 +467,7 @@ export function MetaTesterIntegration({
                       {parts[0]}Verify Token:{' '}
                       {parts[1] && (
                         <span className="inline-flex items-center gap-1">
-                          <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded font-mono">
+                          <code className="bg-yellow-100 px-1 rounded font-mono font-semibold">
                             {parts[1]}
                           </code>
                           <button
@@ -476,7 +476,7 @@ export function MetaTesterIntegration({
                               setSuccess('Verify token copied!')
                               setTimeout(() => setSuccess(null), 2000)
                             }}
-                            className="text-xs px-1 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                            className="text-xs px-1 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-semibold"
                           >
                             Copy
                           </button>
@@ -491,8 +491,8 @@ export function MetaTesterIntegration({
           </div>
         )}
 
-        <div className="text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
-          <p className="font-medium text-green-600 dark:text-green-400">Connected:</p>
+        <div className="text-xs text-slate-600 space-y-1.5 font-medium">
+          <p className="font-bold text-green-700">Connected:</p>
           {connectionStatus.map((conn) => {
             // Use persisted config for display if available (preferred source)
             const displayPageName = persistedConfig?.pageName || conn.pageName || conn.pageId
@@ -506,7 +506,7 @@ export function MetaTesterIntegration({
             const igFields = igSubscriptionStatus?.fields || []
             
             return (
-              <div key={conn.id} className="pl-2 border-l-2 border-green-200 dark:border-green-800 space-y-2">
+              <div key={conn.id} className="pl-2 border-l-2 border-green-200/60 space-y-2">
                 <div>
                   <p className="font-medium">{displayPageName}</p>
                   {displayIgUsername && (

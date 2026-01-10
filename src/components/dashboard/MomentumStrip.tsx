@@ -44,10 +44,10 @@ function MetricPill({
   const [hovered, setHovered] = useState(false)
 
   const colorClasses = {
-    blue: 'bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60',
-    green: 'bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border-green-200/60 dark:border-green-800/60',
-    purple: 'bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 border-purple-200/60 dark:border-purple-800/60',
-    amber: 'bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60',
+    blue: 'bg-blue-50 text-blue-700 border-blue-200/60',
+    green: 'bg-green-50 text-green-700 border-green-200/60',
+    purple: 'bg-purple-50 text-purple-700 border-purple-200/60',
+    amber: 'bg-amber-50 text-amber-700 border-amber-200/60',
   }
 
   const handleClick = () => {
@@ -140,7 +140,7 @@ export const MomentumStrip = memo(function MomentumStrip({ momentum: propMomentu
       <Card className="card-premium p-4">
         <div className="flex items-center gap-3 flex-wrap">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-10 w-28 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+            <div key={i} className="h-10 w-28 bg-slate-200 rounded-lg animate-pulse" />
           ))}
         </div>
       </Card>
@@ -157,10 +157,10 @@ export const MomentumStrip = memo(function MomentumStrip({ momentum: propMomentu
       <Card className="card-premium p-6 text-center">
         <div className="flex flex-col items-center gap-2">
           <Sparkles className="h-5 w-5 text-slate-400" />
-          <p className="text-body font-medium text-slate-700 dark:text-slate-300">
+          <p className="text-body font-semibold text-slate-700">
             Getting started…
           </p>
-          <p className="text-meta muted-text">
+          <p className="text-meta text-slate-600 font-medium">
             Your impact today will appear here
           </p>
         </div>

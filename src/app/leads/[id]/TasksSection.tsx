@@ -267,13 +267,13 @@ export default function TasksSection({ leadId }: { leadId: number }) {
   const getPriorityColor = (priority: string) => {
     switch (priority.toUpperCase()) {
       case 'HIGH':
-        return 'bg-red-100 text-red-800 dark:bg-red-900/20 dark:text-red-400'
+        return 'bg-red-100 text-red-800 font-semibold'
       case 'MEDIUM':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/20 dark:text-yellow-400'
+        return 'bg-yellow-100 text-yellow-800 font-semibold'
       case 'LOW':
-        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/20 dark:text-blue-400'
+        return 'bg-blue-100 text-blue-800 font-semibold'
       default:
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/20 dark:text-gray-400'
+        return 'bg-slate-100 text-slate-800 font-semibold'
     }
   }
 
@@ -346,7 +346,7 @@ export default function TasksSection({ leadId }: { leadId: number }) {
 
       <CardContent className="space-y-3">
         {error && (
-          <div className="bg-red-50 dark:bg-red-900/20 text-red-800 dark:text-red-400 text-sm px-3 py-2 rounded-lg">
+          <div className="bg-red-50 text-red-800 text-sm px-3 py-2 rounded-lg font-semibold">
             {error}
           </div>
         )}
@@ -372,7 +372,7 @@ export default function TasksSection({ leadId }: { leadId: number }) {
                     task.status === 'DONE'
                       ? 'bg-muted/50 border-muted'
                       : overdue
-                        ? 'bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-800'
+                        ? 'bg-red-50 border-red-200/60'
                         : 'bg-background border-border hover:border-primary/50'
                   )}
                 >
@@ -380,9 +380,9 @@ export default function TasksSection({ leadId }: { leadId: number }) {
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 mb-1">
                         {task.status === 'DONE' ? (
-                          <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                          <CheckCircle2 className="h-4 w-4 text-green-700 flex-shrink-0" />
                         ) : (
-                          <Circle className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                          <Circle className="h-4 w-4 text-slate-400 flex-shrink-0" />
                         )}
                         <h4 className={cn(
                           'text-sm font-medium',
@@ -410,7 +410,7 @@ export default function TasksSection({ leadId }: { leadId: number }) {
                         {task.dueAt && (
                           <div className="flex items-center gap-1">
                             <Calendar className="h-3 w-3" />
-                            <span className={cn(overdue && 'text-red-600 dark:text-red-400 font-medium')}>
+                            <span className={cn(overdue && 'text-red-700 font-semibold')}>
                               {formatDueDate(task.dueAt)}
                             </span>
                           </div>

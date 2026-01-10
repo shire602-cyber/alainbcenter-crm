@@ -91,17 +91,17 @@ export function EndOfDaySummary() {
       <DialogTrigger asChild>
         <Button
           variant="outline"
-          className="w-full rounded-xl h-12 border-2 border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-primary/5 transition-all"
+          className="w-full rounded-xl h-12 border-2 border-slate-300/60 hover:border-primary hover:bg-primary/5 transition-all"
         >
           <div className="flex items-center gap-3 w-full">
-            <div className="w-10 h-10 rounded-lg bg-primary/10 dark:bg-primary/20 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
               <Target className="h-5 w-5 text-primary" />
             </div>
             <div className="flex-1 text-left">
-              <p className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+              <p className="text-sm font-bold text-slate-900 tracking-tight">
                 End-of-Day Summary
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-600 font-medium">
                 {totalActions} action{totalActions !== 1 ? 's' : ''} completed today
               </p>
             </div>
@@ -120,17 +120,17 @@ export function EndOfDaySummary() {
         <div className="space-y-6 mt-4">
           {/* Completed Actions */}
           <div>
-            <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-              <CheckCircle2 className="h-4 w-4 text-green-600" />
+            <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2 tracking-tight">
+              <CheckCircle2 className="h-4 w-4 text-green-700" />
               Completed Actions
             </h3>
             <div className="grid grid-cols-3 gap-3">
               {summary.topActions.map((action, idx) => (
-                <Card key={idx} className="p-4 text-center border-2 border-slate-200 dark:border-slate-800">
-                  <p className="text-2xl font-bold text-slate-900 dark:text-slate-100 mb-1">
+                <Card key={idx} className="p-4 text-center border-2 border-slate-200/60">
+                  <p className="text-2xl font-bold text-slate-900 mb-1 tracking-tight">
                     {action.count}
                   </p>
-                  <p className="text-xs text-slate-600 dark:text-slate-400">
+                  <p className="text-xs text-slate-600 font-semibold">
                     {action.label}
                   </p>
                 </Card>
@@ -141,27 +141,27 @@ export function EndOfDaySummary() {
           {/* Revenue Impact */}
           {(summary.revenueCreated || summary.potentialRevenue) && (
             <div>
-              <h3 className="text-sm font-semibold text-slate-700 dark:text-slate-300 mb-3 flex items-center gap-2">
-                <DollarSign className="h-4 w-4 text-green-600" />
+              <h3 className="text-sm font-bold text-slate-700 mb-3 flex items-center gap-2 tracking-tight">
+                <DollarSign className="h-4 w-4 text-green-700" />
                 Revenue Impact
               </h3>
               <div className="grid grid-cols-2 gap-3">
                 {summary.revenueCreated && summary.revenueCreated > 0 && (
-                  <Card className="p-5 border-2 border-green-200 dark:border-green-800 bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/10">
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                  <Card className="p-5 border-2 border-green-200/60 bg-gradient-to-br from-green-50 to-emerald-50">
+                    <p className="text-xs font-semibold text-slate-600 mb-2">
                       Revenue Created
                     </p>
-                    <p className="text-3xl font-bold text-green-700 dark:text-green-300">
+                    <p className="text-3xl font-bold text-green-800 tracking-tight">
                       AED {summary.revenueCreated.toLocaleString()}
                     </p>
                   </Card>
                 )}
                 {summary.potentialRevenue && summary.potentialRevenue > 0 && (
-                  <Card className="p-5 border-2 border-blue-200 dark:border-blue-800 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10">
-                    <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-2">
+                  <Card className="p-5 border-2 border-blue-200/60 bg-gradient-to-br from-blue-50 to-indigo-50">
+                    <p className="text-xs font-semibold text-slate-600 mb-2">
                       Potential Revenue
                     </p>
-                    <p className="text-3xl font-bold text-blue-700 dark:text-blue-300">
+                    <p className="text-3xl font-bold text-blue-800 tracking-tight">
                       AED {summary.potentialRevenue.toLocaleString()}
                     </p>
                   </Card>
@@ -171,16 +171,16 @@ export function EndOfDaySummary() {
           )}
 
           {/* Positive Reinforcement */}
-          <Card className="p-6 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10 dark:from-primary/10 dark:to-primary/5">
+          <Card className="p-6 border-2 border-primary/20 bg-gradient-to-br from-primary/5 to-primary/10">
             <div className="flex items-center gap-3">
               <div className="w-12 h-12 rounded-full bg-primary/20 flex items-center justify-center">
                 <Sparkles className="h-6 w-6 text-primary" />
               </div>
               <div className="flex-1">
-                <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
+                <p className="text-sm font-bold text-slate-900 mb-1 tracking-tight">
                   Great work today! 🎉
                 </p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">
+                <p className="text-xs text-slate-600 font-medium">
                   You've completed {totalActions} action{totalActions !== 1 ? 's' : ''} and moved the needle forward.
                 </p>
               </div>

@@ -39,10 +39,10 @@ export function DashboardPanels() {
   if (disabled) {
     return (
       <Card className="p-6">
-        <h3 className="text-heading text-slate-900 dark:text-slate-100 mb-2">
+        <h3 className="text-heading text-slate-900 mb-2 font-bold tracking-tight">
           Dashboard upgrade in progress
         </h3>
-        <p className="text-body text-slate-700 dark:text-slate-300">
+        <p className="text-body text-slate-700 font-medium">
           This panel is temporarily disabled while we deploy reliability fixes.
         </p>
       </Card>
@@ -66,10 +66,10 @@ export function DashboardSignalsPanel() {
   if (disabled) {
     return (
       <Card className="p-6">
-        <h3 className="text-heading text-slate-900 dark:text-slate-100 mb-2">
+        <h3 className="text-heading text-slate-900 mb-2 font-bold tracking-tight">
           Dashboard upgrade in progress
         </h3>
-        <p className="text-body text-slate-700 dark:text-slate-300">
+        <p className="text-body text-slate-700 font-medium">
           This panel is temporarily disabled while we deploy reliability fixes.
         </p>
       </Card>

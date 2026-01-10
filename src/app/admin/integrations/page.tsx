@@ -185,17 +185,17 @@ export default async function IntegrationsPage() {
           <KPICard
             title="Total Integrations"
             value={integrationTypes.length}
-            icon={<Plug2 className="h-4 w-4 text-slate-400 dark:text-slate-600" />}
+            icon={<Plug2 className="h-4 w-4 text-slate-600" />}
           />
           <KPICard
             title="Enabled"
             value={enabledCount}
-            icon={<CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400" />}
+            icon={<CheckCircle2 className="h-4 w-4 text-green-700" />}
           />
           <KPICard
             title="Disabled"
             value={integrationTypes.length - enabledCount}
-            icon={<XCircle className="h-4 w-4 text-slate-400 dark:text-slate-600" />}
+            icon={<XCircle className="h-4 w-4 text-slate-600" />}
           />
         </div>
 
@@ -213,12 +213,12 @@ export default async function IntegrationsPage() {
                 key={type.name}
                 title={type.label}
                 icon={
-                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isEnabled ? 'bg-green-100 dark:bg-green-900/20' : 'bg-slate-100 dark:bg-slate-800'}`}>
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg ${isEnabled ? 'bg-green-100' : 'bg-slate-100'}`}>
                     <IntegrationIcon iconName={type.iconName} isEnabled={isEnabled} />
                   </div>
                 }
                 badge={
-                  <Badge variant={isEnabled ? 'default' : 'secondary'} className="shrink-0 flex items-center gap-1.5 text-xs">
+                  <Badge variant={isEnabled ? 'default' : 'secondary'} className="shrink-0 flex items-center gap-1.5 text-xs font-semibold">
                     {isEnabled ? (
                       <>
                         <CheckCircle2 className="h-3 w-3" />
@@ -233,7 +233,7 @@ export default async function IntegrationsPage() {
                   </Badge>
                 }
               >
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">{type.description}</p>
+                <p className="text-xs text-slate-600 mb-3 font-medium">{type.description}</p>
                 
                 {type.name === 'instagram-messaging' && (type as any).isMetaTester ? (
                   <MetaTesterIntegration 
@@ -242,7 +242,7 @@ export default async function IntegrationsPage() {
                   />
                 ) : type.name === 'openai' && type.settingsUrl ? (
                   <div className="space-y-2">
-                    <p className="text-xs text-slate-600 dark:text-slate-400">
+                    <p className="text-xs text-slate-600 font-medium">
                       Configure AI models, providers, and pricing in the dedicated AI settings page.
                     </p>
                     <Link href={type.settingsUrl}>
