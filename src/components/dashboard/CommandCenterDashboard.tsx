@@ -17,6 +17,9 @@ import { JoyStrip } from './JoyStrip'
 import { useSmartPolling } from '@/hooks/useSmartPolling'
 import type { CommandCenterData } from '@/lib/dashboard/commandCenterTypes'
 import type { SignalsData } from '@/lib/dashboard/signals'
+import { EmptyState } from '@/components/ui/empty-state'
+import { Button } from '@/components/ui/button'
+import { RefreshCw, BarChart3 } from 'lucide-react'
 
 export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
   const [data, setData] = useState<CommandCenterData | null>(null)
@@ -62,7 +65,21 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
   }
 
   if (!data) {
-    return null
+    return (
+      <div className="space-y-4">
+        <EmptyState
+          icon={BarChart3}
+          title="No Dashboard Data"
+          description="We couldn't load your dashboard data. Please refresh the page or check your connection."
+          action={
+            <Button onClick={() => loadData()} variant="default">
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          }
+        />
+      </div>
+    )
   }
 
   return (

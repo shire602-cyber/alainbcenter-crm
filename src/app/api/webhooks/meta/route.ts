@@ -943,19 +943,43 @@ async function processWebhookPayload(payload: any) {
           })
           
           try {
-            await processInboundMessage({
-              pageId: pageId!,
-              workspaceId: workspaceId ?? 1,
-              senderId: event.senderId!,
-              message: { 
-                text: event.text, 
-                mid: event.messageId,
-                attachments: attachments,
-              },
-              timestamp: event.timestamp || new Date(),
-              channel,
-              instagramProfile: instagramProfile || undefined, // Pass Instagram profile if fetched
-            })
+            // For Instagram, use robust processing pipeline that prioritizes inbox display
+            if (channelLower === 'instagram') {
+              console.log('🚀 [META-WEBHOOK-INSTAGRAM] Using robust processing pipeline')
+              await processInstagramMessageRobust({
+                pageId: pageId!,
+                workspaceId: workspaceId ?? 1,
+                senderId: event.senderId!,
+                message: { 
+                  text: event.text, 
+                  attachments: attachments,
+                  mid: event.messageId || providerMessageId,
+                },
+                timestamp: event.timestamp || new Date(),
+                instagramProfile: instagramProfile || undefined,
+                providerMessageId: providerMessageId,
+                metadata: {
+                  mediaUrl: attachments?.[0]?.url || attachments?.[0]?.payload?.url || null,
+                  mediaMimeType: attachments?.[0]?.type || attachments?.[0]?.mimeType || null,
+                  providerMediaId: attachments?.[0]?.payload?.media_id || attachments?.[0]?.payload?.id || null,
+                },
+              })
+            } else {
+              // For Facebook, use standard processing
+              await processInboundMessage({
+                pageId: pageId!,
+                workspaceId: workspaceId ?? 1,
+                senderId: event.senderId!,
+                message: { 
+                  text: event.text, 
+                  mid: event.messageId,
+                  attachments: attachments,
+                },
+                timestamp: event.timestamp || new Date(),
+                channel,
+                instagramProfile: instagramProfile || undefined, // Pass Instagram profile if fetched
+              })
+            }
 
             console.log(`✅ [META-WEBHOOK] IMMEDIATELY AFTER await processInboundMessage - SUCCESS`, {
               senderId: event.senderId || 'N/A',
