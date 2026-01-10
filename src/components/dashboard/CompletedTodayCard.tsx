@@ -54,12 +54,12 @@ export const CompletedTodayCard = memo(function CompletedTodayCard({
   ].filter(m => m.value > 0).sort((a, b) => b.value - a.value)
 
   return (
-    <Card className="card-premium inset-card bg-gradient-to-br from-green-50/50 to-blue-50/50 dark:from-green-950/10 dark:to-blue-950/10 border-green-200/40 dark:border-green-800/40">
+    <Card className="card-premium inset-card bg-gradient-to-br from-green-50/30 to-blue-50/30 border-green-200/40">
       <div className="flex items-center justify-between mb-3">
-        <h4 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+        <h4 className="text-h2 font-bold text-slate-900 tracking-tight">
           Completed Today
         </h4>
-        <span className="text-meta muted-text font-medium">{celebrationText}</span>
+        <span className="text-meta text-slate-600 font-semibold">{celebrationText}</span>
       </div>
       <div className="flex items-center gap-4 flex-wrap">
         {metrics.map((metric, idx) => {
@@ -68,14 +68,14 @@ export const CompletedTodayCard = memo(function CompletedTodayCard({
             <div key={idx} className="flex items-center gap-2">
               <Icon className={cn(
                 "h-4 w-4",
-                metric.color === 'green' && "text-green-600 dark:text-green-400",
-                metric.color === 'blue' && "text-blue-600 dark:text-blue-400",
-                metric.color === 'purple' && "text-purple-600 dark:text-purple-400"
+                metric.color === 'green' && "text-green-700",
+                metric.color === 'blue' && "text-blue-700",
+                metric.color === 'purple' && "text-purple-700"
               )} />
-              <span className="text-body font-semibold text-slate-900 dark:text-slate-100">
+              <span className="text-body font-bold text-slate-900">
                 {metric.value}
               </span>
-              <span className="text-meta muted-text">{metric.label}</span>
+              <span className="text-meta text-slate-600 font-medium">{metric.label}</span>
             </div>
           )
         })}

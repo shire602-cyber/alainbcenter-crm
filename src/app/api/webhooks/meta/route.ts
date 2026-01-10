@@ -865,8 +865,15 @@ async function processWebhookPayload(payload: any) {
             }
           }
           
-          // Log detailed error information
+          // Log detailed error information with Prisma-specific details
           if (channelLower === 'instagram') {
+            // Capture Prisma error details if available
+            const prismaErrorDetails = error.code || error.meta ? {
+              prismaCode: error.code,
+              prismaMeta: error.meta,
+              prismaClientVersion: error.clientVersion,
+            } : null
+            
             console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in processInboundMessage call', {
               error: errorMessage,
               errorName,
@@ -876,7 +883,24 @@ async function processWebhookPayload(payload: any) {
               senderId: event.senderId || 'N/A',
               messageId: event.messageId || 'N/A',
               pageId: pageId || 'N/A',
+              igBusinessId: entry.id || 'N/A',
+              connectionId: connection?.id || 'N/A',
+              ...(prismaErrorDetails || {}),
             })
+            
+            // Log full Prisma error if it's a Prisma error
+            if (error.code && error.meta) {
+              try {
+                const prismaErrorJson = JSON.stringify({
+                  code: error.code,
+                  meta: error.meta,
+                  message: error.message,
+                }, null, 2)
+                console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] PRISMA ERROR DETAILS:', prismaErrorJson)
+              } catch (jsonError) {
+                console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Failed to serialize Prisma error:', jsonError)
+              }
+            }
           }
           
           if (errorMessage === 'DUPLICATE_MESSAGE' || error.message === 'DUPLICATE_MESSAGE') {
@@ -890,6 +914,13 @@ async function processWebhookPayload(payload: any) {
             }
           } else {
             if (channelLower === 'instagram') {
+              // Capture Prisma error details if available
+              const prismaErrorDetails = error.code || error.meta ? {
+                prismaCode: error.code,
+                prismaMeta: error.meta,
+                prismaClientVersion: error.clientVersion,
+              } : null
+              
               console.error('❌ [META-WEBHOOK-INSTAGRAM] Error processing Instagram message:', {
                 error: errorMessage,
                 errorName,
@@ -902,7 +933,22 @@ async function processWebhookPayload(payload: any) {
                 igBusinessId: entry.id,
                 connectionId: connection?.id || 'NONE',
                 workspaceId: workspaceId || 'NONE',
+                ...(prismaErrorDetails || {}),
               })
+              
+              // Log full Prisma error if it's a Prisma error
+              if (error.code && error.meta) {
+                try {
+                  const prismaErrorJson = JSON.stringify({
+                    code: error.code,
+                    meta: error.meta,
+                    message: error.message,
+                  }, null, 2)
+                  console.error('❌ [META-WEBHOOK-INSTAGRAM] PRISMA ERROR DETAILS (full):', prismaErrorJson)
+                } catch (jsonError) {
+                  console.error('❌ [META-WEBHOOK-INSTAGRAM] Failed to serialize Prisma error:', jsonError)
+                }
+              }
             } else {
               console.error(`❌ [META-WEBHOOK] Error processing ${channel} message:`, {
                 error: errorMessage,

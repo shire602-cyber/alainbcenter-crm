@@ -802,10 +802,10 @@ function InboxPageContent() {
         {/* Left Panel: Conversation List - Compact */}
         <BentoCard className="w-80 flex-shrink-0 rounded-none border-r flex flex-col p-0 overflow-hidden">
           {/* Header */}
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="p-3 border-b border-slate-200/60">
             <div className="flex items-center gap-2 mb-3">
-              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-indigo-100 dark:bg-indigo-900/30">
-                <InboxIcon className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100">
+                <InboxIcon className="h-4 w-4 text-slate-700" />
               </div>
               <h1 className="text-lg font-semibold tracking-tight">Inbox</h1>
             </div>
@@ -831,7 +831,7 @@ function InboxPageContent() {
             </div>
 
           {/* Search */}
-          <div className="p-3 border-b border-slate-200 dark:border-slate-800">
+          <div className="p-3 border-b border-slate-200/60">
             <div className="relative">
               <Search className="absolute left-2 top-1/2 transform -translate-y-1/2 h-3.5 w-3.5 text-slate-400" />
               <Input
@@ -865,8 +865,8 @@ function InboxPageContent() {
                     <div
                       key={conv.id}
                       className={cn(
-                        'flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors duration-150 hover:bg-gray-50 dark:hover:bg-gray-800',
-                        selectedConversation?.id === conv.id && 'bg-indigo-50 dark:bg-indigo-900/20 border border-indigo-200 dark:border-indigo-800'
+                        'flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors duration-150 hover:bg-slate-50',
+                        selectedConversation?.id === conv.id && 'bg-slate-100 border border-slate-300'
                       )}
                       onClick={() => handleSelectConversation(conv)}
                     >
@@ -880,7 +880,7 @@ function InboxPageContent() {
                         <div className="flex items-center justify-between gap-1">
                           <div className="flex items-center gap-1.5 flex-1 min-w-0">
                             <p className={cn(
-                              "text-xs truncate text-slate-900 dark:text-slate-100",
+                              "text-xs truncate text-slate-900 font-semibold",
                               conv.unreadCount > 0 ? "font-semibold" : "font-medium"
                             )}>
                               {conv.contact.fullName && !conv.contact.fullName.includes('Unknown') 
@@ -900,7 +900,7 @@ function InboxPageContent() {
                               )}
                             </div>
                           </div>
-                        <div className="flex items-center justify-between text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                        <div className="flex items-center justify-between text-xs text-slate-600 font-medium mt-0.5">
                           <p className={cn(
                             "truncate flex-1",
                             conv.unreadCount > 0 && "font-medium"
@@ -923,7 +923,7 @@ function InboxPageContent() {
         <BentoCard className="flex-1 flex flex-col rounded-none p-0 overflow-hidden">
           {selectedConversation ? (
             <>
-              <div className="p-3 border-b border-slate-200 dark:border-slate-800 flex items-center justify-between gap-2">
+              <div className="p-3 border-b border-slate-200/60 flex items-center justify-between gap-2">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Avatar 
                     src={selectedConversation.contact.profilePhoto || undefined}
@@ -954,7 +954,7 @@ function InboxPageContent() {
                     </div>
                     {selectedConversation.contact.fullName && 
                      !selectedConversation.contact.fullName.includes('Unknown') && (
-                      <p className="text-xs text-slate-500 dark:text-400 truncate">
+                      <p className="text-xs text-slate-600 font-medium truncate">
                         {selectedConversation.contact.phone}
                       </p>
                     )}
@@ -1046,7 +1046,7 @@ function InboxPageContent() {
                       <Button
                         variant="outline"
                         size="sm"
-                        className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                        className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 font-medium"
                         onClick={async () => {
                           if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
                             return
@@ -1088,10 +1088,10 @@ function InboxPageContent() {
 
               {/* Error/Success Messages */}
               {error && (
-                <div className="mx-4 mt-4 p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-xl">
+                <div className="mx-4 mt-4 p-3 bg-red-50 border border-red-200/60 rounded-xl">
                   <div className="flex items-start gap-2">
                     <XCircle className="h-4 w-4 text-red-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-red-700 dark:text-red-300 whitespace-pre-line">
+                    <p className="text-sm text-red-700 font-medium whitespace-pre-line">
                       {error}
                     </p>
                   </div>
@@ -1099,10 +1099,10 @@ function InboxPageContent() {
               )}
 
               {success && (
-                <div className="mx-4 mt-4 p-3 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-xl">
+                <div className="mx-4 mt-4 p-3 bg-green-50 border border-green-200/60 rounded-xl">
                   <div className="flex items-start gap-2">
                     <CheckCircle2 className="h-4 w-4 text-green-600 mt-0.5 flex-shrink-0" />
-                    <p className="text-sm text-green-700 dark:text-green-300">{success}</p>
+                    <p className="text-sm text-green-700 font-medium">{success}</p>
                   </div>
                 </div>
               )}
@@ -1140,8 +1140,8 @@ function InboxPageContent() {
                           className={cn(
                             'max-w-[75%] p-4 rounded-xl text-sm transition-all',
                             isInbound
-                              ? 'bg-blue-50 dark:bg-blue-950/30 text-blue-900 dark:text-blue-100 border-2 border-blue-200 dark:border-blue-800 rounded-tl-none'
-                              : 'bg-green-500 dark:bg-green-600 text-white rounded-tr-none shadow-green-500/30',
+                              ? 'bg-slate-100 text-slate-900 border-2 border-slate-300 rounded-tl-none font-semibold'
+                              : 'bg-green-600 text-white rounded-tr-none shadow-lg font-semibold',
                             msg.hasMedia || !!msg.mediaProxyUrl || !!msg.providerMediaId
                               ? 'shadow-md hover:shadow-lg'
                               : ''
@@ -1186,7 +1186,7 @@ function InboxPageContent() {
                                     ? att.url 
                                     : `/api/media/messages/${msg.id}` // Use main media proxy endpoint
                                   return (
-                                    <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-900/50">
+                                    <div key={att.id} className="relative group rounded-xl overflow-hidden border border-slate-200/60 bg-white">
                                       <img
                                         src={imageUrl}
                                         alt={att.filename || 'Image'}
@@ -1223,7 +1223,7 @@ function InboxPageContent() {
                                       href={docUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors font-medium"
                                       download={att.filename || undefined}
                                     >
                                       <FileText className="h-5 w-5" />
@@ -1238,7 +1238,7 @@ function InboxPageContent() {
                                         ? att.url
                                         : `/api/media/messages/${msg.id}`) // Use main media proxy endpoint
                                   return (
-                                    <div key={att.id} className="bg-slate-50 dark:bg-slate-900/50 rounded-xl p-3 border border-slate-200 dark:border-slate-700">
+                                    <div key={att.id} className="bg-white rounded-xl p-3 border border-slate-200/60">
                                       <AudioMessagePlayer
                                         mediaId={audioUrl}
                                         mimeType={att.mimeType}
@@ -1257,7 +1257,7 @@ function InboxPageContent() {
                                       href={fileUrl}
                                       target="_blank"
                                       rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-xl hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                                      className="flex items-center gap-2 p-2 bg-slate-100 rounded-xl hover:bg-slate-200 transition-colors font-medium"
                                       download={att.filename || undefined}
                                     >
                                       <FileText className="h-5 w-5" />
@@ -1282,7 +1282,7 @@ function InboxPageContent() {
                                           type="button"
                                           onClick={() => handleTranslate(msg.id, msg.body || '')}
                                           disabled={isTranslating}
-                                          className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors flex items-center gap-1"
+                                          className="text-xs text-slate-600 hover:text-slate-900 hover:underline transition-colors flex items-center gap-1 font-medium"
                                         >
                                           {isTranslating ? (
                                             <>
@@ -1302,9 +1302,9 @@ function InboxPageContent() {
                                     )}
                                     {/* Translation display */}
                                     {hasTranslation && hasTranslation.showing && (
-                                      <div className="p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                                        <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Translation:</p>
-                                        <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
+                                      <div className="p-2 bg-slate-100 rounded-lg border border-slate-200/60">
+                                        <p className="text-xs text-slate-600 mb-1 font-semibold">Translation:</p>
+                                        <p className="text-sm whitespace-pre-wrap break-words text-slate-900 font-medium">
                                           {hasTranslation.text}
                                         </p>
                                       </div>
@@ -1367,7 +1367,7 @@ function InboxPageContent() {
                                               type="button"
                                               onClick={() => handleTranslate(msg.id, msg.body || '')}
                                               disabled={isTranslating}
-                                              className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors flex items-center gap-1"
+                                              className="text-xs text-slate-600 hover:text-slate-900 hover:underline transition-colors flex items-center gap-1 font-medium"
                                             >
                                               {isTranslating ? (
                                                 <>
@@ -1387,9 +1387,9 @@ function InboxPageContent() {
                                         )}
                                         {/* Translation display */}
                                         {hasTranslation && hasTranslation.showing && (
-                                          <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                                            <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Translation:</p>
-                                            <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
+                                          <div className="mt-2 p-2 bg-slate-100 rounded-lg border border-slate-200/60">
+                                            <p className="text-xs text-slate-600 mb-1 font-semibold">Translation:</p>
+                                            <p className="text-sm whitespace-pre-wrap break-words text-slate-900 font-medium">
                                               {hasTranslation.text}
                                             </p>
                                           </div>
@@ -1430,7 +1430,7 @@ function InboxPageContent() {
                                         type="button"
                                         onClick={() => handleTranslate(msg.id, displayText)}
                                         disabled={isTranslating}
-                                        className="text-xs text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-300 hover:underline transition-colors flex items-center gap-1"
+                                        className="text-xs text-slate-600 hover:text-slate-900 hover:underline transition-colors flex items-center gap-1 font-medium"
                                       >
                                         {isTranslating ? (
                                           <>
@@ -1450,9 +1450,9 @@ function InboxPageContent() {
                                   )}
                                   {/* Translation display */}
                                   {hasTranslation && hasTranslation.showing && (
-                                    <div className="mt-2 p-2 bg-slate-100 dark:bg-slate-800 rounded-lg border border-slate-200 dark:border-slate-700">
-                                      <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">Translation:</p>
-                                      <p className="text-sm whitespace-pre-wrap break-words text-slate-700 dark:text-slate-300">
+                                    <div className="mt-2 p-2 bg-slate-100 rounded-lg border border-slate-200/60">
+                                      <p className="text-xs text-slate-600 mb-1 font-semibold">Translation:</p>
+                                      <p className="text-sm whitespace-pre-wrap break-words text-slate-900 font-medium">
                                         {hasTranslation.text}
                                       </p>
                                     </div>
@@ -1486,8 +1486,8 @@ function InboxPageContent() {
                               className={cn(
                                 'text-xs',
                                 isInbound
-                                  ? 'text-slate-500 dark:text-slate-400'
-                                  : 'text-primary-foreground/70'
+                                  ? 'text-slate-600 font-medium'
+                                  : 'text-white/80 font-medium'
                               )}
                             >
                               {formatMessageTime(msg.createdAt)}
@@ -1525,16 +1525,16 @@ function InboxPageContent() {
               </div>
 
               {/* Message Input */}
-              <div className="border-t border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900 p-4">
+              <div className="border-t border-slate-200/60 bg-white p-4">
                 {/* File Preview */}
                 {selectedFile && (
-                  <div className="mb-3 p-3 bg-slate-50 dark:bg-slate-800 rounded-xl flex items-center justify-between">
+                  <div className="mb-3 p-3 bg-slate-50 rounded-xl flex items-center justify-between">
                     <div className="flex items-center gap-2 flex-1 min-w-0">
-                      <Paperclip className="h-4 w-4 text-slate-500 flex-shrink-0" />
-                      <span className="text-sm text-slate-700 dark:text-slate-300 truncate">
+                      <Paperclip className="h-4 w-4 text-slate-600 flex-shrink-0" />
+                      <span className="text-sm text-slate-900 truncate font-medium">
                         {selectedFile.name}
                       </span>
-                      <span className="text-xs text-slate-500">
+                      <span className="text-xs text-slate-600 font-medium">
                         ({(selectedFile.size / 1024).toFixed(1)} KB)
                       </span>
                     </div>
@@ -1558,13 +1558,13 @@ function InboxPageContent() {
                 {/* Upload Progress */}
                 {uploading && uploadProgress > 0 && (
                   <div className="mb-3">
-                    <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden">
+                    <div className="h-2 bg-slate-200 rounded-full overflow-hidden">
                       <div
-                        className="h-full bg-primary transition-all duration-300"
+                        className="h-full bg-slate-900 transition-all duration-300"
                         style={{ width: `${uploadProgress}%` }}
                       />
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-600 mt-1 font-medium">
                       Uploading... {uploadProgress}%
                     </p>
                   </div>
@@ -1639,7 +1639,7 @@ function InboxPageContent() {
                     <span className="hidden sm:inline">Send</span>
                   </Button>
                 </form>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-2">
+                <p className="text-xs text-slate-600 mt-2 font-medium">
                   {selectedFile 
                     ? 'File ready to send. Add a caption or click Send.'
                     : 'Press Enter to send, Shift+Enter for new line, or attach a file'}
@@ -1672,12 +1672,12 @@ function InboxPageContent() {
           <div className="space-y-4 mt-4">
             {/* Error Message */}
             {templateError && (
-              <div className="p-3 border border-red-300 dark:border-red-700 bg-red-50 dark:bg-red-900/20 rounded-lg text-sm text-red-700 dark:text-red-400">
+              <div className="p-3 border border-red-300/60 bg-red-50 rounded-lg text-sm text-red-700 font-medium">
                 <div className="flex items-start gap-2">
                   <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
                   <div className="flex-1">
-                    <p className="font-medium">Error loading templates</p>
-                    <p className="mt-1">{templateError}</p>
+                    <p className="font-semibold">Error loading templates</p>
+                    <p className="mt-1 font-medium">{templateError}</p>
                   </div>
                 </div>
                 <Button
@@ -1707,7 +1707,7 @@ function InboxPageContent() {
                   <button
                     type="button"
                     onClick={loadTemplates}
-                    className="text-xs text-blue-600 dark:text-blue-400 hover:underline"
+                    className="text-xs text-blue-600 hover:text-blue-700 hover:underline font-medium"
                   >
                     Refresh
                   </button>
@@ -1820,7 +1820,7 @@ function InboxPageContent() {
 
       {/* STEP 0: Build stamp for deployment verification */}
       {buildInfo && (
-        <div className="fixed bottom-2 right-2 text-xs text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded z-50">
+        <div className="fixed bottom-2 right-2 text-xs text-slate-500 bg-slate-100 px-2 py-1 rounded z-50 font-medium border border-slate-200/60 shadow-sm">
           Build: {buildInfo.buildId || 'unknown'}
         </div>
       )}

@@ -1581,13 +1581,31 @@ async function findOrCreateLead(input: {
       })
     }
     
+    // Prepare lead data with defensive validation
+    // Ensure all fields are valid types before Prisma call
     const leadData = {
-      contactId: input.contactId,
-      stage: 'NEW',
-      status: 'new',
-      pipelineStage: 'new',
-      lastContactChannel: channelLower,
-      lastInboundAt: messageTimestamp, // Use actual message timestamp
+      contactId: Number(input.contactId), // Explicitly convert to number
+      stage: 'NEW' as const, // Valid enum value
+      status: 'new', // Valid string (legacy field)
+      pipelineStage: 'new', // Valid string (legacy field)
+      lastContactChannel: channelLower || null, // Must be lowercase or null
+      lastInboundAt: messageTimestamp instanceof Date && !isNaN(messageTimestamp.getTime()) 
+        ? messageTimestamp 
+        : new Date(), // Ensure valid Date object
+    }
+    
+    // Final validation of leadData structure before Prisma call
+    if (isInstagram) {
+      console.log(`🔍 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Lead data prepared`, {
+        contactId: leadData.contactId,
+        contactIdType: typeof leadData.contactId,
+        stage: leadData.stage,
+        status: leadData.status,
+        pipelineStage: leadData.pipelineStage,
+        lastContactChannel: leadData.lastContactChannel,
+        lastInboundAt: leadData.lastInboundAt?.toISOString(),
+        lastInboundAtType: leadData.lastInboundAt instanceof Date ? 'Date' : typeof leadData.lastInboundAt,
+      })
     }
     
     console.log(`🔍 [AUTO-MATCH] IMMEDIATELY BEFORE prisma.lead.create()`, {
@@ -1620,16 +1638,43 @@ async function findOrCreateLead(input: {
         console.log(`✅ [AUTO-MATCH] Created new lead: ${newLead.id} and linked existing conversations`)
       }
     } catch (createError: any) {
+      // Capture full Prisma error details without truncation
+      const prismaError = {
+        message: createError.message || 'Unknown error',
+        code: createError.code || 'NO_CODE', // Prisma error code (e.g., P2002, P2003)
+        meta: createError.meta || null, // Field names that failed validation
+        clientVersion: createError.clientVersion || 'unknown',
+        stack: createError.stack || 'No stack trace',
+      }
+      
+      // Log full error without truncation for Prisma errors
       console.error(`❌ [AUTO-MATCH] IMMEDIATELY AFTER prisma.lead.create() - ERROR`, {
-        error: createError.message || 'Unknown error',
-        errorName: createError.name || 'UnknownError',
-        errorCode: createError.code || 'NO_CODE',
-        errorMeta: createError.meta || 'NO_META',
-        errorStack: createError.stack?.substring(0, 1000) || 'No stack trace',
-        fullError: JSON.stringify(createError, Object.getOwnPropertyNames(createError)).substring(0, 1000),
+        ...prismaError,
         leadData,
         isInstagram,
+        contactId: input.contactId,
+        channel: channelLower,
+        messageTimestamp: messageTimestamp?.toISOString() || 'INVALID',
       })
+      
+      // Log full Prisma error as JSON for detailed analysis
+      try {
+        const fullPrismaError = JSON.stringify(prismaError, null, 2)
+        console.error(`❌ [AUTO-MATCH] FULL PRISMA ERROR (JSON):`, fullPrismaError)
+      } catch (jsonError) {
+        console.error(`❌ [AUTO-MATCH] Failed to serialize Prisma error:`, jsonError)
+      }
+      
+      if (isInstagram) {
+        console.error(`❌ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Prisma lead.create() failed`, {
+          prismaCode: prismaError.code,
+          prismaMeta: prismaError.meta,
+          prismaMessage: prismaError.message,
+          leadData,
+          contactId: input.contactId,
+          channel: channelLower,
+        })
+      }
       
       // Re-throw to trigger outer catch block
       throw createError

@@ -30,15 +30,15 @@ interface FocusHeroCardProps {
 function ChannelIcon({ channel }: { channel?: string }) {
   const ch = channel?.toLowerCase() || 'whatsapp'
   if (ch.includes('whatsapp') || ch.includes('wa')) {
-    return <MessageSquare className="h-4 w-4 text-green-600 dark:text-green-400" />
+    return <MessageSquare className="h-4 w-4 text-green-700" />
   }
   if (ch.includes('phone') || ch.includes('call')) {
-    return <Phone className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+    return <Phone className="h-4 w-4 text-blue-700" />
   }
   if (ch.includes('email') || ch.includes('mail')) {
-    return <Mail className="h-4 w-4 text-slate-600 dark:text-slate-400" />
+    return <Mail className="h-4 w-4 text-slate-700" />
   }
-  return <MessageSquare className="h-4 w-4 text-slate-500" />
+  return <MessageSquare className="h-4 w-4 text-slate-600" />
 }
 
 function getWhyNow(item: CommandItem): string {
@@ -74,13 +74,13 @@ export const FocusHeroCard = memo(function FocusHeroCard({
   if (!item) {
     return (
       <Card className="card-premium inset-hero text-center">
-        <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
-          <Calendar className="h-8 w-8 text-green-600 dark:text-green-400" />
+        <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+          <Calendar className="h-8 w-8 text-green-700" />
         </div>
-        <p className="text-h1 text-slate-900 dark:text-slate-100 mb-2">
+        <p className="text-h1 text-slate-900 mb-2 font-bold">
           All caught up ✅
         </p>
-        <p className="text-body muted-text">
+        <p className="text-body text-slate-600 font-medium">
           Enjoy the calm — we'll notify you if something comes up
         </p>
       </Card>
@@ -111,17 +111,17 @@ export const FocusHeroCard = memo(function FocusHeroCard({
           {/* Header: Channel + SLA + Refresh */}
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
+              <div className="w-8 h-8 rounded-full bg-slate-100 flex items-center justify-center">
                 <ChannelIcon channel={item.channel} />
               </div>
               {isSlaBreached && (
                 <div className="flex items-center gap-1.5">
                   <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                  <span className="text-meta text-red-600 dark:text-red-400 font-medium">{item.slaLabel}</span>
+                  <span className="text-meta text-red-700 font-semibold">{item.slaLabel}</span>
                 </div>
               )}
               {item.slaLabel && !isSlaBreached && (
-                <Badge className="chip text-xs">{item.slaLabel}</Badge>
+                <Badge className="chip text-xs font-semibold">{item.slaLabel}</Badge>
               )}
             </div>
             {onRefresh && (
@@ -138,15 +138,15 @@ export const FocusHeroCard = memo(function FocusHeroCard({
           </div>
 
           {/* Title */}
-          <h3 className="text-h1 text-slate-900 dark:text-slate-100 mb-3 font-semibold">
+          <h3 className="text-h1 text-slate-900 mb-3 font-bold tracking-tight">
             {item.title}
           </h3>
 
           {/* Preview with quote icon */}
           {item.preview && (
             <div className="mb-3">
-              <div className="flex items-start gap-2 text-body text-slate-700 dark:text-slate-300">
-                <Quote className="h-3.5 w-3.5 text-slate-400 dark:text-slate-500 mt-0.5 flex-shrink-0" />
+              <div className="flex items-start gap-2 text-body text-slate-700 font-medium">
+                <Quote className="h-3.5 w-3.5 text-slate-500 mt-0.5 flex-shrink-0" />
                 <p className="line-clamp-2 leading-relaxed">
                   {item.preview}
                 </p>
@@ -155,11 +155,11 @@ export const FocusHeroCard = memo(function FocusHeroCard({
           )}
 
           {/* Context Strip */}
-          <div className="flex items-center gap-3 text-meta muted-text mb-4">
+          <div className="flex items-center gap-3 text-meta text-slate-600 mb-4 font-medium">
             {item.channel && (
               <div className="flex items-center gap-1.5">
                 <ChannelIcon channel={item.channel} />
-                <span className="capitalize">{item.channel}</span>
+                <span className="capitalize font-semibold">{item.channel}</span>
               </div>
             )}
             {item.waitingDays !== undefined && (
@@ -171,7 +171,7 @@ export const FocusHeroCard = memo(function FocusHeroCard({
             {isSlaBreached && (
               <>
                 <span>·</span>
-                <span className="text-red-600 dark:text-red-400 font-medium">SLA risk</span>
+                <span className="text-red-700 font-semibold">SLA risk</span>
               </>
             )}
           </div>
@@ -179,11 +179,11 @@ export const FocusHeroCard = memo(function FocusHeroCard({
           {/* Meta Row: Service + Revenue */}
           <div className="flex items-center gap-2 flex-wrap">
             {item.revenueHint && (
-              <Badge className="chip bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400">
+              <Badge className="chip bg-green-100 text-green-700 font-semibold">
                 {item.revenueHint}
               </Badge>
             )}
-            <span className="text-meta muted-text">{whyNow}</span>
+            <span className="text-meta text-slate-600 font-medium">{whyNow}</span>
           </div>
         </div>
 

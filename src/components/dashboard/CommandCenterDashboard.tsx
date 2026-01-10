@@ -52,10 +52,10 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
     return (
       <div className="space-y-4">
         <FocusHeroCardSkeleton />
-        <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-[14px] animate-pulse" />
+        <div className="h-32 bg-slate-200 rounded-xl animate-pulse" />
         <div className="grid md:grid-cols-2 gap-4">
-          <div className="h-64 bg-slate-200 dark:bg-slate-800 rounded-[14px] animate-pulse" />
-          <div className="h-32 bg-slate-200 dark:bg-slate-800 rounded-[14px] animate-pulse" />
+          <div className="h-64 bg-slate-200 rounded-xl animate-pulse" />
+          <div className="h-32 bg-slate-200 rounded-xl animate-pulse" />
         </div>
       </div>
     )

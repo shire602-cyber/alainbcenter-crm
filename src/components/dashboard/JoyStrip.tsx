@@ -106,7 +106,7 @@ export const JoyStrip = memo(function JoyStrip() {
       <Card className="card-premium inset-card">
         <div className="flex items-center gap-3 flex-wrap">
           {[1, 2, 3, 4].map((i) => (
-            <div key={i} className="h-10 w-28 bg-slate-200 dark:bg-slate-800 rounded-lg animate-pulse" />
+            <div key={i} className="h-10 w-28 bg-slate-200 rounded-lg animate-pulse" />
           ))}
         </div>
       </Card>
@@ -125,52 +125,52 @@ export const JoyStrip = memo(function JoyStrip() {
       {/* Joy Metrics */}
       <Card className="card-premium inset-card">
         <div className="flex items-center justify-between mb-3">
-          <h4 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+          <h4 className="text-h2 font-bold text-slate-900 tracking-tight">
             Today's Impact
           </h4>
-          <span className="text-meta muted-text font-medium">{encouragement}</span>
+          <span className="text-meta text-slate-600 font-semibold">{encouragement}</span>
         </div>
         <div className="flex items-center gap-3 flex-wrap">
           {metrics.ttfrMedianMinutes !== null && (
-            <div className="flex items-center gap-2 pill bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60 px-3 py-2">
+            <div className="flex items-center gap-2 pill bg-blue-50 text-blue-700 border-blue-200/60 px-3 py-2 rounded-lg">
               <Clock className="h-3.5 w-3.5" />
-              <span className="text-body font-semibold">{formatTTFR(metrics.ttfrMedianMinutes)}</span>
-              <span className="text-meta opacity-80">avg reply</span>
+              <span className="text-body font-bold">{formatTTFR(metrics.ttfrMedianMinutes)}</span>
+              <span className="text-meta opacity-80 font-medium">avg reply</span>
             </div>
           )}
           {metrics.tasksDone > 0 && (
-            <div className="flex items-center gap-2 pill bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border-green-200/60 dark:border-green-800/60 px-3 py-2">
+            <div className="flex items-center gap-2 pill bg-green-50 text-green-700 border-green-200/60 px-3 py-2 rounded-lg">
               <CheckCircle2 className="h-3.5 w-3.5" />
-              <span className="text-body font-semibold">{metrics.tasksDone}</span>
-              <span className="text-meta opacity-80">tasks</span>
+              <span className="text-body font-bold">{metrics.tasksDone}</span>
+              <span className="text-meta opacity-80 font-medium">tasks</span>
             </div>
           )}
           {metrics.leadsAdvanced > 0 && (
-            <div className="flex items-center gap-2 pill bg-purple-50 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400 border-purple-200/60 dark:border-purple-800/60 px-3 py-2">
+            <div className="flex items-center gap-2 pill bg-purple-50 text-purple-700 border-purple-200/60 px-3 py-2 rounded-lg">
               <TrendingUp className="h-3.5 w-3.5" />
-              <span className="text-body font-semibold">{metrics.leadsAdvanced}</span>
-              <span className="text-meta opacity-80">advanced</span>
+              <span className="text-body font-bold">{metrics.leadsAdvanced}</span>
+              <span className="text-meta opacity-80 font-medium">advanced</span>
             </div>
           )}
           {metrics.savedFromSla > 0 && (
-            <div className="flex items-center gap-2 pill bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60 px-3 py-2">
+            <div className="flex items-center gap-2 pill bg-amber-50 text-amber-700 border-amber-200/60 px-3 py-2 rounded-lg">
               <Shield className="h-3.5 w-3.5" />
-              <span className="text-body font-semibold">{metrics.savedFromSla}</span>
-              <span className="text-meta opacity-80">saved</span>
+              <span className="text-body font-bold">{metrics.savedFromSla}</span>
+              <span className="text-meta opacity-80 font-medium">saved</span>
             </div>
           )}
           {metrics.revenueActions > 0 && (
-            <div className="flex items-center gap-2 pill bg-emerald-50 text-emerald-700 dark:bg-emerald-900/20 dark:text-emerald-400 border-emerald-200/60 dark:border-emerald-800/60 px-3 py-2">
+            <div className="flex items-center gap-2 pill bg-emerald-50 text-emerald-700 border-emerald-200/60 px-3 py-2 rounded-lg">
               <DollarSign className="h-3.5 w-3.5" />
-              <span className="text-body font-semibold">{metrics.revenueActions}</span>
-              <span className="text-meta opacity-80">revenue</span>
+              <span className="text-body font-bold">{metrics.revenueActions}</span>
+              <span className="text-meta opacity-80 font-medium">revenue</span>
             </div>
           )}
           {metrics.streak.daysActive > 0 && (
-            <div className="flex items-center gap-2 pill bg-orange-50 text-orange-700 dark:bg-orange-900/20 dark:text-orange-400 border-orange-200/60 dark:border-orange-800/60 px-3 py-2">
+            <div className="flex items-center gap-2 pill bg-orange-50 text-orange-700 border-orange-200/60 px-3 py-2 rounded-lg">
               <Flame className="h-3.5 w-3.5" />
-              <span className="text-body font-semibold">{metrics.streak.daysActive}</span>
-              <span className="text-meta opacity-80">day streak</span>
+              <span className="text-body font-bold">{metrics.streak.daysActive}</span>
+              <span className="text-meta opacity-80 font-medium">day streak</span>
             </div>
           )}
           {!hasActivity && (
@@ -184,21 +184,21 @@ export const JoyStrip = memo(function JoyStrip() {
       {/* Friction Alerts (quiet, subtle) */}
       {metrics.friction && (
         (metrics.friction.highTtfr || metrics.friction.overdueTasks > 0 || metrics.friction.waitingLong > 0) && (
-          <Card className="card-premium inset-card bg-slate-50/50 dark:bg-slate-900/30 border-slate-200/40 dark:border-slate-800/40">
-            <div className="flex items-center gap-2 text-meta muted-text">
-              <span className="font-medium">Friction:</span>
+          <Card className="card-premium inset-card bg-slate-50 border-slate-200/60">
+            <div className="flex items-center gap-2 text-meta text-slate-600">
+              <span className="font-semibold">Friction:</span>
               {metrics.friction.highTtfr && (
-                <Badge className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <Badge className="chip bg-slate-100 text-slate-700 font-semibold">
                   High reply time
                 </Badge>
               )}
               {metrics.friction.overdueTasks > 0 && (
-                <Badge className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <Badge className="chip bg-slate-100 text-slate-700 font-semibold">
                   {metrics.friction.overdueTasks} overdue
                 </Badge>
               )}
               {metrics.friction.waitingLong > 0 && (
-                <Badge className="chip bg-slate-100 text-slate-600 dark:bg-slate-800 dark:text-slate-400">
+                <Badge className="chip bg-slate-100 text-slate-700 font-semibold">
                   {metrics.friction.waitingLong} waiting
                 </Badge>
               )}

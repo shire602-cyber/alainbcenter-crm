@@ -371,19 +371,19 @@ export default function LandingPage() {
       </section>
 
       {/* AI Autopilot Section */}
-      <section className="py-24 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950">
+      <section className="py-24 bg-gradient-to-br from-slate-50 via-white to-slate-100">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-6xl mx-auto">
             <div className="grid md:grid-cols-2 gap-12 items-center">
               <div>
-                <Badge className="mb-4 bg-gradient-to-r from-purple-100 to-pink-100 text-purple-700 dark:from-purple-900/30 dark:to-pink-900/30 dark:text-purple-300">
+                <Badge className="mb-4 bg-slate-100 text-slate-700 border-0 font-semibold">
                   <Bot className="h-3 w-3 mr-2" />
                   AI Autopilot
                 </Badge>
-                <h2 className="text-4xl md:text-5xl font-bold mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+                <h2 className="text-4xl md:text-5xl font-bold mb-6 text-slate-900 tracking-tight">
                   Your AI Assistant That Never Sleeps
                 </h2>
-                <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
+                <p className="text-xl text-slate-600 mb-8 font-medium leading-relaxed">
                   Our AI handles conversations 24/7. Qualifies leads, answers questions, books appointments—all automatically. You only step in when needed.
                 </p>
                 <div className="space-y-4">
@@ -395,16 +395,16 @@ export default function LandingPage() {
                     'Routes complex queries to humans',
                   ].map((item, i) => (
                     <div key={i} className="flex items-center gap-3">
-                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-green-400 to-emerald-500 flex items-center justify-center">
+                      <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-sm">
                         <CheckCircle2 className="h-4 w-4 text-white" />
                       </div>
-                      <span className="text-gray-700 dark:text-gray-300">{item}</span>
+                      <span className="text-slate-700 font-medium">{item}</span>
                     </div>
                   ))}
                 </div>
                 <div className="mt-8">
                   <Link href="/login">
-                    <Button size="lg" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                    <Button size="lg" className="bg-slate-900 hover:bg-slate-800">
                       Try AI Autopilot Free
                       <ArrowRight className="ml-2 h-5 w-5" />
                     </Button>
@@ -412,8 +412,8 @@ export default function LandingPage() {
                 </div>
               </div>
               <div className="relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/20 to-purple-500/20 rounded-3xl blur-3xl" />
-                <div className="relative bg-white dark:bg-gray-800 rounded-2xl p-8 shadow-2xl border border-gray-200 dark:border-gray-700">
+                <div className="absolute inset-0 bg-slate-100/50 rounded-3xl blur-3xl" />
+                <div className="relative bg-white rounded-2xl p-8 shadow-2xl border border-slate-200/60">
                   <div className="space-y-4">
                     {[
                       { role: 'customer', text: 'Hi, I need help with visa renewal', time: '2:34 PM' },
@@ -423,23 +423,23 @@ export default function LandingPage() {
                     ].map((msg, i) => (
                       <div key={i} className={cn("flex gap-3", msg.role === 'customer' ? 'justify-end' : 'justify-start')}>
                         {msg.role === 'ai' && (
-                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-500 to-pink-500 flex items-center justify-center flex-shrink-0">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-purple-600 to-pink-600 flex items-center justify-center flex-shrink-0 shadow-md">
                             <Bot className="h-4 w-4 text-white" />
                           </div>
                         )}
                         <div className={cn(
                           "max-w-[80%] rounded-2xl px-4 py-3",
                           msg.role === 'customer'
-                            ? "bg-blue-600 text-white"
-                            : "bg-gray-100 dark:bg-gray-700 text-gray-900 dark:text-white"
+                            ? "bg-slate-900 text-white shadow-md"
+                            : "bg-slate-100 text-slate-900 shadow-sm"
                         )}>
-                          <p className="text-sm">{msg.text}</p>
-                          <p className={cn("text-xs mt-1", msg.role === 'customer' ? 'text-blue-100' : 'text-gray-500')}>
+                          <p className="text-sm font-medium">{msg.text}</p>
+                          <p className={cn("text-xs mt-1.5 font-medium", msg.role === 'customer' ? 'text-slate-300' : 'text-slate-500')}>
                             {msg.time}
                           </p>
                         </div>
                         {msg.role === 'customer' && (
-                          <div className="w-8 h-8 rounded-full bg-gray-300 flex-shrink-0" />
+                          <div className="w-8 h-8 rounded-full bg-slate-300 flex-shrink-0" />
                         )}
                       </div>
                     ))}
@@ -452,31 +452,31 @@ export default function LandingPage() {
       </section>
 
       {/* Testimonials */}
-      <section className="py-24 bg-white dark:bg-gray-900">
+      <section className="py-24 bg-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
               Loved by 500+ Businesses
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
+            <p className="text-xl text-slate-600 font-medium">
               See what our customers say about us
             </p>
           </div>
           <div className="grid md:grid-cols-3 gap-8">
             {testimonials.map((testimonial, i) => (
-              <div key={i} className="bg-gray-50 dark:bg-gray-800 rounded-2xl p-6 border border-gray-200 dark:border-gray-700 hover:shadow-xl transition-all">
+              <div key={i} className="bg-slate-50 rounded-2xl p-6 border border-slate-200/60 hover:shadow-xl transition-all">
                 <div className="flex items-center gap-1 mb-4">
                   {[1, 2, 3, 4, 5].map((star) => (
                     <Star key={star} className="h-4 w-4 fill-yellow-400 text-yellow-400" />
                   ))}
                 </div>
-                <Quote className="h-8 w-8 text-gray-300 dark:text-gray-600 mb-4" />
-                <p className="text-gray-700 dark:text-gray-300 mb-6 leading-relaxed">
+                <Quote className="h-8 w-8 text-slate-300 mb-4" />
+                <p className="text-slate-700 mb-6 leading-relaxed font-medium">
                   "{testimonial.content}"
                 </p>
                 <div>
-                  <div className="font-semibold text-gray-900 dark:text-white">{testimonial.name}</div>
-                  <div className="text-sm text-gray-600 dark:text-gray-400">
+                  <div className="font-bold text-slate-900">{testimonial.name}</div>
+                  <div className="text-sm text-slate-600 font-medium">
                     {testimonial.role} at {testimonial.company}
                   </div>
                 </div>
@@ -487,30 +487,30 @@ export default function LandingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 bg-gradient-to-br from-blue-600 via-purple-600 to-pink-600 text-white">
+      <section className="py-24 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
             <h2 className="text-4xl md:text-5xl font-bold mb-6">
               Ready to 10x Your Business?
             </h2>
-            <p className="text-xl mb-8 text-blue-100">
+            <p className="text-xl mb-8 text-slate-200 font-medium">
               Join 500+ businesses using AI to automate customer conversations and recover lost revenue.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
               <Link href="/login">
-                <Button size="lg" className="text-lg px-8 py-6 bg-white text-blue-600 hover:bg-gray-100 shadow-xl">
+                <Button size="lg" className="text-lg px-8 py-6 bg-white text-slate-900 hover:bg-slate-100 shadow-xl font-semibold">
                   Start Free Trial
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               <Link href="#demo">
-                <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-2 border-white text-white hover:bg-white/10">
+                <Button size="lg" variant="outline" className="text-lg px-8 py-6 border-2 border-white text-white hover:bg-white/10 font-semibold">
                   <Play className="mr-2 h-5 w-5" />
                   Watch Demo
                 </Button>
               </Link>
             </div>
-            <p className="mt-6 text-blue-100 text-sm">
+            <p className="mt-6 text-slate-300 text-sm font-medium">
               No credit card required • 14-day free trial • Cancel anytime
             </p>
           </div>
@@ -518,7 +518,7 @@ export default function LandingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="bg-gray-900 text-gray-400 py-12">
+      <footer className="bg-slate-900 text-slate-400 py-12">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid md:grid-cols-4 gap-8 mb-8">
             <div>
@@ -566,7 +566,7 @@ export default function LandingPage() {
               </ul>
             </div>
           </div>
-          <div className="border-t border-gray-800 pt-8 text-center text-sm">
+          <div className="border-t border-slate-800 pt-8 text-center text-sm font-medium">
             <p>© {new Date().getFullYear()} IMPLSE AI. All rights reserved.</p>
           </div>
         </div>

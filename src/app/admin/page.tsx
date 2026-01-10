@@ -73,7 +73,7 @@ export default async function AdminPage() {
       icon: Briefcase,
       href: '/admin/services',
       color: 'text-blue-600',
-      bgColor: 'bg-blue-50 dark:bg-blue-900/10',
+      bgColor: 'bg-blue-50',
     },
     {
       title: 'User Management',
@@ -81,7 +81,7 @@ export default async function AdminPage() {
       icon: Users,
       href: '/admin/users',
       color: 'text-purple-600',
-      bgColor: 'bg-purple-50 dark:bg-purple-900/10',
+      bgColor: 'bg-purple-50',
     },
     {
       title: 'Integrations',
@@ -89,7 +89,7 @@ export default async function AdminPage() {
       icon: Plug2,
       href: '/admin/integrations',
       color: 'text-green-600',
-      bgColor: 'bg-green-50 dark:bg-green-900/10',
+      bgColor: 'bg-green-50',
     },
     {
       title: 'Reports',
@@ -97,7 +97,7 @@ export default async function AdminPage() {
       icon: BarChart3,
       href: '/reports',
       color: 'text-indigo-600',
-      bgColor: 'bg-indigo-50 dark:bg-indigo-900/10',
+      bgColor: 'bg-indigo-50',
     },
     {
       title: 'Leads Management',
@@ -105,7 +105,7 @@ export default async function AdminPage() {
       icon: TrendingUp,
       href: '/leads',
       color: 'text-pink-600',
-      bgColor: 'bg-pink-50 dark:bg-pink-900/10',
+      bgColor: 'bg-pink-50',
     },
   ]
 
@@ -166,7 +166,7 @@ export default async function AdminPage() {
                   href={link.href}
                   className="group block p-4 rounded-xl border border-slate-200/60 hover:border-slate-300 hover:shadow-md bg-white transition-all duration-300"
                 >
-                  <div className={`inline-flex p-2.5 rounded-xl ${link.bgColor.replace('dark:bg-', '')} mb-3 group-hover:scale-105 transition-transform`}>
+                  <div className={`inline-flex p-2.5 rounded-xl ${link.bgColor} mb-3 group-hover:scale-105 transition-transform`}>
                     <Icon className={`h-4 w-4 ${link.color}`} />
                   </div>
                   <h3 className="text-sm font-bold tracking-tight text-slate-900 mb-1.5">{link.title}</h3>
