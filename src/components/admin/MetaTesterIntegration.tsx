@@ -686,17 +686,17 @@ export function MetaTesterIntegration({
                   </code>
                 </p>
                 <div className="space-y-1">
-                  <p className="text-slate-600 dark:text-slate-400">
-                    <span className="font-medium">Verify Token:</span>{' '}
+                  <p className="text-slate-600 font-medium">
+                    <span className="font-bold">Verify Token:</span>{' '}
                     {webhookVerifyTokenConfigured || storedWebhookVerifyToken ? (
-                      <span className="text-green-600 dark:text-green-400">✓ Configured</span>
+                      <span className="text-green-700 font-semibold">✓ Configured</span>
                     ) : (
-                      <span className="text-yellow-600 dark:text-yellow-400">⚠ Not set</span>
+                      <span className="text-yellow-700 font-semibold">⚠ Not set</span>
                     )}
                   </p>
                   {storedWebhookVerifyToken && (
                     <div className="flex items-center gap-2">
-                      <code className="text-xs bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded font-mono flex-1 truncate">
+                      <code className="text-xs bg-slate-100 px-2 py-1 rounded font-mono flex-1 truncate font-semibold">
                         {storedWebhookVerifyToken}
                       </code>
                       <button
@@ -705,14 +705,14 @@ export function MetaTesterIntegration({
                           setSuccess('Verify token copied to clipboard!')
                           setTimeout(() => setSuccess(null), 2000)
                         }}
-                        className="text-xs px-2 py-1 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                        className="text-xs px-2 py-1 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-semibold"
                       >
                         Copy
                       </button>
                     </div>
                   )}
                 </div>
-                <p className="text-xs text-slate-500 dark:text-slate-500 mt-2">
+                <p className="text-xs text-slate-600 mt-2 font-medium">
                   Copy the Callback URL above and paste it in Meta Developers → Instagram → API Setup → Webhooks → Callback URL
                 </p>
               </div>
@@ -752,22 +752,22 @@ export function MetaTesterIntegration({
               </Button>
             </div>
             {webhookTestResults && (
-              <div className="mt-3 p-3 bg-slate-50 dark:bg-slate-900 border rounded text-xs">
-                <p className="font-medium mb-2">Webhook Diagnostic Results:</p>
-                <div className="space-y-1 text-xs">
-                  <p><span className="font-medium">URL:</span> <code className="bg-slate-200 dark:bg-slate-800 px-1 rounded">{webhookTestResults.webhookUrl}</code></p>
-                  <p><span className="font-medium">Accessible:</span> {webhookTestResults.webhookAccessible ? '✅ Yes' : '❌ No'}</p>
+              <div className="mt-3 p-3 bg-slate-50 border rounded text-xs border-slate-200/60">
+                <p className="font-bold mb-2 tracking-tight">Webhook Diagnostic Results:</p>
+                <div className="space-y-1 text-xs font-medium">
+                  <p><span className="font-bold">URL:</span> <code className="bg-slate-200 px-1 rounded font-semibold">{webhookTestResults.webhookUrl}</code></p>
+                  <p><span className="font-bold">Accessible:</span> {webhookTestResults.webhookAccessible ? '✅ Yes' : '❌ No'}</p>
                   {webhookTestResults.webhookResponse && (
-                    <p><span className="font-medium">Response Status:</span> {webhookTestResults.webhookResponse.status}</p>
+                    <p><span className="font-bold">Response Status:</span> {webhookTestResults.webhookResponse.status}</p>
                   )}
                   {webhookTestResults.webhookError && (
-                    <p className="text-red-600"><span className="font-medium">Error:</span> {webhookTestResults.webhookError}</p>
+                    <p className="text-red-700 font-semibold"><span className="font-bold">Error:</span> {webhookTestResults.webhookError}</p>
                   )}
-                  <p><span className="font-medium">Verify Token:</span> {webhookTestResults.verifyTokenConfigured ? '✅ Configured' : '❌ Not Set'}</p>
+                  <p><span className="font-bold">Verify Token:</span> {webhookTestResults.verifyTokenConfigured ? '✅ Configured' : '❌ Not Set'}</p>
                   {webhookTestResults.environment && (
                     <details className="mt-2">
-                      <summary className="cursor-pointer text-xs text-slate-600 dark:text-slate-400">Environment Info</summary>
-                      <pre className="mt-1 p-2 bg-slate-100 dark:bg-slate-800 rounded text-xs overflow-auto">
+                      <summary className="cursor-pointer text-xs text-slate-600 font-semibold">Environment Info</summary>
+                      <pre className="mt-1 p-2 bg-slate-100 rounded text-xs overflow-auto font-mono">
                         {JSON.stringify(webhookTestResults.environment, null, 2)}
                       </pre>
                     </details>
@@ -777,9 +777,9 @@ export function MetaTesterIntegration({
             )}
 
             {/* Meta Console Configuration Checklist */}
-            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+            <div className="mt-4 p-4 bg-blue-50 border border-blue-200/60 rounded">
               <div className="flex items-center justify-between mb-3">
-                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                <h4 className="text-sm font-bold text-blue-900 tracking-tight">
                   📋 Meta Developer Console Configuration Checklist
                 </h4>
                 <Button
@@ -805,34 +805,34 @@ export function MetaTesterIntegration({
                   <span className="mt-0.5">1️⃣</span>
                   <div className="flex-1">
                     <p className="font-medium">Go to Meta Developer Console</p>
-                    <p className="text-slate-600 dark:text-slate-400">Meta Developers → Your App → Instagram → Webhooks</p>
+                    <p className="text-slate-600 font-medium">Meta Developers → Your App → Instagram → Webhooks</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5">2️⃣</span>
                   <div className="flex-1">
-                    <p className="font-medium">Enter Webhook URL (exact copy):</p>
-                    <code className="block mt-1 p-1.5 bg-white dark:bg-slate-800 rounded text-xs break-all">
+                    <p className="font-semibold">Enter Webhook URL (exact copy):</p>
+                    <code className="block mt-1 p-1.5 bg-white rounded text-xs break-all font-semibold border border-slate-200/60">
                       {webhookUrl || '[your webhook URL]'}
                     </code>
-                    <p className="text-red-600 dark:text-red-400 mt-1">⚠️ Must include https:// - no trailing slash</p>
+                    <p className="text-red-700 mt-1 font-semibold">⚠️ Must include https:// - no trailing slash</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5">3️⃣</span>
                   <div className="flex-1">
-                    <p className="font-medium">Enter Verify Token (exact copy, case-sensitive):</p>
-                    <code className="block mt-1 p-1.5 bg-white dark:bg-slate-800 rounded text-xs break-all">
+                    <p className="font-semibold">Enter Verify Token (exact copy, case-sensitive):</p>
+                    <code className="block mt-1 p-1.5 bg-white rounded text-xs break-all font-semibold border border-slate-200/60">
                       {storedWebhookVerifyToken || webhookVerifyToken || '[your verify token]'}
                     </code>
-                    <p className="text-red-600 dark:text-red-400 mt-1">⚠️ Case-sensitive - copy exactly, no extra spaces</p>
+                    <p className="text-red-700 mt-1 font-semibold">⚠️ Case-sensitive - copy exactly, no extra spaces</p>
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5">4️⃣</span>
                   <div className="flex-1">
-                    <p className="font-medium">Subscribe to these fields:</p>
-                    <code className="block mt-1 p-1.5 bg-white dark:bg-slate-800 rounded text-xs">
+                    <p className="font-semibold">Subscribe to these fields:</p>
+                    <code className="block mt-1 p-1.5 bg-white rounded text-xs font-semibold border border-slate-200/60">
                       messages, messaging_postbacks
                     </code>
                   </div>
@@ -840,8 +840,8 @@ export function MetaTesterIntegration({
                 <div className="flex items-start gap-2">
                   <span className="mt-0.5">5️⃣</span>
                   <div className="flex-1">
-                    <p className="font-medium">Click &quot;Verify and Save&quot;</p>
-                    <p className="text-slate-600 dark:text-slate-400">Meta will test the webhook - use &quot;Test Verification&quot; button above to simulate this</p>
+                    <p className="font-semibold">Click &quot;Verify and Save&quot;</p>
+                    <p className="text-slate-600 font-medium">Meta will test the webhook - use &quot;Test Verification&quot; button above to simulate this</p>
                   </div>
                 </div>
               </div>
@@ -849,23 +849,23 @@ export function MetaTesterIntegration({
               {verificationTestResults && (
                 <div className={`mt-3 p-3 rounded text-xs ${
                   verificationTestResults.verificationSuccess
-                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                    ? 'bg-green-50 border border-green-200/60'
+                    : 'bg-red-50 border border-red-200/60'
                 }`}>
-                  <p className={`font-medium mb-1 ${
+                  <p className={`font-bold mb-1 tracking-tight ${
                     verificationTestResults.verificationSuccess
-                      ? 'text-green-800 dark:text-green-200'
-                      : 'text-red-800 dark:text-red-200'
+                      ? 'text-green-800'
+                      : 'text-red-800'
                   }`}>
                     Verification Test Result:
                   </p>
-                  <p className={verificationTestResults.verificationSuccess ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>
+                  <p className={`font-medium ${verificationTestResults.verificationSuccess ? 'text-green-700' : 'text-red-700'}`}>
                     {verificationTestResults.explanation}
                   </p>
                   {verificationTestResults.verificationResult && (
                     <details className="mt-2">
-                      <summary className="cursor-pointer text-xs">Technical Details</summary>
-                      <pre className="mt-1 p-2 bg-white dark:bg-slate-800 rounded text-xs overflow-auto max-h-40">
+                      <summary className="cursor-pointer text-xs font-semibold">Technical Details</summary>
+                      <pre className="mt-1 p-2 bg-white rounded text-xs overflow-auto max-h-40 font-mono border border-slate-200/60">
                         {JSON.stringify(verificationTestResults.verificationResult, null, 2)}
                       </pre>
                     </details>
@@ -874,9 +874,9 @@ export function MetaTesterIntegration({
               )}
 
               {/* Webhook Events Viewer */}
-              <div className="mt-4 pt-4 border-t border-blue-300 dark:border-blue-700">
+              <div className="mt-4 pt-4 border-t border-blue-300/60">
                 <div className="flex items-center justify-between mb-2">
-                  <h5 className="text-xs font-semibold text-blue-900 dark:text-blue-100">
+                  <h5 className="text-xs font-bold text-blue-900 tracking-tight">
                     Recent Webhook Events
                   </h5>
                   <Button
@@ -902,22 +902,22 @@ export function MetaTesterIntegration({
                     {webhookEvents.events && webhookEvents.events.length > 0 ? (
                       <div className="space-y-2 max-h-60 overflow-y-auto">
                         {webhookEvents.events.slice(0, 5).map((event: any) => (
-                          <div key={event.id} className="p-2 bg-white dark:bg-slate-800 rounded border">
+                          <div key={event.id} className="p-2 bg-white rounded border border-slate-200/60">
                             <div className="flex items-center justify-between mb-1">
-                              <span className="font-medium text-xs">{event.payloadObject || event.eventType}</span>
-                              <span className="text-slate-500 text-xs">
+                              <span className="font-bold text-xs tracking-tight">{event.payloadObject || event.eventType}</span>
+                              <span className="text-slate-600 text-xs font-medium">
                                 {new Date(event.createdAt).toLocaleString()}
                               </span>
                             </div>
                             {event.messagePreview && (
-                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                              <p className="text-xs text-slate-700 mt-1 font-medium">
                                 Message from: {event.messagePreview.from} - {event.messagePreview.text}
                               </p>
                             )}
                             {event.payloadPreview && (
                               <details className="mt-1">
-                                <summary className="cursor-pointer text-xs text-slate-500">Payload Preview</summary>
-                                <pre className="mt-1 p-1 bg-slate-100 dark:bg-slate-900 rounded text-xs overflow-auto max-h-32">
+                                <summary className="cursor-pointer text-xs text-slate-600 font-semibold">Payload Preview</summary>
+                                <pre className="mt-1 p-1 bg-slate-100 rounded text-xs overflow-auto max-h-32 font-mono border border-slate-200/60">
                                   {JSON.stringify(event.payloadPreview, null, 2)}
                                 </pre>
                               </details>
@@ -925,13 +925,13 @@ export function MetaTesterIntegration({
                           </div>
                         ))}
                         {webhookEvents.events.length > 5 && (
-                          <p className="text-xs text-slate-500 text-center">
+                          <p className="text-xs text-slate-600 text-center font-semibold">
                             Showing 5 of {webhookEvents.total} events
                           </p>
                         )}
                       </div>
                     ) : (
-                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                      <p className="text-xs text-slate-600 font-medium">
                         {webhookEvents.message || 'No webhook events found yet. If you just configured the webhook, wait a few minutes after sending a test DM.'}
                       </p>
                     )}
@@ -945,10 +945,10 @@ export function MetaTesterIntegration({
               </div>
 
               {/* Troubleshooting Guide */}
-              <div className="mt-4 pt-4 border-t border-blue-300 dark:border-blue-700">
+              <div className="mt-4 pt-4 border-t border-blue-300/60">
                 <button
                   onClick={() => setShowTroubleshooting(!showTroubleshooting)}
-                  className="w-full text-left text-xs font-semibold text-blue-900 dark:text-blue-100 flex items-center justify-between"
+                  className="w-full text-left text-xs font-bold text-blue-900 flex items-center justify-between tracking-tight"
                 >
                   <span>🔧 Troubleshooting Guide</span>
                   <span>{showTroubleshooting ? '▼' : '▶'}</span>
@@ -956,8 +956,8 @@ export function MetaTesterIntegration({
                 {showTroubleshooting && (
                   <div className="mt-2 space-y-3 text-xs">
                     <div>
-                      <p className="font-medium text-red-700 dark:text-red-300 mb-1">❌ No webhook events received:</p>
-                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                      <p className="font-bold text-red-700 mb-1 tracking-tight">❌ No webhook events received:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 ml-2 font-medium">
                         <li>Verify webhook URL is EXACT (including https://, no trailing slash)</li>
                         <li>Verify token matches EXACTLY (case-sensitive, no extra spaces)</li>
                         <li>Make sure you clicked &quot;Verify and Save&quot; in Meta Console</li>
@@ -967,8 +967,8 @@ export function MetaTesterIntegration({
                       </ul>
                     </div>
                     <div>
-                      <p className="font-medium text-yellow-700 dark:text-yellow-300 mb-1">⚠️ Verification fails:</p>
-                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                      <p className="font-bold text-yellow-700 mb-1 tracking-tight">⚠️ Verification fails:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 ml-2 font-medium">
                         <li>Use the &quot;Test Verification&quot; button above to diagnose</li>
                         <li>Check that verify token is configured in your system</li>
                         <li>Check Vercel logs for verification errors</li>
@@ -976,8 +976,8 @@ export function MetaTesterIntegration({
                       </ul>
                     </div>
                     <div>
-                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">ℹ️ Events received but no DMs in inbox:</p>
-                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                      <p className="font-bold text-blue-700 mb-1 tracking-tight">ℹ️ Events received but no DMs in inbox:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 ml-2 font-medium">
                         <li>Check &quot;View Events&quot; above to see if events are arriving</li>
                         <li>Check Vercel logs for [META-WEBHOOK-INSTAGRAM-DEBUG] entries</li>
                         <li>Verify connection is active (check connection status above)</li>
@@ -985,8 +985,8 @@ export function MetaTesterIntegration({
                       </ul>
                     </div>
                     <div>
-                      <p className="font-medium text-green-700 dark:text-green-300 mb-1">✅ Testing your setup:</p>
-                      <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                      <p className="font-bold text-green-700 mb-1 tracking-tight">✅ Testing your setup:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-600 ml-2 font-medium">
                         <li>Click &quot;Test Verification&quot; - should pass if token is correct</li>
                         <li>Send a DM to your Instagram account from another account</li>
                         <li>Click &quot;View Events&quot; - should show recent webhook events</li>
@@ -1007,15 +1007,15 @@ export function MetaTesterIntegration({
   return (
     <div className="space-y-3">
       {error && (
-        <div className="p-2 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded text-xs text-red-700 dark:text-red-300">
-          <div className="font-medium">{error}</div>
+        <div className="p-2 bg-red-50 border border-red-200/60 rounded text-xs text-red-700 font-semibold">
+          <div className="font-bold">{error}</div>
           {errorDetails && (
-            <div className="mt-1 text-red-600 dark:text-red-400">{errorDetails}</div>
+            <div className="mt-1 text-red-600 font-medium">{errorDetails}</div>
           )}
         </div>
       )}
       {success && (
-        <div className="p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded text-xs text-green-700 dark:text-green-300">
+        <div className="p-2 bg-green-50 border border-green-200/60 rounded text-xs text-green-700 font-semibold">
           {success}
         </div>
       )}
@@ -1074,22 +1074,22 @@ export function MetaTesterIntegration({
               const selectedPage = pages.find((p) => p.id === selectedPageId)
               if (selectedPage && !selectedPage.instagram_business_account) {
                 return (
-                  <p className="text-xs text-red-600 dark:text-red-400">
+                  <p className="text-xs text-red-700 font-semibold">
                     ⚠️ Selected page does not have an Instagram Business Account connected. Instagram DM integration requires a page with IG connected.
                   </p>
                 )
               }
               return null
             })()}
-            <p className="text-xs text-slate-500">
+            <p className="text-xs text-slate-600 font-medium">
               Select the Facebook Page and Instagram account you want to connect
             </p>
           </div>
         )}
 
         <div className="space-y-2">
-          <label className="block text-xs font-medium">
-            Webhook Verify Token <span className="text-slate-400">(optional)</span>
+          <label className="block text-xs font-semibold">
+            Webhook Verify Token <span className="text-slate-500 font-medium">(optional)</span>
           </label>
           <Input
             type="text"
@@ -1098,19 +1098,19 @@ export function MetaTesterIntegration({
             onChange={(e) => setWebhookVerifyToken(e.target.value)}
             className="text-xs h-8"
           />
-          <p className="text-xs text-slate-500">
+          <p className="text-xs text-slate-600 font-medium">
             Set this in Meta App → Webhooks → Verify Token. Stored in database.
           </p>
         </div>
       </div>
 
       {webhookUrl && (
-        <div className="p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded text-xs">
-          <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">Webhook URL for Meta:</p>
-          <code className="text-xs bg-blue-100 dark:bg-blue-900 px-1 py-0.5 rounded break-all">
+        <div className="p-2 bg-blue-50 border border-blue-200/60 rounded text-xs">
+          <p className="font-bold text-blue-700 mb-1 tracking-tight">Webhook URL for Meta:</p>
+          <code className="text-xs bg-blue-100 px-1 py-0.5 rounded break-all font-semibold">
             {webhookUrl}
           </code>
-          <p className="text-blue-600 dark:text-blue-400 mt-1">
+          <p className="text-blue-700 mt-1 font-semibold">
             Copy this URL and paste it in Meta Developers → Instagram → API Setup → Webhooks → Callback URL
           </p>
         </div>

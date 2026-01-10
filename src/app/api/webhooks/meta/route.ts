@@ -243,7 +243,17 @@ export async function POST(req: NextRequest) {
         console.log('✅ [META-WEBHOOK-POST] Async webhook processing completed successfully', {
           object: payload.object,
           entryCount: payload.entry?.length || 0,
+          isInstagram: payload.object === 'instagram',
+          timestamp: new Date().toISOString(),
         })
+        
+        // Additional logging for Instagram to confirm processing completed
+        if (payload.object === 'instagram') {
+          console.log('✅ [META-WEBHOOK-INSTAGRAM] Processing status: Async webhook processing completed', {
+            entryCount: payload.entry?.length || 0,
+            note: 'Check logs above to see if events were processed into leads and messages',
+          })
+        }
       })
       .catch((error: any) => {
         // Capture full error object for debugging
@@ -251,6 +261,13 @@ export async function POST(req: NextRequest) {
         const errorName = error.name || 'UnknownError'
         const errorCode = error.code || 'NO_CODE'
         const errorStack = error.stack?.substring(0, 1000) || 'No stack trace'
+        
+        // Capture Prisma error details if available
+        const prismaErrorDetails = error.code || error.meta ? {
+          prismaCode: error.code,
+          prismaMeta: error.meta,
+          prismaClientVersion: error.clientVersion,
+        } : null
         
         // Safely serialize error object
         let fullError = 'Could not serialize error'
@@ -278,7 +295,36 @@ export async function POST(req: NextRequest) {
           fullError,
           object: payload.object,
           entryCount: payload.entry?.length || 0,
+          isInstagram: payload.object === 'instagram',
+          timestamp: new Date().toISOString(),
+          ...(prismaErrorDetails || {}),
         })
+        
+        // Additional logging for Instagram errors
+        if (payload.object === 'instagram') {
+          console.error('❌ [META-WEBHOOK-INSTAGRAM] Processing status: Async webhook processing FAILED', {
+            error: errorMessage,
+            errorName,
+            errorCode,
+            entryCount: payload.entry?.length || 0,
+            ...(prismaErrorDetails || {}),
+            warning: 'Instagram webhook processing failed - no leads or messages will be created for this webhook',
+          })
+          
+          // Log full Prisma error if it's a Prisma error
+          if (error.code && error.meta) {
+            try {
+              const prismaErrorJson = JSON.stringify({
+                code: error.code,
+                meta: error.meta,
+                message: error.message,
+              }, null, 2)
+              console.error('❌ [META-WEBHOOK-INSTAGRAM] PRISMA ERROR IN processWebhookPayload:', prismaErrorJson)
+            } catch (jsonError) {
+              console.error('❌ [META-WEBHOOK-INSTAGRAM] Failed to serialize Prisma error:', jsonError)
+            }
+          }
+        }
       })
 
     return response
@@ -514,8 +560,10 @@ async function processWebhookPayload(payload: any) {
       })
     }
 
-    if (normalizedEvents.length === 0 && payload.object === 'instagram') {
-      console.warn('⚠️ [META-WEBHOOK-INSTAGRAM-DEBUG] Normalization produced ZERO events for Instagram webhook', {
+    // Verify normalization is working - log results
+    if (payload.object === 'instagram') {
+      if (normalizedEvents.length === 0) {
+        console.warn('⚠️ [META-WEBHOOK-INSTAGRAM-DEBUG] Normalization produced ZERO events for Instagram webhook - attempting fallback', {
         entryId: entry.id,
         entryKeys: Object.keys(entry),
         hasChanges: !!entry.changes,
@@ -638,6 +686,51 @@ async function processWebhookPayload(payload: any) {
             allConditions: event.eventType === 'message' && event.senderId && (hasText || hasAttachments),
           },
           rawPayloadPreview: JSON.stringify(event.rawPayload).substring(0, 500),
+        })
+      }
+      
+      // Check if event passes processing conditions
+      const passesConditions = event.eventType === 'message' && event.senderId && (hasText || hasAttachments)
+      
+      // Log when events are skipped due to condition check failure
+      if (!passesConditions) {
+        if (channelLower === 'instagram') {
+          const skipReason = !event.eventType ? 'missing eventType' :
+                            !event.senderId ? 'missing senderId' :
+                            !hasText && !hasAttachments ? 'no text or attachments' :
+                            event.eventType !== 'message' ? `eventType is '${event.eventType}' not 'message'` :
+                            'unknown'
+          
+          console.warn('⚠️ [META-WEBHOOK-INSTAGRAM] Event SKIPPED - does not pass conditions', {
+            eventType: event.eventType || 'MISSING',
+            hasSenderId: !!event.senderId,
+            senderId: event.senderId || 'MISSING',
+            hasText,
+            textValue: event.text || '[no text]',
+            textLength: event.text?.length || 0,
+            hasAttachments,
+            attachmentsCount: event.rawPayload?.attachments?.length || 0,
+            reason: skipReason,
+            conditionBreakdown: {
+              isMessage: event.eventType === 'message',
+              hasSender: !!event.senderId,
+              hasTextOrAttachments: (hasText || hasAttachments),
+              allConditions: event.eventType === 'message' && event.senderId && (hasText || hasAttachments),
+            },
+          })
+        }
+        continue // Skip this event
+      }
+      
+      // Event passes conditions - proceed with processing
+      if (channelLower === 'instagram') {
+        console.log('🔄 [META-WEBHOOK-INSTAGRAM] About to process event - PASSED conditions', {
+          eventType: event.eventType,
+          senderId: event.senderId,
+          messageId: event.messageId || 'N/A',
+          hasText: !!event.text,
+          hasAttachments,
+          textPreview: event.text ? `${event.text.substring(0, 50)}${event.text.length > 50 ? '...' : ''}` : '[no text]',
         })
       }
       

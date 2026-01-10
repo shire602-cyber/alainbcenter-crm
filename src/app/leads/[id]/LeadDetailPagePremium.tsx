@@ -710,8 +710,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       <Badge
                         className={cn(
                           'text-xs',
-                          compliance.status === 'CRITICAL' && 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400',
-                          compliance.status === 'WARNING' && 'bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400'
+                          compliance.status === 'CRITICAL' && 'bg-red-100 text-red-700 font-semibold',
+                          compliance.status === 'WARNING' && 'bg-amber-100 text-amber-700 font-semibold'
                         )}
                         title={compliance.notes}
                       >
@@ -845,11 +845,11 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Needed</Label>
                   {/* Show requestedServiceRaw prominently if serviceTypeId not set */}
                   {lead.requestedServiceRaw && !lead.serviceTypeId && (
-                    <div className="mb-2 p-2 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
-                      <p className="text-sm font-medium text-blue-900 dark:text-blue-100">
+                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200/60 rounded">
+                      <p className="text-sm font-bold text-blue-900 tracking-tight">
                         {lead.requestedServiceRaw}
                       </p>
-                      <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                      <p className="text-xs text-blue-700 mt-1 font-medium">
                         Detected from messages - select service type below to confirm
                       </p>
                     </div>
@@ -877,12 +877,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         ))}
                       </Select>
                   {lead.serviceTypeEnum && !lead.serviceTypeId && (
-                    <p className="text-xs text-muted-foreground mt-1">
+                    <p className="text-xs text-slate-600 mt-1 font-medium">
                       Detected: {lead.serviceTypeEnum.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </p>
                   )}
                   {lead.requestedServiceRaw && (
-                    <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 italic">
+                    <p className="text-xs text-blue-700 mt-1 italic font-medium">
                       Customer mentioned: "{lead.requestedServiceRaw}"
                     </p>
                   )}
@@ -1024,7 +1024,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         <Button
                           variant="ghost"
                           size="sm"
-                          className="gap-1.5 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20"
+                          className="gap-1.5 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-semibold"
                           onClick={async () => {
                             if (!confirm('⚠️ Wipe all test data for this lead?\n\nThis will:\n- Delete all messages\n- Delete all OutboundJobs\n- Clear conversation state (AI memory)\n- Delete all logs\n\nThis action cannot be undone. Use for testing AI behavior from scratch.')) {
                               return
@@ -1063,7 +1063,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                           <Button
                             variant="ghost"
                             size="sm"
-                            className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                            className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 font-semibold"
                             onClick={async () => {
                               if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
                                 return
@@ -1154,7 +1154,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                                   className={cn(
                                     'rounded-xl px-5 py-3 max-w-[75%] shadow-sm transition-all',
                                     isInbound
-                                      ? 'bg-gray-100 dark:bg-gray-800 rounded-tl-none hover:shadow-md'
+                                      ? 'bg-slate-100 rounded-tl-none hover:shadow-md'
                                       : 'bg-primary text-primary-foreground rounded-tr-none hover:shadow-md'
                                   )}
                                 >
@@ -1244,7 +1244,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                                   className={cn(
                                     'rounded-xl px-4 py-2.5 max-w-[70%] shadow-sm transition-all',
                                     isInbound
-                                      ? 'bg-gray-100 dark:bg-gray-800 rounded-tl-none hover:shadow-md'
+                                      ? 'bg-slate-100 rounded-tl-none hover:shadow-md'
                                       : 'bg-primary text-primary-foreground rounded-tr-none hover:shadow-md'
                                   )}
                                 >
@@ -1345,15 +1345,15 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
             {/* Test Tools (Admin Only) */}
             {currentUser?.role === 'ADMIN' && (
-              <Card className="rounded-2xl glass-soft shadow-sidebar border-orange-200 dark:border-orange-900">
+              <Card className="rounded-2xl glass-soft shadow-sidebar border-orange-200/60">
                 <CardHeader className="pb-3 pt-4 px-5">
-                  <CardTitle className="text-base font-semibold text-section-header">Test Tools</CardTitle>
+                  <CardTitle className="text-base font-bold text-section-header tracking-tight">Test Tools</CardTitle>
                 </CardHeader>
                 <CardContent className="px-5 pb-5">
                   <Button
                     variant="outline"
                     size="sm"
-                    className="w-full gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 dark:hover:bg-orange-900/20 border-orange-300 dark:border-orange-800"
+                    className="w-full gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-300/60 font-semibold"
                     onClick={async () => {
                       if (!confirm('⚠️ Wipe all test data for this lead?\n\nThis will:\n- Delete all messages\n- Delete all OutboundJobs\n- Clear conversation state (AI memory)\n- Delete all logs\n\nThis action cannot be undone. Use for testing AI behavior from scratch.')) {
                         return
@@ -1419,14 +1419,14 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     const data = JSON.parse(lead.dataJson)
                     if (data.expiry_hint_text) {
                       return (
-                        <div className="p-3 rounded-lg border border-yellow-200 bg-yellow-50/50 dark:bg-yellow-900/10 dark:border-yellow-800/50">
+                        <div className="p-3 rounded-lg border border-yellow-200/60 bg-yellow-50">
                           <div className="flex items-start gap-2 mb-2">
-                            <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                            <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
                             <div className="flex-1">
-                              <p className="text-xs font-medium text-yellow-900 dark:text-yellow-100 mb-1">
+                              <p className="text-xs font-bold text-yellow-900 mb-1 tracking-tight">
                                 Unverified Expiry Hint
                               </p>
-                              <p className="text-xs text-yellow-700 dark:text-yellow-300 italic">
+                              <p className="text-xs text-yellow-800 italic font-medium">
                                 "{data.expiry_hint_text}"
                               </p>
                             </div>
@@ -1434,7 +1434,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                           <Button
                             size="sm"
                             variant="outline"
-                            className="w-full mt-2 text-xs h-7 border-yellow-300 dark:border-yellow-700"
+                            className="w-full mt-2 text-xs h-7 border-yellow-300/60 font-semibold"
                             onClick={() => setShowExpiryModal(true)}
                           >
                             <Calendar className="h-3 w-3 mr-1" />
@@ -1462,9 +1462,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         key={expiry.id}
                         className={cn(
                           'group p-4 rounded-2xl border-2 text-sm hover:shadow-lg transition-all cursor-pointer',
-                          isOverdue && 'border-red-200 bg-red-50/50 dark:bg-red-900/10 dark:border-red-800/50',
-                          isUrgent && 'border-orange-200 bg-orange-50/50 dark:bg-orange-900/10 dark:border-orange-800/50',
-                          isWarning && 'border-amber-200 bg-amber-50/50 dark:bg-amber-900/10 dark:border-amber-800/50',
+                          isOverdue && 'border-red-200/60 bg-red-50',
+                          isUrgent && 'border-orange-200/60 bg-orange-50',
+                          isWarning && 'border-amber-200/60 bg-amber-50',
                           !isOverdue && !isUrgent && !isWarning && 'border-border bg-card hover:bg-muted/50'
                         )}
                       >
@@ -1630,17 +1630,17 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     .map((notification: any) => (
                       <div
                         key={notification.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800"
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-yellow-50 border-yellow-200/60"
                       >
-                        <AlertCircle className="h-4 w-4 text-yellow-600 dark:text-yellow-400 mt-0.5 flex-shrink-0" />
+                        <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
                         <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium text-yellow-900 dark:text-yellow-100">
+                          <p className="text-sm font-bold text-yellow-900 tracking-tight">
                             {notification.title}
                           </p>
-                          <p className="text-xs text-yellow-700 dark:text-yellow-300 mt-1">
+                          <p className="text-xs text-yellow-800 mt-1 font-medium">
                             {notification.message}
                           </p>
-                          <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-1">
+                          <p className="text-xs text-yellow-700 mt-1 font-semibold">
                             {format(parseISO(notification.createdAt), 'MMM dd, yyyy HH:mm')}
                           </p>
                         </div>
