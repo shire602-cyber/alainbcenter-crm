@@ -1581,16 +1581,34 @@ async function findOrCreateLead(input: {
       })
     }
     
-    const newLead = await prisma.lead.create({
-      data: {
-        contactId: input.contactId,
-        stage: 'NEW',
-        status: 'new',
-        pipelineStage: 'new',
-        lastContactChannel: channelLower,
-        lastInboundAt: messageTimestamp, // Use actual message timestamp
-      },
+    const leadData = {
+      contactId: input.contactId,
+      stage: 'NEW',
+      status: 'new',
+      pipelineStage: 'new',
+      lastContactChannel: channelLower,
+      lastInboundAt: messageTimestamp, // Use actual message timestamp
+    }
+    
+    console.log(`🔍 [AUTO-MATCH] IMMEDIATELY BEFORE prisma.lead.create()`, {
+      leadData,
+      isInstagram,
     })
+    
+    let newLead
+    try {
+      newLead = await prisma.lead.create({
+        data: leadData,
+      })
+      
+      console.log(`✅ [AUTO-MATCH] IMMEDIATELY AFTER prisma.lead.create() - SUCCESS`, {
+        leadId: newLead?.id || 'NULL',
+        leadStage: newLead?.stage || 'NULL',
+        leadContactId: newLead?.contactId || 'NULL',
+        hasLead: !!newLead,
+        leadType: typeof newLead,
+        isInstagram,
+      })
     
     if (isInstagram) {
       console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Lead created successfully`, {
