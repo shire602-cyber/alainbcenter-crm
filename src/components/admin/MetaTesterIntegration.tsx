@@ -558,20 +558,20 @@ export function MetaTesterIntegration({
                     {(!igSubscribed || igStatusUnknown) && (
                       <div className={`mt-2 p-3 border rounded text-xs ${
                         igStatusUnknown 
-                          ? 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800' 
-                          : 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800'
+                          ? 'bg-yellow-50 border-yellow-200/60' 
+                          : 'bg-red-50 border-red-200/60'
                       }`}>
-                        <p className={`font-medium mb-2 ${
+                        <p className={`font-bold mb-2 ${
                           igStatusUnknown
-                            ? 'text-yellow-800 dark:text-yellow-200'
-                            : 'text-red-800 dark:text-red-200'
+                            ? 'text-yellow-800'
+                            : 'text-red-800'
                         }`}>
                           {igStatusUnknown ? '⚠️ Manual Verification Required:' : 'Manual Setup Required:'}
                         </p>
-                        <ol className={`list-decimal list-inside space-y-1 ${
+                        <ol className={`list-decimal list-inside space-y-1 font-medium ${
                           igStatusUnknown
-                            ? 'text-yellow-700 dark:text-yellow-300'
-                            : 'text-red-700 dark:text-red-300'
+                            ? 'text-yellow-700'
+                            : 'text-red-700'
                         }`}>
                           <li>
                             Go to{' '}
@@ -586,10 +586,10 @@ export function MetaTesterIntegration({
                           </li>
                           <li className="flex items-center gap-2">
                             <span>Add Webhook URL:</span>
-                            <code className={`px-2 py-0.5 rounded font-mono text-xs ${
+                            <code className={`px-2 py-0.5 rounded font-mono text-xs font-semibold ${
                               igStatusUnknown
-                                ? 'bg-yellow-100 dark:bg-yellow-900'
-                                : 'bg-red-100 dark:bg-red-900'
+                                ? 'bg-yellow-100'
+                                : 'bg-red-100'
                             }`}>
                               {webhookUrl || '[your webhook URL]'}
                             </code>
@@ -600,7 +600,7 @@ export function MetaTesterIntegration({
                                   setSuccess('Webhook URL copied to clipboard!')
                                   setTimeout(() => setSuccess(null), 2000)
                                 }}
-                                className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                                className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-semibold"
                               >
                                 Copy
                               </button>
@@ -608,10 +608,10 @@ export function MetaTesterIntegration({
                           </li>
                           <li className="flex items-center gap-2">
                             <span>Set Verify Token:</span>
-                            <code className={`px-2 py-0.5 rounded font-mono text-xs ${
+                            <code className={`px-2 py-0.5 rounded font-mono text-xs font-semibold ${
                               igStatusUnknown
-                                ? 'bg-yellow-100 dark:bg-yellow-900'
-                                : 'bg-red-100 dark:bg-red-900'
+                                ? 'bg-yellow-100'
+                                : 'bg-red-100'
                             }`}>
                               {storedWebhookVerifyToken || webhookVerifyToken || '[your verify token]'}
                             </code>
@@ -625,16 +625,16 @@ export function MetaTesterIntegration({
                                     setTimeout(() => setSuccess(null), 2000)
                                   }
                                 }}
-                                className="text-xs px-2 py-0.5 bg-blue-100 dark:bg-blue-900 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-800"
+                                className="text-xs px-2 py-0.5 bg-blue-100 text-blue-700 rounded hover:bg-blue-200 font-semibold"
                               >
                                 Copy
                               </button>
                             )}
                           </li>
-                          <li>Subscribe to: <code className={`px-1 rounded ${
+                          <li>Subscribe to: <code className={`px-1 rounded font-semibold ${
                             igStatusUnknown
-                              ? 'bg-yellow-100 dark:bg-yellow-900'
-                              : 'bg-red-100 dark:bg-red-900'
+                              ? 'bg-yellow-100'
+                              : 'bg-red-100'
                           }`}>messages, messaging_postbacks</code></li>
                           <li>Click &quot;Verify and Save&quot;</li>
                           <li>
@@ -675,13 +675,13 @@ export function MetaTesterIntegration({
         </div>
 
         {webhookUrl && (
-          <div className="pt-2 border-t border-slate-200 dark:border-slate-700 space-y-2">
+          <div className="pt-2 border-t border-slate-200/60 space-y-2">
             <div className="text-xs space-y-1">
-              <p className="font-medium text-slate-700 dark:text-slate-300">Webhook Configuration:</p>
+              <p className="font-bold text-slate-700 tracking-tight">Webhook Configuration:</p>
               <div className="pl-2 space-y-1">
-                <p className="text-slate-600 dark:text-slate-400">
-                  <span className="font-medium">Callback URL:</span>{' '}
-                  <code className="text-xs bg-slate-100 dark:bg-slate-800 px-1 py-0.5 rounded">
+                <p className="text-slate-600 font-medium">
+                  <span className="font-bold">Callback URL:</span>{' '}
+                  <code className="text-xs bg-slate-100 px-1 py-0.5 rounded font-semibold">
                     {webhookUrl}
                   </code>
                 </p>

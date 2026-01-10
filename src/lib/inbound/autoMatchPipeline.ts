@@ -1389,7 +1389,8 @@ async function findOrCreateLead(input: {
   
   try {
     // BUG FIX: Use actual message timestamp instead of webhook processing time
-    const messageTimestamp = input.timestamp || new Date()
+    // Use let to allow reassignment if validation fails
+    let messageTimestamp = input.timestamp || new Date()
     
     if (isInstagram) {
       console.log(`📸 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Starting`, {
