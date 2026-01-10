@@ -27,7 +27,7 @@ export function BentoCard({
   const Content = (
     <div 
       className={cn(
-        "group relative bg-slate-50 dark:bg-slate-900/50 border-2 border-slate-200/50 dark:border-slate-800/50 rounded-2xl p-5 transition-all duration-300 hover:shadow-2xl hover:border-primary/20 hover:-translate-y-1",
+        "group relative bg-white border border-slate-200/60 rounded-2xl p-6 transition-all duration-300 hover:shadow-[0_20px_60px_-12px_rgba(0,0,0,0.08)] hover:border-slate-300 hover:-translate-y-0.5",
         colSpan === 2 && "md:col-span-2",
         colSpan === 3 && "md:col-span-3",
         colSpan === 4 && "md:col-span-4",
@@ -35,18 +35,18 @@ export function BentoCard({
       )}
     >
       {(title || action || badge) && (
-        <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between mb-4 pb-3 border-b border-slate-200/60">
           {title && (
-            <div className="flex items-center gap-2">
-              {icon && <div className="text-slate-500 dark:text-slate-400">{icon}</div>}
-              <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+            <div className="flex items-center gap-2.5">
+              {icon && <div className="text-slate-600">{icon}</div>}
+              <h3 className="text-sm font-bold text-slate-900 tracking-tight">
                 {title}
               </h3>
               {badge && <div className="text-xs">{badge}</div>}
             </div>
           )}
           {action && (
-            <div className="text-xs text-slate-600 dark:text-slate-400">
+            <div className="text-xs text-slate-600 font-medium">
               {action}
             </div>
           )}

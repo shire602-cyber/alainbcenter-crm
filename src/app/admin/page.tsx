@@ -44,7 +44,7 @@ export default async function AdminPage() {
       icon: Briefcase,
       href: '/admin/services',
       color: 'text-blue-600',
-      bgColor: 'bg-blue-100 dark:bg-blue-900/20',
+      bgColor: 'bg-blue-100',
     },
     {
       title: 'Total Users',
@@ -53,7 +53,7 @@ export default async function AdminPage() {
       icon: Users,
       href: '/admin/users',
       color: 'text-purple-600',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/20',
+      bgColor: 'bg-purple-100',
     },
     {
       title: 'Total Leads',
@@ -62,7 +62,7 @@ export default async function AdminPage() {
       icon: TrendingUp,
       href: '/leads',
       color: 'text-green-600',
-      bgColor: 'bg-green-100 dark:bg-green-900/20',
+      bgColor: 'bg-green-100',
     },
   ]
 
@@ -113,41 +113,41 @@ export default async function AdminPage() {
     <MainLayout>
       <div className="space-y-4">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-2xl font-semibold tracking-tight text-foreground">
+            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
               Admin Dashboard
             </h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <p className="text-sm text-slate-600 mt-2 font-medium">
               Manage services, users, integrations, and system settings
             </p>
           </div>
         </div>
 
         {/* Stats Cards */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           {stats.map((stat) => {
             const Icon = stat.icon
             return (
               <Link key={stat.title} href={stat.href} className="block">
                 <BentoCard className="group cursor-pointer">
-                  <div className="flex items-start justify-between mb-2">
+                  <div className="flex items-start justify-between mb-3">
                     <div className="flex-1">
-                      <div className="flex items-center gap-2 mb-1">
-                        <Icon className={`h-4 w-4 ${stat.color}`} />
-                        <span className="text-xs font-medium text-slate-600 dark:text-slate-400 uppercase tracking-wide">
+                      <div className="flex items-center gap-2.5 mb-2">
+                        <Icon className={`h-5 w-5 ${stat.color}`} />
+                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
                           {stat.title}
                         </span>
                       </div>
-                      <p className="text-2xl font-semibold tracking-tight text-slate-900 dark:text-slate-100 mb-0.5">
+                      <p className="text-3xl font-bold tracking-tight text-slate-900 mb-1">
                         {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
                       </p>
-                      <p className="text-xs text-slate-600 dark:text-slate-400">{stat.subtitle}</p>
+                      <p className="text-xs text-slate-600 font-medium">{stat.subtitle}</p>
                     </div>
                   </div>
-                  <div className="flex items-center gap-1.5 mt-3 pt-2 border-t border-slate-200 dark:border-slate-800">
-                    <span className="text-xs text-primary font-medium">View Details</span>
-                    <ArrowRight className="h-3 w-3 text-primary group-hover:translate-x-0.5 transition-transform" />
+                  <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-slate-200/60">
+                    <span className="text-xs text-slate-900 font-semibold group-hover:text-slate-900 transition-colors">View Details</span>
+                    <ArrowRight className="h-3.5 w-3.5 text-slate-700 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </BentoCard>
               </Link>
@@ -164,16 +164,16 @@ export default async function AdminPage() {
                 <Link 
                   key={link.title} 
                   href={link.href}
-                  className="group block p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition-all"
+                  className="group block p-4 rounded-xl border border-slate-200/60 hover:border-slate-300 hover:shadow-md bg-white transition-all duration-300"
                 >
-                  <div className={`inline-flex p-2 rounded-lg ${link.bgColor} mb-2 group-hover:scale-105 transition-transform`}>
+                  <div className={`inline-flex p-2.5 rounded-xl ${link.bgColor.replace('dark:bg-', '')} mb-3 group-hover:scale-105 transition-transform`}>
                     <Icon className={`h-4 w-4 ${link.color}`} />
                   </div>
-                  <h3 className="text-sm font-semibold tracking-tight text-foreground mb-1">{link.title}</h3>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">{link.description}</p>
-                  <div className="flex items-center gap-1.5 text-xs text-primary font-medium">
+                  <h3 className="text-sm font-bold tracking-tight text-slate-900 mb-1.5">{link.title}</h3>
+                  <p className="text-xs text-slate-600 mb-3 font-medium leading-relaxed">{link.description}</p>
+                  <div className="flex items-center gap-1.5 text-xs text-slate-900 font-semibold">
                     <span>Open</span>
-                    <ArrowRight className="h-3 w-3 group-hover:translate-x-0.5 transition-transform" />
+                    <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </Link>
               )

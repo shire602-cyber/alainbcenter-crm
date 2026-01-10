@@ -94,30 +94,41 @@ export default function LoginPage() {
   }
 
   return (
-    <div className="min-h-screen grid grid-cols-1 md:grid-cols-2">
-      {/* Left Column - Gradient Background */}
-      <div className="hidden md:flex flex-col justify-center items-center bg-gradient-to-br from-indigo-500 to-violet-600 p-12 text-white relative overflow-hidden">
-        <div className={`max-w-md space-y-6 ${mounted ? 'animate-fade-in-up' : 'opacity-0'}`}>
-          <h1 className="text-4xl md:text-5xl font-bold leading-tight">
-            Turn conversations into customers.
+    <div className="min-h-screen grid grid-cols-1 md:grid-cols-2 bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      {/* Left Column - Branding Panel */}
+      <div className="hidden md:flex flex-col justify-center items-center p-12 text-slate-900 relative overflow-hidden">
+        {/* Sophisticated geometric pattern background */}
+        <div className="absolute inset-0 opacity-[0.03]">
+          <div className="absolute inset-0" style={{
+            backgroundImage: `linear-gradient(to right, #1e293b 1px, transparent 1px),
+                              linear-gradient(to bottom, #1e293b 1px, transparent 1px)`,
+            backgroundSize: '48px 48px'
+          }}></div>
+        </div>
+        
+        {/* Subtle geometric shapes */}
+        <div className="absolute top-20 right-20 w-32 h-32 border border-slate-300/30 rotate-45"></div>
+        <div className="absolute bottom-32 left-16 w-24 h-24 border border-slate-300/20 rotate-12"></div>
+        <div className="absolute top-1/2 right-1/4 w-16 h-16 border border-slate-300/25 rotate-45"></div>
+        
+        <div className={`max-w-md space-y-8 relative z-10 ${mounted ? 'animate-premium-fade-in' : 'opacity-0'}`}>
+          <h1 className="text-5xl md:text-6xl font-bold leading-tight tracking-tight text-slate-900">
+            Turn conversations<br />into customers.
           </h1>
-          <p className="text-lg md:text-xl text-indigo-100 leading-relaxed">
+          <p className="text-lg md:text-xl text-slate-600 leading-relaxed font-medium">
             AI-powered WhatsApp CRM for modern businesses.
           </p>
         </div>
-        {/* Decorative elements */}
-        <div className="absolute top-0 right-0 w-64 h-64 bg-white/10 rounded-full blur-3xl -translate-y-1/2 translate-x-1/2"></div>
-        <div className="absolute bottom-0 left-0 w-96 h-96 bg-white/5 rounded-full blur-3xl translate-y-1/2 -translate-x-1/2"></div>
       </div>
 
       {/* Right Column - Login Form */}
-      <div className="flex items-center justify-center p-4 md:p-8 bg-background">
-        <div className={`w-full max-w-md ${mounted ? 'animate-fade-in-up' : 'opacity-0'}`} style={{ animationDelay: '100ms' }}>
-          <div className="rounded-2xl border border-border/50 bg-card p-8 shadow-xl">
+      <div className="flex items-center justify-center p-4 md:p-12">
+        <div className={`w-full max-w-lg ${mounted ? 'animate-premium-fade-in' : 'opacity-0'}`} style={{ animationDelay: '150ms' }}>
+          <div className="rounded-2xl border border-slate-200/60 bg-white/80 backdrop-blur-sm p-10 md:p-12 shadow-[0_20px_60px_-12px_rgba(0,0,0,0.08),0_0_0_1px_rgba(0,0,0,0.02)]">
             {/* Logo */}
-            <div className="flex justify-center mb-8">
-              <Link href="/" className="flex items-center gap-3 group">
-                <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 overflow-hidden flex-shrink-0 px-4 py-2 shadow-md transition-all duration-200 group-hover:shadow-lg group-hover:scale-[1.02]">
+            <div className="flex justify-center mb-10">
+              <Link href="/" className="flex items-center gap-4 group">
+                <div className="flex h-14 w-14 items-center justify-center rounded-xl bg-slate-900 overflow-hidden flex-shrink-0 px-3 py-3 shadow-lg transition-all duration-300 group-hover:shadow-xl group-hover:scale-[1.03]">
                   <img 
                     src="/implse-ai-icon.svg" 
                     alt="IMPLSE AI" 
@@ -129,34 +140,34 @@ export default function LoginPage() {
                       if (parent && !parent.querySelector('.logo-fallback')) {
                         const fallback = document.createElement('div')
                         fallback.className = 'logo-fallback'
-                        fallback.innerHTML = '<svg class="h-6 w-6 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>'
+                        fallback.innerHTML = '<svg class="h-7 w-7 text-white" fill="currentColor" viewBox="0 0 20 20"><path d="M9 2a1 1 0 000 2h2a1 1 0 100-2H9z"/><path fill-rule="evenodd" d="M4 5a2 2 0 012-2 3 3 0 003 3h2a3 3 0 003-3 2 2 0 012 2v11a2 2 0 01-2 2H6a2 2 0 01-2-2V5zm3 4a1 1 0 000 2h.01a1 1 0 100-2H7zm3 0a1 1 0 000 2h3a1 1 0 100-2h-3zm-3 4a1 1 0 100 2h.01a1 1 0 100-2H7zm3 0a1 1 0 100 2h3a1 1 0 100-2h-3z" clip-rule="evenodd"/></svg>'
                         parent.appendChild(fallback)
                       }
                     }}
                   />
                 </div>
                 <div>
-                  <h2 className="text-xl font-semibold text-foreground">IMPLSE AI</h2>
-                  <p className="text-xs text-muted-foreground">AI Business CRM</p>
+                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">IMPLSE AI</h2>
+                  <p className="text-xs text-slate-600 font-medium mt-0.5">AI Business CRM</p>
                 </div>
               </Link>
             </div>
 
-            <div className="space-y-1 mb-8 text-center">
-              <h2 className="text-2xl font-semibold tracking-tight text-foreground">Welcome back</h2>
-              <p className="text-sm text-muted-foreground">Sign in to your account</p>
+            <div className="space-y-2 mb-10 text-center">
+              <h2 className="text-3xl font-bold tracking-tight text-slate-900">Welcome back</h2>
+              <p className="text-sm text-slate-600">Sign in to your account</p>
             </div>
 
             <form className="space-y-6" onSubmit={handleSubmit}>
               {error && (
-                <div className="bg-destructive/10 border border-destructive/20 text-destructive px-4 py-3 rounded-lg text-sm animate-fade-in">
+                <div className="bg-red-50 border border-red-200/60 text-red-700 px-4 py-3.5 rounded-lg text-sm font-medium shadow-sm animate-premium-fade-in">
                   {error}
                 </div>
               )}
               
-              <div className="space-y-4">
-                <div className="space-y-2">
-                  <label htmlFor="email" className="block text-sm font-medium text-foreground">
+              <div className="space-y-5">
+                <div className="space-y-2.5">
+                  <label htmlFor="email" className="block text-sm font-semibold text-slate-900">
                     Email address
                   </label>
                   <input
@@ -166,7 +177,7 @@ export default function LoginPage() {
                     autoComplete="email"
                     required
                     placeholder="Enter your email"
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+                    className="flex h-12 w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 focus:shadow-[inset_0_0_0_1px_rgba(148,163,184,0.2)] disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50 transition-all duration-300"
                     value={email}
                     onChange={(e) => setEmail(e.target.value)}
                     onKeyDown={(e) => {
@@ -177,8 +188,8 @@ export default function LoginPage() {
                   />
                 </div>
                 
-                <div className="space-y-2">
-                  <label htmlFor="password" className="block text-sm font-medium text-foreground">
+                <div className="space-y-2.5">
+                  <label htmlFor="password" className="block text-sm font-semibold text-slate-900">
                     Password
                   </label>
                   <input
@@ -188,7 +199,7 @@ export default function LoginPage() {
                     autoComplete="current-password"
                     required
                     placeholder="Enter your password"
-                    className="flex h-10 w-full rounded-lg border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-200"
+                    className="flex h-12 w-full rounded-lg border border-slate-200 bg-white px-4 py-3 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-slate-400 focus:ring-4 focus:ring-slate-100 focus:shadow-[inset_0_0_0_1px_rgba(148,163,184,0.2)] disabled:cursor-not-allowed disabled:opacity-50 disabled:bg-slate-50 transition-all duration-300"
                     value={password}
                     onChange={(e) => setPassword(e.target.value)}
                     onKeyDown={(e) => {
@@ -203,13 +214,21 @@ export default function LoginPage() {
                 </div>
               </div>
 
-              <div>
+              <div className="pt-2">
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center py-2.5 px-4 rounded-lg shadow-sm text-sm font-medium tracking-normal text-white bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-700 hover:to-violet-700 hover:shadow-md focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed transition-all duration-200"
+                  className="w-full flex justify-center items-center h-12 px-4 rounded-lg shadow-lg text-sm font-semibold tracking-normal text-white bg-slate-900 hover:bg-slate-800 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-slate-200 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-900 transition-all duration-300"
                 >
-                  {loading ? 'Signing in...' : 'Sign in'}
+                  {loading ? (
+                    <span className="flex items-center gap-2">
+                      <svg className="animate-spin h-4 w-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                        <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+                        <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                      </svg>
+                      Signing in...
+                    </span>
+                  ) : 'Sign in'}
                 </button>
               </div>
             </form>
@@ -218,18 +237,18 @@ export default function LoginPage() {
       </div>
 
       <style jsx>{`
-        @keyframes fade-in-up {
+        @keyframes premium-fade-in {
           from {
             opacity: 0;
-            transform: translateY(20px);
+            transform: translateY(24px) scale(0.98);
           }
           to {
             opacity: 1;
-            transform: translateY(0);
+            transform: translateY(0) scale(1);
           }
         }
-        .animate-fade-in-up {
-          animation: fade-in-up 0.6s ease-out forwards;
+        .animate-premium-fade-in {
+          animation: premium-fade-in 0.7s cubic-bezier(0.16, 1, 0.3, 1) forwards;
         }
       `}</style>
     </div>

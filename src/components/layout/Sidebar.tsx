@@ -97,7 +97,7 @@ export function Sidebar() {
           <div className="flex grow flex-col gap-y-2 overflow-y-auto border-r border-border bg-card pb-4 px-4">
             <div className="flex h-16 shrink-0 items-center justify-between border-b border-subtle mb-4">
             <Link href="/" className="flex items-center gap-3 flex-1 group">
-              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-violet-600 overflow-hidden flex-shrink-0 px-2 py-2 shadow-md transition-all duration-200 group-hover:shadow-lg group-hover:scale-[1.02]">
+              <div className="flex h-12 w-12 items-center justify-center rounded-xl bg-slate-900 overflow-hidden flex-shrink-0 px-2 py-2 shadow-lg transition-all duration-300 group-hover:shadow-xl group-hover:scale-[1.03]">
                 <img 
                   src="/implse-ai-icon.svg" 
                   alt="IMPLSE AI" 
@@ -117,8 +117,8 @@ export function Sidebar() {
                 />
               </div>
               <div className="flex-1 min-w-0">
-                  <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">IMPLSE AI</h1>
-                  <p className="text-xs text-muted-foreground font-normal truncate">AI Business CRM</p>
+                  <h1 className="text-h2 font-bold text-slate-900 truncate tracking-tight">IMPLSE AI</h1>
+                  <p className="text-xs text-slate-600 font-medium truncate">AI Business CRM</p>
                 </div>
               </Link>
           <Button
@@ -149,8 +149,8 @@ export function Sidebar() {
                       className={cn(
                         "group flex gap-x-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-normal transition-all duration-300 relative",
                         isActive
-                          ? "bg-gradient-to-r from-blue-600 to-purple-600 text-white shadow-lg shadow-blue-500/30 scale-105"
-                          : "text-foreground/70 hover:bg-gradient-to-r hover:from-blue-50 hover:to-purple-50 dark:hover:from-blue-950/30 dark:hover:to-purple-950/30 hover:text-blue-700 dark:hover:text-blue-300 hover:shadow-md"
+                          ? "bg-slate-900 text-white shadow-lg scale-[1.02]"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm"
                       )}
                       title={item.description}
                     >
@@ -158,20 +158,20 @@ export function Sidebar() {
                         <item.icon
                           className={cn(
                             "h-4 w-4 shrink-0",
-                            isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
+                            isActive ? "text-white" : "text-slate-500 group-hover:text-slate-900"
                           )}
                           aria-hidden="true"
                         />
                         {showUnrepliedDot && (
-                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
+                          <span className="absolute -top-1 -right-1 h-2 w-2 rounded-full bg-red-500 animate-pulse"></span>
                         )}
                       </div>
                       <div className="flex-1">
                         <div>{item.name}</div>
                         {item.description && (
                           <div className={cn(
-                            "text-xs mt-0.5",
-                            isActive ? "text-primary-foreground/70" : "text-muted-foreground"
+                            "text-xs mt-0.5 font-medium",
+                            isActive ? "text-white/80" : "text-slate-500"
                           )}>
                             {item.description}
                           </div>
@@ -195,17 +195,17 @@ export function Sidebar() {
                     <Link
                       href={item.href}
                       className={cn(
-                        "group flex gap-x-3 rounded-lg px-3 py-2 text-sm font-medium leading-normal transition-all duration-200",
+                        "group flex gap-x-3 rounded-lg px-3 py-2 text-sm font-semibold leading-normal transition-all duration-300",
                         isActive
-                          ? "bg-primary text-primary-foreground shadow-sm"
-                          : "text-foreground/70 hover:bg-secondary hover:text-foreground"
+                          ? "bg-slate-900 text-white shadow-md"
+                          : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm"
                       )}
                       title={item.description}
                     >
                       <item.icon
                         className={cn(
                           "h-4 w-4 shrink-0",
-                          isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
+                          isActive ? "text-white" : "text-slate-500 group-hover:text-slate-900"
                         )}
                         aria-hidden="true"
                       />
@@ -213,8 +213,8 @@ export function Sidebar() {
                         <div>{item.name}</div>
                         {item.description && (
                           <div className={cn(
-                            "text-xs mt-0.5",
-                            isActive ? "text-primary-foreground/70" : "text-muted-foreground"
+                            "text-xs mt-0.5 font-medium",
+                            isActive ? "text-white/80" : "text-slate-500"
                           )}>
                             {item.description}
                           </div>
@@ -232,7 +232,7 @@ export function Sidebar() {
                     <div className="h-px bg-border" />
                   </li>
                   <li className="px-3 py-2">
-                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
                       Administration
                     </p>
                   </li>
@@ -243,17 +243,17 @@ export function Sidebar() {
                         <Link
                           href={item.href}
                           className={cn(
-                            "group flex gap-x-2 rounded-md p-2 text-sm font-medium leading-5 transition-colors",
+                            "group flex gap-x-2 rounded-lg p-2.5 text-sm font-semibold leading-5 transition-all duration-300",
                             isActive
-                              ? "bg-primary text-primary-foreground shadow-md"
-                              : "text-muted-foreground hover:bg-secondary hover:text-foreground hover:shadow-sm"
+                              ? "bg-slate-900 text-white shadow-md"
+                              : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm"
                           )}
                           title={item.description}
                         >
                           <item.icon
                             className={cn(
                               "h-4 w-4 shrink-0",
-                              isActive ? "text-primary-foreground" : "text-muted-foreground group-hover:text-foreground"
+                              isActive ? "text-white" : "text-slate-500 group-hover:text-slate-900"
                             )}
                             aria-hidden="true"
                           />
@@ -261,8 +261,8 @@ export function Sidebar() {
                             <div>{item.name}</div>
                             {item.description && (
                               <div className={cn(
-                                "text-xs mt-0.5",
-                                isActive ? "text-primary-foreground/70" : "text-muted-foreground"
+                                "text-xs mt-0.5 font-medium",
+                                isActive ? "text-white/80" : "text-slate-500"
                               )}>
                                 {item.description}
                               </div>

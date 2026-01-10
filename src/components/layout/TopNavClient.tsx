@@ -4,7 +4,6 @@ import { useEffect, useState, KeyboardEvent } from 'react'
 import { Avatar } from '@/components/ui/avatar'
 import { Button } from '@/components/ui/button'
 import LogoutButton from '@/components/LogoutButton'
-import { DarkModeToggle } from '@/components/layout/DarkModeToggle'
 import { useSidebar } from '@/components/layout/SidebarContext'
 import { Bell, Search, Plus, Menu, MessageSquare } from 'lucide-react'
 import Link from 'next/link'
@@ -75,7 +74,7 @@ export function TopNavClient() {
   }, [])
 
   return (
-    <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-border bg-card/95 backdrop-blur supports-[backdrop-filter]:bg-card/80 px-4 sm:px-6 lg:px-8 shadow-sm">
+    <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-slate-200/60 bg-white/95 backdrop-blur-sm supports-[backdrop-filter]:bg-white/90 px-4 sm:px-6 lg:px-8 shadow-sm">
       {/* Sidebar Toggle Button */}
       <Button
         variant="ghost"
@@ -89,37 +88,36 @@ export function TopNavClient() {
       
       <div className="flex flex-1 gap-x-4 self-stretch lg:gap-x-6">
         <div className="relative flex flex-1 items-center max-w-2xl">
-          <Search className="pointer-events-none absolute left-3 h-5 w-5 text-muted-foreground" />
+          <Search className="pointer-events-none absolute left-3 h-5 w-5 text-slate-400" />
           <input
             type="search"
             placeholder="Search leads, contacts, or anything... (Ctrl+K)"
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
-            className="block h-10 w-full rounded-lg border border-border bg-secondary/50 py-1.5 pl-10 pr-20 text-sm text-foreground placeholder:text-muted-foreground focus:ring-2 focus:ring-primary focus:border-primary sm:text-sm transition-all duration-200 hover:bg-secondary"
+            className="block h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-20 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-slate-100 focus:border-slate-300 focus:bg-white sm:text-sm transition-all duration-300 hover:bg-slate-50 hover:border-slate-300"
           />
           <div className="absolute right-2 flex items-center gap-1">
-            <kbd className="hidden md:inline-flex h-5 select-none items-center gap-1 rounded border border-border bg-background px-1.5 font-mono text-[10px] font-medium text-muted-foreground">
+            <kbd className="hidden md:inline-flex h-6 select-none items-center gap-1 rounded border border-slate-200 bg-white px-2 font-mono text-[10px] font-semibold text-slate-500 shadow-sm">
               <span className="text-xs">⌘</span>K
             </kbd>
           </div>
         </div>
         <div className="flex items-center gap-x-3 lg:gap-x-4">
-          <DarkModeToggle />
           <Link href="/notifications">
-            <Button variant="ghost" size="icon" className="relative" title="Notifications">
-              <Bell className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="relative hover:bg-slate-100" title="Notifications">
+              <Bell className="h-5 w-5 text-slate-600" />
               {notificationCount > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse border-2 border-white"></span>
               )}
             </Button>
           </Link>
           
           <Link href="/inbox">
-            <Button variant="ghost" size="icon" className="relative" title="Inbox">
-              <MessageSquare className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="relative hover:bg-slate-100" title="Inbox">
+              <MessageSquare className="h-5 w-5 text-slate-600" />
               {unrepliedCount > 0 && (
-                <span className="absolute top-1 right-1 h-2 w-2 rounded-full bg-destructive animate-pulse"></span>
+                <span className="absolute top-1 right-1 h-2.5 w-2.5 rounded-full bg-red-500 animate-pulse border-2 border-white"></span>
               )}
             </Button>
           </Link>
@@ -131,14 +129,14 @@ export function TopNavClient() {
             </Button>
           </Link>
 
-          <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-border" />
+          <div className="hidden lg:block lg:h-6 lg:w-px lg:bg-slate-200" />
 
           <div className="flex items-center gap-x-3">
             <div className="hidden text-right lg:block">
-              <p className="text-sm font-medium text-foreground">{user?.name || 'User'}</p>
-              <p className="text-xs text-muted-foreground">{user?.email || ''}</p>
+              <p className="text-sm font-semibold text-slate-900">{user?.name || 'User'}</p>
+              <p className="text-xs text-slate-600 font-medium">{user?.email || ''}</p>
               {user?.role && (
-                <p className="text-xs font-medium text-primary mt-0.5">
+                <p className="text-xs font-bold text-slate-700 mt-0.5">
                   {user.role.toUpperCase()}
                 </p>
               )}

@@ -77,48 +77,48 @@ export default function LandingPage() {
       icon: MessageSquare,
       title: 'Unified Inbox',
       description: 'WhatsApp, Instagram, Facebook, Email—all in one place. Never miss a conversation.',
-      color: 'text-green-600 dark:text-green-400',
-      bgColor: 'bg-green-50 dark:bg-green-900/20',
+      color: 'text-green-700',
+      bgColor: 'bg-green-50',
       gradient: 'from-green-500 to-emerald-500',
     },
     {
       icon: Bot,
       title: 'AI Autopilot',
       description: 'Smart AI handles 80% of conversations. Qualifies leads, answers questions, books appointments—automatically.',
-      color: 'text-purple-600 dark:text-purple-400',
-      bgColor: 'bg-purple-50 dark:bg-purple-900/20',
+      color: 'text-purple-700',
+      bgColor: 'bg-purple-50',
       gradient: 'from-purple-500 to-pink-500',
     },
     {
       icon: TrendingUp,
       title: 'Renewal Revenue',
       description: 'Automated renewal reminders recover 30% more revenue. Never miss an expiry date.',
-      color: 'text-blue-600 dark:text-blue-400',
-      bgColor: 'bg-blue-50 dark:bg-blue-900/20',
+      color: 'text-blue-700',
+      bgColor: 'bg-blue-50',
       gradient: 'from-blue-500 to-cyan-500',
     },
     {
       icon: Workflow,
       title: 'Smart Automation',
       description: 'Build workflows that work. Auto-follow-ups, lead routing, task creation—all automated.',
-      color: 'text-orange-600 dark:text-orange-400',
-      bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+      color: 'text-orange-700',
+      bgColor: 'bg-orange-50',
       gradient: 'from-orange-500 to-red-500',
     },
     {
       icon: BarChart3,
       title: 'Revenue Intelligence',
       description: 'Real-time dashboards show exactly what\'s working. Forecast revenue, track KPIs, optimize performance.',
-      color: 'text-indigo-600 dark:text-indigo-400',
-      bgColor: 'bg-indigo-50 dark:bg-indigo-900/20',
+      color: 'text-indigo-700',
+      bgColor: 'bg-indigo-50',
       gradient: 'from-indigo-500 to-purple-500',
     },
     {
       icon: Shield,
       title: 'Enterprise Security',
       description: 'Bank-level encryption, GDPR compliant, SOC 2 ready. Your data is safe with us.',
-      color: 'text-teal-600 dark:text-teal-400',
-      bgColor: 'bg-teal-50 dark:bg-teal-900/20',
+      color: 'text-teal-700',
+      bgColor: 'bg-teal-50',
       gradient: 'from-teal-500 to-green-500',
     },
   ]
@@ -162,11 +162,11 @@ export default function LandingPage() {
   ]
 
     return (
-    <div className="min-h-screen bg-white dark:bg-gray-950">
+    <div className="min-h-screen bg-white">
       {/* Navigation */}
       <nav className={cn(
         "fixed top-0 left-0 right-0 z-50 transition-all duration-300",
-        scrolled ? "bg-white/80 dark:bg-gray-900/80 backdrop-blur-lg shadow-sm" : "bg-transparent"
+        scrolled ? "bg-white/95 backdrop-blur-lg shadow-sm border-b border-slate-200/60" : "bg-transparent"
       )}>
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -189,13 +189,13 @@ export default function LandingPage() {
               />
             </div>
             <div className="hidden md:flex items-center gap-6">
-              <Link href="#features" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <Link href="#features" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
                 Features
               </Link>
-              <Link href="#pricing" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <Link href="#pricing" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
                 Pricing
               </Link>
-              <Link href="/privacy-policy" className="text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors">
+              <Link href="/privacy-policy" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
                 Privacy
               </Link>
             </div>
@@ -204,7 +204,7 @@ export default function LandingPage() {
                 <Button variant="ghost" size="sm">Sign In</Button>
               </Link>
               <Link href="/login">
-                <Button size="sm" className="bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-700 hover:to-purple-700">
+                <Button size="sm" className="bg-slate-900 hover:bg-slate-800">
                   Get Started
                 </Button>
               </Link>
@@ -216,33 +216,33 @@ export default function LandingPage() {
       {/* Hero Section */}
       <section className="relative min-h-screen flex items-center justify-center overflow-hidden pt-16">
         {/* Animated Background */}
-        <div className="absolute inset-0 bg-gradient-to-br from-blue-50 via-purple-50 to-pink-50 dark:from-gray-900 dark:via-gray-900 dark:to-gray-950" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.1),transparent_50%)]" />
-        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(168,85,247,0.1),transparent_50%)]" />
+        <div className="absolute inset-0 bg-gradient-to-br from-slate-50 via-white to-slate-100" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_30%_20%,rgba(59,130,246,0.05),transparent_50%)]" />
+        <div className="absolute inset-0 bg-[radial-gradient(circle_at_70%_80%,rgba(168,85,247,0.05),transparent_50%)]" />
         
         <div className="container mx-auto px-4 sm:px-6 lg:px-8 relative z-10">
           <div className="max-w-5xl mx-auto text-center">
             {/* Badge */}
-            <Badge className="mb-6 text-sm px-4 py-1.5 bg-gradient-to-r from-blue-100 to-purple-100 text-blue-700 dark:from-blue-900/30 dark:to-purple-900/30 dark:text-blue-300 border-0">
+            <Badge className="mb-6 text-sm px-4 py-2 bg-slate-100 text-slate-700 border-0 font-semibold">
               <Sparkles className="h-3 w-3 mr-2" />
               AI-Powered CRM for UAE Business Services
             </Badge>
 
             {/* Headline */}
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight">
-              <span className="bg-gradient-to-r from-gray-900 via-blue-800 to-purple-800 dark:from-white dark:via-blue-200 dark:to-purple-200 bg-clip-text text-transparent">
+            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">
+              <span className="text-slate-900">
                 The CRM That
               </span>
               <br />
-              <span className="bg-gradient-to-r from-blue-600 via-purple-600 to-pink-600 bg-clip-text text-transparent">
+              <span className="bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 bg-clip-text text-transparent">
                 Works While You Sleep
               </span>
             </h1>
 
             {/* Subheadline */}
-            <p className="text-xl md:text-2xl text-gray-600 dark:text-gray-300 mb-8 max-w-3xl mx-auto leading-relaxed">
+            <p className="text-xl md:text-2xl text-slate-600 mb-8 max-w-3xl mx-auto leading-relaxed font-medium">
               AI handles your WhatsApp, Instagram, and Facebook conversations. 
-              <span className="font-semibold text-gray-900 dark:text-white"> Qualifies leads, books appointments, recovers renewals</span>—all automatically.
+              <span className="font-bold text-slate-900"> Qualifies leads, books appointments, recovers renewals</span>—all automatically.
             </p>
 
             {/* CTA Buttons */}
@@ -262,11 +262,11 @@ export default function LandingPage() {
             </div>
 
             {/* Social Proof */}
-            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-gray-600 dark:text-gray-400">
+            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-600 font-medium">
               <div className="flex items-center gap-2">
                 <div className="flex -space-x-2">
                   {[1, 2, 3, 4].map((i) => (
-                    <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-blue-400 to-purple-400 border-2 border-white dark:border-gray-900" />
+                    <div key={i} className="w-8 h-8 rounded-full bg-gradient-to-br from-slate-400 to-slate-600 border-2 border-white" />
                   ))}
                 </div>
                 <span>500+ businesses trust us</span>
@@ -281,25 +281,25 @@ export default function LandingPage() {
 
             {/* Scroll Indicator */}
             <div className="absolute bottom-8 left-1/2 transform -translate-x-1/2 animate-bounce">
-              <ChevronDown className="h-6 w-6 text-gray-400" />
+              <ChevronDown className="h-6 w-6 text-slate-400" />
             </div>
           </div>
         </div>
       </section>
 
       {/* Stats Section */}
-      <section className="py-16 bg-white dark:bg-gray-900 border-y">
+      <section className="py-16 bg-white border-y border-slate-200/60">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="grid grid-cols-2 md:grid-cols-4 gap-8">
             {stats.map((stat, i) => (
               <div key={i} className="text-center">
-                <div className="inline-flex items-center justify-center w-12 h-12 rounded-full bg-gradient-to-br from-blue-100 to-purple-100 dark:from-blue-900/30 dark:to-purple-900/30 mb-4">
-                  <stat.icon className={cn("h-6 w-6", stat.icon === Zap ? "text-yellow-600" : stat.icon === Target ? "text-green-600" : stat.icon === DollarSign ? "text-blue-600" : "text-purple-600")} />
+                <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-slate-100 mb-4">
+                  <stat.icon className={cn("h-7 w-7", stat.icon === Zap ? "text-yellow-600" : stat.icon === Target ? "text-green-600" : stat.icon === DollarSign ? "text-blue-600" : "text-purple-600")} />
                 </div>
-                <div className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-purple-600 bg-clip-text text-transparent mb-2">
+                <div className="text-4xl font-bold text-slate-900 mb-2 tracking-tight">
                   {stat.value}
                 </div>
-                <div className="text-sm text-gray-600 dark:text-gray-400">{stat.label}</div>
+                <div className="text-sm text-slate-600 font-semibold">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -307,23 +307,23 @@ export default function LandingPage() {
       </section>
 
       {/* Channels Section */}
-      <section className="py-20 bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950">
+      <section className="py-20 bg-gradient-to-b from-white to-slate-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
               All Your Channels, One Inbox
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
+            <p className="text-xl text-slate-600 font-medium">
               WhatsApp, Instagram, Facebook, Email—unified. Never switch tabs again.
             </p>
           </div>
           <div className="grid grid-cols-2 md:grid-cols-4 gap-6 max-w-4xl mx-auto">
             {channels.map((channel, i) => (
               <div key={i} className="group relative">
-                <div className="absolute inset-0 bg-gradient-to-br from-blue-500/10 to-purple-500/10 rounded-2xl blur-xl group-hover:blur-2xl transition-all" />
-                <div className="relative bg-white dark:bg-gray-800 p-6 rounded-2xl border border-gray-200 dark:border-gray-700 hover:border-blue-300 dark:hover:border-blue-700 transition-all hover:shadow-xl">
+                <div className="absolute inset-0 bg-slate-100/50 rounded-2xl blur-xl group-hover:blur-2xl transition-all opacity-0 group-hover:opacity-100" />
+                <div className="relative bg-white p-6 rounded-2xl border border-slate-200/60 hover:border-slate-300 hover:shadow-lg transition-all">
                   <channel.icon className={cn("h-12 w-12 mb-4 mx-auto", channel.color)} />
-                  <div className="text-lg font-semibold text-gray-900 dark:text-white">{channel.name}</div>
+                  <div className="text-lg font-bold text-slate-900">{channel.name}</div>
                 </div>
               </div>
             ))}
@@ -332,14 +332,14 @@ export default function LandingPage() {
       </section>
 
       {/* Features Section */}
-      <section id="features" className="py-24 bg-white dark:bg-gray-950">
+      <section id="features" className="py-24 bg-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-16">
-            <Badge className="mb-4">Powerful Features</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+            <Badge className="mb-4 bg-slate-100 text-slate-700 border-0 font-semibold">Powerful Features</Badge>
+            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
               Everything You Need to Scale
             </h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
+            <p className="text-xl text-slate-600 font-medium">
               Built specifically for UAE business services. Visa, renewals, business setup—all automated.
             </p>
           </div>
@@ -349,20 +349,20 @@ export default function LandingPage() {
               <div
                 key={i}
                 className={cn(
-                  "group relative p-6 rounded-2xl border-2 transition-all cursor-pointer",
+                  "group relative p-6 rounded-2xl border-2 transition-all cursor-pointer bg-white",
                   activeFeature === i
-                    ? "border-blue-500 dark:border-blue-400 shadow-xl scale-105"
-                    : "border-gray-200 dark:border-gray-800 hover:border-gray-300 dark:hover:border-gray-700"
+                    ? "border-slate-900 shadow-xl scale-[1.02]"
+                    : "border-slate-200/60 hover:border-slate-300 hover:shadow-lg"
                 )}
                 onClick={() => setActiveFeature(i)}
               >
-                <div className={cn("absolute inset-0 rounded-2xl bg-gradient-to-br opacity-0 group-hover:opacity-100 transition-opacity", `from-${feature.gradient.split(' ')[1]}-500/10 to-${feature.gradient.split(' ')[3]}-500/10`)} />
+                <div className={cn("absolute inset-0 rounded-2xl opacity-0 group-hover:opacity-100 transition-opacity", `bg-gradient-to-br from-${feature.gradient.split(' ')[1]}-500/5 to-${feature.gradient.split(' ')[3]}-500/5`)} />
                 <div className="relative">
                   <div className={cn("inline-flex p-3 rounded-xl mb-4", feature.bgColor)}>
                     <feature.icon className={cn("h-6 w-6", feature.color)} />
                   </div>
-                  <h3 className="text-xl font-bold mb-2 text-gray-900 dark:text-white">{feature.title}</h3>
-                  <p className="text-gray-600 dark:text-gray-400">{feature.description}</p>
+                  <h3 className="text-xl font-bold mb-2 text-slate-900">{feature.title}</h3>
+                  <p className="text-slate-600 font-medium leading-relaxed">{feature.description}</p>
                 </div>
               </div>
             ))}

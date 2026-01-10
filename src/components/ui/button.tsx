@@ -4,16 +4,16 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const buttonVariants = cva(
-  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-xl text-sm font-medium tracking-normal transition-all duration-200 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-indigo-500 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 button-press",
+  "inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-lg text-sm font-semibold tracking-normal transition-all duration-300 focus-visible:outline-none focus-visible:ring-4 focus-visible:ring-slate-200 focus-visible:ring-offset-2 disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0",
   {
     variants: {
       variant: {
-        default: "bg-gradient-to-r from-indigo-600 to-violet-600 text-white shadow-sm hover:from-indigo-700 hover:to-violet-700 hover:shadow-md transition-shadow",
-        destructive: "bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/90 hover:shadow-md transition-shadow",
-        outline: "border border-border bg-background shadow-sm hover:bg-gray-50 dark:hover:bg-gray-800 hover:border-indigo-300 dark:hover:border-indigo-700 transition-all",
-        secondary: "bg-secondary text-secondary-foreground border border-border shadow-sm hover:bg-secondary/80 hover:shadow-md transition-shadow",
-        ghost: "hover:bg-accent hover:text-accent-foreground transition-colors",
-        link: "text-indigo-600 dark:text-indigo-400 underline-offset-4 hover:underline",
+        default: "bg-slate-900 text-white shadow-lg hover:bg-slate-800 hover:shadow-xl transition-all duration-300",
+        destructive: "bg-red-600 text-white shadow-lg hover:bg-red-700 hover:shadow-xl transition-all duration-300",
+        outline: "border border-slate-200 bg-white shadow-sm hover:bg-slate-50 hover:border-slate-300 hover:shadow-md transition-all duration-300 text-slate-900",
+        secondary: "bg-slate-100 text-slate-900 border border-slate-200 shadow-sm hover:bg-slate-200 hover:shadow-md transition-all duration-300",
+        ghost: "hover:bg-slate-100 hover:text-slate-900 transition-colors duration-200 text-slate-700",
+        link: "text-slate-900 underline-offset-4 hover:underline font-medium",
       },
       size: {
         default: "h-10 px-4 py-2",

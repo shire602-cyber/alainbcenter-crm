@@ -232,9 +232,54 @@ export async function POST(req: NextRequest) {
     }
 
     // Process webhook asynchronously (don't block response)
-    processWebhookPayload(payload).catch((error) => {
-      console.error('❌ [META-WEBHOOK-POST] Error processing Meta webhook:', error)
+    // Log immediately that we're starting async processing
+    console.log('🔄 [META-WEBHOOK-POST] Starting async webhook processing', {
+      object: payload.object,
+      entryCount: payload.entry?.length || 0,
     })
+    
+    processWebhookPayload(payload)
+      .then(() => {
+        console.log('✅ [META-WEBHOOK-POST] Async webhook processing completed successfully', {
+          object: payload.object,
+          entryCount: payload.entry?.length || 0,
+        })
+      })
+      .catch((error: any) => {
+        // Capture full error object for debugging
+        const errorMessage = error.message || String(error) || 'Unknown error'
+        const errorName = error.name || 'UnknownError'
+        const errorCode = error.code || 'NO_CODE'
+        const errorStack = error.stack?.substring(0, 1000) || 'No stack trace'
+        
+        // Safely serialize error object
+        let fullError = 'Could not serialize error'
+        try {
+          fullError = JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000)
+        } catch (serializeError) {
+          try {
+            fullError = JSON.stringify({
+              message: error.message,
+              name: error.name,
+              code: error.code,
+              stack: error.stack,
+              toString: String(error),
+            }).substring(0, 1000)
+          } catch {
+            fullError = String(error).substring(0, 500)
+          }
+        }
+        
+        console.error('❌ [META-WEBHOOK-POST] Error processing Meta webhook:', {
+          error: errorMessage,
+          errorName,
+          errorCode,
+          errorStack,
+          fullError,
+          object: payload.object,
+          entryCount: payload.entry?.length || 0,
+        })
+      })
 
     return response
   } catch (error: any) {
@@ -249,10 +294,20 @@ export async function POST(req: NextRequest) {
  * Stores events and optionally creates inbound messages
  */
 async function processWebhookPayload(payload: any) {
+  console.log('🔄 [META-WEBHOOK-PROCESS] processWebhookPayload called', {
+    object: payload.object,
+    hasEntry: !!payload.entry,
+    entryCount: payload.entry?.length || 0,
+  })
+  
   if (payload.object !== 'page' && payload.object !== 'instagram') {
-    console.log('Ignoring non-page/instagram webhook object:', payload.object)
+    console.log('⚠️ [META-WEBHOOK-PROCESS] Ignoring non-page/instagram webhook object:', payload.object)
     return
   }
+  
+  console.log(`✅ [META-WEBHOOK-PROCESS] Processing ${payload.object} webhook`, {
+    entryCount: payload.entry?.length || 0,
+  })
 
   // CRITICAL: Log raw payload structure for debugging
   // This helps diagnose what Meta is actually sending

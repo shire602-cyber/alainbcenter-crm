@@ -254,12 +254,12 @@ export default function RenewalsDashboard() {
 
   return (
     <MainLayout>
-      <div className="space-y-2 bg-background">
+      <div className="space-y-3 bg-white">
         {/* Compact Header */}
-        <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center justify-between mb-3">
           <div>
-            <h1 className="text-xl font-semibold tracking-tight text-foreground">Renewals</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <h1 className="text-2xl font-bold tracking-tight text-slate-900">Renewals</h1>
+            <p className="text-sm text-slate-600 mt-1 font-medium">
               Track expiring items and renewal opportunities
             </p>
           </div>
@@ -316,7 +316,7 @@ export default function RenewalsDashboard() {
           <BentoCard title="Filters" icon={<Filter className="h-4 w-4" />} className="md:col-span-1">
             <div className="space-y-2">
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Stage</label>
+                <label className="block text-xs font-semibold text-slate-900">Stage</label>
                 <Select
                   value={stageFilter}
                   onChange={(e) => setStageFilter(e.target.value)}
@@ -332,7 +332,7 @@ export default function RenewalsDashboard() {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Status</label>
+                <label className="block text-xs font-semibold text-slate-900">Status</label>
                 <Select
                   value={statusFilter}
                   onChange={(e) => setStatusFilter(e.target.value)}
@@ -379,34 +379,34 @@ export default function RenewalsDashboard() {
                     <Link
                       key={item.id}
                       href={`/leads/${item.lead?.id || item.contact.id}`}
-                      className="block p-3 rounded-2xl border-2 border-slate-200/50 dark:border-slate-800/50 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-primary/20 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group"
+                      className="block p-4 rounded-2xl border border-slate-200/60 hover:bg-slate-50 hover:border-slate-300 hover:shadow-lg hover:-translate-y-0.5 transition-all duration-300 group bg-white"
                     >
                       <div className="flex items-center justify-between gap-2">
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate group-hover:text-primary transition-colors flex-1">
+                          <div className="flex items-center gap-2 mb-1.5">
+                            <p className="text-sm font-semibold text-slate-900 truncate group-hover:text-slate-900 transition-colors flex-1">
                               {item.contact.fullName}
                             </p>
                             <Badge
                               variant={isUrgent ? 'destructive' : item.daysRemaining <= 30 ? 'default' : 'secondary'}
-                              className="text-xs flex-shrink-0"
+                              className="text-xs flex-shrink-0 font-semibold"
                             >
                               {item.daysRemaining < 0 
                                 ? `${Math.abs(item.daysRemaining)}d overdue` 
                                 : `${item.daysRemaining}d left`}
                             </Badge>
                           </div>
-                          <p className="text-xs text-slate-500 dark:text-slate-400">
+                          <p className="text-xs text-slate-600 font-medium">
                             {item.type.replace(/_/g, ' ')} · Expires {format(parseISO(item.expiryDate), 'MMM d, yyyy')}
                           </p>
                           {item.projectedRevenue > 0 && (
-                            <div className="flex items-center gap-1 mt-1">
+                            <div className="flex items-center gap-1 mt-1.5">
                               <DollarSign className="h-3 w-3 text-green-600" />
-                              <span className="text-xs font-medium text-green-600">
+                              <span className="text-xs font-semibold text-green-700">
                                 AED {item.projectedRevenue.toLocaleString()}
                               </span>
                               {item.renewalProbability && (
-                                <span className="text-xs text-slate-500 dark:text-slate-400">
+                                <span className="text-xs text-slate-500 font-medium">
                                   ({item.renewalProbability}% prob)
                                 </span>
                               )}

@@ -41,7 +41,6 @@ import { InlineEditableField } from '@/components/leads/InlineEditableField'
 import { ExpiryCountdown } from '@/components/leads/ExpiryCountdown'
 import { AutopilotCard } from '@/components/leads/AutopilotCard'
 import { RemindersCard } from '@/components/leads/RemindersCard'
-import { DarkModeToggle } from '@/components/layout/DarkModeToggle'
 import { ExtractedDataPanel } from '@/components/leads/ExtractedDataPanel'
 import { NextBestAction } from '@/components/leads/NextBestAction'
 import { LeadSummary } from '@/components/leads/LeadSummary'
@@ -747,7 +746,6 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
               {/* Right: Action Buttons */}
               <div className="flex items-center gap-3 flex-shrink-0">
-                <DarkModeToggle />
                 {lead.contact?.phone && (
                   <Button
                     onClick={() => openWhatsApp(lead.contact.phone, messageText || undefined)}

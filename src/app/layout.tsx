@@ -16,13 +16,13 @@ export default function RootLayout({
   children: ReactNode
 }) {
   return (
-    <html lang="en" suppressHydrationWarning className={inter.variable}>
+    <html lang="en" className={`${inter.variable} light`} style={{ colorScheme: 'light' }}>
       <head>
         <title>IMPLSE AI - AI-Powered CRM</title>
         <meta name="description" content="AI-powered CRM for business setup and visa services. Automate conversations, recover revenue, scale your business." />
         <link rel="icon" href="/implse-ai-icon.svg" type="image/svg+xml" />
       </head>
-      <body suppressHydrationWarning className="font-sans antialiased text-body text-foreground bg-app min-h-screen">
+      <body className="font-sans antialiased text-body text-foreground bg-app min-h-screen">
         <Providers>
           {children}
         </Providers>
