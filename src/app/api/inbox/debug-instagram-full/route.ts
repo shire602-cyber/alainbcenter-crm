@@ -70,7 +70,6 @@ export async function GET(req: NextRequest) {
         phone: true,
         email: true,
         createdAt: true,
-        updatedAt: true,
       },
       orderBy: { createdAt: 'desc' },
       take: 20,
