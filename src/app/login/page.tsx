@@ -112,7 +112,7 @@ export default function LoginPage() {
         <div className="absolute top-1/2 right-1/4 w-16 h-16 border border-slate-300/25 rotate-45"></div>
         
         <div className={`max-w-md space-y-8 relative z-10 ${mounted ? 'animate-premium-fade-in' : 'opacity-0'}`}>
-          <h1 className="text-5xl md:text-6xl font-bold leading-tight tracking-tight text-slate-900">
+          <h1 className="text-hero text-slate-900">
             Turn conversations<br />into customers.
           </h1>
           <p className="text-lg md:text-xl text-slate-600 leading-relaxed font-medium">
@@ -147,14 +147,14 @@ export default function LoginPage() {
                   />
                 </div>
                 <div>
-                  <h2 className="text-2xl font-bold text-slate-900 tracking-tight">IMPLSE AI</h2>
+                  <h2 className="text-headline text-slate-900">IMPLSE AI</h2>
                   <p className="text-xs text-slate-600 font-medium mt-0.5">AI Business CRM</p>
                 </div>
               </Link>
             </div>
 
             <div className="space-y-2 mb-10 text-center">
-              <h2 className="text-3xl font-bold tracking-tight text-slate-900">Welcome back</h2>
+              <h2 className="text-display text-slate-900">Welcome back</h2>
               <p className="text-sm text-slate-600">Sign in to your account</p>
             </div>
 
@@ -167,7 +167,7 @@ export default function LoginPage() {
               
               <div className="space-y-5">
                 <div className="space-y-2.5">
-                  <label htmlFor="email" className="block text-sm font-semibold text-slate-900">
+                  <label htmlFor="email" className="block text-body font-semibold text-slate-900">
                     Email address
                   </label>
                   <input
@@ -189,7 +189,7 @@ export default function LoginPage() {
                 </div>
                 
                 <div className="space-y-2.5">
-                  <label htmlFor="password" className="block text-sm font-semibold text-slate-900">
+                  <label htmlFor="password" className="block text-body font-semibold text-slate-900">
                     Password
                   </label>
                   <input
@@ -218,7 +218,7 @@ export default function LoginPage() {
                 <button
                   type="submit"
                   disabled={loading}
-                  className="w-full flex justify-center items-center h-12 px-4 rounded-lg shadow-lg text-sm font-semibold tracking-normal text-white bg-slate-900 hover:bg-slate-800 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-slate-200 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-900 transition-all duration-300"
+                  className="w-full flex justify-center items-center h-12 px-4 rounded-lg shadow-lg text-body font-semibold tracking-normal text-white bg-slate-900 hover:bg-slate-800 hover:shadow-xl focus:outline-none focus:ring-4 focus:ring-slate-200 focus:ring-offset-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:bg-slate-900 transition-all duration-300"
                 >
                   {loading ? (
                     <span className="flex items-center gap-2">

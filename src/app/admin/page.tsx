@@ -115,7 +115,7 @@ export default async function AdminPage() {
         {/* Header */}
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight text-slate-900">
+            <h1 className="text-display text-slate-900">
               Admin Dashboard
             </h1>
             <p className="text-sm text-slate-600 mt-2 font-medium">
@@ -135,18 +135,18 @@ export default async function AdminPage() {
                     <div className="flex-1">
                       <div className="flex items-center gap-2.5 mb-2">
                         <Icon className={`h-5 w-5 ${stat.color}`} />
-                        <span className="text-xs font-bold text-slate-700 uppercase tracking-wider">
+                        <span className="text-caption font-bold text-slate-700 uppercase tracking-wider">
                           {stat.title}
                         </span>
                       </div>
-                      <p className="text-3xl font-bold tracking-tight text-slate-900 mb-1">
+                      <p className="text-display text-slate-900 mb-1">
                         {typeof stat.value === 'number' ? stat.value.toLocaleString() : stat.value}
                       </p>
                       <p className="text-xs text-slate-600 font-medium">{stat.subtitle}</p>
                     </div>
                   </div>
                   <div className="flex items-center gap-1.5 mt-4 pt-3 border-t border-slate-200/60">
-                    <span className="text-xs text-slate-900 font-semibold group-hover:text-slate-900 transition-colors">View Details</span>
+                    <span className="text-caption text-slate-900 font-semibold group-hover:text-slate-900 transition-colors">View Details</span>
                     <ArrowRight className="h-3.5 w-3.5 text-slate-700 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </BentoCard>
@@ -169,9 +169,9 @@ export default async function AdminPage() {
                   <div className={`inline-flex p-2.5 rounded-xl ${link.bgColor} mb-3 group-hover:scale-105 transition-transform`}>
                     <Icon className={`h-4 w-4 ${link.color}`} />
                   </div>
-                  <h3 className="text-sm font-bold tracking-tight text-slate-900 mb-1.5">{link.title}</h3>
-                  <p className="text-xs text-slate-600 mb-3 font-medium leading-relaxed">{link.description}</p>
-                  <div className="flex items-center gap-1.5 text-xs text-slate-900 font-semibold">
+                  <h3 className="text-body font-bold text-slate-900 mb-1.5">{link.title}</h3>
+                  <p className="text-caption text-slate-600 mb-3 leading-relaxed">{link.description}</p>
+                  <div className="flex items-center gap-1.5 text-caption text-slate-900 font-semibold">
                     <span>Open</span>
                     <ArrowRight className="h-3.5 w-3.5 group-hover:translate-x-1 transition-transform" />
                   </div>

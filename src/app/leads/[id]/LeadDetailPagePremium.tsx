@@ -698,7 +698,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 </Link>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-4">
-                    <h1 className="text-3xl font-bold truncate">
+                    <h1 className="text-display truncate">
                       {lead.contact?.fullName && lead.contact.fullName !== 'Unknown' && !lead.contact.fullName.startsWith('Contact +')
                         ? lead.contact.fullName
                         : lead.contact?.phone

@@ -14,21 +14,56 @@
   --font-inter: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   
   /* Theme System - Vibrant, modern colors */
-  --bg-app: rgb(249 250 251); /* gray-50 - warmer */
+  --bg-app: rgb(249 250 251); /* gray-50 - consistent */
   --bg-card: rgb(255 255 255); /* white */
   --bg-card-muted: rgb(249 250 251); /* gray-50 */
   --text: rgb(17 24 39); /* gray-900 - better contrast */
   --text-muted: rgb(107 114 128); /* gray-500 */
-  --border: rgb(229 231 235 / 0.8); /* gray-200/80 */
+  --border: rgb(229 231 235 / 0.6); /* gray-200/60 - consistent opacity */
   --accent-blue: #3b82f6;
   --accent-purple: #8b5cf6;
   --accent-green: #10b981;
   --accent-orange: #f59e0b;
-  --shadow-soft: 0 2px 4px 0 rgb(0 0 0 / 0.06);
-  --shadow-premium: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
-  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.15);
   
-  /* Spacing rhythm */
+  /* Status Colors - Semantic */
+  --success-primary: rgb(22 163 74); /* green-600 */
+  --success-bg: rgb(240 253 244); /* green-50 */
+  --success-text: rgb(21 128 61); /* green-700 */
+  --warning-primary: rgb(217 119 6); /* amber-600 */
+  --warning-bg: rgb(255 251 235); /* amber-50 */
+  --warning-text: rgb(180 83 9); /* amber-700 */
+  --error-primary: rgb(220 38 38); /* red-600 */
+  --error-bg: rgb(254 242 242); /* red-50 */
+  --error-text: rgb(185 28 28); /* red-700 */
+  --info-primary: rgb(37 99 235); /* blue-600 */
+  --info-bg: rgb(239 246 255); /* blue-50 */
+  --info-text: rgb(29 78 216); /* blue-700 */
+  
+  /* Lead Status Colors */
+  --hot-primary: rgb(220 38 38); /* red-600 */
+  --hot-bg: rgb(254 242 242); /* red-50 */
+  --hot-text: rgb(185 28 28); /* red-700 */
+  --warm-primary: rgb(234 88 12); /* orange-600 */
+  --warm-bg: rgb(255 247 237); /* orange-50 */
+  --warm-text: rgb(194 65 12); /* orange-700 */
+  --cold-primary: rgb(37 99 235); /* blue-600 */
+  --cold-bg: rgb(239 246 255); /* blue-50 */
+  --cold-text: rgb(29 78 216); /* blue-700 */
+  
+  /* Border System */
+  --border-subtle: rgb(226 232 240 / 0.6); /* slate-200/60 */
+  --border-visible: rgb(203 213 225); /* slate-300 */
+  --border-prominent: rgb(148 163 184); /* slate-400 */
+  --border-interactive: rgb(59 130 246 / 0.4); /* primary/40 */
+  
+  /* Shadow System - Standardized */
+  --shadow-subtle: 0 1px 2px 0 rgb(0 0 0 / 0.05); /* shadow-sm */
+  --shadow-standard: 0 4px 6px -1px rgb(0 0 0 / 0.07); /* shadow-md */
+  --shadow-elevated: 0 10px 15px -3px rgb(0 0 0 / 0.1); /* shadow-lg */
+  --shadow-hover: 0 20px 25px -5px rgb(0 0 0 / 0.1); /* shadow-xl */
+  --shadow-glow: 0 0 20px rgba(59, 130, 246, 0.1); /* blue-500/10 */
+  
+  /* Spacing rhythm - 8px grid */
   --spacing-xs: 0.25rem; /* 4px */
   --spacing-sm: 0.5rem; /* 8px */
   --spacing-md: 1rem; /* 16px */
@@ -47,48 +82,89 @@
 } */
 
 @layer utilities {
-  /* TYPOGRAPHY SCALE - Premium rhythm */
-  .text-title {
-    font-size: 32px;
-    line-height: 36px;
-    font-weight: 650;
+  /* SEMANTIC TYPOGRAPHY SCALE - Premium, consistent hierarchy */
+  /* Hero - For landing page headlines */
+  .text-hero {
+    font-size: 48px;
+    line-height: 56px;
+    font-weight: 700;
+    letter-spacing: -0.025em;
+    @apply text-slate-900;
+  }
+
+  /* Display - For major page titles */
+  .text-display {
+    font-size: 36px;
+    line-height: 44px;
+    font-weight: 700;
     letter-spacing: -0.02em;
+    @apply text-slate-900;
   }
 
-  .text-h1 {
+  /* Headline - For section headings */
+  .text-headline {
     font-size: 24px;
-    line-height: 30px;
-    font-weight: 650;
+    line-height: 32px;
+    font-weight: 700;
     letter-spacing: -0.01em;
+    @apply text-slate-900;
   }
 
-  .text-h2 {
+  /* Subhead - For card titles and subsections */
+  .text-subhead {
     font-size: 18px;
     line-height: 24px;
     font-weight: 600;
     letter-spacing: -0.01em;
+    @apply text-slate-900;
   }
 
-  .text-heading {
-    font-size: 20px;
-    line-height: 26px;
-    font-weight: 650;
-    letter-spacing: -0.01em;
+  /* Body Large - For important body text */
+  .text-body-large {
+    font-size: 16px;
+    line-height: 24px;
+    font-weight: 400;
+    letter-spacing: 0;
+    @apply text-slate-700;
   }
 
+  /* Body - For regular body text */
   .text-body {
     font-size: 14px;
     line-height: 20px;
-    font-weight: 450;
+    font-weight: 400;
     letter-spacing: 0;
+    @apply text-slate-600;
   }
 
-  .text-meta {
+  /* Caption - For labels, metadata, captions */
+  .text-caption {
     font-size: 12px;
     line-height: 16px;
     font-weight: 500;
     letter-spacing: 0.01em;
     @apply text-slate-500;
+  }
+
+  /* Legacy support - map old classes to new semantic ones */
+  .text-title {
+    @apply text-display;
+  }
+
+  .text-h1 {
+    @apply text-headline;
+  }
+
+  .text-h2 {
+    @apply text-subhead;
+  }
+
+  .text-heading {
+    @apply text-subhead;
+  }
+
+  .text-meta {
+    @apply text-caption;
   }
 
   /* SURFACE TOKENS */

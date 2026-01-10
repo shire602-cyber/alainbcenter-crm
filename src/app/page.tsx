@@ -189,13 +189,13 @@ export default function LandingPage() {
               />
             </div>
             <div className="hidden md:flex items-center gap-6">
-              <Link href="#features" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
+              <Link href="#features" className="text-body hover:text-slate-900 transition-colors">
                 Features
               </Link>
-              <Link href="#pricing" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
+              <Link href="#pricing" className="text-body hover:text-slate-900 transition-colors">
                 Pricing
               </Link>
-              <Link href="/privacy-policy" className="text-slate-600 hover:text-slate-900 font-medium transition-colors">
+              <Link href="/privacy-policy" className="text-body hover:text-slate-900 transition-colors">
                 Privacy
               </Link>
             </div>
@@ -229,7 +229,7 @@ export default function LandingPage() {
             </Badge>
 
             {/* Headline */}
-            <h1 className="text-5xl md:text-7xl font-bold mb-6 leading-tight tracking-tight">
+            <h1 className="text-hero mb-6">
               <span className="text-slate-900">
                 The CRM That
               </span>
@@ -240,9 +240,9 @@ export default function LandingPage() {
             </h1>
 
             {/* Subheadline */}
-            <p className="text-xl md:text-2xl text-slate-600 mb-8 max-w-3xl mx-auto leading-relaxed font-medium">
+            <p className="text-body-large mb-8 max-w-3xl mx-auto">
               AI handles your WhatsApp, Instagram, and Facebook conversations. 
-              <span className="font-bold text-slate-900"> Qualifies leads, books appointments, recovers renewals</span>—all automatically.
+              <span className="font-semibold text-slate-900"> Qualifies leads, books appointments, recovers renewals</span>—all automatically.
             </p>
 
             {/* CTA Buttons */}
@@ -262,7 +262,7 @@ export default function LandingPage() {
             </div>
 
             {/* Social Proof */}
-            <div className="flex flex-wrap items-center justify-center gap-6 text-sm text-slate-600 font-medium">
+            <div className="flex flex-wrap items-center justify-center gap-6 text-caption">
               <div className="flex items-center gap-2">
                 <div className="flex -space-x-2">
                   {[1, 2, 3, 4].map((i) => (
@@ -296,10 +296,10 @@ export default function LandingPage() {
                 <div className="inline-flex items-center justify-center w-14 h-14 rounded-full bg-slate-100 mb-4">
                   <stat.icon className={cn("h-7 w-7", stat.icon === Zap ? "text-yellow-600" : stat.icon === Target ? "text-green-600" : stat.icon === DollarSign ? "text-blue-600" : "text-purple-600")} />
                 </div>
-                <div className="text-4xl font-bold text-slate-900 mb-2 tracking-tight">
+                <div className="text-display mb-2">
                   {stat.value}
                 </div>
-                <div className="text-sm text-slate-600 font-semibold">{stat.label}</div>
+                <div className="text-caption font-semibold">{stat.label}</div>
               </div>
             ))}
           </div>
@@ -310,10 +310,10 @@ export default function LandingPage() {
       <section className="py-20 bg-gradient-to-b from-white to-slate-50">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-12">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
+            <h2 className="text-display mb-4">
               All Your Channels, One Inbox
             </h2>
-            <p className="text-xl text-slate-600 font-medium">
+            <p className="text-body-large">
               WhatsApp, Instagram, Facebook, Email—unified. Never switch tabs again.
             </p>
           </div>
@@ -323,7 +323,7 @@ export default function LandingPage() {
                 <div className="absolute inset-0 bg-slate-100/50 rounded-2xl blur-xl group-hover:blur-2xl transition-all opacity-0 group-hover:opacity-100" />
                 <div className="relative bg-white p-6 rounded-2xl border border-slate-200/60 hover:border-slate-300 hover:shadow-lg transition-all">
                   <channel.icon className={cn("h-12 w-12 mb-4 mx-auto", channel.color)} />
-                  <div className="text-lg font-bold text-slate-900">{channel.name}</div>
+                  <div className="text-subhead">{channel.name}</div>
                 </div>
               </div>
             ))}
@@ -336,10 +336,10 @@ export default function LandingPage() {
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-16">
             <Badge className="mb-4 bg-slate-100 text-slate-700 border-0 font-semibold">Powerful Features</Badge>
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
+            <h2 className="text-display mb-4">
               Everything You Need to Scale
             </h2>
-            <p className="text-xl text-slate-600 font-medium">
+            <p className="text-body-large">
               Built specifically for UAE business services. Visa, renewals, business setup—all automated.
             </p>
           </div>
@@ -361,8 +361,8 @@ export default function LandingPage() {
                   <div className={cn("inline-flex p-3 rounded-xl mb-4", feature.bgColor)}>
                     <feature.icon className={cn("h-6 w-6", feature.color)} />
                   </div>
-                  <h3 className="text-xl font-bold mb-2 text-slate-900">{feature.title}</h3>
-                  <p className="text-slate-600 font-medium leading-relaxed">{feature.description}</p>
+                  <h3 className="text-subhead mb-2">{feature.title}</h3>
+                  <p className="text-body leading-relaxed">{feature.description}</p>
                 </div>
               </div>
             ))}
@@ -380,10 +380,10 @@ export default function LandingPage() {
                   <Bot className="h-3 w-3 mr-2" />
                   AI Autopilot
                 </Badge>
-                <h2 className="text-4xl md:text-5xl font-bold mb-6 text-slate-900 tracking-tight">
+                <h2 className="text-display mb-6">
                   Your AI Assistant That Never Sleeps
                 </h2>
-                <p className="text-xl text-slate-600 mb-8 font-medium leading-relaxed">
+                <p className="text-body-large mb-8 leading-relaxed">
                   Our AI handles conversations 24/7. Qualifies leads, answers questions, books appointments—all automatically. You only step in when needed.
                 </p>
                 <div className="space-y-4">
@@ -398,7 +398,7 @@ export default function LandingPage() {
                       <div className="flex-shrink-0 w-6 h-6 rounded-full bg-gradient-to-br from-green-500 to-emerald-600 flex items-center justify-center shadow-sm">
                         <CheckCircle2 className="h-4 w-4 text-white" />
                       </div>
-                      <span className="text-slate-700 font-medium">{item}</span>
+                      <span className="text-body">{item}</span>
                     </div>
                   ))}
                 </div>
@@ -433,8 +433,8 @@ export default function LandingPage() {
                             ? "bg-slate-900 text-white shadow-md"
                             : "bg-slate-100 text-slate-900 shadow-sm"
                         )}>
-                          <p className="text-sm font-medium">{msg.text}</p>
-                          <p className={cn("text-xs mt-1.5 font-medium", msg.role === 'customer' ? 'text-slate-300' : 'text-slate-500')}>
+                          <p className="text-body">{msg.text}</p>
+                          <p className={cn("text-caption mt-1.5", msg.role === 'customer' ? 'text-slate-300' : 'text-slate-500')}>
                             {msg.time}
                           </p>
                         </div>
@@ -455,10 +455,10 @@ export default function LandingPage() {
       <section className="py-24 bg-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center mb-16">
-            <h2 className="text-4xl md:text-5xl font-bold mb-4 text-slate-900 tracking-tight">
+            <h2 className="text-display mb-4">
               Loved by 500+ Businesses
             </h2>
-            <p className="text-xl text-slate-600 font-medium">
+            <p className="text-body-large">
               See what our customers say about us
             </p>
           </div>
@@ -471,12 +471,12 @@ export default function LandingPage() {
                   ))}
                 </div>
                 <Quote className="h-8 w-8 text-slate-300 mb-4" />
-                <p className="text-slate-700 mb-6 leading-relaxed font-medium">
+                <p className="text-body mb-6 leading-relaxed">
                   "{testimonial.content}"
                 </p>
                 <div>
-                  <div className="font-bold text-slate-900">{testimonial.name}</div>
-                  <div className="text-sm text-slate-600 font-medium">
+                  <div className="text-subhead">{testimonial.name}</div>
+                  <div className="text-caption">
                     {testimonial.role} at {testimonial.company}
                   </div>
                 </div>
@@ -490,10 +490,10 @@ export default function LandingPage() {
       <section className="py-24 bg-gradient-to-br from-slate-900 via-slate-800 to-slate-900 text-white">
         <div className="container mx-auto px-4 sm:px-6 lg:px-8">
           <div className="max-w-4xl mx-auto text-center">
-            <h2 className="text-4xl md:text-5xl font-bold mb-6">
+            <h2 className="text-display mb-6 text-white">
               Ready to 10x Your Business?
             </h2>
-            <p className="text-xl mb-8 text-slate-200 font-medium">
+            <p className="text-body-large mb-8 text-slate-200">
               Join 500+ businesses using AI to automate customer conversations and recover lost revenue.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center">
@@ -510,7 +510,7 @@ export default function LandingPage() {
                 </Button>
               </Link>
             </div>
-            <p className="mt-6 text-slate-300 text-sm font-medium">
+            <p className="mt-6 text-slate-300 text-caption">
               No credit card required • 14-day free trial • Cancel anytime
             </p>
           </div>
@@ -540,33 +540,33 @@ export default function LandingPage() {
                   }}
                 />
               </div>
-              <p className="text-sm">
+              <p className="text-caption">
                 AI-powered CRM for UAE business services. Automate conversations, recover revenue, scale your business.
               </p>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Product</h3>
-              <ul className="space-y-2 text-sm">
+              <h3 className="text-subhead text-white mb-4">Product</h3>
+              <ul className="space-y-2 text-caption">
                 <li><Link href="#features" className="hover:text-white transition-colors">Features</Link></li>
                 <li><Link href="#pricing" className="hover:text-white transition-colors">Pricing</Link></li>
                 <li><Link href="/login" className="hover:text-white transition-colors">Sign In</Link></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Company</h3>
-              <ul className="space-y-2 text-sm">
+              <h3 className="text-subhead text-white mb-4">Company</h3>
+              <ul className="space-y-2 text-caption">
                 <li><Link href="/privacy-policy" className="hover:text-white transition-colors">Privacy Policy</Link></li>
                 <li><a href="mailto:ashire@alainbcenter.com" className="hover:text-white transition-colors">Contact</a></li>
               </ul>
             </div>
             <div>
-              <h3 className="text-white font-semibold mb-4">Connect</h3>
-              <ul className="space-y-2 text-sm">
+              <h3 className="text-subhead text-white mb-4">Connect</h3>
+              <ul className="space-y-2 text-caption">
                 <li><a href="mailto:ashire@alainbcenter.com" className="hover:text-white transition-colors">Email Us</a></li>
               </ul>
             </div>
           </div>
-          <div className="border-t border-slate-800 pt-8 text-center text-sm font-medium">
+          <div className="border-t border-slate-800 pt-8 text-center text-caption">
             <p>© {new Date().getFullYear()} IMPLSE AI. All rights reserved.</p>
           </div>
         </div>

@@ -445,24 +445,38 @@ async function processWebhookPayload(payload: any) {
       igBusinessId = entryId
       console.log(`📸 [META-WEBHOOK] Instagram event - entry.id=${entryId} (IG Business Account ID)`)
       
+      // Log connection lookup attempt
+      console.log('🔍 [META-WEBHOOK-INSTAGRAM] Looking up connection', {
+        object: payload.object,
+        entryId: entry.id,
+        igBusinessId: entryId,
+        hasChanges: !!entry.changes,
+        changesCount: entry.changes?.length || 0,
+        hasMessaging: !!entry.messaging,
+        messagingCount: entry.messaging?.length || 0,
+        workspaceId: null, // Will be converted to 1 in getConnectionByIgBusinessId
+      })
+      
       // Query for connection using IG Business Account ID
       // Note: workspaceId null is converted to 1 in getConnectionByIgBusinessId (single-tenant)
       connection = await getConnectionByIgBusinessId(entryId, null)
       
       if (connection) {
         pageId = connection.pageId
-        console.log(`✅ [META-WEBHOOK] Resolved connection by igBusinessId:`, {
+        console.log('✅ [META-WEBHOOK-INSTAGRAM] Connection found', {
           connectionId: connection.id,
-          pageId: pageId,
-          igBusinessId: connection.igBusinessId,
+          workspaceId: connection.workspaceId ?? 'N/A',
+          pageId: pageId || 'N/A',
+          igBusinessId: connection.igBusinessId || 'N/A',
           igUsername: connection.igUsername || 'N/A',
-          workspaceId: connection.workspaceId,
-          status: connection.status,
+          status: connection.status || 'N/A',
         })
       } else {
-        console.warn(`⚠️ [META-WEBHOOK] No connection found for IG Business Account ID: ${entryId}`, {
+        console.error('❌ [META-WEBHOOK-INSTAGRAM] Connection NOT found', {
+          entryId: entry.id,
           searchedIgBusinessId: entryId,
-          hint: 'Verify the connection was created with the correct igBusinessId during setup',
+          workspaceId: null, // Searched with null, converted to 1
+          warning: 'This Instagram webhook will NOT be processed - connection missing. Verify connection was created with correct igBusinessId.',
         })
       }
     } else if (payload.object === 'page') {

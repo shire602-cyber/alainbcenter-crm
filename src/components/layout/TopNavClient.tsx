@@ -95,10 +95,10 @@ export function TopNavClient() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
-            className="block h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-20 text-sm font-medium text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-slate-100 focus:border-slate-300 focus:bg-white sm:text-sm transition-all duration-300 hover:bg-slate-50 hover:border-slate-300"
+            className="block h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-20 text-body text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-slate-100 focus:border-slate-300 focus:bg-white transition-all duration-300 hover:bg-slate-50 hover:border-slate-300"
           />
           <div className="absolute right-2 flex items-center gap-1">
-            <kbd className="hidden md:inline-flex h-6 select-none items-center gap-1 rounded border border-slate-200 bg-white px-2 font-mono text-[10px] font-semibold text-slate-500 shadow-sm">
+            <kbd className="hidden md:inline-flex h-6 select-none items-center gap-1 rounded border border-slate-200 bg-white px-2 font-mono text-caption font-semibold text-slate-500 shadow-sm">
               <span className="text-xs">⌘</span>K
             </kbd>
           </div>
@@ -133,10 +133,10 @@ export function TopNavClient() {
 
           <div className="flex items-center gap-x-3">
             <div className="hidden text-right lg:block">
-              <p className="text-sm font-semibold text-slate-900">{user?.name || 'User'}</p>
-              <p className="text-xs text-slate-600 font-medium">{user?.email || ''}</p>
+              <p className="text-body font-semibold text-slate-900">{user?.name || 'User'}</p>
+              <p className="text-caption text-slate-600">{user?.email || ''}</p>
               {user?.role && (
-                <p className="text-xs font-bold text-slate-700 mt-0.5">
+                <p className="text-caption font-bold text-slate-700 mt-0.5">
                   {user.role.toUpperCase()}
                 </p>
               )}

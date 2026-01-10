@@ -207,10 +207,10 @@ export default function KanbanPage() {
                 <KanbanSquare className="h-6 w-6 text-purple-600" />
               </div>
               <div>
-                <h1 className="text-3xl font-semibold tracking-tight">
+                <h1 className="text-display">
                   Leads Pipeline
                 </h1>
-                <p className="text-muted-foreground mt-1 text-lg">
+                <p className="text-muted-foreground mt-1 text-body-large">
                   Drag cards between columns to update pipeline stage
                 </p>
               </div>

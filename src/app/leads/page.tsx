@@ -537,8 +537,8 @@ export default function LeadsPageNew() {
         {/* Premium Header */}
         <div className="flex items-center justify-between">
           <div>
-            <h1 className="text-3xl font-bold tracking-tight">Leads</h1>
-            <p className="text-sm text-muted-foreground mt-1">
+            <h1 className="text-display">Leads</h1>
+            <p className="text-body text-muted-foreground mt-1">
               {total} {total === 1 ? 'lead' : 'leads'} total
             </p>
           </div>
@@ -699,7 +699,7 @@ export default function LeadsPageNew() {
             <div className="p-4 bg-muted/30 rounded-lg border border-border/50 space-y-3">
               <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                 <div>
-                  <label className="text-xs font-medium text-muted-foreground mb-1.5 block">Owner</label>
+                  <label className="text-caption text-muted-foreground mb-1.5 block">Owner</label>
                   <Select 
                     value={assignedToUserId} 
                     onChange={(e) => setAssignedToUserId(e.target.value)}
@@ -748,14 +748,14 @@ export default function LeadsPageNew() {
                       placeholder="From"
                       value={createdAtFrom}
                       onChange={(e) => setCreatedAtFrom(e.target.value)}
-                      className="h-9 text-xs"
+                      className="h-9 text-caption"
                     />
                     <Input
                       type="date"
                       placeholder="To"
                       value={createdAtTo}
                       onChange={(e) => setCreatedAtTo(e.target.value)}
-                      className="h-9 text-xs"
+                      className="h-9 text-caption"
                     />
                   </div>
                 </div>
@@ -770,7 +770,7 @@ export default function LeadsPageNew() {
                 <Badge
                   key={chip.key}
                   variant="secondary"
-                  className="px-2.5 py-1 text-xs font-medium cursor-pointer hover:bg-secondary/80"
+                  className="px-2.5 py-1 text-caption cursor-pointer hover:bg-secondary/80"
                   onClick={() => removeFilterChip(chip.key)}
                 >
                   {chip.label}: {chip.value}
@@ -784,7 +784,7 @@ export default function LeadsPageNew() {
         {/* Bulk Actions Bar */}
         {selectedIds.size > 0 && (
           <div className="flex items-center gap-3 p-4 bg-primary/5 border border-primary/20 rounded-lg backdrop-blur-sm">
-            <span className="text-sm font-semibold text-foreground">
+            <span className="text-body font-semibold text-foreground">
               {selectedIds.size} {selectedIds.size === 1 ? 'lead' : 'leads'} selected
             </span>
             <div className="flex items-center gap-2 ml-auto">
@@ -918,7 +918,7 @@ export default function LeadsPageNew() {
                             />
                             <div>
                               <div className="font-semibold text-foreground">{lead.contact.fullName}</div>
-                              <div className="text-xs text-muted-foreground mt-0.5">{lead.contact.phone}</div>
+                              <div className="text-caption text-muted-foreground mt-0.5">{lead.contact.phone}</div>
                             </div>
                           </div>
                         </TableCell>
@@ -940,12 +940,12 @@ export default function LeadsPageNew() {
                           )}
                         </TableCell>
                         <TableCell className="py-3">
-                          <span className="text-sm text-foreground">{lead.assignedUser?.name || <span className="text-muted-foreground">—</span>}</span>
+                          <span className="text-body text-foreground">{lead.assignedUser?.name || <span className="text-muted-foreground">—</span>}</span>
                         </TableCell>
                         <TableCell className="py-3">
                           {lead.lastContact ? (
                             <div className="space-y-0.5">
-                              <div className="text-xs text-muted-foreground">
+                              <div className="text-caption text-muted-foreground">
                                 {lead.lastContact.direction === 'INBOUND' || lead.lastContact.direction === 'IN' ? 'Received' : 'Sent'}
                               </div>
                               <div className="text-xs text-muted-foreground/70">
@@ -953,7 +953,7 @@ export default function LeadsPageNew() {
                               </div>
                             </div>
                           ) : (
-                            <span className="text-muted-foreground text-sm">—</span>
+                            <span className="text-muted-foreground text-body">—</span>
                           )}
                         </TableCell>
                         <TableCell className="py-3">
@@ -1000,7 +1000,7 @@ export default function LeadsPageNew() {
             {/* Pagination */}
             {!loading && leads.length > 0 && (
               <div className="flex items-center justify-between p-4 border-t">
-                <div className="text-sm text-muted-foreground">
+                <div className="text-body text-muted-foreground">
                   Showing {(page - 1) * limit + 1} to {Math.min(page * limit, total)} of {total} leads
                 </div>
                 <div className="flex items-center gap-2">
@@ -1012,7 +1012,7 @@ export default function LeadsPageNew() {
                   >
                     Previous
                   </Button>
-                  <span className="text-sm">
+                  <span className="text-body">
                     Page {page} of {Math.ceil(total / limit)}
                   </span>
                   <Button
@@ -1136,7 +1136,7 @@ export default function LeadsPageNew() {
               <DialogTitle>Delete {selectedIds.size} Lead(s)?</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 py-4">
-              <p className="text-sm text-muted-foreground">
+              <p className="text-body text-muted-foreground">
                 This action cannot be undone. Are you sure you want to delete {selectedIds.size} lead(s)?
               </p>
               <div className="flex justify-end gap-2">
@@ -1197,9 +1197,9 @@ export default function LeadsPageNew() {
             </DialogHeader>
             {importPreview && (
               <div className="space-y-4">
-                <div className="grid grid-cols-3 gap-4 text-sm">
+                <div className="grid grid-cols-3 gap-4 text-body">
                   <div>
-                    <div className="font-medium">Total Rows</div>
+                    <div>Total Rows</div>
                     <div>{importPreview.totalRows}</div>
                   </div>
                   <div>

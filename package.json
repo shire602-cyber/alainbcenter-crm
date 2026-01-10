@@ -20,7 +20,8 @@
     "backfill:wa-media": "tsx scripts/backfillWhatsappMediaIds.ts",
     "populate-renewals": "tsx scripts/populate-renewals.ts",
     "postinstall": "prisma generate",
-    "deploy": "bash scripts/deploy.sh"
+    "deploy": "bash scripts/deploy.sh",
+    "audit:packages": "bash scripts/create-audit-packages.sh"
   },
   "dependencies": {
     "@dnd-kit/core": "^6.3.1",

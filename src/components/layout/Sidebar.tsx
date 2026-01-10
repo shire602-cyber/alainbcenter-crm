@@ -117,8 +117,8 @@ export function Sidebar() {
                 />
               </div>
               <div className="flex-1 min-w-0">
-                  <h1 className="text-h2 font-bold text-slate-900 truncate tracking-tight">IMPLSE AI</h1>
-                  <p className="text-xs text-slate-600 font-medium truncate">AI Business CRM</p>
+                  <h1 className="text-subhead truncate">IMPLSE AI</h1>
+                  <p className="text-caption truncate">AI Business CRM</p>
                 </div>
               </Link>
           <Button
@@ -147,7 +147,7 @@ export function Sidebar() {
                     <Link
                       href={item.href}
                       className={cn(
-                        "group flex gap-x-3 rounded-xl px-4 py-2.5 text-sm font-semibold leading-normal transition-all duration-300 relative",
+                        "group flex gap-x-3 rounded-xl px-4 py-2.5 text-body font-semibold leading-normal transition-all duration-300 relative",
                         isActive
                           ? "bg-slate-900 text-white shadow-lg scale-[1.02]"
                           : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm"
@@ -170,7 +170,7 @@ export function Sidebar() {
                         <div>{item.name}</div>
                         {item.description && (
                           <div className={cn(
-                            "text-xs mt-0.5 font-medium",
+                            "text-caption mt-0.5",
                             isActive ? "text-white/80" : "text-slate-500"
                           )}>
                             {item.description}
@@ -195,7 +195,7 @@ export function Sidebar() {
                     <Link
                       href={item.href}
                       className={cn(
-                        "group flex gap-x-3 rounded-lg px-3 py-2 text-sm font-semibold leading-normal transition-all duration-300",
+                        "group flex gap-x-3 rounded-lg px-3 py-2 text-body font-semibold leading-normal transition-all duration-300",
                         isActive
                           ? "bg-slate-900 text-white shadow-md"
                           : "text-slate-700 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm"
@@ -213,7 +213,7 @@ export function Sidebar() {
                         <div>{item.name}</div>
                         {item.description && (
                           <div className={cn(
-                            "text-xs mt-0.5 font-medium",
+                            "text-caption mt-0.5",
                             isActive ? "text-white/80" : "text-slate-500"
                           )}>
                             {item.description}
@@ -232,7 +232,7 @@ export function Sidebar() {
                     <div className="h-px bg-border" />
                   </li>
                   <li className="px-3 py-2">
-                    <p className="text-xs font-bold text-slate-500 uppercase tracking-wider">
+                    <p className="text-caption font-bold text-slate-500 uppercase tracking-wider">
                       Administration
                     </p>
                   </li>
@@ -243,7 +243,7 @@ export function Sidebar() {
                         <Link
                           href={item.href}
                           className={cn(
-                            "group flex gap-x-2 rounded-lg p-2.5 text-sm font-semibold leading-5 transition-all duration-300",
+                            "group flex gap-x-2 rounded-lg p-2.5 text-body font-semibold leading-5 transition-all duration-300",
                             isActive
                               ? "bg-slate-900 text-white shadow-md"
                               : "text-slate-600 hover:bg-slate-100 hover:text-slate-900 hover:shadow-sm"

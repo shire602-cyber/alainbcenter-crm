@@ -3,7 +3,7 @@ import { cva, type VariantProps } from "class-variance-authority"
 import { cn } from "@/lib/utils"
 
 const badgeVariants = cva(
-  "inline-flex items-center rounded-full border px-2.5 py-0.5 text-xs font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
+  "inline-flex items-center rounded-full border px-3 py-1 text-caption font-semibold transition-colors focus:outline-none focus:ring-2 focus:ring-ring focus:ring-offset-2",
   {
     variants: {
       variant: {
@@ -11,11 +11,12 @@ const badgeVariants = cva(
         secondary: "border-transparent bg-secondary text-secondary-foreground hover:bg-secondary/80",
         destructive: "border-transparent bg-destructive text-destructive-foreground shadow-sm hover:bg-destructive/80",
         outline: "text-foreground",
-        success: "border-transparent bg-green-500 text-white shadow-sm hover:bg-green-600",
-        warning: "border-transparent bg-yellow-500 text-white shadow-sm hover:bg-yellow-600",
-        hot: "border-transparent bg-red-500 text-white shadow-sm",
-        warm: "border-transparent bg-orange-500 text-white shadow-sm",
-        cold: "border-transparent bg-blue-500 text-white shadow-sm",
+        success: "bg-green-50 text-green-700 border-green-200 font-semibold shadow-sm hover:bg-green-100",
+        warning: "bg-amber-50 text-amber-700 border-amber-200 font-semibold shadow-sm hover:bg-amber-100",
+        error: "bg-red-50 text-red-700 border-red-200 font-semibold shadow-sm hover:bg-red-100",
+        hot: "bg-red-50 text-red-700 border-red-200 font-semibold shadow-sm hover:bg-red-100",
+        warm: "bg-orange-50 text-orange-700 border-orange-200 font-semibold shadow-sm hover:bg-orange-100",
+        cold: "bg-blue-50 text-blue-700 border-blue-200 font-medium shadow-sm hover:bg-blue-100",
       },
     },
     defaultVariants: {

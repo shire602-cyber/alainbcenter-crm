@@ -128,7 +128,13 @@ export async function GET(req: NextRequest) {
         // Retry without deletedAt filter - just use channel filter
         try {
           conversations = await prisma.conversation.findMany({
-            where: whereClause,
+            where: {
+              ...whereClause,
+              // Only include conversations that have at least one message
+              messages: {
+                some: {},
+              },
+            },
             select: {
               id: true,
               channel: true,

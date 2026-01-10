@@ -52,3 +52,6 @@ next-env.d.ts
 test-results/
 .cursor/debug.log
 .cursor/debug.log
+
+# audit packages (generated zip files)
+/_audit_zips

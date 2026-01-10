@@ -222,10 +222,10 @@ export default function ReportsPage() {
         <div className="space-y-2">
         {/* Header */}
         <div className="mb-2">
-          <h1 className="text-2xl font-bold tracking-tight text-slate-900">
+          <h1 className="text-headline text-slate-900">
             Reports & Analytics
           </h1>
-          <p className="text-sm text-slate-600 mt-1 font-medium">
+          <p className="text-body text-slate-600 mt-1">
             Industry-specific insights for visa & business setup services
           </p>
         </div>
@@ -234,12 +234,12 @@ export default function ReportsPage() {
           <BentoCard className="border-red-200/60">
             <div className="flex items-center gap-2 mb-3 pb-2 border-b border-slate-200/60">
               <AlertTriangle className="h-4 w-4 text-red-600" />
-              <h3 className="text-sm font-bold text-red-700">
+              <h3 className="text-body font-bold text-red-700">
                 Error Loading Reports
               </h3>
             </div>
             <div>
-              <p className="text-xs text-slate-700 mb-3 font-medium">{error}</p>
+              <p className="text-caption text-slate-700 mb-3">{error}</p>
               <Button onClick={loadData} variant="outline" size="sm">
                 Retry
               </Button>
@@ -297,14 +297,14 @@ export default function ReportsPage() {
                     className="border-orange-200/60"
                     action={
                       <Link href="/leads?filter=expiring_90">
-                        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1">
+                        <Button variant="ghost" size="sm" className="h-6 text-caption gap-1">
                           View All <ArrowRight className="h-3 w-3" />
                         </Button>
                       </Link>
                     }
                   >
-                    <p className="text-2xl font-semibold tracking-tight text-orange-600">{kpis.expiry?.expiringSoon ?? 0}</p>
-                    <p className="text-xs text-slate-600 mt-1 font-medium">
+                    <p className="text-headline font-semibold text-orange-600">{kpis.expiry?.expiringSoon ?? 0}</p>
+                    <p className="text-caption text-slate-600 mt-1">
                       Leads with expiries in the next 30 days
                     </p>
                   </BentoCard>
@@ -315,14 +315,14 @@ export default function ReportsPage() {
                     className="border-red-200/60"
                     action={
                       <Link href="/leads?filter=overdue">
-                        <Button variant="ghost" size="sm" className="h-6 text-xs gap-1">
+                        <Button variant="ghost" size="sm" className="h-6 text-caption gap-1">
                           View All <ArrowRight className="h-3 w-3" />
                         </Button>
                       </Link>
                     }
                   >
-                    <p className="text-2xl font-semibold tracking-tight text-red-600">{kpis.expiry?.overdueLeads ?? 0}</p>
-                    <p className="text-xs text-slate-600 mt-1 font-medium">
+                    <p className="text-headline font-semibold text-red-600">{kpis.expiry?.overdueLeads ?? 0}</p>
+                    <p className="text-caption text-slate-600 mt-1">
                       Leads with expired documents/visas
                     </p>
                   </BentoCard>
@@ -335,12 +335,12 @@ export default function ReportsPage() {
                 >
                   <div className="grid grid-cols-2 gap-4">
                     <div>
-                      <p className="text-xs text-slate-600 mb-1 font-semibold">New Leads</p>
-                      <p className="text-2xl font-semibold tracking-tight">{kpis.activity.recentLeads30Days}</p>
+                      <p className="text-caption text-slate-600 mb-1 font-semibold">New Leads</p>
+                      <p className="text-headline font-semibold">{kpis.activity.recentLeads30Days}</p>
               </div>
                     <div>
-                      <p className="text-xs text-slate-600 mb-1 font-semibold">Won Deals</p>
-                      <p className="text-2xl font-semibold tracking-tight text-green-600">
+                      <p className="text-caption text-slate-600 mb-1 font-semibold">Won Deals</p>
+                      <p className="text-headline font-semibold text-green-600">
                         {kpis.activity.recentWon30Days}
                       </p>
         </div>
@@ -371,51 +371,51 @@ export default function ReportsPage() {
                     key={user.userId}
                     title={user.userName}
                     icon={<UserCheck className="h-4 w-4" />}
-                    badge={<Badge variant="outline" className="text-xs">{user.metrics.totalLeads} Leads</Badge>}
+                    badge={<Badge variant="outline" className="text-caption">{user.metrics.totalLeads} Leads</Badge>}
                   >
-                    <p className="text-xs text-slate-600 mb-3 font-medium">
+                    <p className="text-caption text-slate-600 mb-3">
                       {user.userEmail} • {user.userRole}
                     </p>
                     <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
                       <div>
-                        <p className="text-xs text-slate-600 mb-1 font-semibold">Conversion Rate</p>
-                        <p className="text-xl font-bold tracking-tight text-slate-900">{user.metrics.conversionRate.toFixed(1)}%</p>
-                        <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                        <p className="text-caption text-slate-600 mb-1 font-semibold">Conversion Rate</p>
+                        <p className="text-subhead font-bold text-slate-900">{user.metrics.conversionRate.toFixed(1)}%</p>
+                        <p className="text-caption text-slate-600 mt-0.5">
                           {user.metrics.wonLeads} won
                         </p>
                         </div>
                       <div>
-                        <p className="text-xs text-slate-600 mb-1 font-semibold">Response Time</p>
-                        <p className="text-xl font-semibold tracking-tight">
+                        <p className="text-caption text-slate-600 mb-1 font-semibold">Response Time</p>
+                        <p className="text-subhead font-semibold">
                           {Math.floor(user.metrics.avgResponseTimeMinutes / 60)}h{' '}
                           {user.metrics.avgResponseTimeMinutes % 60}m
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-600 mb-1 font-semibold">Tasks Completed</p>
-                        <p className="text-xl font-bold tracking-tight text-slate-900">{user.metrics.completedTasks}</p>
-                        <p className="text-xs text-slate-600 mt-0.5 font-medium">
+                        <p className="text-caption text-slate-600 mb-1 font-semibold">Tasks Completed</p>
+                        <p className="text-subhead font-bold text-slate-900">{user.metrics.completedTasks}</p>
+                        <p className="text-caption text-slate-600 mt-0.5">
                           {user.metrics.taskCompletionRate.toFixed(1)}% rate
                         </p>
                       </div>
                       <div>
-                        <p className="text-xs text-slate-600 mb-1 font-semibold">Messages Sent</p>
-                        <p className="text-xl font-bold tracking-tight text-slate-900">{user.metrics.messagesSent30Days}</p>
-                        <p className="text-xs text-slate-600 mt-0.5 font-medium">last 30 days</p>
+                        <p className="text-caption text-slate-600 mb-1 font-semibold">Messages Sent</p>
+                        <p className="text-subhead font-bold text-slate-900">{user.metrics.messagesSent30Days}</p>
+                        <p className="text-caption text-slate-600 mt-0.5">last 30 days</p>
                       </div>
                     </div>
                     <div className="mt-3 pt-3 border-t border-slate-200/60">
-                      <div className="flex items-center gap-3 text-xs">
+                      <div className="flex items-center gap-3 text-caption">
                         <div className="flex items-center gap-1.5">
                           <Clock className="h-3 w-3 text-slate-600" />
-                          <span className="text-slate-600 font-medium">Processing:</span>
+                          <span className="text-slate-600">Processing:</span>
                           <span className="font-bold text-slate-900">
                             {user.metrics.avgProcessingTimeDays.toFixed(1)} days
                           </span>
                         </div>
                         <div className="flex items-center gap-1.5">
                           <TrendingUp className="h-3 w-3 text-slate-600" />
-                          <span className="text-slate-600 font-medium">In Progress:</span>
+                          <span className="text-slate-600">In Progress:</span>
                           <span className="font-bold text-slate-900">{user.metrics.inProgressLeads}</span>
                         </div>
                         <div className="flex items-center gap-1.5">
