@@ -285,8 +285,9 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
           entryKeys: Object.keys(entry),
         })
       }
-    } else {
-      // FACEBOOK PAGE STRUCTURE: entry.messaging[]
+    }
+  } else {
+    // FACEBOOK PAGE STRUCTURE: entry.messaging[]
       // This is the original structure - keep unchanged for backward compatibility
       const messagingEvents = entry.messaging || []
 
