@@ -1609,15 +1609,30 @@ async function findOrCreateLead(input: {
         leadType: typeof newLead,
         isInstagram,
       })
-    
-    if (isInstagram) {
-      console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Lead created successfully`, {
-        leadId: newLead.id,
-        contactId: newLead.contactId,
-        stage: newLead.stage,
+      
+      if (isInstagram) {
+        console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Lead created successfully`, {
+          leadId: newLead.id,
+          contactId: newLead.contactId,
+          stage: newLead.stage,
+        })
+      } else {
+        console.log(`✅ [AUTO-MATCH] Created new lead: ${newLead.id} and linked existing conversations`)
+      }
+    } catch (createError: any) {
+      console.error(`❌ [AUTO-MATCH] IMMEDIATELY AFTER prisma.lead.create() - ERROR`, {
+        error: createError.message || 'Unknown error',
+        errorName: createError.name || 'UnknownError',
+        errorCode: createError.code || 'NO_CODE',
+        errorMeta: createError.meta || 'NO_META',
+        errorStack: createError.stack?.substring(0, 1000) || 'No stack trace',
+        fullError: JSON.stringify(createError, Object.getOwnPropertyNames(createError)).substring(0, 1000),
+        leadData,
+        isInstagram,
       })
-    } else {
-      console.log(`✅ [AUTO-MATCH] Created new lead: ${newLead.id} and linked existing conversations`)
+      
+      // Re-throw to trigger outer catch block
+      throw createError
     }
     
     // CRITICAL FIX: Link all existing conversations for this contact to the new lead
