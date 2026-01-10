@@ -1533,22 +1533,66 @@ async function findOrCreateLead(input: {
     
     // Validate lead creation requirements before attempting to create
     // Ensure contactId exists and is valid
-    if (!input.contactId || input.contactId <= 0) {
-      const errorMsg = `Invalid contactId: ${input.contactId}`
+    if (!input.contactId || input.contactId <= 0 || !Number.isInteger(input.contactId)) {
+      const errorMsg = `Invalid contactId: ${input.contactId} (must be positive integer)`
       if (isInstagram) {
         console.error(`❌ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Validation failed`, {
           error: errorMsg,
           errorName: 'ValidationError',
           contactId: input.contactId,
+          contactIdType: typeof input.contactId,
         })
       }
       throw new Error(errorMsg)
     }
     
+    // Verify contact exists in database before creating lead
+    let contactExists = false
+    try {
+      const contact = await prisma.contact.findUnique({
+        where: { id: input.contactId },
+        select: { id: true, fullName: true, phone: true },
+      })
+      contactExists = !!contact
+      
+      if (isInstagram) {
+        console.log(`🔍 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Contact verification`, {
+          contactId: input.contactId,
+          exists: contactExists,
+          contactName: contact?.fullName || 'N/A',
+          contactPhone: contact?.phone || 'N/A',
+        })
+      }
+      
+      if (!contactExists) {
+        const errorMsg = `Contact ${input.contactId} does not exist in database`
+        if (isInstagram) {
+          console.error(`❌ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Contact not found`, {
+            error: errorMsg,
+            contactId: input.contactId,
+          })
+        }
+        throw new Error(errorMsg)
+      }
+    } catch (contactError: any) {
+      // Re-throw validation errors
+      if (contactError.message?.includes('does not exist')) {
+        throw contactError
+      }
+      // Log database errors but continue (might be transient)
+      console.error(`⚠️ [AUTO-MATCH] Failed to verify contact existence:`, contactError.message)
+      if (isInstagram) {
+        console.error(`⚠️ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Contact verification failed (continuing)`, {
+          error: contactError.message,
+          contactId: input.contactId,
+        })
+      }
+    }
+    
     // Ensure channel is valid
     const validChannels = ['whatsapp', 'instagram', 'facebook', 'email', 'webchat']
-    const channelLower = input.channel.toLowerCase()
-    if (!validChannels.includes(channelLower)) {
+    const channelLower = (input.channel || '').toLowerCase().trim()
+    if (!channelLower || !validChannels.includes(channelLower)) {
       const errorMsg = `Invalid channel: ${input.channel}`
       if (isInstagram) {
         console.error(`❌ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Validation failed`, {
@@ -1562,15 +1606,22 @@ async function findOrCreateLead(input: {
     
     // Validate messageTimestamp is valid Date
     if (!(messageTimestamp instanceof Date) || isNaN(messageTimestamp.getTime())) {
-      const errorMsg = `Invalid messageTimestamp: ${messageTimestamp}`
+      const errorMsg = `Invalid messageTimestamp: ${messageTimestamp} (must be valid Date object)`
       if (isInstagram) {
         console.error(`❌ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Validation failed`, {
           error: errorMsg,
           errorName: 'ValidationError',
           messageTimestamp,
+          messageTimestampType: typeof messageTimestamp,
         })
       }
-      throw new Error(errorMsg)
+      // Fallback to current date if invalid
+      messageTimestamp = new Date()
+      if (isInstagram) {
+        console.warn(`⚠️ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Using current date as fallback`, {
+          fallbackTimestamp: messageTimestamp.toISOString(),
+        })
+      }
     }
     
     if (isInstagram) {
