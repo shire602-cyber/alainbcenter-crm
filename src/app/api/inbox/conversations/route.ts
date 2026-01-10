@@ -329,6 +329,11 @@ export async function GET(req: NextRequest) {
                 }
               : null,
             createdAt: conv.createdAt.toISOString(),
+            assignedUser: conv.assignedUser ? {
+              id: conv.assignedUser.id,
+              name: conv.assignedUser.name,
+              email: conv.assignedUser.email,
+            } : null,
           }
         })
     

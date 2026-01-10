@@ -113,6 +113,7 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
     )
   }
 
+  // Ensure data exists (should always be set by loadData)
   if (!data) {
     return (
       <div className="space-y-4">
@@ -131,33 +132,73 @@ export const CommandCenterDashboard = memo(function CommandCenterDashboard() {
     )
   }
 
+  // Check if dashboard is truly empty (no items, no activity)
+  const hasAnyData = data.focusNow || 
+    (data.upNext && data.upNext.length > 0) ||
+    (data.signals && (
+      (data.signals.renewals && data.signals.renewals.length > 0) ||
+      (data.signals.waiting && data.signals.waiting.length > 0) ||
+      (data.signals.alerts && data.signals.alerts.length > 0)
+    )) ||
+    (data.momentum && (
+      data.momentum.repliesToday > 0 ||
+      data.momentum.quotesToday > 0 ||
+      data.momentum.renewalsNext7Days > 0
+    )) ||
+    (data.completedToday && (
+      data.completedToday.tasksDone > 0 ||
+      data.completedToday.messagesSent > 0 ||
+      data.completedToday.quotesSent > 0
+    ))
+
+  if (!hasAnyData) {
+    return (
+      <div className="space-y-4">
+        <EmptyState
+          icon={BarChart3}
+          title="Welcome to your Dashboard"
+          description="Your dashboard will populate as you create leads, send messages, and complete tasks. Get started by creating your first lead!"
+          action={
+            <Button onClick={() => window.location.href = '/leads?action=create'} variant="default">
+              Create First Lead
+            </Button>
+          }
+        />
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
       {/* Hero: Focus Now */}
-      <FocusHeroCard
-        item={data.focusNow}
-        onRefresh={manualRefresh}
-        isRefreshing={isPolling}
-      />
+      {data.focusNow && (
+        <FocusHeroCard
+          item={data.focusNow}
+          onRefresh={manualRefresh}
+          isRefreshing={isPolling}
+        />
+      )}
 
       {/* Up Next (max 3) */}
-      {data.upNext.length > 0 && (
+      {data.upNext && data.upNext.length > 0 && (
         <UpNextList items={data.upNext} />
       )}
 
       {/* Right column / below fold: Signals + Momentum + Completed */}
       <div className="grid md:grid-cols-2 gap-4">
         <div className="space-y-4">
-          <SignalsPanel signals={data.signals as SignalsData} />
+          {data.signals && <SignalsPanel signals={data.signals as SignalsData} />}
         </div>
         <div className="space-y-4">
-          <MomentumStrip momentum={data.momentum} />
+          {data.momentum && <MomentumStrip momentum={data.momentum} />}
           <JoyStrip />
-          <CompletedTodayCard
-            tasksDone={data.completedToday.tasksDone}
-            messagesSent={data.completedToday.messagesSent}
-            quotesSent={data.completedToday.quotesSent}
-          />
+          {data.completedToday && (
+            <CompletedTodayCard
+              tasksDone={data.completedToday.tasksDone}
+              messagesSent={data.completedToday.messagesSent}
+              quotesSent={data.completedToday.quotesSent}
+            />
+          )}
         </div>
       </div>
     </div>
