@@ -214,7 +214,7 @@ export default function MarketingPage() {
           </div>
 
           {/* Feature Highlight */}
-          <div className="mt-16 bg-gradient-to-r from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/20 rounded-2xl p-8 md:p-12">
+          <div className="mt-16 bg-gradient-to-r from-blue-50 to-indigo-50 rounded-2xl p-8 md:p-12">
             <div className="grid md:grid-cols-2 gap-8 items-center">
               <div>
                 <Badge className="mb-4">Most Popular</Badge>
@@ -235,7 +235,7 @@ export default function MarketingPage() {
               </div>
               <div className="bg-white rounded-xl p-6 shadow-xl">
                 <div className="space-y-4">
-                  <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-green-50 rounded-lg">
                     <div>
                       <p className="font-semibold">Ahmed Hassan</p>
                       <p className="text-sm text-gray-600">Family Visa Inquiry</p>
@@ -286,7 +286,7 @@ export default function MarketingPage() {
                 <Card key={idx} className="text-center">
                   <CardHeader>
                     <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
-                      <Icon className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+                      <Icon className="h-8 w-8 text-blue-600" />
                     </div>
                     <CardTitle className="text-xl">{benefit.title}</CardTitle>
                   </CardHeader>
@@ -326,7 +326,7 @@ export default function MarketingPage() {
                 <CardContent>
                   <div className="flex items-center gap-3">
                     <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
-                      <Users className="h-5 w-5 text-blue-600 dark:text-blue-400" />
+                      <Users className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
                       <p className="font-semibold">{testimonial.name}</p>
