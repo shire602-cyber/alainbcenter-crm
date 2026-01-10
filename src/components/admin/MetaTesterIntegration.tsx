@@ -65,6 +65,11 @@ export function MetaTesterIntegration({
   const [webhookVerifyTokenConfigured, setWebhookVerifyTokenConfigured] = useState(false)
   const [storedWebhookVerifyToken, setStoredWebhookVerifyToken] = useState<string | null>(null)
   const [checkingSubscription, setCheckingSubscription] = useState(false)
+  const [testingVerification, setTestingVerification] = useState(false)
+  const [verificationTestResults, setVerificationTestResults] = useState<any>(null)
+  const [viewingWebhookEvents, setViewingWebhookEvents] = useState(false)
+  const [webhookEvents, setWebhookEvents] = useState<any>(null)
+  const [showTroubleshooting, setShowTroubleshooting] = useState(false)
   
   // Page selection state
   const [pages, setPages] = useState<MetaPage[]>([])
@@ -348,6 +353,53 @@ export function MetaTesterIntegration({
       setSuccess(null)
     } finally {
       setTestingWebhook(false)
+    }
+  }
+
+  const handleTestWebhookVerification = async () => {
+    setTestingVerification(true)
+    setError(null)
+    setSuccess(null)
+    setVerificationTestResults(null)
+
+    try {
+      const res = await fetch('/api/integrations/meta/test-webhook-verification')
+      const data = await res.json()
+      setVerificationTestResults(data)
+      
+      if (data.verificationSuccess) {
+        setSuccess('✅ Webhook verification test PASSED - Meta should be able to verify your webhook')
+      } else {
+        setError(`⚠️ Webhook verification test failed: ${data.explanation || 'Unknown error'}`)
+      }
+    } catch (err: any) {
+      setError('Failed to test webhook verification: ' + err.message)
+    } finally {
+      setTestingVerification(false)
+    }
+  }
+
+  const handleViewWebhookEvents = async () => {
+    setViewingWebhookEvents(true)
+    setError(null)
+    setSuccess(null)
+
+    try {
+      const igBusinessId = connectionStatus[0]?.igBusinessId
+      const url = `/api/integrations/meta/webhook-events${igBusinessId ? `?igBusinessId=${igBusinessId}&limit=20` : '?limit=20'}`
+      const res = await fetch(url)
+      const data = await res.json()
+      setWebhookEvents(data)
+      
+      if (data.events && data.events.length > 0) {
+        setSuccess(`✅ Found ${data.events.length} recent webhook event(s)`)
+      } else {
+        setSuccess('ℹ️ No webhook events found yet. If you just configured the webhook, wait a few minutes and check again.')
+      }
+    } catch (err: any) {
+      setError('Failed to fetch webhook events: ' + err.message)
+    } finally {
+      setViewingWebhookEvents(false)
     }
   }
 
@@ -723,6 +775,229 @@ export function MetaTesterIntegration({
                 </div>
               </div>
             )}
+
+            {/* Meta Console Configuration Checklist */}
+            <div className="mt-4 p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded">
+              <div className="flex items-center justify-between mb-3">
+                <h4 className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+                  📋 Meta Developer Console Configuration Checklist
+                </h4>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7"
+                  onClick={handleTestWebhookVerification}
+                  disabled={testingVerification}
+                >
+                  {testingVerification ? (
+                    <>
+                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                      Testing...
+                    </>
+                  ) : (
+                    'Test Verification'
+                  )}
+                </Button>
+              </div>
+              
+              <div className="space-y-2 text-xs">
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5">1️⃣</span>
+                  <div className="flex-1">
+                    <p className="font-medium">Go to Meta Developer Console</p>
+                    <p className="text-slate-600 dark:text-slate-400">Meta Developers → Your App → Instagram → Webhooks</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5">2️⃣</span>
+                  <div className="flex-1">
+                    <p className="font-medium">Enter Webhook URL (exact copy):</p>
+                    <code className="block mt-1 p-1.5 bg-white dark:bg-slate-800 rounded text-xs break-all">
+                      {webhookUrl || '[your webhook URL]'}
+                    </code>
+                    <p className="text-red-600 dark:text-red-400 mt-1">⚠️ Must include https:// - no trailing slash</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5">3️⃣</span>
+                  <div className="flex-1">
+                    <p className="font-medium">Enter Verify Token (exact copy, case-sensitive):</p>
+                    <code className="block mt-1 p-1.5 bg-white dark:bg-slate-800 rounded text-xs break-all">
+                      {storedWebhookVerifyToken || webhookVerifyToken || '[your verify token]'}
+                    </code>
+                    <p className="text-red-600 dark:text-red-400 mt-1">⚠️ Case-sensitive - copy exactly, no extra spaces</p>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5">4️⃣</span>
+                  <div className="flex-1">
+                    <p className="font-medium">Subscribe to these fields:</p>
+                    <code className="block mt-1 p-1.5 bg-white dark:bg-slate-800 rounded text-xs">
+                      messages, messaging_postbacks
+                    </code>
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <span className="mt-0.5">5️⃣</span>
+                  <div className="flex-1">
+                    <p className="font-medium">Click &quot;Verify and Save&quot;</p>
+                    <p className="text-slate-600 dark:text-slate-400">Meta will test the webhook - use &quot;Test Verification&quot; button above to simulate this</p>
+                  </div>
+                </div>
+              </div>
+
+              {verificationTestResults && (
+                <div className={`mt-3 p-3 rounded text-xs ${
+                  verificationTestResults.verificationSuccess
+                    ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
+                    : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                }`}>
+                  <p className={`font-medium mb-1 ${
+                    verificationTestResults.verificationSuccess
+                      ? 'text-green-800 dark:text-green-200'
+                      : 'text-red-800 dark:text-red-200'
+                  }`}>
+                    Verification Test Result:
+                  </p>
+                  <p className={verificationTestResults.verificationSuccess ? 'text-green-700 dark:text-green-300' : 'text-red-700 dark:text-red-300'}>
+                    {verificationTestResults.explanation}
+                  </p>
+                  {verificationTestResults.verificationResult && (
+                    <details className="mt-2">
+                      <summary className="cursor-pointer text-xs">Technical Details</summary>
+                      <pre className="mt-1 p-2 bg-white dark:bg-slate-800 rounded text-xs overflow-auto max-h-40">
+                        {JSON.stringify(verificationTestResults.verificationResult, null, 2)}
+                      </pre>
+                    </details>
+                  )}
+                </div>
+              )}
+
+              {/* Webhook Events Viewer */}
+              <div className="mt-4 pt-4 border-t border-blue-300 dark:border-blue-700">
+                <div className="flex items-center justify-between mb-2">
+                  <h5 className="text-xs font-semibold text-blue-900 dark:text-blue-100">
+                    Recent Webhook Events
+                  </h5>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="text-xs h-7"
+                    onClick={handleViewWebhookEvents}
+                    disabled={viewingWebhookEvents}
+                  >
+                    {viewingWebhookEvents ? (
+                      <>
+                        <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                        Loading...
+                      </>
+                    ) : (
+                      'View Events'
+                    )}
+                  </Button>
+                </div>
+                
+                {webhookEvents && (
+                  <div className="mt-2 text-xs">
+                    {webhookEvents.events && webhookEvents.events.length > 0 ? (
+                      <div className="space-y-2 max-h-60 overflow-y-auto">
+                        {webhookEvents.events.slice(0, 5).map((event: any) => (
+                          <div key={event.id} className="p-2 bg-white dark:bg-slate-800 rounded border">
+                            <div className="flex items-center justify-between mb-1">
+                              <span className="font-medium text-xs">{event.payloadObject || event.eventType}</span>
+                              <span className="text-slate-500 text-xs">
+                                {new Date(event.createdAt).toLocaleString()}
+                              </span>
+                            </div>
+                            {event.messagePreview && (
+                              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+                                Message from: {event.messagePreview.from} - {event.messagePreview.text}
+                              </p>
+                            )}
+                            {event.payloadPreview && (
+                              <details className="mt-1">
+                                <summary className="cursor-pointer text-xs text-slate-500">Payload Preview</summary>
+                                <pre className="mt-1 p-1 bg-slate-100 dark:bg-slate-900 rounded text-xs overflow-auto max-h-32">
+                                  {JSON.stringify(event.payloadPreview, null, 2)}
+                                </pre>
+                              </details>
+                            )}
+                          </div>
+                        ))}
+                        {webhookEvents.events.length > 5 && (
+                          <p className="text-xs text-slate-500 text-center">
+                            Showing 5 of {webhookEvents.total} events
+                          </p>
+                        )}
+                      </div>
+                    ) : (
+                      <p className="text-xs text-slate-600 dark:text-slate-400">
+                        {webhookEvents.message || 'No webhook events found yet. If you just configured the webhook, wait a few minutes after sending a test DM.'}
+                      </p>
+                    )}
+                    {webhookEvents.stats && (
+                      <div className="mt-2 pt-2 border-t text-xs text-slate-500">
+                        Total: {webhookEvents.stats.total} | Last 24h: {webhookEvents.stats.recent24h}
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* Troubleshooting Guide */}
+              <div className="mt-4 pt-4 border-t border-blue-300 dark:border-blue-700">
+                <button
+                  onClick={() => setShowTroubleshooting(!showTroubleshooting)}
+                  className="w-full text-left text-xs font-semibold text-blue-900 dark:text-blue-100 flex items-center justify-between"
+                >
+                  <span>🔧 Troubleshooting Guide</span>
+                  <span>{showTroubleshooting ? '▼' : '▶'}</span>
+                </button>
+                {showTroubleshooting && (
+                  <div className="mt-2 space-y-3 text-xs">
+                    <div>
+                      <p className="font-medium text-red-700 dark:text-red-300 mb-1">❌ No webhook events received:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                        <li>Verify webhook URL is EXACT (including https://, no trailing slash)</li>
+                        <li>Verify token matches EXACTLY (case-sensitive, no extra spaces)</li>
+                        <li>Make sure you clicked &quot;Verify and Save&quot; in Meta Console</li>
+                        <li>Check that you subscribed to &quot;messages&quot; and &quot;messaging_postbacks&quot;</li>
+                        <li>Wait 2-3 minutes after configuration for Meta to activate webhook</li>
+                        <li>Send a test DM from a different Instagram account</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium text-yellow-700 dark:text-yellow-300 mb-1">⚠️ Verification fails:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                        <li>Use the &quot;Test Verification&quot; button above to diagnose</li>
+                        <li>Check that verify token is configured in your system</li>
+                        <li>Check Vercel logs for verification errors</li>
+                        <li>Make sure webhook URL is publicly accessible (not localhost)</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium text-blue-700 dark:text-blue-300 mb-1">ℹ️ Events received but no DMs in inbox:</p>
+                      <ul className="list-disc list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                        <li>Check &quot;View Events&quot; above to see if events are arriving</li>
+                        <li>Check Vercel logs for [META-WEBHOOK-INSTAGRAM-DEBUG] entries</li>
+                        <li>Verify connection is active (check connection status above)</li>
+                        <li>Check that IG Business Account ID matches in events</li>
+                      </ul>
+                    </div>
+                    <div>
+                      <p className="font-medium text-green-700 dark:text-green-300 mb-1">✅ Testing your setup:</p>
+                      <ol className="list-decimal list-inside space-y-1 text-slate-600 dark:text-slate-400 ml-2">
+                        <li>Click &quot;Test Verification&quot; - should pass if token is correct</li>
+                        <li>Send a DM to your Instagram account from another account</li>
+                        <li>Click &quot;View Events&quot; - should show recent webhook events</li>
+                        <li>Check Vercel logs - should show POST requests to /api/webhooks/meta</li>
+                        <li>DM should appear in Inbox after successful processing</li>
+                      </ol>
+                    </div>
+                  </div>
+                )}
+              </div>
+            </div>
           </div>
         )}
       </div>
