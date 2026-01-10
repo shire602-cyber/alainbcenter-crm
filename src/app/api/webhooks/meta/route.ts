@@ -170,6 +170,19 @@ export async function GET(req: NextRequest) {
  * Receive webhook events from Meta
  */
 export async function POST(req: NextRequest) {
+  // Log immediately when POST request arrives
+  const requestTimestamp = new Date().toISOString()
+  const userAgent = req.headers.get('user-agent') || 'unknown'
+  const contentType = req.headers.get('content-type') || 'unknown'
+  
+  console.log('📥 [META-WEBHOOK-POST] POST request received', {
+    timestamp: requestTimestamp,
+    userAgent,
+    contentType,
+    path: req.nextUrl.pathname,
+    method: req.method,
+  })
+  
   // Immediately return 200 OK to Meta
   const response = NextResponse.json({ success: true })
 
@@ -177,6 +190,12 @@ export async function POST(req: NextRequest) {
     // Verify webhook signature if app secret is configured (optional)
     const signature = req.headers.get('x-hub-signature-256')
     const body = await req.text()
+    
+    console.log('📥 [META-WEBHOOK-POST] Request body received', {
+      bodyLength: body.length,
+      hasSignature: !!signature,
+      bodyPreview: body.substring(0, 200),
+    })
 
     const appSecret = getAppSecret()
     if (appSecret && signature) {
