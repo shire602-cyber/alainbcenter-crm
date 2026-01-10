@@ -215,11 +215,25 @@ export async function POST(req: NextRequest) {
       console.log('ℹ️ META_APP_SECRET not configured - skipping signature verification (optional)')
     }
 
-    const payload = JSON.parse(body)
+    let payload
+    try {
+      payload = JSON.parse(body)
+      console.log('📥 [META-WEBHOOK-POST] Payload parsed successfully', {
+        object: payload.object,
+        hasEntry: !!payload.entry,
+        entryCount: payload.entry?.length || 0,
+      })
+    } catch (parseError: any) {
+      console.error('❌ [META-WEBHOOK-POST] Failed to parse payload as JSON', {
+        error: parseError.message,
+        bodyPreview: body.substring(0, 500),
+      })
+      return response
+    }
 
     // Process webhook asynchronously (don't block response)
     processWebhookPayload(payload).catch((error) => {
-      console.error('Error processing Meta webhook:', error)
+      console.error('❌ [META-WEBHOOK-POST] Error processing Meta webhook:', error)
     })
 
     return response
