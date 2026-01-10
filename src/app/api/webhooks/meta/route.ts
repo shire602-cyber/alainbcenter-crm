@@ -717,17 +717,45 @@ async function processWebhookPayload(payload: any) {
             })
           }
         } catch (error: any) {
+          // Capture full error object with all properties for debugging
+          const errorMessage = error.message || String(error) || 'Unknown error'
+          const errorName = error.name || 'UnknownError'
+          const errorCode = error.code || 'NO_CODE'
+          const errorStack = error.stack?.substring(0, 1000) || 'No stack trace'
+          
+          // Safely serialize error object
+          let fullError = 'Could not serialize error'
+          try {
+            fullError = JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 1000)
+          } catch (serializeError) {
+            try {
+              fullError = JSON.stringify({
+                message: error.message,
+                name: error.name,
+                code: error.code,
+                stack: error.stack,
+                toString: String(error),
+              }).substring(0, 1000)
+            } catch {
+              fullError = String(error).substring(0, 500)
+            }
+          }
+          
           // Log detailed error information
           if (channelLower === 'instagram') {
             console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in processInboundMessage call', {
-              error: error.message,
-              errorStack: error.stack?.substring(0, 500),
+              error: errorMessage,
+              errorName,
+              errorCode,
+              errorStack,
+              fullError,
               senderId: event.senderId || 'N/A',
               messageId: event.messageId || 'N/A',
               pageId: pageId || 'N/A',
             })
           }
-          if (error.message === 'DUPLICATE_MESSAGE') {
+          
+          if (errorMessage === 'DUPLICATE_MESSAGE' || error.message === 'DUPLICATE_MESSAGE') {
             if (channelLower === 'instagram') {
               console.log('ℹ️ [META-WEBHOOK-INSTAGRAM] Duplicate Instagram message detected - skipping', {
                 messageId: event.messageId || 'N/A',
@@ -739,22 +767,25 @@ async function processWebhookPayload(payload: any) {
           } else {
             if (channelLower === 'instagram') {
               console.error('❌ [META-WEBHOOK-INSTAGRAM] Error processing Instagram message:', {
-                error: error.message,
-                errorName: error.name,
-                errorCode: error.code,
-                errorStack: error.stack?.substring(0, 500),
+                error: errorMessage,
+                errorName,
+                errorCode,
+                errorStack,
+                fullError,
                 senderId: event.senderId || 'N/A',
                 messageId: event.messageId || 'N/A',
                 pageId: pageId || 'N/A',
                 igBusinessId: entry.id,
                 connectionId: connection?.id || 'NONE',
                 workspaceId: workspaceId || 'NONE',
-                // Include full error for debugging
-                fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 500),
               })
             } else {
               console.error(`❌ [META-WEBHOOK] Error processing ${channel} message:`, {
-                error: error.message,
+                error: errorMessage,
+                errorName,
+                errorCode,
+                errorStack,
+                fullError,
                 senderId: event.senderId,
                 channel,
                 pageId,
