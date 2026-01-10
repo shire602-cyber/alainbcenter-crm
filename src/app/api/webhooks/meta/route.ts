@@ -552,7 +552,7 @@ async function processWebhookPayload(payload: any) {
           rawPayloadPreview: JSON.stringify(event.rawPayload).substring(0, 500),
         })
       }
-
+      
       if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
         // Defensive logging for Instagram message ingestion
         if (channelLower === 'instagram') {
@@ -740,11 +740,17 @@ async function processWebhookPayload(payload: any) {
             if (channelLower === 'instagram') {
               console.error('❌ [META-WEBHOOK-INSTAGRAM] Error processing Instagram message:', {
                 error: error.message,
-                errorStack: error.stack?.substring(0, 200),
+                errorName: error.name,
+                errorCode: error.code,
+                errorStack: error.stack?.substring(0, 500),
                 senderId: event.senderId || 'N/A',
                 messageId: event.messageId || 'N/A',
                 pageId: pageId || 'N/A',
                 igBusinessId: entry.id,
+                connectionId: connection?.id || 'NONE',
+                workspaceId: workspaceId || 'NONE',
+                // Include full error for debugging
+                fullError: JSON.stringify(error, Object.getOwnPropertyNames(error)).substring(0, 500),
               })
             } else {
               console.error(`❌ [META-WEBHOOK] Error processing ${channel} message:`, {

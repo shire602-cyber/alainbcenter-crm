@@ -73,11 +73,16 @@ export async function handleInboundMessageAutoMatch(
   input: AutoMatchInput
 ): Promise<AutoMatchResult> {
   const startTime = Date.now()
-  console.log(`🔄 [AUTO-MATCH] Starting pipeline`, {
+  
+  const logContext = {
     channel: input.channel,
     providerMessageId: input.providerMessageId,
     hasText: !!input.text && input.text.trim().length > 0,
-  })
+    textPreview: input.text ? input.text.substring(0, 50) : '[no text]',
+    senderId: input.metadata?.senderId || 'N/A',
+  }
+  
+  console.log(`🔄 [AUTO-MATCH] Starting pipeline`, logContext)
 
   // Step 1: DEDUPE inbound message
   const isDuplicate = await checkInboundDedupe(input.channel, input.providerMessageId)
@@ -223,11 +228,29 @@ export async function handleInboundMessageAutoMatch(
   // Step 4: FIND/CREATE Conversation (linked to lead)
   // SYNC ORDER: Conversation must exist before we can update knownFields
   // Extract externalThreadId using canonical function
+  // Pass metadata with senderId for Instagram/Facebook fallback extraction
+  const webhookPayloadForThreadId = input.metadata?.webhookEntry || input.metadata?.webhookValue || {
+    ...input.metadata,
+    // Ensure senderId is accessible for Instagram/Facebook fallback
+    senderId: input.metadata?.senderId,
+    metadata: input.metadata, // Nested metadata for compatibility
+  }
+  
   const externalThreadId = getExternalThreadId(
     input.channel,
     contact,
-    input.metadata?.webhookEntry || input.metadata?.webhookValue || input.metadata
+    webhookPayloadForThreadId
   )
+  
+  if (isInstagram) {
+    console.log(`📸 [AUTO-MATCH-INSTAGRAM] External thread ID extracted`, {
+      externalThreadId: externalThreadId || 'N/A',
+      contactPhone: contact.phone || 'N/A',
+      hasWebhookPayload: !!webhookPayloadForThreadId,
+      hasSenderId: !!webhookPayloadForThreadId?.senderId,
+      hasMetadataSenderId: !!input.metadata?.senderId,
+    })
+  }
   
   // Step 3.5: CRITICAL FIX 4 - Detect language from inbound text
   let detectedLanguage: string | null = null
@@ -242,7 +265,7 @@ export async function handleInboundMessageAutoMatch(
   }
 
   // DIAGNOSTIC LOG: before conversation upsert
-  console.log(`[AUTO-MATCH] BEFORE-CONV-UPSERT`, JSON.stringify({
+  const logData = {
     contactId: contactResult.id,
     channel: input.channel,
     channelLower: input.channel.toLowerCase(),
@@ -250,7 +273,19 @@ export async function handleInboundMessageAutoMatch(
     leadId: lead.id,
     providerMessageId: input.providerMessageId,
     detectedLanguage,
-  }))
+    contactPhone: contact.phone || 'N/A',
+    contactPhoneFormat: contact.phone?.startsWith('ig:') ? 'instagram' : contact.phone?.startsWith('fb:') ? 'facebook' : 'other',
+  }
+  
+  console.log(`[AUTO-MATCH] BEFORE-CONV-UPSERT`, JSON.stringify(logData))
+  
+  if (isInstagram) {
+    console.log(`📸 [AUTO-MATCH-INSTAGRAM] Before conversation upsert`, {
+      ...logData,
+      hasExternalThreadId: !!externalThreadId,
+      externalThreadIdPreview: externalThreadId ? externalThreadId.substring(0, 50) : 'N/A',
+    })
+  }
   
   // For Instagram, store profile photo in knownFields JSON if available
   let knownFields: any = undefined
@@ -267,15 +302,38 @@ export async function handleInboundMessageAutoMatch(
     })
   }
 
-  const conversationResult = await upsertConversation({
-    contactId: contactResult.id,
-    channel: input.channel,
-    leadId: lead.id, // CRITICAL: Link conversation to lead
-    timestamp: input.timestamp, // Use actual message timestamp
-    externalThreadId, // Canonical external thread ID
-    language: detectedLanguage, // CRITICAL FIX 4: Store detected language
-    knownFields: knownFields ? JSON.stringify(knownFields) : undefined, // Store Instagram profile info
-  })
+  let conversationResult
+  try {
+    conversationResult = await upsertConversation({
+      contactId: contactResult.id,
+      channel: input.channel,
+      leadId: lead.id, // CRITICAL: Link conversation to lead
+      timestamp: input.timestamp, // Use actual message timestamp
+      externalThreadId, // Canonical external thread ID
+      language: detectedLanguage, // CRITICAL FIX 4: Store detected language
+      knownFields: knownFields ? JSON.stringify(knownFields) : undefined, // Store Instagram profile info
+    })
+    
+    if (isInstagram) {
+      console.log(`✅ [AUTO-MATCH-INSTAGRAM] Conversation upserted successfully`, {
+        conversationId: conversationResult.id,
+        contactId: contactResult.id,
+        leadId: lead.id,
+        externalThreadId: externalThreadId || 'N/A',
+      })
+    }
+  } catch (convError: any) {
+    console.error(`❌ [AUTO-MATCH-INSTAGRAM] Failed to upsert conversation`, {
+      error: convError.message,
+      errorCode: convError.code,
+      errorStack: convError.stack?.substring(0, 500),
+      contactId: contactResult.id,
+      leadId: lead.id,
+      externalThreadId: externalThreadId || 'N/A',
+      channel: input.channel.toLowerCase(),
+    })
+    throw convError // Re-throw to prevent silent failure
+  }
   
   // Fetch full conversation record (exclude lastProcessedInboundMessageId if column doesn't exist)
   let conversation
@@ -957,6 +1015,27 @@ export async function handleInboundMessageAutoMatch(
     }
   }
 
+  // Log successful completion
+  const duration = Date.now() - startTime
+  
+  if (isInstagram) {
+    console.log(`✅ [AUTO-MATCH-INSTAGRAM] Instagram message pipeline completed successfully`, {
+      duration: `${duration}ms`,
+      conversationId: conversation.id,
+      messageId: message.id,
+      contactId: contact.id,
+      leadId: lead.id,
+      channel: input.channel.toLowerCase(), // Stored as lowercase
+    })
+  } else {
+    console.log(`✅ [AUTO-MATCH] Pipeline completed successfully`, {
+      duration: `${duration}ms`,
+      conversationId: conversation.id,
+      messageId: message.id,
+      channel: input.channel.toLowerCase(),
+    })
+  }
+  
   return {
     contact,
     conversation,
@@ -976,20 +1055,42 @@ async function checkInboundDedupe(
   channel: string,
   providerMessageId: string
 ): Promise<boolean> {
+  const normalizedChannel = normalizeChannel(channel)
+  const isInstagram = normalizedChannel === 'instagram'
+  
   try {
     await prisma.inboundMessageDedup.create({
       data: {
-        provider: normalizeChannel(channel),
+        provider: normalizedChannel,
         providerMessageId,
         processingStatus: 'PROCESSING',
       },
     })
+    if (isInstagram) {
+      console.log(`✅ [AUTO-MATCH-INSTAGRAM] Dedupe check passed - not a duplicate`, {
+        channel: normalizedChannel,
+        providerMessageId,
+      })
+    }
     return false // Not duplicate
   } catch (error: any) {
     if (error.code === 'P2002') {
       // Unique constraint violation = duplicate
+      if (isInstagram) {
+        console.log(`ℹ️ [AUTO-MATCH-INSTAGRAM] Duplicate message detected in dedupe check`, {
+          channel: normalizedChannel,
+          providerMessageId,
+        })
+      }
       return true
     }
+    // Log non-duplicate errors (database issues, etc.)
+    console.error(`❌ [AUTO-MATCH] Error in dedupe check (non-duplicate error):`, {
+      channel: normalizedChannel,
+      providerMessageId,
+      errorCode: error.code,
+      errorMessage: error.message,
+    })
     throw error
   }
 }
@@ -1519,8 +1620,31 @@ async function createCommunicationLog(input: {
   // HOTFIX: Fallback retry for Prisma schema mismatch (temporary safety during Vercel deploys)
   // If Prisma Client doesn't recognize providerMediaId/media fields, retry without them
   let message
+  const isInstagramMessage = normalizedChannel === 'instagram'
+  
+  if (isInstagramMessage) {
+    console.log(`📸 [AUTO-MATCH-INSTAGRAM] Attempting to create message`, {
+      conversationId: input.conversationId,
+      leadId: input.leadId,
+      contactId: input.contactId,
+      channel: normalizedChannel,
+      providerMessageId: input.providerMessageId,
+      hasText: !!data.body,
+      textPreview: data.body ? data.body.substring(0, 50) : 'N/A',
+      direction: data.direction,
+    })
+  }
+  
   try {
     message = await prisma.message.create({ data })
+    
+    if (isInstagramMessage) {
+      console.log(`✅ [AUTO-MATCH-INSTAGRAM] Message created successfully`, {
+        messageId: message.id,
+        conversationId: message.conversationId,
+        providerMessageId: input.providerMessageId,
+      })
+    }
   } catch (err: any) {
     const msg = String(err?.message ?? err)
     

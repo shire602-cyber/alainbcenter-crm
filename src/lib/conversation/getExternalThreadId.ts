@@ -79,14 +79,37 @@ export function getExternalThreadId(
   
   // For Instagram, use Instagram user ID from phone field (format: ig:123456789)
   if (channelLower === 'instagram') {
+    // Primary: Extract from contact phone field (most reliable)
     if (contact.phone && contact.phone.startsWith('ig:')) {
       const instagramUserId = contact.phone.replace('ig:', '')
-      return `instagram:${instagramUserId}`
+      const threadId = `instagram:${instagramUserId}`
+      console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from contact phone: ${threadId}`)
+      return threadId
     }
-    // Fallback: try to extract from webhook payload
+    // Fallback 1: Extract from metadata.senderId (from autoMatchPipeline)
     if (webhookPayload?.metadata?.senderId) {
-      return `instagram:${webhookPayload.metadata.senderId}`
+      const threadId = `instagram:${webhookPayload.metadata.senderId}`
+      console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from metadata.senderId: ${threadId}`)
+      return threadId
     }
+    // Fallback 2: Check directly in metadata object (not nested)
+    if (webhookPayload?.senderId) {
+      const threadId = `instagram:${webhookPayload.senderId}`
+      console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from webhookPayload.senderId: ${threadId}`)
+      return threadId
+    }
+    // Fallback 3: Check in top-level metadata object
+    if (typeof webhookPayload === 'object' && 'senderId' in webhookPayload) {
+      const threadId = `instagram:${(webhookPayload as any).senderId}`
+      console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from top-level senderId: ${threadId}`)
+      return threadId
+    }
+    // Log warning if no Instagram user ID found
+    console.warn(`⚠️ [EXTERNAL-THREAD-ID] Could not extract Instagram user ID`, {
+      contactPhone: contact.phone || 'N/A',
+      hasWebhookPayload: !!webhookPayload,
+      webhookPayloadKeys: webhookPayload ? Object.keys(webhookPayload) : [],
+    })
   }
   
   // For Facebook, use Facebook user ID from phone field (format: fb:123456789)

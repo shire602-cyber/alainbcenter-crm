@@ -33,14 +33,18 @@ export async function GET(req: NextRequest) {
   try {
     await requireAuthApi()
 
-    const channelParam = req.nextUrl.searchParams.get('channel') || 'whatsapp'
+    // Default to 'all' instead of 'whatsapp' to show all channels by default
+    // Frontend already passes 'channel=all' when activeChannel is 'all', but this ensures correct default
+    const channelParam = req.nextUrl.searchParams.get('channel') || 'all'
 
     // Build where clause - if channel is 'all', don't filter by channel
     // Try to use deletedAt if available, but fallback gracefully if column doesn't exist
     const whereClause: any = {}
     
     if (channelParam && channelParam !== 'all') {
-      whereClause.channel = channelParam
+      // Normalize channel to lowercase to match database storage
+      // All channels are stored as lowercase in the database
+      whereClause.channel = channelParam.toLowerCase()
     }
 
     // Query conversations - handle gracefully if deletedAt doesn't exist
@@ -266,6 +270,20 @@ export async function GET(req: NextRequest) {
     
           const instagramProfilePic = extractInstagramProfilePhoto(conv)
           
+          // Log Instagram conversations for debugging
+          if (conv.channel === 'instagram') {
+            console.log(`📸 [INBOX-API] Instagram conversation found`, {
+              conversationId: conv.id,
+              contactId: conv.contact.id,
+              contactName: conv.contact.fullName,
+              contactPhone: conv.contact.phone,
+              hasMessages: conv.messages.length > 0,
+              messageCount: conv.messages.length,
+              lastMessageAt: conv.lastMessageAt.toISOString(),
+              unreadCount: conv.unreadCount,
+            })
+          }
+          
           return {
             id: conv.id,
             contact: {
@@ -302,6 +320,20 @@ export async function GET(req: NextRequest) {
           }
         })
     
+        // Log summary for debugging
+        const instagramCount = formatted.filter((c: any) => c.channel === 'instagram').length
+        if (instagramCount > 0 || channelParam === 'instagram' || channelParam === 'all') {
+          console.log(`📊 [INBOX-API] Conversations query result`, {
+            totalCount: formatted.length,
+            instagramCount,
+            channelParam,
+            channels: formatted.reduce((acc: any, c: any) => {
+              acc[c.channel] = (acc[c.channel] || 0) + 1
+              return acc
+            }, {} as Record<string, number>),
+          })
+        }
+        
         // Sort by lastMessageAt descending (most recent messages on top)
         // Secondary sort by priorityScore for conversations with same timestamp
         formatted.sort((a: any, b: any) => {
