@@ -288,36 +288,36 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
       const messagingEvents = entry.messaging || []
 
       for (const event of messagingEvents) {
-      const normalizedEvent: NormalizedWebhookEvent = {
-        pageId,
-        eventType: 'unknown',
-        rawPayload: event,
-      }
+        const normalizedEvent: NormalizedWebhookEvent = {
+          pageId,
+          eventType: 'unknown',
+          rawPayload: event,
+        }
 
-      if (event.sender) {
-        normalizedEvent.senderId = event.sender.id
-      }
+        if (event.sender) {
+          normalizedEvent.senderId = event.sender.id
+        }
 
-      if (event.recipient) {
-        normalizedEvent.recipientId = event.recipient.id
-      }
+        if (event.recipient) {
+          normalizedEvent.recipientId = event.recipient.id
+        }
 
-      if (event.timestamp) {
-        normalizedEvent.timestamp = new Date(event.timestamp * 1000)
-      }
+        if (event.timestamp) {
+          normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+        }
 
-      // Determine event type
-      if (event.message) {
-        normalizedEvent.eventType = 'message'
-        normalizedEvent.messageId = event.message.mid
-        normalizedEvent.text = event.message.text
-      } else if (event.postback) {
-        normalizedEvent.eventType = 'postback'
-      } else if (event.delivery) {
-        normalizedEvent.eventType = 'delivery'
-      } else if (event.read) {
-        normalizedEvent.eventType = 'read'
-      }
+        // Determine event type
+        if (event.message) {
+          normalizedEvent.eventType = 'message'
+          normalizedEvent.messageId = event.message.mid
+          normalizedEvent.text = event.message.text
+        } else if (event.postback) {
+          normalizedEvent.eventType = 'postback'
+        } else if (event.delivery) {
+          normalizedEvent.eventType = 'delivery'
+        } else if (event.read) {
+          normalizedEvent.eventType = 'read'
+        }
 
         normalized.push(normalizedEvent)
       }
