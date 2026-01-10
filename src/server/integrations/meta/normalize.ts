@@ -117,7 +117,7 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
       } else {
         // Primary structure: entry.changes[].value.messages[] (if changes exist)
         for (const change of changes) {
-        console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing change', {
+          console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing change', {
           field: change.field,
           valueKeys: change.value ? Object.keys(change.value) : [],
           hasMessages: !!change.value?.messages,
@@ -285,9 +285,9 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
     } else {
       // FACEBOOK PAGE STRUCTURE: entry.messaging[]
       // This is the original structure - keep unchanged for backward compatibility
-    const messagingEvents = entry.messaging || []
+      const messagingEvents = entry.messaging || []
 
-    for (const event of messagingEvents) {
+      for (const event of messagingEvents) {
       const normalizedEvent: NormalizedWebhookEvent = {
         pageId,
         eventType: 'unknown',
@@ -319,18 +319,18 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
         normalizedEvent.eventType = 'read'
       }
 
-      normalized.push(normalizedEvent)
-    }
+        normalized.push(normalizedEvent)
+      }
 
       // Process leadgen events for Facebook Page webhooks
-    const changes = entry.changes || []
-    for (const change of changes) {
-      if (change.field === 'leadgen' && change.value) {
-        normalized.push({
-          pageId,
-          eventType: 'leadgen',
-          rawPayload: change.value,
-        })
+      const changes = entry.changes || []
+      for (const change of changes) {
+        if (change.field === 'leadgen' && change.value) {
+          normalized.push({
+            pageId,
+            eventType: 'leadgen',
+            rawPayload: change.value,
+          })
         }
       }
     }
