@@ -289,55 +289,54 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
   } else {
     // FACEBOOK PAGE STRUCTURE: entry.messaging[]
       // This is the original structure - keep unchanged for backward compatibility
-      const messagingEvents = entry.messaging || []
+    const messagingEvents = entry.messaging || []
 
-      for (const event of messagingEvents) {
-        const normalizedEvent: NormalizedWebhookEvent = {
-          pageId,
-          eventType: 'unknown',
-          rawPayload: event,
-        }
-
-        if (event.sender) {
-          normalizedEvent.senderId = event.sender.id
-        }
-
-        if (event.recipient) {
-          normalizedEvent.recipientId = event.recipient.id
-        }
-
-        if (event.timestamp) {
-          normalizedEvent.timestamp = new Date(event.timestamp * 1000)
-        }
-
-        // Determine event type
-        if (event.message) {
-          normalizedEvent.eventType = 'message'
-          normalizedEvent.messageId = event.message.mid
-          normalizedEvent.text = event.message.text
-        } else if (event.postback) {
-          normalizedEvent.eventType = 'postback'
-        } else if (event.delivery) {
-          normalizedEvent.eventType = 'delivery'
-        } else if (event.read) {
-          normalizedEvent.eventType = 'read'
-        }
-
-        normalized.push(normalizedEvent)
+    for (const event of messagingEvents) {
+      const normalizedEvent: NormalizedWebhookEvent = {
+        pageId,
+        eventType: 'unknown',
+        rawPayload: event,
       }
+
+      if (event.sender) {
+        normalizedEvent.senderId = event.sender.id
+      }
+
+      if (event.recipient) {
+        normalizedEvent.recipientId = event.recipient.id
+      }
+
+      if (event.timestamp) {
+        normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+      }
+
+      // Determine event type
+      if (event.message) {
+        normalizedEvent.eventType = 'message'
+        normalizedEvent.messageId = event.message.mid
+        normalizedEvent.text = event.message.text
+      } else if (event.postback) {
+        normalizedEvent.eventType = 'postback'
+      } else if (event.delivery) {
+        normalizedEvent.eventType = 'delivery'
+      } else if (event.read) {
+        normalizedEvent.eventType = 'read'
+      }
+
+      normalized.push(normalizedEvent)
+    }
 
       // Process leadgen events for Facebook Page webhooks
-      const changes = entry.changes || []
-      for (const change of changes) {
-        if (change.field === 'leadgen' && change.value) {
-          normalized.push({
-            pageId,
-            eventType: 'leadgen',
-            rawPayload: change.value,
-          })
+    const changes = entry.changes || []
+    for (const change of changes) {
+      if (change.field === 'leadgen' && change.value) {
+        normalized.push({
+          pageId,
+          eventType: 'leadgen',
+          rawPayload: change.value,
+        })
         }
       }
-    }
     }
   }
 
