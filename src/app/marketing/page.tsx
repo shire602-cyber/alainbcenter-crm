@@ -233,12 +233,12 @@ export default function MarketingPage() {
                   ))}
                 </ul>
               </div>
-              <div className="bg-white dark:bg-gray-800 rounded-xl p-6 shadow-xl">
+              <div className="bg-white rounded-xl p-6 shadow-xl">
                 <div className="space-y-4">
                   <div className="flex items-center justify-between p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
                     <div>
                       <p className="font-semibold">Ahmed Hassan</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Family Visa Inquiry</p>
+                      <p className="text-sm text-gray-600">Family Visa Inquiry</p>
                     </div>
                     <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
                       HOT 85
@@ -247,7 +247,7 @@ export default function MarketingPage() {
                   <div className="flex items-center justify-between p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
                     <div>
                       <p className="font-semibold">Sarah Ali</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">Business Setup</p>
+                      <p className="text-sm text-gray-600">Business Setup</p>
                     </div>
                     <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
                       WARM 62
@@ -256,9 +256,9 @@ export default function MarketingPage() {
                   <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
                     <div>
                       <p className="font-semibold">Mohammed Khan</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">General Inquiry</p>
+                      <p className="text-sm text-gray-600">General Inquiry</p>
                     </div>
-                    <Badge className="bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+                    <Badge className="bg-blue-100 text-blue-700">
                       COLD 35
                     </Badge>
                   </div>
@@ -270,7 +270,7 @@ export default function MarketingPage() {
       </section>
 
       {/* Benefits Section */}
-      <section className="py-24 border-b bg-gray-50 dark:bg-gray-900/50">
+      <section className="py-24 border-b bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Why Teams Choose Alain CRM</h2>
@@ -330,7 +330,7 @@ export default function MarketingPage() {
                     </div>
                     <div>
                       <p className="font-semibold">{testimonial.name}</p>
-                      <p className="text-sm text-gray-600 dark:text-gray-400">
+                      <p className="text-sm text-gray-600">
                         {testimonial.role}, {testimonial.company}
                       </p>
                     </div>
@@ -375,18 +375,18 @@ export default function MarketingPage() {
       </section>
 
       {/* Footer */}
-      <footer className="py-12 border-t bg-gray-50 dark:bg-gray-900/50">
+      <footer className="py-12 border-t bg-gray-50">
         <div className="container mx-auto px-4">
           <div className="grid md:grid-cols-4 gap-8">
             <div>
               <h3 className="font-bold text-lg mb-4">Alain CRM</h3>
-              <p className="text-gray-600 dark:text-gray-400 text-sm">
+              <p className="text-gray-600 text-sm">
                 The complete CRM solution for UAE business services companies.
               </p>
             </div>
             <div>
               <h4 className="font-semibold mb-4">Product</h4>
-              <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+              <ul className="space-y-2 text-sm text-gray-600">
                 <li><Link href="#features" className="hover:text-blue-600">Features</Link></li>
                 <li><Link href="/login" className="hover:text-blue-600">Pricing</Link></li>
                 <li><Link href="/login" className="hover:text-blue-600">Security</Link></li>
@@ -394,7 +394,7 @@ export default function MarketingPage() {
             </div>
             <div>
               <h4 className="font-semibold mb-4">Company</h4>
-              <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+              <ul className="space-y-2 text-sm text-gray-600">
                 <li><Link href="/login" className="hover:text-blue-600">About</Link></li>
                 <li><Link href="/login" className="hover:text-blue-600">Contact</Link></li>
                 <li><Link href="/login" className="hover:text-blue-600">Careers</Link></li>
@@ -402,14 +402,14 @@ export default function MarketingPage() {
             </div>
             <div>
               <h4 className="font-semibold mb-4">Support</h4>
-              <ul className="space-y-2 text-sm text-gray-600 dark:text-gray-400">
+              <ul className="space-y-2 text-sm text-gray-600">
                 <li><Link href="/login" className="hover:text-blue-600">Documentation</Link></li>
                 <li><Link href="/login" className="hover:text-blue-600">Help Center</Link></li>
                 <li><Link href="/login" className="hover:text-blue-600">API</Link></li>
               </ul>
             </div>
           </div>
-          <div className="mt-8 pt-8 border-t text-center text-sm text-gray-600 dark:text-gray-400">
+          <div className="mt-8 pt-8 border-t text-center text-sm text-gray-600">
             <p>© 2025 Alain Business Center. All rights reserved.</p>
           </div>
         </div>

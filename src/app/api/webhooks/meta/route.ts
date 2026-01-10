@@ -1279,13 +1279,14 @@ async function processInboundMessage(data: {
       // Re-throw to allow caller to handle
       throw autoMatchError
     }
+  
   } catch (error: any) {
     if (isInstagram) {
-      console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in handleInboundMessageAutoMatch', {
+      console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in processInboundMessage (outer catch)', {
         error: error.message,
         errorStack: error.stack?.substring(0, 500),
         senderId: senderId,
-        providerMessageId: message.mid || 'N/A',
+        providerMessageId: providerMessageId || message?.mid || 'N/A',
         channel: channel,
       })
     }
