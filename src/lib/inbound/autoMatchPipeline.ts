@@ -285,22 +285,57 @@ export async function handleInboundMessageAutoMatch(
         contactId: contactResult.id,
         channel: input.channel,
         providerMessageId: input.providerMessageId,
+        timestamp: input.timestamp?.toISOString() || 'N/A',
       })
     }
     
-    lead = await findOrCreateLead({
+    console.log(`🔍 [AUTO-MATCH] IMMEDIATELY BEFORE findOrCreateLead call`, {
       contactId: contactResult.id,
       channel: input.channel,
       providerMessageId: input.providerMessageId,
-      timestamp: input.timestamp, // Use actual message timestamp
+      timestamp: input.timestamp?.toISOString() || 'N/A',
+      isInstagram,
     })
     
-    if (isInstagram) {
-      console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: LEAD_CREATION - Success`, {
-        leadId: lead.id,
-        stage: lead.stage,
-        contactId: lead.contactId,
+    try {
+      lead = await findOrCreateLead({
+        contactId: contactResult.id,
+        channel: input.channel,
+        providerMessageId: input.providerMessageId,
+        timestamp: input.timestamp, // Use actual message timestamp
       })
+      
+      console.log(`✅ [AUTO-MATCH] IMMEDIATELY AFTER findOrCreateLead call - SUCCESS`, {
+        leadId: lead?.id || 'NULL',
+        leadStage: lead?.stage || 'NULL',
+        leadContactId: lead?.contactId || 'NULL',
+        hasLead: !!lead,
+        leadType: typeof lead,
+        isInstagram,
+      })
+      
+      if (isInstagram) {
+        console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: LEAD_CREATION - Success`, {
+          leadId: lead.id,
+          stage: lead.stage,
+          contactId: lead.contactId,
+        })
+      }
+    } catch (leadError: any) {
+      console.error(`❌ [AUTO-MATCH] IMMEDIATELY AFTER findOrCreateLead call - ERROR CAUGHT`, {
+        error: leadError.message || 'Unknown error',
+        errorName: leadError.name || 'UnknownError',
+        errorCode: leadError.code || 'NO_CODE',
+        errorStack: leadError.stack?.substring(0, 1000) || 'No stack trace',
+        fullError: JSON.stringify(leadError, Object.getOwnPropertyNames(leadError)).substring(0, 1000),
+        contactId: contactResult.id,
+        channel: input.channel,
+        providerMessageId: input.providerMessageId,
+        isInstagram,
+      })
+      
+      // Re-throw to trigger outer catch block
+      throw leadError
     }
   } catch (leadError: any) {
     // Capture full error object for debugging

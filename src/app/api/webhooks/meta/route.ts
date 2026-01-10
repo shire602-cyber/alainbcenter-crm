@@ -724,30 +724,66 @@ async function processWebhookPayload(payload: any) {
             })
           }
 
-          await processInboundMessage({
-            pageId,
+          console.log(`🔍 [META-WEBHOOK] IMMEDIATELY BEFORE await processInboundMessage`, {
+            pageId: pageId || 'N/A',
             workspaceId: workspaceId ?? 1,
-            senderId: event.senderId,
-            message: { 
-              text: event.text, 
-              mid: event.messageId,
-              attachments: attachments,
-            },
-            timestamp: event.timestamp || new Date(),
+            senderId: event.senderId || 'N/A',
+            messageId: event.messageId || 'N/A',
             channel,
-            instagramProfile: instagramProfile || undefined, // Pass Instagram profile if fetched
+            channelLower,
+            isInstagram: channelLower === 'instagram',
           })
-
-          // Defensive logging: Log successful Instagram message storage
-          if (channelLower === 'instagram') {
-            console.log('✅ [META-WEBHOOK-INSTAGRAM] processInboundMessage call completed (check logs above for actual storage)', {
-              senderId: event.senderId || 'N/A',
-              recipientId: event.recipientId || 'N/A',
-              channel: 'instagram',
-              igBusinessId: entry.id,
-              pageId: pageId,
-              messageId: event.messageId || 'N/A',
+          
+          try {
+            await processInboundMessage({
+              pageId,
+              workspaceId: workspaceId ?? 1,
+              senderId: event.senderId,
+              message: { 
+                text: event.text, 
+                mid: event.messageId,
+                attachments: attachments,
+              },
+              timestamp: event.timestamp || new Date(),
+              channel,
+              instagramProfile: instagramProfile || undefined, // Pass Instagram profile if fetched
             })
+
+            console.log(`✅ [META-WEBHOOK] IMMEDIATELY AFTER await processInboundMessage - SUCCESS`, {
+              senderId: event.senderId || 'N/A',
+              messageId: event.messageId || 'N/A',
+              channel,
+              channelLower,
+              isInstagram: channelLower === 'instagram',
+            })
+
+            // Defensive logging: Log successful Instagram message storage
+            if (channelLower === 'instagram') {
+              console.log('✅ [META-WEBHOOK-INSTAGRAM] processInboundMessage call completed (check logs above for actual storage)', {
+                senderId: event.senderId || 'N/A',
+                recipientId: event.recipientId || 'N/A',
+                channel: 'instagram',
+                igBusinessId: entry.id,
+                pageId: pageId,
+                messageId: event.messageId || 'N/A',
+              })
+            }
+          } catch (processError: any) {
+            console.error(`❌ [META-WEBHOOK] IMMEDIATELY AFTER await processInboundMessage - ERROR CAUGHT`, {
+              error: processError.message || 'Unknown error',
+              errorName: processError.name || 'UnknownError',
+              errorCode: processError.code || 'NO_CODE',
+              errorStack: processError.stack?.substring(0, 1000) || 'No stack trace',
+              fullError: JSON.stringify(processError, Object.getOwnPropertyNames(processError)).substring(0, 1000),
+              senderId: event.senderId || 'N/A',
+              messageId: event.messageId || 'N/A',
+              channel,
+              channelLower,
+              isInstagram: channelLower === 'instagram',
+            })
+            
+            // Re-throw to trigger outer catch block
+            throw processError
           }
         } catch (error: any) {
           // Capture full error object with all properties for debugging
