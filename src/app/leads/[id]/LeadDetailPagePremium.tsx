@@ -138,6 +138,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const [messages, setMessages] = useState<any[]>([])
   const [loadingMessages, setLoadingMessages] = useState(false)
   const [conversationId, setConversationId] = useState<number | null>(null)
+  const [conversationsByChannel, setConversationsByChannel] = useState<Record<string, number | null>>({})
   const [currentUser, setCurrentUser] = useState<any>(null)
   const [deletingChat, setDeletingChat] = useState(false)
   
@@ -191,28 +192,66 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     }
   }, [lead, activeChannel])
 
-  async function loadConversationId() {
-    if (!lead?.contactId) return
-    try {
-      const channelMap: Record<string, string> = {
+  // Update conversationId when activeChannel changes (if we already have conversationsByChannel)
+  useEffect(() => {
+    if (Object.keys(conversationsByChannel).length > 0) {
+      const activeChannelMap: Record<string, string> = {
         whatsapp: 'whatsapp',
         email: 'email',
         instagram: 'instagram',
         facebook: 'facebook',
       }
-      const dbChannel = channelMap[activeChannel] || 'whatsapp'
-      const convRes = await fetch(`/api/inbox/conversations?channel=${dbChannel}`)
+      const dbChannel = activeChannelMap[activeChannel] || 'whatsapp'
+      setConversationId(conversationsByChannel[dbChannel] || null)
+    }
+  }, [activeChannel, conversationsByChannel])
+
+  async function loadConversationId() {
+    if (!lead?.contactId) return
+    try {
+      // Fetch ALL conversations for this contact across all channels
+      // This ensures Instagram conversations are found even if they don't have a leadId yet
+      const convRes = await fetch(`/api/inbox/conversations?channel=all`)
       if (convRes.ok) {
         const convData = await convRes.json()
-        const conversation = convData.conversations?.find((c: any) => c.contact.id === lead.contactId)
-        if (conversation) {
-          setConversationId(conversation.id)
-        } else {
-          setConversationId(null)
+        // Filter conversations by contactId
+        const contactConversations = convData.conversations?.filter((c: any) => c.contact?.id === lead.contactId) || []
+        
+        // Build a map of channel -> conversationId
+        const channelMap: Record<string, number | null> = {
+          whatsapp: null,
+          email: null,
+          instagram: null,
+          facebook: null,
         }
+        
+        // Map each conversation to its channel
+        contactConversations.forEach((conv: any) => {
+          const channel = conv.channel?.toLowerCase() || 'whatsapp'
+          if (channel in channelMap) {
+            channelMap[channel] = conv.id
+          }
+        })
+        
+        // Store all conversations by channel
+        setConversationsByChannel(channelMap)
+        
+        // Set the conversationId for the currently active channel
+        const activeChannelMap: Record<string, string> = {
+          whatsapp: 'whatsapp',
+          email: 'email',
+          instagram: 'instagram',
+          facebook: 'facebook',
+        }
+        const dbChannel = activeChannelMap[activeChannel] || 'whatsapp'
+        setConversationId(channelMap[dbChannel] || null)
+      } else {
+        setConversationsByChannel({})
+        setConversationId(null)
       }
     } catch (err) {
       console.error('Failed to load conversation ID:', err)
+      setConversationsByChannel({})
       setConversationId(null)
     }
   }
@@ -330,6 +369,33 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     
     try {
       setLoadingMessages(true)
+      
+      // If we have a conversationId for the active channel, use the conversation API
+      // This works even if the conversation doesn't have a leadId yet (e.g., Instagram)
+      const activeChannelMap: Record<string, string> = {
+        whatsapp: 'whatsapp',
+        email: 'email',
+        instagram: 'instagram',
+        facebook: 'facebook',
+      }
+      const dbChannel = activeChannelMap[activeChannel] || 'whatsapp'
+      const convId = conversationsByChannel[dbChannel] || conversationId
+      
+      if (convId) {
+        // Use conversation API - works for all channels including Instagram without leadId
+        const res = await fetch(`/api/inbox/conversations/${convId}`)
+        if (res.ok) {
+          const data = await res.json()
+          // Extract messages from conversation response (response structure: { ok: true, conversation: { messages: [...] } })
+          if (data.ok && data.conversation?.messages) {
+            setMessages(data.conversation.messages || [])
+            return
+          }
+        }
+      }
+      
+      // Fallback: Use lead messages API (requires leadId)
+      // This is the old behavior for backward compatibility
       const channelMap: Record<string, string> = {
         whatsapp: 'WHATSAPP',
         email: 'EMAIL',
@@ -342,9 +408,13 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       if (res.ok) {
         const data = await res.json()
         setMessages(data.messages || [])
+      } else {
+        // If no conversation found, set empty messages
+        setMessages([])
       }
     } catch (err) {
       console.error('Failed to load messages:', err)
+      setMessages([])
     } finally {
       setLoadingMessages(false)
     }
@@ -685,7 +755,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     <MainLayout>
       <div className="flex flex-col h-[calc(100vh-4rem)]">
         {/* Sticky Header Bar */}
-        <div className="sticky top-0 z-30 glass-medium border-b shadow-conversation">
+        <div className="sticky top-0 z-30 glass-premium border-b shadow-conversation">
           <div className="px-6 py-4">
             <div className="flex items-center justify-between gap-6">
               {/* Left: Breadcrumb + Lead Info */}
@@ -778,7 +848,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           {/* LEFT COLUMN: Lead Snapshot */}
           <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
             {/* Contact Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-colors">
+            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover-lift card-ultra-premium">
               <CardHeader className="pb-3 pt-4 px-5 border-b border-border/50">
                 <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
                   <User className="h-4 w-4" />
@@ -891,7 +961,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             </Card>
 
             {/* Pipeline Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-colors">
+            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover-lift card-ultra-premium">
               <CardHeader className="pb-4 pt-4 px-5 border-b border-border/50">
                 <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
                   <Target className="h-4 w-4" />
@@ -909,7 +979,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             </Card>
 
             {/* AI Insight Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-colors">
+            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover-lift card-ultra-premium">
               <CardHeader className="pb-3 border-b border-border/50">
                 <div className="flex items-center justify-between">
                   <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
@@ -993,7 +1063,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             {/* Conversation Tabs */}
             <Card className="rounded-2xl glass-medium shadow-conversation flex-[2] flex flex-col overflow-hidden min-h-0">
               <CardHeader className="pb-3 flex-shrink-0 p-0">
-                <div className="sticky top-16 z-20 glass-medium border-b px-4 py-2">
+                <div className="sticky top-16 z-20 glass-premium border-b px-4 py-2">
                   <div className="flex items-center justify-between mb-2">
                   <Tabs value={activeChannel} onValueChange={setActiveChannel}>
                     <TabsList>
@@ -1152,11 +1222,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                                 )}
                                                                 <div
                                   className={cn(
-                                    'rounded-xl px-5 py-3 max-w-[75%] shadow-sm transition-all',
+                                    'max-w-[75%] animate-fade-in-up',
                                     isInbound
-                                      ? 'bg-slate-100 rounded-tl-none hover:shadow-md'
-                                      : 'bg-primary text-primary-foreground rounded-tr-none hover:shadow-md'
+                                      ? 'message-bubble-inbound rounded-tl-none'
+                                      : 'message-bubble-outbound rounded-tr-none'
                                   )}
+                                  style={{ animationDelay: `${idx * 30}ms` }}
                                 >
                                   <p className="text-base whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet}</p>
                                   <div className="flex items-center justify-between mt-3">
@@ -1242,11 +1313,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                                 )}
                                 <div
                                   className={cn(
-                                    'rounded-xl px-4 py-2.5 max-w-[70%] shadow-sm transition-all',
+                                    'max-w-[70%] animate-fade-in-up',
                                     isInbound
-                                      ? 'bg-slate-100 rounded-tl-none hover:shadow-md'
-                                      : 'bg-primary text-primary-foreground rounded-tr-none hover:shadow-md'
+                                      ? 'message-bubble-inbound rounded-tl-none'
+                                      : 'message-bubble-outbound rounded-tr-none'
                                   )}
+                                  style={{ animationDelay: `${idx * 30}ms` }}
                                 >
                                   <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
                                   <div className="flex items-center justify-between mt-2">
@@ -1296,10 +1368,102 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
                   </TabsContent>
 
-                  <TabsContent value="instagram" className="flex-1 flex items-center justify-center p-4">
-                    <div className="text-center text-muted-foreground">
-                      <Instagram className="h-8 w-8 mx-auto mb-1 opacity-50" />
-                      <p className="text-xs">Instagram integration coming soon</p>
+                  <TabsContent value="instagram" className="flex-1 flex flex-col overflow-hidden m-0 min-h-0">
+                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 min-h-0" style={{ maxHeight: 'calc(100vh - 400px)' }} ref={(el) => {
+                      // Auto-scroll to bottom
+                      if (el && messages.length > 0) {
+                        setTimeout(() => {
+                          el.scrollTop = el.scrollHeight
+                        }, 100)
+                      }
+                    }}>
+                      {loadingMessages ? (
+                        <div className="text-center py-4 text-muted-foreground">
+                          <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                          <p className="text-xs">Loading messages...</p>
+                        </div>
+                      ) : messages.length === 0 ? (
+                        <div className="text-center py-4 text-muted-foreground">
+                          <Instagram className="h-8 w-8 mx-auto mb-1 opacity-50" />
+                          <p className="text-xs">No Instagram messages yet. Start a conversation below.</p>
+                        </div>
+                      ) : (
+                        messages
+                          .slice()
+                          .reverse()
+                          .map((msg: any, idx: number) => {
+                            const isInbound = msg.direction === 'INBOUND' || msg.direction === 'IN' || msg.direction === 'inbound'
+                            const isNewMessage = idx === messages.length - 1 && !isInbound && sending
+                            return (
+                              <div
+                                key={msg.id}
+                                className={cn(
+                                  'flex gap-3 animate-slide-in',
+                                  isInbound ? 'justify-start' : 'justify-end',
+                                  isNewMessage && 'animate-message-send'
+                                )}
+                                style={{ animationDelay: `${idx * 0.05}s` }}
+                              >
+                                {isInbound && (
+                                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
+                                    <User className="h-3 w-3" />
+                                  </div>
+                                )}
+                                <div
+                                  className={cn(
+                                    'max-w-[75%] animate-fade-in-up',
+                                    isInbound
+                                      ? 'message-bubble-inbound rounded-tl-none'
+                                      : 'message-bubble-outbound rounded-tr-none'
+                                  )}
+                                  style={{ animationDelay: `${idx * 30}ms` }}
+                                >
+                                  <p className="text-base whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet || '[Media message]'}</p>
+                                  <div className="flex items-center justify-between mt-3">
+                                    <p className={cn('text-xs', isInbound ? 'text-muted-foreground' : 'text-primary-foreground/70')}>
+                                      {formatMessageTime(msg.createdAt)}
+                                    </p>
+                                    {!isInbound && msg.status && (
+                                      <div className="flex items-center gap-1 ml-2">
+                                        {msg.status === 'READ' ? (
+                                          <span title="Read"><CheckCheck className="h-3 w-3 text-blue-500" /></span>
+                                        ) : msg.status === 'DELIVERED' ? (
+                                          <span title="Delivered"><CheckCheck className="h-3 w-3 text-gray-400" /></span>
+                                        ) : msg.status === 'SENT' ? (
+                                          <span title="Sent"><CheckCircle2 className="h-3 w-3 text-gray-400" /></span>
+                                        ) : msg.status === 'FAILED' ? (
+                                          <span title="Failed"><XCircle className="h-3 w-3 text-red-500" /></span>
+                                        ) : (
+                                          <span title="Pending"><Clock className="h-3 w-3 text-gray-400" /></span>
+                                        )}
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                                {!isInbound && (
+                                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
+                                    <User className="h-3 w-3 text-primary-foreground" />
+                                  </div>
+                                )}
+                              </div>
+                            )
+                          })
+                      )}
+                    </div>
+
+                    {/* Message Composer */}
+                    <div className="border-t p-4 bg-card/50 flex-shrink-0">
+                      <MessageComposerEnhanced
+                        value={messageText}
+                        onChange={setMessageText}
+                        onSend={handleSendMessage}
+                        sending={sending}
+                        onAIDraft={handleGenerateAIDraft}
+                        generatingAI={generatingAI}
+                        leadName={lead.contact?.fullName}
+                        expiryDate={lead.expiryItems?.[0]?.expiryDate}
+                        serviceType={lead.serviceType?.name}
+                      />
                     </div>
                   </TabsContent>
 

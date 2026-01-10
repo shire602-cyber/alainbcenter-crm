@@ -273,16 +273,27 @@ export async function POST(req: NextRequest) {
             text: messageText,
             timestamp: timestamp,
             metadata: {
-              externalId: from, // Instagram user ID
+              senderId: from, // Instagram user ID - CRITICAL: Use senderId (not externalId) for autoMatchPipeline
+              externalId: from, // Keep for backward compatibility
               rawPayload: message,
               mediaUrl: mediaUrl,
               mediaMimeType: mediaMimeType,
             },
           })
 
-          console.log(`✅ Processed Instagram message ${messageId} from ${from}`)
+          console.log(`✅ [INSTAGRAM-WEBHOOK] Processed Instagram message ${messageId} from ${from}`, {
+            messageId,
+            senderId: from,
+            conversationId: result?.conversation?.id || 'N/A',
+            leadId: result?.lead?.id || 'N/A',
+          })
         } catch (error: any) {
-          console.error(`❌ Failed to process Instagram message from ${from}:`, error.message)
+          console.error(`❌ [INSTAGRAM-WEBHOOK] Failed to process Instagram message from ${from}:`, {
+            error: error.message,
+            stack: error.stack?.substring(0, 500),
+            messageId,
+            senderId: from,
+          })
           // Continue processing other messages
         }
       }

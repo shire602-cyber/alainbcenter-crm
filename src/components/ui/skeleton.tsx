@@ -17,7 +17,7 @@ function Skeleton({
       className={cn(
         "rounded-lg bg-slate-100",
         variant === 'pulse' && "animate-pulse",
-        variant === 'shimmer' && "skeleton-shimmer",
+        variant === 'shimmer' && "skeleton-shimmer-premium",
         variant === 'default' && "bg-slate-100/50",
         className
       )}

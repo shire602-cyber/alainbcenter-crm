@@ -800,9 +800,9 @@ function InboxPageContent() {
     <MainLayout>
       <div className="flex h-[calc(100vh-4rem)] gap-2">
         {/* Left Panel: Conversation List - Compact */}
-        <BentoCard className="w-80 flex-shrink-0 rounded-none border-r flex flex-col p-0 overflow-hidden">
+        <BentoCard className="w-80 flex-shrink-0 rounded-none border-r flex flex-col p-0 overflow-hidden glass-soft">
           {/* Header */}
-          <div className="p-3 border-b border-slate-200/60">
+          <div className="p-3 border-b border-slate-200/60 glass-medium">
             <div className="flex items-center gap-2 mb-3">
               <div className="flex h-8 w-8 items-center justify-center rounded-xl bg-slate-100">
                 <InboxIcon className="h-4 w-4 text-slate-700" />
@@ -865,8 +865,10 @@ function InboxPageContent() {
                     <div
                       key={conv.id}
                       className={cn(
-                        'flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-colors duration-150 hover:bg-slate-50',
-                        selectedConversation?.id === conv.id && 'bg-slate-100 border border-slate-300'
+                        'flex items-center gap-2 p-2 rounded-xl cursor-pointer transition-all duration-300 hover-lift',
+                        selectedConversation?.id === conv.id 
+                          ? 'bg-slate-100 border border-slate-300 shadow-sm' 
+                          : 'hover:bg-slate-50/80'
                       )}
                       onClick={() => handleSelectConversation(conv)}
                     >
@@ -917,10 +919,10 @@ function InboxPageContent() {
         </BentoCard>
 
         {/* Right Panel: Messages - Compact */}
-        <BentoCard className="flex-1 flex flex-col rounded-none p-0 overflow-hidden">
+        <BentoCard className="flex-1 flex flex-col rounded-none p-0 overflow-hidden glass-soft">
           {selectedConversation ? (
             <>
-              <div className="p-3 border-b border-slate-200/60 flex items-center justify-between gap-2">
+              <div className="p-3 border-b border-slate-200/60 flex items-center justify-between gap-2 glass-medium">
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Avatar 
                     src={selectedConversation.contact.profilePhoto || undefined}
@@ -1135,14 +1137,13 @@ function InboxPageContent() {
                       >
                         <div
                           className={cn(
-                            'max-w-[75%] p-4 rounded-xl text-body transition-all',
+                            'max-w-[75%] text-body',
                             isInbound
-                              ? 'bg-slate-100 text-slate-900 border-2 border-slate-300 rounded-tl-none font-semibold'
-                              : 'bg-green-600 text-white rounded-tr-none shadow-lg font-semibold',
-                            msg.hasMedia || !!msg.mediaProxyUrl || !!msg.providerMediaId
-                              ? 'shadow-md hover:shadow-lg'
-                              : ''
+                              ? 'message-bubble-inbound rounded-tl-none'
+                              : 'message-bubble-outbound rounded-tr-none',
+                            'animate-fade-in-up'
                           )}
+                          style={{ animationDelay: `${index * 30}ms` }}
                         >
                           {/* CANONICAL: Use hasMedia flag or mediaProxyUrl/providerMediaId from API */}
                           {(() => {

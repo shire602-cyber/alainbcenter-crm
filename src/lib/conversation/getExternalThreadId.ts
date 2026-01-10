@@ -92,13 +92,25 @@ export function getExternalThreadId(
       console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from metadata.senderId: ${threadId}`)
       return threadId
     }
-    // Fallback 2: Check directly in metadata object (not nested)
+    // Fallback 2: Extract from metadata.externalId (backward compatibility - old webhook format)
+    if (webhookPayload?.metadata?.externalId) {
+      const threadId = `instagram:${webhookPayload.metadata.externalId}`
+      console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from metadata.externalId (fallback): ${threadId}`)
+      return threadId
+    }
+    // Fallback 3: Check directly in metadata object (not nested)
     if (webhookPayload?.senderId) {
       const threadId = `instagram:${webhookPayload.senderId}`
       console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from webhookPayload.senderId: ${threadId}`)
       return threadId
     }
-    // Fallback 3: Check in top-level metadata object
+    // Fallback 4: Check externalId at top level (backward compatibility)
+    if (webhookPayload?.externalId) {
+      const threadId = `instagram:${webhookPayload.externalId}`
+      console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from webhookPayload.externalId (fallback): ${threadId}`)
+      return threadId
+    }
+    // Fallback 5: Check in top-level metadata object
     if (typeof webhookPayload === 'object' && 'senderId' in webhookPayload) {
       const threadId = `instagram:${(webhookPayload as any).senderId}`
       console.log(`✅ [EXTERNAL-THREAD-ID] Instagram thread ID from top-level senderId: ${threadId}`)
@@ -109,6 +121,8 @@ export function getExternalThreadId(
       contactPhone: contact.phone || 'N/A',
       hasWebhookPayload: !!webhookPayload,
       webhookPayloadKeys: webhookPayload ? Object.keys(webhookPayload) : [],
+      hasMetadata: !!webhookPayload?.metadata,
+      metadataKeys: webhookPayload?.metadata ? Object.keys(webhookPayload.metadata) : [],
     })
   }
   
