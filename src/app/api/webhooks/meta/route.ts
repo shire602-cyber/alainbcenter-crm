@@ -686,7 +686,35 @@ async function processWebhookPayload(payload: any) {
       // Continue - still store webhook event for debugging
     }
 
+    // Log entry into processing loop
+    if (payload.object === 'instagram') {
+      console.log('🔄 [META-WEBHOOK-INSTAGRAM] Entering event processing loop', {
+        entryId: entry.id,
+        normalizedEventCount: normalizedEvents.length,
+        hasConnection: !!connection,
+        connectionId: connection?.id || 'NONE',
+        events: normalizedEvents.map((e, idx) => ({
+          index: idx + 1,
+          eventType: e.eventType,
+          senderId: e.senderId || 'MISSING',
+          messageId: e.messageId || 'MISSING',
+          hasText: !!e.text,
+          textLength: e.text?.length || 0,
+        })),
+      })
+    }
+
     for (const event of normalizedEvents) {
+      // Log each event being processed
+      if (payload.object === 'instagram') {
+        console.log('🔄 [META-WEBHOOK-INSTAGRAM] Processing event in loop', {
+          eventIndex: normalizedEvents.indexOf(event) + 1,
+          totalEvents: normalizedEvents.length,
+          eventType: event.eventType,
+          senderId: event.senderId || 'MISSING',
+          messageId: event.messageId || 'MISSING',
+        })
+      }
       // Determine channel based on payload object
       // Pass uppercase to match AutoMatchInput interface - normalizeChannel will convert to lowercase
       const channel = payload.object === 'instagram' ? 'INSTAGRAM' : 'FACEBOOK'
