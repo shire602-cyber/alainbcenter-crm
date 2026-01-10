@@ -275,7 +275,10 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
 
           normalized.push(normalizedEvent)
         }
-      } else if (normalized.length === 0) {
+      }
+      
+      // Check if we still have no normalized events
+      if (normalized.length === 0) {
         console.warn('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: No events normalized and no messaging array available', {
           changesCount: changes.length,
           messagingCount: messaging.length,
