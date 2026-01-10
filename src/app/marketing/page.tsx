@@ -249,11 +249,11 @@ export default function MarketingPage() {
                       <p className="font-semibold">Sarah Ali</p>
                       <p className="text-sm text-gray-600">Business Setup</p>
                     </div>
-                    <Badge className="bg-orange-100 text-orange-700 dark:bg-orange-900/30 dark:text-orange-300">
+                    <Badge className="bg-orange-100 text-orange-700">
                       WARM 62
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-gray-50 dark:bg-gray-700 rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-gray-50 rounded-lg">
                     <div>
                       <p className="font-semibold">Mohammed Khan</p>
                       <p className="text-sm text-gray-600">General Inquiry</p>
@@ -285,7 +285,7 @@ export default function MarketingPage() {
               return (
                 <Card key={idx} className="text-center">
                   <CardHeader>
-                    <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4">
+                    <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
                       <Icon className="h-8 w-8 text-blue-600" />
                     </div>
                     <CardTitle className="text-xl">{benefit.title}</CardTitle>
@@ -325,7 +325,7 @@ export default function MarketingPage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex items-center gap-3">
-                    <div className="w-10 h-10 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center">
+                    <div className="w-10 h-10 rounded-full bg-blue-100 flex items-center justify-center">
                       <Users className="h-5 w-5 text-blue-600" />
                     </div>
                     <div>
@@ -343,7 +343,7 @@ export default function MarketingPage() {
       </section>
 
       {/* CTA Section */}
-      <section className="py-24 bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700">
+      <section className="py-24 bg-gradient-to-r from-blue-600 to-indigo-600">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center text-white">
             <Building2 className="h-16 w-16 mx-auto mb-6 opacity-90" />
