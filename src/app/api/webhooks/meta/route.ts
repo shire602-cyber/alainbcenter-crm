@@ -1123,8 +1123,10 @@ async function processInboundMessage(data: {
 
   // Check if we have a safe function to insert messages
   // Use the autoMatchPipeline which is the safe, isolated function
+  // Declare providerMessageId outside try block so it's accessible in catch
+  const providerMessageId = message?.mid || `meta_${channel.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+  
   try {
-    const providerMessageId = message.mid || `meta_${channel.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
 
     // Extract attachment metadata - handle both Instagram and Facebook structures
     // Instagram: attachment.url or attachment.payload.url

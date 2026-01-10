@@ -240,11 +240,11 @@ export default function MarketingPage() {
                       <p className="font-semibold">Ahmed Hassan</p>
                       <p className="text-sm text-gray-600">Family Visa Inquiry</p>
                     </div>
-                    <Badge className="bg-red-100 text-red-700 dark:bg-red-900/30 dark:text-red-300">
+                    <Badge className="bg-red-100 text-red-700">
                       HOT 85
                     </Badge>
                   </div>
-                  <div className="flex items-center justify-between p-4 bg-yellow-50 dark:bg-yellow-900/20 rounded-lg">
+                  <div className="flex items-center justify-between p-4 bg-yellow-50 rounded-lg">
                     <div>
                       <p className="font-semibold">Sarah Ali</p>
                       <p className="text-sm text-gray-600">Business Setup</p>
