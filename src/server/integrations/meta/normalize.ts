@@ -36,9 +36,8 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
     const pageId = entry.id
 
     if (payload.object === 'instagram') {
-      // INSTAGRAM STRUCTURE: entry.changes[].value.messages[]
-      // Instagram webhooks use changes structure (similar to WhatsApp)
-      // Also check for entry.messaging[] as fallback (some Instagram webhook formats may use this)
+      // INSTAGRAM STRUCTURE: entry.changes[].value.messages[] OR entry.messaging[]
+      // Instagram webhooks can use either structure - prioritize based on what's present
       const changes = entry.changes || []
       const messaging = entry.messaging || []
       
@@ -47,10 +46,77 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
         changesCount: changes.length,
         changesFields: changes.map((c: any) => c.field),
         messagingCount: messaging.length,
+        hasChanges: changes.length > 0,
+        hasMessaging: messaging.length > 0,
+        normalizationPath: changes.length > 0 ? 'changes[] first' : messaging.length > 0 ? 'messaging[] only' : 'none',
       })
       
-      // Primary structure: entry.changes[].value.messages[]
-      for (const change of changes) {
+      // If entry.changes is empty but entry.messaging exists, process messaging[] immediately
+      // This handles the case where Instagram sends entry.messaging[] structure
+      if (changes.length === 0 && messaging.length > 0) {
+        console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: entry.changes is empty, processing messaging[] structure immediately', {
+          messagingCount: messaging.length,
+        })
+        
+        for (const event of messaging) {
+          console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing messaging event (primary path)', {
+            eventKeys: Object.keys(event),
+            hasSender: !!event.sender,
+            hasRecipient: !!event.recipient,
+            hasMessage: !!event.message,
+            hasTimestamp: !!event.timestamp,
+          })
+          
+          const normalizedEvent: NormalizedWebhookEvent = {
+            pageId,
+            eventType: 'message',
+            rawPayload: event,
+          }
+
+          // Extract sender ID: event.sender.id
+          if (event.sender) {
+            normalizedEvent.senderId = event.sender.id || event.sender
+            console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Extracted senderId from messaging (primary)', {
+              sender: event.sender,
+              extracted: normalizedEvent.senderId,
+            })
+          }
+
+          // Extract recipient ID: event.recipient.id
+          if (event.recipient) {
+            normalizedEvent.recipientId = event.recipient.id || event.recipient
+          }
+
+          // Extract timestamp
+          if (event.timestamp) {
+            normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+          }
+
+          // Extract message ID and text from event.message
+          if (event.message) {
+            normalizedEvent.messageId = event.message.mid || event.message.id
+            normalizedEvent.text = event.message.text || ''
+            console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Extracted message from messaging (primary)', {
+              messageId: normalizedEvent.messageId,
+              hasText: !!normalizedEvent.text,
+              textPreview: normalizedEvent.text ? `${normalizedEvent.text.substring(0, 30)}...` : '[no text]',
+            })
+          } else {
+            console.warn('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Messaging event missing "message" field (primary)', {
+              eventKeys: Object.keys(event),
+            })
+          }
+
+          normalized.push(normalizedEvent)
+        }
+        
+        // Skip changes processing since we've already handled messaging[]
+        console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Completed messaging[] processing (primary path)', {
+          normalizedCount: normalized.length,
+        })
+      } else {
+        // Primary structure: entry.changes[].value.messages[] (if changes exist)
+        for (const change of changes) {
         console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing change', {
           field: change.field,
           valueKeys: change.value ? Object.keys(change.value) : [],

@@ -529,7 +529,25 @@ async function processWebhookPayload(payload: any) {
     }
 
     // Normalize and process events (optional - only if safe inbox function exists)
+    // Log immediately before normalization to confirm it's being called
+    if (payload.object === 'instagram') {
+      console.log('🔄 [META-WEBHOOK-INSTAGRAM] About to call normalizeWebhookEvent', {
+        entryId: entry.id,
+        hasConnection: !!connection,
+        connectionId: connection?.id || 'NONE',
+      })
+    }
+    
     const normalizedEvents = normalizeWebhookEvent(payload)
+    
+    // Log immediately after normalization to confirm it completed
+    if (payload.object === 'instagram') {
+      console.log('🔄 [META-WEBHOOK-INSTAGRAM] normalizeWebhookEvent completed', {
+        entryId: entry.id,
+        normalizedEventCount: normalizedEvents.length,
+        hasEvents: normalizedEvents.length > 0,
+      })
+    }
 
     // Post-normalization validation logging
     if (payload.object === 'instagram') {
