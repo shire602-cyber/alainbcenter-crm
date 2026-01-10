@@ -63,7 +63,13 @@ export async function GET(req: NextRequest) {
       }
       
       conversations = await prisma.conversation.findMany({
-        where: whereWithDeletedAt,
+        where: {
+          ...whereWithDeletedAt,
+          // Only include conversations that have at least one message
+          messages: {
+            some: {},
+          },
+        },
         select: {
           id: true,
           channel: true,
