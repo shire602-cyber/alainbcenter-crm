@@ -334,6 +334,7 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
         }
       }
     }
+    }
   }
 
   return normalized
