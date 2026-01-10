@@ -129,37 +129,37 @@ export default function MarketingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
       {/* Hero Section */}
       <section className="relative overflow-hidden border-b">
         <div className="container mx-auto px-4 py-24 md:py-32">
           <div className="max-w-4xl mx-auto text-center">
-            <Badge className="mb-6 text-sm px-4 py-1.5 bg-blue-100 text-blue-700 dark:bg-blue-900/30 dark:text-blue-300">
+            <Badge className="mb-6 text-sm px-4 py-1.5 bg-blue-100 text-blue-700 font-semibold">
               Built for UAE Business Services
             </Badge>
-            <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 to-gray-700 dark:from-white dark:to-gray-300 bg-clip-text text-transparent">
+            <h1 className="text-5xl md:text-6xl font-bold mb-6 bg-gradient-to-r from-gray-900 to-gray-700 bg-clip-text text-transparent tracking-tight">
               The CRM That Grows
               <br />
-              <span className="text-blue-600 dark:text-blue-400">Your Business</span>
+              <span className="text-blue-700">Your Business</span>
             </h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-600 mb-8 max-w-2xl mx-auto font-medium">
               All-in-one CRM for visa services, business setup, and renewals. 
               AI-powered automation, multi-channel messaging, and compliance intelligence.
             </p>
             <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
               <Link href="/login">
-                <Button size="lg" className="text-lg px-8 py-6">
+                <Button size="lg" className="text-lg px-8 py-6 font-semibold">
                   Get Started Free
                   <ArrowRight className="ml-2 h-5 w-5" />
                 </Button>
               </Link>
               <Link href="#features">
-                <Button size="lg" variant="outline" className="text-lg px-8 py-6">
+                <Button size="lg" variant="outline" className="text-lg px-8 py-6 font-semibold">
                   See Features
                 </Button>
               </Link>
             </div>
-            <div className="mt-12 flex items-center justify-center gap-8 text-sm text-gray-500 dark:text-gray-400">
+            <div className="mt-12 flex items-center justify-center gap-8 text-sm text-gray-600 font-medium">
               <div className="flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 text-green-600" />
                 <span>No Credit Card</span>
@@ -182,7 +182,7 @@ export default function MarketingPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Everything You Need to Manage Leads</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300 max-w-2xl mx-auto">
+            <p className="text-xl text-gray-600 max-w-2xl mx-auto">
               Powerful features designed specifically for UAE business services and visa companies
             </p>
           </div>
@@ -219,7 +219,7 @@ export default function MarketingPage() {
               <div>
                 <Badge className="mb-4">Most Popular</Badge>
                 <h3 className="text-3xl font-bold mb-4">AI-Powered Lead Qualification</h3>
-                <p className="text-lg text-gray-600 dark:text-gray-300 mb-6">
+                <p className="text-lg text-gray-600 mb-6">
                   Automatically score and qualify every lead. Our AI analyzes contact info, 
                   service requests, and engagement to give you a 0-100 score. 
                   Focus on hot leads, never miss a warm opportunity.
@@ -274,7 +274,7 @@ export default function MarketingPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Why Teams Choose Alain CRM</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
+            <p className="text-xl text-gray-600">
               Real results from real businesses
             </p>
           </div>
@@ -305,7 +305,7 @@ export default function MarketingPage() {
         <div className="container mx-auto px-4">
           <div className="text-center mb-16">
             <h2 className="text-4xl font-bold mb-4">Loved by Teams Across UAE</h2>
-            <p className="text-xl text-gray-600 dark:text-gray-300">
+            <p className="text-xl text-gray-600">
               See what our users are saying
             </p>
           </div>

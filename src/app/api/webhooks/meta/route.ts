@@ -1187,33 +1187,97 @@ async function processInboundMessage(data: {
     }
 
     if (isInstagram) {
-      console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Calling handleInboundMessageAutoMatch', {
+      console.log('🔄 [META-WEBHOOK-INSTAGRAM-DEBUG] Processing status: About to call handleInboundMessageAutoMatch', {
         channel: autoMatchInput.channel,
         providerMessageId: autoMatchInput.providerMessageId,
         textLength: autoMatchInput.text.length,
         textPreview: autoMatchInput.text.substring(0, 50),
         timestamp: autoMatchInput.timestamp.toISOString(),
-        metadata: autoMatchInput.metadata,
+        fromAddress: autoMatchInput.fromPhone || autoMatchInput.fromEmail || 'N/A',
+        hasBody: !!autoMatchInput.text && autoMatchInput.text.trim().length > 0,
       })
     }
 
-    await handleInboundMessageAutoMatch(autoMatchInput)
+    try {
+      await handleInboundMessageAutoMatch(autoMatchInput)
 
-    // Defensive logging for Instagram message processing
-    if (isInstagram) {
-      console.log('✅ [META-WEBHOOK-INSTAGRAM-DEBUG] handleInboundMessageAutoMatch completed successfully', {
-        senderId: senderId,
-        providerMessageId: providerMessageId,
-        channel: 'instagram', // Stored as lowercase in DB
-        textLength: text.length,
-      })
-      console.log('✅ [META-WEBHOOK-INSTAGRAM] Instagram message processed and stored to database', {
-        senderId: senderId,
-        messageId: providerMessageId,
-        channel: 'instagram', // Stored as lowercase in DB
-      })
-    } else {
-      console.log(`✅ Processed ${data.channel} message from ${senderId}`)
+      // Defensive logging for Instagram message processing
+      if (isInstagram) {
+        console.log('✅ [META-WEBHOOK-INSTAGRAM-DEBUG] Processing status: handleInboundMessageAutoMatch completed successfully', {
+          senderId: senderId,
+          providerMessageId: providerMessageId,
+          channel: 'instagram', // Stored as lowercase in DB
+          textLength: text.length,
+          fromAddress: autoMatchInput.fromPhone || autoMatchInput.fromEmail || 'N/A',
+          note: 'This means contact, lead, conversation, and message should have been created/updated',
+        })
+      } else {
+        console.log(`✅ Processed ${data.channel} message from ${senderId}`)
+      }
+    } catch (autoMatchError: any) {
+      // Enhanced error logging for handleInboundMessageAutoMatch
+      const errorMessage = autoMatchError.message || String(autoMatchError) || 'Unknown error'
+      const errorName = autoMatchError.name || 'UnknownError'
+      const errorCode = autoMatchError.code || 'NO_CODE'
+      const errorStack = autoMatchError.stack?.substring(0, 1000) || 'No stack trace'
+      
+      // Capture Prisma error details if available
+      const prismaErrorDetails = autoMatchError.code || autoMatchError.meta ? {
+        prismaCode: autoMatchError.code,
+        prismaMeta: autoMatchError.meta,
+        prismaClientVersion: autoMatchError.clientVersion,
+      } : null
+      
+      // Safely serialize error object
+      let fullError = 'Could not serialize error'
+      try {
+        fullError = JSON.stringify(autoMatchError, Object.getOwnPropertyNames(autoMatchError)).substring(0, 1000)
+      } catch (serializeError) {
+        try {
+          fullError = JSON.stringify({
+            message: autoMatchError.message,
+            name: autoMatchError.name,
+            code: autoMatchError.code,
+            stack: autoMatchError.stack,
+            toString: String(autoMatchError),
+          }).substring(0, 1000)
+        } catch {
+          fullError = String(autoMatchError).substring(0, 500)
+        }
+      }
+      
+      if (isInstagram) {
+        console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Processing status: handleInboundMessageAutoMatch FAILED', {
+          error: errorMessage,
+          errorName,
+          errorCode,
+          errorStack,
+          fullError,
+          senderId: senderId,
+          providerMessageId: providerMessageId,
+          channel: 'instagram',
+          textLength: text.length,
+          fromAddress: autoMatchInput.fromPhone || autoMatchInput.fromEmail || 'N/A',
+          ...(prismaErrorDetails || {}),
+        })
+        
+        // Log full Prisma error if it's a Prisma error
+        if (autoMatchError.code && autoMatchError.meta) {
+          try {
+            const prismaErrorJson = JSON.stringify({
+              code: autoMatchError.code,
+              meta: autoMatchError.meta,
+              message: autoMatchError.message,
+            }, null, 2)
+            console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] PRISMA ERROR IN handleInboundMessageAutoMatch:', prismaErrorJson)
+          } catch (jsonError) {
+            console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Failed to serialize Prisma error:', jsonError)
+          }
+        }
+      }
+      
+      // Re-throw to allow caller to handle
+      throw autoMatchError
     }
   } catch (error: any) {
     if (isInstagram) {
