@@ -118,11 +118,11 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
         // Primary structure: entry.changes[].value.messages[] (if changes exist)
         for (const change of changes) {
           console.log('[META-WEBHOOK-INSTAGRAM-DEBUG] Normalize: Processing change', {
-          field: change.field,
-          valueKeys: change.value ? Object.keys(change.value) : [],
-          hasMessages: !!change.value?.messages,
-          messagesCount: change.value?.messages?.length || 0,
-        })
+            field: change.field,
+            valueKeys: change.value ? Object.keys(change.value) : [],
+            hasMessages: !!change.value?.messages,
+            messagesCount: change.value?.messages?.length || 0,
+          })
         
         // Instagram messages come in changes with field: "messages"
         if (change.field === 'messages' && change.value?.messages) {
