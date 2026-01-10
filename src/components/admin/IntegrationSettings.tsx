@@ -430,7 +430,7 @@ export function IntegrationSettings({
                 <p className="text-xs text-muted-foreground">
                   Your Meta App Secret (found in Meta for Developers → App Dashboard → Settings → Basic → App Secret)
                 </p>
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                <p className="text-xs text-yellow-600 font-medium">
                   ⚠️ Keep this secret secure. Used for webhook signature verification.
                 </p>
               </div>
@@ -529,7 +529,7 @@ export function IntegrationSettings({
                   <strong>Required for Meta webhook setup.</strong> Click "Generate Token" to create a secure token, 
                   then use this exact value when configuring the webhook in Meta Business Manager → WhatsApp → Configuration → Webhooks.
                 </p>
-                <p className="text-xs text-yellow-600 dark:text-yellow-400 font-medium">
+                <p className="text-xs text-yellow-600 font-medium">
                   ⚠️ Copy this token and paste it in Meta's webhook configuration page (Verify Token field).
                 </p>
               </div>

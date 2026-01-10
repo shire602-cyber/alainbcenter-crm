@@ -397,8 +397,8 @@ export function AutomationRulesManager() {
       </div>
 
       {seedResult && (
-        <BentoCard className={seedResult.success ? 'border-green-200 dark:border-green-800' : 'border-red-200 dark:border-red-800'}>
-          <div className={`flex items-center gap-2 ${seedResult.success ? 'text-green-800 dark:text-green-200' : 'text-red-800 dark:text-red-200'}`}>
+        <BentoCard className={seedResult.success ? 'border-green-200/60' : 'border-red-200/60'}>
+          <div className={`flex items-center gap-2 font-bold ${seedResult.success ? 'text-green-800 tracking-tight' : 'text-red-800 tracking-tight'}`}>
             {seedResult.success ? (
               <CheckCircle2 className="h-4 w-4" />
             ) : (
@@ -425,7 +425,7 @@ export function AutomationRulesManager() {
                   <span className="text-yellow-600">🟡 Stopped</span>
                 )}
               </p>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+              <p className="text-xs text-slate-600 mt-1">
                 {workerRunning 
                   ? 'Automation is processing jobs continuously in the background. Messages will be replied to automatically.'
                   : 'Automation is not running. Click "Start Worker" to enable set-and-forget automation.'}
@@ -452,22 +452,22 @@ export function AutomationRulesManager() {
           </div>
 
           {workerStats && (
-            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+            <div className="grid grid-cols-4 gap-2 pt-2 border-t border-slate-200">
               <div className="text-center">
                 <p className="text-lg font-semibold text-yellow-600">{workerStats.pending}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Pending</p>
+                <p className="text-xs text-slate-600">Pending</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-semibold text-blue-600">{workerStats.processing}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Processing</p>
+                <p className="text-xs text-slate-600">Processing</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-semibold text-green-600">{workerStats.completed}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Completed</p>
+                <p className="text-xs text-slate-600">Completed</p>
               </div>
               <div className="text-center">
                 <p className="text-lg font-semibold text-red-600">{workerStats.failed}</p>
-                <p className="text-xs text-slate-600 dark:text-slate-400">Failed</p>
+                <p className="text-xs text-slate-600">Failed</p>
               </div>
             </div>
           )}
@@ -500,7 +500,7 @@ export function AutomationRulesManager() {
           }
         >
           {runResult.timestamp && (
-            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+            <p className="text-xs text-slate-600 mb-3">
               {runResult.processing ? 'Queued at' : 'Ran at'}: {new Date(runResult.timestamp).toLocaleString()}
             </p>
           )}
@@ -509,7 +509,7 @@ export function AutomationRulesManager() {
               <p className="text-sm text-slate-700 dark:text-slate-300">
                 {runResult.message || 'Automation run is queued and processing in the background. Results will appear in the logs below.'}
               </p>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
+              <p className="text-xs text-slate-500">
                 Check the "Recent Runs" section below for updates.
               </p>
             </div>
@@ -585,7 +585,7 @@ export function AutomationRulesManager() {
           ) : (
             <p className="text-2xl font-semibold tracking-tight text-purple-600">{draftCount}</p>
           )}
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-1">
+          <p className="text-xs text-slate-600 mt-1">
             Pending drafts created by autopilot
           </p>
         </BentoCard>
@@ -597,7 +597,7 @@ export function AutomationRulesManager() {
           {loadingStats ? (
             <Skeleton className="h-8 w-16 rounded" />
           ) : runLogs.length === 0 ? (
-            <p className="text-xs text-slate-600 dark:text-slate-400">No runs yet</p>
+            <p className="text-xs text-slate-600">No runs yet</p>
           ) : (
             <div className="space-y-1.5">
               {runLogs.slice(0, 5).map((log) => (
@@ -608,7 +608,7 @@ export function AutomationRulesManager() {
                     ) : (
                       <XCircle className="h-3 w-3 text-red-600" />
                     )}
-                    <span className="text-slate-600 dark:text-slate-400">
+                    <span className="text-slate-600">
                       {log.ruleKey === 'autopilot_manual_run' ? 'Manual Run' :
                        log.ruleKey === 'autopilot_daily_run' ? 'Daily Cron' :
                        log.message || log.ruleKey || 'Automation Run'}
@@ -630,7 +630,7 @@ export function AutomationRulesManager() {
           <Badge variant="outline" className="text-sm px-2 py-0.5">
             Draft Mode (Safe)
           </Badge>
-          <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
+          <p className="text-xs text-slate-600 mt-2">
             Drafts are created but not sent automatically
           </p>
         </BentoCard>
@@ -641,7 +641,7 @@ export function AutomationRulesManager() {
         title="Seed Automation Rules"
         icon={<Zap className="h-4 w-4" />}
       >
-        <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+        <p className="text-xs text-slate-600 mb-3">
           Create default automation rules for your system. Click the buttons below to seed different rule types.
         </p>
         
@@ -724,7 +724,7 @@ export function AutomationRulesManager() {
         title="Automation Rules"
         icon={<Zap className="h-4 w-4" />}
       >
-        <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+        <p className="text-xs text-slate-600 mb-3">
           Rules run daily via cron or manually using "Run Autopilot Now". Enable or disable as needed.
         </p>
         <AutomationRulesClient />

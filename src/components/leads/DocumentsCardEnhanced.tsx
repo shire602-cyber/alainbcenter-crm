@@ -294,9 +294,9 @@ export function DocumentsCardEnhanced({
 
   const getComplianceBadgeColor = () => {
     if (!compliance) return 'bg-gray-100 text-gray-700'
-    if (compliance.status === 'CRITICAL') return 'bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400'
-    if (compliance.status === 'WARNING') return 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/20 dark:text-yellow-400'
-    return 'bg-green-100 text-green-700 dark:bg-green-900/20 dark:text-green-400'
+    if (compliance.status === 'CRITICAL') return 'bg-red-100 text-red-700 font-semibold'
+    if (compliance.status === 'WARNING') return 'bg-yellow-100 text-yellow-700 font-semibold'
+    return 'bg-green-100 text-green-700 font-semibold'
   }
 
   return (
@@ -402,17 +402,17 @@ export function DocumentsCardEnhanced({
                   key={req.id}
                   className={cn(
                     'flex items-center gap-2 p-2 rounded-lg border text-xs',
-                    matchingDoc && !isExpired && 'bg-green-50 dark:bg-green-900/10 border-green-200 dark:border-green-800',
-                    isExpired && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
-                    isExpiringSoon && 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800',
-                    !matchingDoc && req.isMandatory && 'bg-gray-50 dark:bg-gray-800 border-gray-200 dark:border-gray-700',
+                    matchingDoc && !isExpired && 'bg-green-50 border-green-200/60',
+                    isExpired && 'bg-red-50 border-red-200/60',
+                    isExpiringSoon && 'bg-yellow-50 border-yellow-200/60',
+                    !matchingDoc && req.isMandatory && 'bg-gray-50 border-gray-200/60',
                     !matchingDoc && !req.isMandatory && 'border-border'
                   )}
                 >
                   {matchingDoc && !isExpired ? (
-                    <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                    <CheckCircle2 className="h-4 w-4 text-green-700 flex-shrink-0" />
                   ) : isExpired ? (
-                    <XCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                    <XCircle className="h-4 w-4 text-red-700 flex-shrink-0" />
                   ) : isExpiringSoon ? (
                     <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
                   ) : (

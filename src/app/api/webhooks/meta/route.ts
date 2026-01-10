@@ -1281,6 +1281,7 @@ async function processInboundMessage(data: {
       // Re-throw to allow caller to handle
       throw autoMatchError
     }
+    // Close inner try-catch - outer try continues
   } catch (error: any) {
     if (isInstagram) {
       console.error('❌ [META-WEBHOOK-INSTAGRAM-DEBUG] Error in processInboundMessage (outer catch)', {
