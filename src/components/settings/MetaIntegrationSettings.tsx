@@ -52,8 +52,8 @@ export function MetaIntegrationSettings() {
     <div className="space-y-8 animate-fade-in">
       <div>
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-            <Facebook className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <div className="p-2 rounded-lg bg-blue-100">
+            <Facebook className="h-6 w-6 text-blue-600" />
           </div>
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">
@@ -136,17 +136,17 @@ export function MetaIntegrationSettings() {
             </div>
           </div>
 
-          <div className="mt-6 p-4 bg-blue-50 dark:bg-blue-900/10 border border-blue-200 dark:border-blue-800 rounded-lg">
+          <div className="mt-6 p-4 bg-blue-50 border border-blue-200 rounded-lg">
             <div className="flex items-start gap-3">
               <Info className="h-5 w-5 text-blue-600 mt-0.5" />
               <div className="flex-1">
-                <p className="font-semibold text-blue-900 dark:text-blue-100 mb-2">
+                <p className="font-semibold text-blue-900 mb-2">
                   Webhook Callback URL
                 </p>
-                <code className="block p-2 bg-white dark:bg-gray-800 rounded text-sm mb-2 break-all">
+                <code className="block p-2 bg-white rounded text-sm mb-2 break-all">
                   {webhookUrl || 'Loading...'}
                 </code>
-                <p className="text-sm text-blue-700 dark:text-blue-300">
+                <p className="text-sm text-blue-700">
                   Use this URL when setting up your webhook in Meta Business Manager
                 </p>
               </div>

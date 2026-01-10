@@ -154,8 +154,8 @@ export default function ServicesPage() {
         </div>
 
         {error && (
-          <BentoCard className="border-red-200 dark:border-red-800">
-            <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
+          <BentoCard className="border-red-200">
+            <div className="flex items-center gap-2 text-red-800">
               <AlertCircle className="h-4 w-4" />
               <span className="text-sm font-medium">{error}</span>
             </div>
@@ -205,17 +205,17 @@ export default function ServicesPage() {
                 }
               >
                 {service.code && (
-                  <p className="text-xs text-slate-600 dark:text-slate-400 font-mono bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded inline-block mb-2">
+                  <p className="text-xs text-slate-600 font-mono bg-slate-100 px-2 py-1 rounded inline-block mb-2">
                     {service.code}
                   </p>
                 )}
                 {service._count && (
-                  <div className="flex items-center gap-1.5 text-xs text-slate-600 dark:text-slate-400 mb-3">
+                  <div className="flex items-center gap-1.5 text-xs text-slate-600 mb-3">
                     <Briefcase className="h-3 w-3" />
                     <span>{service._count.leads} {service._count.leads === 1 ? 'lead' : 'leads'}</span>
                   </div>
                 )}
-                <div className="flex gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                <div className="flex gap-2 pt-2 border-t border-slate-200">
                   <Button
                     variant="outline"
                     size="sm"

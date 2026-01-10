@@ -283,12 +283,12 @@ export function RenewalRevenueCard({
 
           {/* Projected Revenue */}
           {projectedRevenue && (
-            <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+            <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
               <div className="flex items-center gap-2 mb-1">
-                <TrendingUp className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+                <TrendingUp className="h-4 w-4 text-blue-600" />
                 <Label className="text-xs text-muted-foreground">Projected Revenue</Label>
               </div>
-              <p className="text-xl font-bold text-blue-700 dark:text-blue-300">
+              <p className="text-xl font-bold text-blue-700">
                 {new Intl.NumberFormat('en-AE', {
                   style: 'currency',
                   currency: 'AED',

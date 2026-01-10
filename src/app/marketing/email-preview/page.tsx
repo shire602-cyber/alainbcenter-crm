@@ -27,7 +27,7 @@ export default function EmailPreviewPage() {
   }
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8">
+    <div className="min-h-screen bg-gray-100 py-8">
       <div className="container mx-auto px-4">
         <div className="mb-6">
           <Link href="/marketing">
@@ -41,7 +41,7 @@ export default function EmailPreviewPage() {
         <div className="grid lg:grid-cols-3 gap-8">
           {/* Controls */}
           <div className="lg:col-span-1 space-y-6">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+            <div className="bg-white rounded-lg p-6 shadow">
               <h2 className="text-xl font-bold mb-4">Email Settings</h2>
               <div className="space-y-4">
                 <div>
@@ -69,9 +69,9 @@ export default function EmailPreviewPage() {
               </div>
             </div>
 
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow">
+            <div className="bg-white rounded-lg p-6 shadow">
               <h3 className="font-semibold mb-4">Email Tips</h3>
-              <ul className="text-sm text-gray-600 dark:text-gray-400 space-y-2">
+              <ul className="text-sm text-gray-600 space-y-2">
                 <li>• Personalize with recipient name</li>
                 <li>• Keep subject lines under 50 characters</li>
                 <li>• Use clear, action-oriented CTAs</li>
@@ -83,9 +83,9 @@ export default function EmailPreviewPage() {
 
           {/* Preview */}
           <div className="lg:col-span-2">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 shadow mb-4">
+            <div className="bg-white rounded-lg p-6 shadow mb-4">
               <h2 className="text-xl font-bold mb-2">Email Preview</h2>
-              <p className="text-sm text-gray-600 dark:text-gray-400">
+              <p className="text-sm text-gray-600">
                 Subject: <strong>{subject}</strong>
               </p>
             </div>

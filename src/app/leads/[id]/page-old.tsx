@@ -365,10 +365,10 @@ export default function LeadDetailPage({
         <div className="flex items-center justify-center h-screen bg-app">
           <div className="text-center max-w-md mx-auto p-6">
             <div className="mb-6">
-              <div className="w-16 h-16 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center mx-auto mb-4">
+              <div className="w-16 h-16 rounded-full bg-slate-100 flex items-center justify-center mx-auto mb-4">
                 <Info className="h-8 w-8 text-slate-400" />
               </div>
-              <h2 className="text-h1 font-semibold text-slate-900 dark:text-slate-100 mb-2">
+              <h2 className="text-h1 font-semibold text-slate-900 mb-2">
                 Lead Not Found
               </h2>
               <p className="text-body muted-text">
@@ -442,7 +442,7 @@ export default function LeadDetailPage({
               <ArrowLeft className="h-4 w-4" />
             </Button>
             <div className="flex-1 min-w-0">
-              <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 truncate">
+              <h1 className="text-h2 font-semibold text-slate-900 truncate">
                 {lead?.contact?.fullName || 'Lead'}
               </h1>
               <p className="text-meta muted-text truncate">
@@ -552,7 +552,7 @@ export default function LeadDetailPage({
                 <ArrowLeft className="h-4 w-4" />
               </Button>
               <div>
-                <h1 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+                <h1 className="text-h2 font-semibold text-slate-900">
                   {lead?.contact?.fullName || 'Lead'}
                 </h1>
                 <p className="text-meta muted-text">
@@ -579,7 +579,7 @@ export default function LeadDetailPage({
         {/* Middle: Lead DNA */}
         <div className="w-80 border-r border-subtle overflow-y-auto">
           <div className="p-4 border-b border-subtle bg-app sticky top-0 z-10">
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-h2 font-semibold text-slate-900">
               Lead Details
             </h2>
           </div>
@@ -591,7 +591,7 @@ export default function LeadDetailPage({
         {/* Right: Actions */}
         <div className="w-80 overflow-y-auto">
           <div className="p-4 border-b border-subtle bg-app sticky top-0 z-10">
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+            <h2 className="text-h2 font-semibold text-slate-900">
               Next Actions
             </h2>
           </div>
@@ -621,7 +621,7 @@ export default function LeadDetailPage({
       
       {/* STEP 0: Build stamp for deployment verification */}
       {buildInfo && (
-        <div className="fixed bottom-2 right-2 text-xs text-slate-400 dark:text-slate-600 bg-slate-100 dark:bg-slate-800 px-2 py-1 rounded z-50">
+        <div className="fixed bottom-2 right-2 text-xs text-slate-400 bg-slate-100 px-2 py-1 rounded z-50">
           Build: {buildInfo.buildId || 'unknown'}
         </div>
       )}

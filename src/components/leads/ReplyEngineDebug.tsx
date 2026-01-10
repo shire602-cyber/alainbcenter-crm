@@ -184,8 +184,8 @@ export function ReplyEngineDebug({ conversationId, leadId }: ReplyEngineDebugPro
                   </details>
                 )}
                 {fsmState.stop.enabled && (
-                  <div className="p-2 bg-red-50 dark:bg-red-900/20 rounded text-xs">
-                    <span className="font-semibold text-red-600 dark:text-red-400">Stop Enabled:</span>
+                  <div className="p-2 bg-red-50 rounded text-xs">
+                    <span className="font-semibold text-red-600">Stop Enabled:</span>
                     <span className="ml-2">{fsmState.stop.reason || 'Unknown'}</span>
                   </div>
                 )}

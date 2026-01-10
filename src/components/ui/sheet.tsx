@@ -93,7 +93,7 @@ export function SheetContent({ children, className, side = 'bottom' }: SheetCont
         onClick={() => context.onOpenChange(false)}
       />
       <div className={cn(
-        "fixed z-50 bg-white dark:bg-slate-900 shadow-2xl transition-transform duration-300",
+        "fixed z-50 bg-white shadow-2xl transition-transform duration-300",
         sideClasses[side],
         side === 'bottom' && "max-h-[90vh] overflow-y-auto",
         side === 'top' && "max-h-[90vh] overflow-y-auto",
@@ -122,7 +122,7 @@ interface SheetHeaderProps {
 
 export function SheetHeader({ children, className }: SheetHeaderProps) {
   return (
-    <div className={cn("p-6 pb-4 border-b border-slate-200 dark:border-slate-800", className)}>
+    <div className={cn("p-6 pb-4 border-b border-slate-200", className)}>
       {children}
     </div>
   )
@@ -135,7 +135,7 @@ interface SheetTitleProps {
 
 export function SheetTitle({ children, className }: SheetTitleProps) {
   return (
-    <h2 className={cn("text-lg font-semibold text-slate-900 dark:text-slate-100", className)}>
+    <h2 className={cn("text-lg font-semibold text-slate-900", className)}>
       {children}
     </h2>
   )
@@ -148,7 +148,7 @@ interface SheetDescriptionProps {
 
 export function SheetDescription({ children, className }: SheetDescriptionProps) {
   return (
-    <p className={cn("text-sm text-slate-600 dark:text-slate-400 mt-1", className)}>
+    <p className={cn("text-sm text-slate-600 mt-1", className)}>
       {children}
     </p>
   )

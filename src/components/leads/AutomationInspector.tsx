@@ -148,11 +148,11 @@ export function AutomationInspector({ leadId, className }: AutomationInspectorPr
   const nextAction = rules.find(r => r.status === 'active' && r.nextRun)
 
   return (
-    <Card className={cn('rounded-2xl shadow-sm border-2', autopilotEnabled ? 'border-green-200 dark:border-green-800' : 'border-gray-200 dark:border-gray-800', className)}>
+    <Card className={cn('rounded-2xl shadow-sm border-2', autopilotEnabled ? 'border-green-200' : 'border-gray-200', className)}>
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
-            <Zap className={cn('h-4 w-4', autopilotEnabled && 'text-green-600 dark:text-green-400')} />
+            <Zap className={cn('h-4 w-4', autopilotEnabled && 'text-green-600')} />
             Autopilot
           </CardTitle>
           <Switch
@@ -166,14 +166,14 @@ export function AutomationInspector({ leadId, className }: AutomationInspectorPr
         {autopilotEnabled ? (
           <>
             {nextAction && (
-              <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+              <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
                 <div className="flex items-start gap-2">
-                  <Clock className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+                  <Clock className="h-4 w-4 text-blue-600 mt-0.5" />
                   <div className="flex-1 min-w-0">
-                    <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                    <p className="text-xs font-medium text-blue-900">
                       Next Action
                     </p>
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                    <p className="text-xs text-blue-700 mt-0.5">
                       {nextAction.name} - {format(new Date(nextAction.nextRun!), 'MMM dd, HH:mm')}
                     </p>
                   </div>
@@ -223,7 +223,7 @@ export function AutomationInspector({ leadId, className }: AutomationInspectorPr
                     className="flex items-start gap-2 p-2 rounded-lg border text-xs"
                   >
                     {log.status === 'executed' ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600 dark:text-green-400 mt-0.5 flex-shrink-0" />
+                      <CheckCircle2 className="h-3.5 w-3.5 text-green-600 mt-0.5 flex-shrink-0" />
                     ) : (
                       <XCircle className="h-3.5 w-3.5 text-gray-400 mt-0.5 flex-shrink-0" />
                     )}

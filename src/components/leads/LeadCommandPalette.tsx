@@ -181,7 +181,7 @@ export function LeadCommandPalette({
               placeholder="Type a command or search..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 dark:border-slate-800 bg-card focus:outline-none focus:ring-2 focus:ring-blue-500/20"
+              className="w-full pl-9 pr-4 py-2 rounded-lg border border-slate-200 bg-card focus:outline-none focus:ring-2 focus:ring-blue-500/20"
               autoFocus
             />
           </div>
@@ -201,11 +201,11 @@ export function LeadCommandPalette({
                   className={cn(
                     "w-full flex items-center gap-3 px-3 py-2.5 rounded-lg text-left transition-colors",
                     idx === selectedIndex
-                      ? "bg-blue-50 dark:bg-blue-950/30 text-blue-700 dark:text-blue-300"
-                      : "hover:bg-slate-50 dark:hover:bg-slate-800 text-slate-900 dark:text-slate-100"
+                      ? "bg-blue-50 text-blue-700"
+                      : "hover:bg-slate-50:bg-slate-800 text-slate-900"
                   )}
                 >
-                  <div className="text-slate-500 dark:text-slate-400">
+                  <div className="text-slate-500">
                     {command.icon}
                   </div>
                   <div className="flex-1 min-w-0">

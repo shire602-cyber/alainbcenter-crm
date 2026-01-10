@@ -90,7 +90,7 @@ export function AccordionItem({ value, children, className }: AccordionItemProps
 
   return (
     <AccordionItemContext.Provider value={{ value }}>
-      <div className={cn('border border-slate-200 dark:border-slate-800 rounded-lg overflow-hidden', className)}>
+      <div className={cn('border border-slate-200 rounded-lg overflow-hidden', className)}>
         {children}
       </div>
     </AccordionItemContext.Provider>
@@ -115,11 +115,11 @@ export function AccordionTrigger({ children, className }: AccordionTriggerProps)
     <button
       onClick={() => context.toggleItem(itemContext.value)}
       className={cn(
-        'w-full flex items-center justify-between p-4 text-left hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors',
+        'w-full flex items-center justify-between p-4 text-left hover:bg-slate-50:bg-slate-900/50 transition-colors',
         className
       )}
     >
-      <span className="text-sm font-medium text-slate-900 dark:text-slate-100">
+      <span className="text-sm font-medium text-slate-900">
         {children}
       </span>
       <ChevronDown className={cn(

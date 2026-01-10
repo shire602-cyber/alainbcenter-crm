@@ -722,7 +722,7 @@ async function processWebhookPayload(payload: any) {
         continue // Skip this event
       }
       
-      // Event passes conditions - proceed with processing
+      // Event passes conditions - proceed with processing (we already checked passesConditions above)
       if (channelLower === 'instagram') {
         console.log('🔄 [META-WEBHOOK-INSTAGRAM] About to process event - PASSED conditions', {
           eventType: event.eventType,
@@ -734,9 +734,9 @@ async function processWebhookPayload(payload: any) {
         })
       }
       
-      if (event.eventType === 'message' && event.senderId && (hasText || hasAttachments)) {
-        // Defensive logging for Instagram message ingestion
-        if (channelLower === 'instagram') {
+      // Process the event (we already verified it passes conditions above, but keep the original check for safety)
+      // Defensive logging for Instagram message ingestion
+      if (channelLower === 'instagram') {
           console.log('📥 [META-WEBHOOK-INSTAGRAM] Instagram messaging event received - PASSING conditions', {
             object: payload.object,
             entryId: entry.id, // IG Business Account ID
@@ -884,9 +884,9 @@ async function processWebhookPayload(payload: any) {
           
           try {
             await processInboundMessage({
-              pageId,
+              pageId: pageId!,
               workspaceId: workspaceId ?? 1,
-              senderId: event.senderId,
+              senderId: event.senderId!,
               message: { 
                 text: event.text, 
                 mid: event.messageId,

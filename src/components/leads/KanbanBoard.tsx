@@ -156,10 +156,10 @@ export function KanbanBoard({ leads, loading = false, onStageChange, filters }: 
       <div className="flex gap-4 overflow-x-auto pb-4">
         {PIPELINE_STAGES.map((stage) => (
           <div key={stage} className="flex-shrink-0 w-80 bg-card rounded-lg border p-4">
-            <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded mb-4 animate-pulse" />
+            <div className="h-8 bg-slate-200 rounded mb-4 animate-pulse" />
             <div className="space-y-3">
               {[1, 2, 3].map((i) => (
-                <div key={i} className="h-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                <div key={i} className="h-24 bg-slate-200 rounded animate-pulse" />
               ))}
             </div>
           </div>

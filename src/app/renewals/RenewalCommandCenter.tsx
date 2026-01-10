@@ -280,10 +280,10 @@ export default function RenewalCommandCenter() {
 
   const getServiceTypeBadge = (serviceType: string) => {
     const colors: Record<string, string> = {
-      'TRADE_LICENSE': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-      'EMIRATES_ID': 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-      'RESIDENCY': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-      'VISIT_VISA': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
+      'TRADE_LICENSE': 'bg-blue-100 text-blue-800 font-semibold',
+      'EMIRATES_ID': 'bg-green-100 text-green-800 font-semibold',
+      'RESIDENCY': 'bg-purple-100 text-purple-800 font-semibold',
+      'VISIT_VISA': 'bg-orange-100 text-orange-800 font-semibold',
     }
     return (
       <Badge className={cn('text-xs font-medium', colors[serviceType] || 'bg-gray-100 text-gray-800')}>
@@ -297,30 +297,30 @@ export default function RenewalCommandCenter() {
     const days = differenceInDays(parseISO(expiresAt), now)
     
     if (days < 0) {
-      return <span className="text-red-600 dark:text-red-400 font-semibold">Expired {Math.abs(days)}d ago</span>
+      return <span className="text-red-700 font-bold tracking-tight">Expired {Math.abs(days)}d ago</span>
     } else if (days === 0) {
-      return <span className="text-red-600 dark:text-red-400 font-semibold">Expires today</span>
+      return <span className="text-red-700 font-bold tracking-tight">Expires today</span>
     } else if (days === 1) {
-      return <span className="text-orange-600 dark:text-orange-400 font-semibold">1 day left</span>
+      return <span className="text-orange-700 font-bold tracking-tight">1 day left</span>
     } else if (days <= 7) {
-      return <span className="text-orange-600 dark:text-orange-400 font-semibold">{days} days left</span>
+      return <span className="text-orange-700 font-bold tracking-tight">{days} days left</span>
     } else {
-      return <span className="text-slate-600 dark:text-slate-400">{days} days left</span>
+      return <span className="text-slate-600 font-medium">{days} days left</span>
     }
   }
 
   const getLastContacted = (lastContactedAt: string | null) => {
     if (!lastContactedAt) {
-      return <span className="text-slate-400 dark:text-slate-500 text-xs">Never</span>
+      return <span className="text-slate-400 text-xs">Never</span>
     }
     try {
       return (
-        <span className="text-xs text-slate-600 dark:text-slate-400">
+        <span className="text-xs text-slate-600">
           {formatDistanceToNow(parseISO(lastContactedAt), { addSuffix: true })}
         </span>
       )
     } catch {
-      return <span className="text-xs text-slate-600 dark:text-slate-400">{format(parseISO(lastContactedAt), 'MMM d')}</span>
+      return <span className="text-xs text-slate-600">{format(parseISO(lastContactedAt), 'MMM d')}</span>
     }
   }
 
@@ -335,10 +335,10 @@ export default function RenewalCommandCenter() {
     <MainLayout>
       <div className="h-screen flex flex-col bg-background">
         {/* Command Bar */}
-        <div className="sticky top-0 z-40 bg-white dark:bg-slate-900 border-b border-slate-200 dark:border-slate-800">
+        <div className="sticky top-0 z-40 bg-white border-b border-slate-200">
           <div className="px-6 py-3">
             <div className="flex items-center justify-between">
-              <h1 className="text-xl font-semibold text-slate-900 dark:text-slate-100">
+              <h1 className="text-xl font-semibold text-slate-900">
                 Renewals
               </h1>
               <div className="flex items-center gap-3">
@@ -376,7 +376,7 @@ export default function RenewalCommandCenter() {
         </div>
 
         {/* Queue Tabs */}
-        <div className="border-b border-slate-200 dark:border-slate-800 bg-white dark:bg-slate-900">
+        <div className="border-b border-slate-200 bg-white">
           <div className="px-6">
             <Tabs value={activeQueue} onValueChange={(v) => setActiveQueue(v as QueueType)}>
               <TabsList className="h-10">
@@ -396,7 +396,7 @@ export default function RenewalCommandCenter() {
         </div>
 
         {/* Renewal List */}
-        <div className="flex-1 overflow-y-auto bg-slate-50 dark:bg-slate-950">
+        <div className="flex-1 overflow-y-auto bg-slate-50">
           <div className="p-6">
             {loading ? (
               <div className="space-y-2">
@@ -406,7 +406,7 @@ export default function RenewalCommandCenter() {
               </div>
             ) : activeItems.length === 0 ? (
               <Card className="p-12 text-center">
-                <p className="text-slate-500 dark:text-slate-400">
+                <p className="text-slate-500">
                   {searchQuery ? 'No renewals match your search' : `No renewals in ${queueTabs.find(t => t.id === activeQueue)?.label.toLowerCase()}`}
                 </p>
               </Card>
@@ -425,12 +425,12 @@ export default function RenewalCommandCenter() {
                         {/* Lead Identity */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
-                            <span className="font-semibold text-sm text-slate-900 dark:text-slate-100 truncate">
+                            <span className="font-semibold text-sm text-slate-900 truncate">
                               {item.lead?.contact?.fullName || 'Unknown'}
                             </span>
                             {getServiceTypeBadge(item.serviceType)}
                           </div>
-                          <div className="flex items-center gap-4 text-xs text-slate-600 dark:text-slate-400">
+                          <div className="flex items-center gap-4 text-xs text-slate-600">
                             <span>{item.lead?.contact?.phone || 'No phone'}</span>
                           </div>
                         </div>
@@ -443,7 +443,7 @@ export default function RenewalCommandCenter() {
                         {/* Estimated Value */}
                         <div className="w-24 text-right">
                           {item.expectedValue ? (
-                            <span className="text-sm font-semibold text-green-600 dark:text-green-400">
+                            <span className="text-sm font-semibold text-green-600">
                               AED {item.expectedValue.toLocaleString()}
                             </span>
                           ) : (
@@ -456,7 +456,7 @@ export default function RenewalCommandCenter() {
                           {item.assignedTo ? (
                             <div className="flex items-center gap-1.5">
                               <User className="h-3 w-3 text-slate-400" />
-                              <span className="text-xs text-slate-600 dark:text-slate-400 truncate">
+                              <span className="text-xs text-slate-600 truncate">
                                 {item.assignedTo.name}
                               </span>
                             </div>
@@ -530,31 +530,31 @@ export default function RenewalCommandCenter() {
                 <Card className="p-4">
                   <div className="space-y-3 text-sm">
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Renewal Type:</span>
+                      <span className="text-slate-600">Renewal Type:</span>
                       {getServiceTypeBadge(selectedItem.serviceType)}
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Expires At:</span>
+                      <span className="text-slate-600">Expires At:</span>
                       <span className="font-medium">{format(parseISO(selectedItem.expiresAt), 'MMM d, yyyy')}</span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Estimated Value:</span>
+                      <span className="text-slate-600">Estimated Value:</span>
                       <span className="font-medium">
                         {selectedItem.expectedValue ? `AED ${selectedItem.expectedValue.toLocaleString()}` : 'N/A'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Status:</span>
+                      <span className="text-slate-600">Status:</span>
                       <Badge variant="secondary">{selectedItem.status}</Badge>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Assigned To:</span>
+                      <span className="text-slate-600">Assigned To:</span>
                       <span className="font-medium">
                         {selectedItem.assignedTo?.name || 'Unassigned'}
                       </span>
                     </div>
                     <div className="flex justify-between">
-                      <span className="text-slate-600 dark:text-slate-400">Last Contacted:</span>
+                      <span className="text-slate-600">Last Contacted:</span>
                       <span className="font-medium">
                         {getLastContacted(selectedItem.lastContactedAt)}
                       </span>
@@ -632,7 +632,7 @@ export default function RenewalCommandCenter() {
                 />
               </div>
             </div>
-            <div className="px-6 py-4 border-t border-slate-100 dark:border-slate-800 flex justify-end gap-2">
+            <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
               <Button variant="outline" onClick={() => {
                 setShowWhatsAppModal(false)
                 setWhatsappMessage('')

@@ -43,14 +43,14 @@ export function WinsToday() {
   // Hide section if no metrics available yet
   if (loading || (!metrics.tasksCompleted && !metrics.messagesSent && !metrics.quotesSent)) {
     return (
-      <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center mx-auto mb-4">
-          <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+      <div className="p-8 text-center rounded-2xl bg-slate-50 border border-slate-200">
+        <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+          <Sparkles className="h-8 w-8 text-blue-600" />
         </div>
-        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
+        <p className="text-sm font-semibold text-slate-900 mb-1">
           Wins Today
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-500">
           Track your achievements here
         </p>
       </div>
@@ -61,35 +61,35 @@ export function WinsToday() {
       icon: CheckCircle2,
       label: 'Tasks Completed',
       value: metrics.tasksCompleted || 0,
-      color: 'text-green-600 dark:text-green-400',
-      bgColor: 'bg-green-100 dark:bg-green-900/20',
+      color: 'text-green-600',
+      bgColor: 'bg-green-100',
     },
     {
       icon: MessageSquare,
       label: 'Messages Sent',
       value: metrics.messagesSent || 0,
-      color: 'text-purple-600 dark:text-purple-400',
-      bgColor: 'bg-purple-100 dark:bg-purple-900/20',
+      color: 'text-purple-600',
+      bgColor: 'bg-purple-100',
     },
     {
       icon: Sparkles,
       label: 'Quotes Sent',
       value: metrics.quotesSent || 0,
-      color: 'text-orange-600 dark:text-orange-400',
-      bgColor: 'bg-orange-100 dark:bg-orange-900/20',
+      color: 'text-orange-600',
+      bgColor: 'bg-orange-100',
     },
   ].filter(win => win.value > 0) // Only show wins with value > 0
 
   if (wins.length === 0) {
     return (
-      <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-        <div className="w-16 h-16 rounded-full bg-blue-100 dark:bg-blue-900/20 flex items-center justify-center mx-auto mb-4">
-          <Sparkles className="h-8 w-8 text-blue-600 dark:text-blue-400" />
+      <div className="p-8 text-center rounded-2xl bg-slate-50 border border-slate-200">
+        <div className="w-16 h-16 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4">
+          <Sparkles className="h-8 w-8 text-blue-600" />
         </div>
-        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
+        <p className="text-sm font-semibold text-slate-900 mb-1">
           Wins Today
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-500">
           Track your achievements here
         </p>
       </div>
@@ -103,7 +103,7 @@ export function WinsToday() {
         return (
           <Card
             key={idx}
-            className="p-6 rounded-2xl border-2 border-slate-200 dark:border-slate-800 bg-gradient-to-br from-slate-50 to-slate-100 dark:from-slate-900 dark:to-slate-800"
+            className="p-6 rounded-2xl border-2 border-slate-200 bg-gradient-to-br from-slate-50 to-slate-100"
           >
             <div className="flex items-center gap-4">
               <div className={cn(
@@ -113,7 +113,7 @@ export function WinsToday() {
                 <Icon className={cn("h-6 w-6", win.color)} />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-xs text-slate-500 dark:text-slate-400 mb-1">
+                <p className="text-xs text-slate-500 mb-1">
                   {win.label}
                 </p>
                 <p className={cn("text-2xl font-bold", win.color)}>

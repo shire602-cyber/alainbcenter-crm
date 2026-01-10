@@ -70,13 +70,13 @@ export function DoThisNow() {
   function getPriorityColor(priority: string) {
     switch (priority) {
       case 'URGENT':
-        return 'border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-900/20'
+        return 'border-red-200 bg-red-50'
       case 'HIGH':
-        return 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20'
+        return 'border-orange-200 bg-orange-50'
       case 'NORMAL':
-        return 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20'
+        return 'border-blue-200 bg-blue-50'
       default:
-        return 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50'
+        return 'border-slate-200 bg-slate-50'
     }
   }
 
@@ -84,7 +84,7 @@ export function DoThisNow() {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-20 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+          <div key={i} className="h-20 bg-slate-100 rounded-xl animate-pulse" />
         ))}
       </div>
     )
@@ -92,14 +92,14 @@ export function DoThisNow() {
 
   if (items.length === 0) {
     return (
-      <div className="p-8 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
-        <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
-          <Clock className="h-8 w-8 text-green-600 dark:text-green-400" />
+      <div className="p-8 text-center rounded-2xl bg-slate-50 border border-slate-200">
+        <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+          <Clock className="h-8 w-8 text-green-600" />
         </div>
-        <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">
+        <p className="text-sm font-semibold text-slate-900 mb-1">
           All caught up!
         </p>
-        <p className="text-xs text-slate-500 dark:text-slate-400">
+        <p className="text-xs text-slate-500">
           No urgent actions required
         </p>
       </div>
@@ -120,17 +120,17 @@ export function DoThisNow() {
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-2">
                 {item.priority === 'URGENT' && (
-                  <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0" />
+                  <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0" />
                 )}
-                <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                <h4 className="text-sm font-semibold text-slate-900 truncate">
                   {item.title}
                 </h4>
               </div>
-              <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+              <p className="text-xs text-slate-600 mb-3">
                 {item.reason}
               </p>
               {item.dueAt && (
-                <p className="text-xs text-slate-500 dark:text-slate-500 mb-3">
+                <p className="text-xs text-slate-500 mb-3">
                   {formatDistanceToNow(new Date(item.dueAt), { addSuffix: true })}
                 </p>
               )}
@@ -152,8 +152,8 @@ export function DoThisNow() {
             </div>
             {item.revenuePotential && (
               <div className="flex-shrink-0 text-right">
-                <p className="text-xs text-slate-500 dark:text-slate-400">Value</p>
-                <p className="text-sm font-bold text-slate-900 dark:text-slate-100">
+                <p className="text-xs text-slate-500">Value</p>
+                <p className="text-sm font-bold text-slate-900">
                   AED {item.revenuePotential.toLocaleString()}
                 </p>
               </div>

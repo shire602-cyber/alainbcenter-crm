@@ -29,14 +29,14 @@ export const LEAD_STAGE_LABELS: Record<LeadStage, string> = {
 }
 
 export const LEAD_STAGE_COLORS: Record<LeadStage, string> = {
-  NEW: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  CONTACTED: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  QUALIFIED: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  PROPOSAL_SENT: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  ENGAGED: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  COMPLETED_WON: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200',
-  LOST: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200',
-  ON_HOLD: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
+  NEW: 'bg-gray-100 text-gray-800',
+  CONTACTED: 'bg-blue-100 text-blue-800',
+  QUALIFIED: 'bg-yellow-100 text-yellow-800',
+  PROPOSAL_SENT: 'bg-orange-100 text-orange-800',
+  ENGAGED: 'bg-purple-100 text-purple-800',
+  COMPLETED_WON: 'bg-green-100 text-green-800',
+  LOST: 'bg-red-100 text-red-800',
+  ON_HOLD: 'bg-gray-100 text-gray-800',
 }
 
 // Document types

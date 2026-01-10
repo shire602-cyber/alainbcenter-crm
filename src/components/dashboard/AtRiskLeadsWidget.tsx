@@ -76,8 +76,8 @@ export function AtRiskLeadsWidget() {
       <BentoCard title="At Risk Leads">
         <div className="flex flex-col items-center justify-center py-6 text-center">
           <AlertTriangle className="h-6 w-6 text-green-600 mb-1.5" />
-          <p className="text-xs font-medium text-slate-900 dark:text-slate-100 mb-0.5">No at-risk leads</p>
-          <p className="text-xs text-slate-500 dark:text-slate-400">All high-value leads are active!</p>
+          <p className="text-xs font-medium text-slate-900 mb-0.5">No at-risk leads</p>
+          <p className="text-xs text-slate-500">All high-value leads are active!</p>
         </div>
       </BentoCard>
     )
@@ -87,7 +87,7 @@ export function AtRiskLeadsWidget() {
     <BentoCard
       title="At Risk Leads"
       action={
-        <Link href="/leads?filter=at_risk" className="text-xs text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
+        <Link href="/leads?filter=at_risk" className="text-xs text-slate-600 hover:text-primary transition-colors">
           View all →
         </Link>
       }
@@ -97,14 +97,14 @@ export function AtRiskLeadsWidget() {
           <Link
             key={lead.id}
             href={`/leads/${lead.id}`}
-            className="block p-2 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+            className="block p-2 rounded-lg border border-slate-200 hover:bg-slate-100:bg-slate-800/50 hover:border-slate-300:border-slate-700 transition-all group"
           >
             <div className="flex items-start justify-between gap-2 mb-1">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors truncate">
+                <p className="text-xs font-medium text-slate-900 group-hover:text-primary transition-colors truncate">
                   {lead.contactName}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 truncate">
+                <p className="text-xs text-slate-500 truncate">
                   {lead.serviceType}
                 </p>
               </div>
@@ -127,19 +127,19 @@ export function AtRiskLeadsWidget() {
                 </span>
               </div>
               {lead.daysSinceLastActivity !== null && (
-                <span className="text-xs text-slate-500 dark:text-slate-400">
+                <span className="text-xs text-slate-500">
                   {lead.daysSinceLastActivity}d ago
                 </span>
               )}
             </div>
             {lead.phone && (
-              <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+              <div className="flex items-center gap-1 mt-1.5 pt-1.5 border-t border-slate-200">
                 <a
                   href={`https://wa.me/${lead.phone.replace(/[^0-9]/g, '')}`}
                   target="_blank"
                   rel="noopener noreferrer"
                   onClick={(e) => e.stopPropagation()}
-                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  className="p-1 rounded hover:bg-slate-200:bg-slate-700 transition-colors"
                   title="WhatsApp"
                 >
                   <MessageSquare className="h-3 w-3 text-green-600" />
@@ -147,7 +147,7 @@ export function AtRiskLeadsWidget() {
                 <a
                   href={`tel:${lead.phone}`}
                   onClick={(e) => e.stopPropagation()}
-                  className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-700 transition-colors"
+                  className="p-1 rounded hover:bg-slate-200:bg-slate-700 transition-colors"
                   title="Call"
                 >
                   <Phone className="h-3 w-3 text-blue-600" />

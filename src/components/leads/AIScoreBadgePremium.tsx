@@ -28,19 +28,19 @@ export function AIScoreBadgePremium({ score, showTooltip = true, className }: AI
   const colors = {
     hot: {
       dot: 'bg-red-500',
-      badge: 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400 border-red-200 dark:border-red-800',
+      badge: 'bg-red-50 text-red-700 border-red-200',
       progress: 'bg-red-500',
       tooltip: 'High engagement, recent activity, quick responses, qualified service needs'
     },
     warm: {
       dot: 'bg-orange-500',
-      badge: 'bg-orange-50 dark:bg-orange-900/20 text-orange-700 dark:text-orange-400 border-orange-200 dark:border-orange-800',
+      badge: 'bg-orange-50 text-orange-700 border-orange-200',
       progress: 'bg-orange-500',
       tooltip: 'Moderate interest, some engagement, potential for conversion with follow-up'
     },
     cold: {
       dot: 'bg-gray-400',
-      badge: 'bg-gray-50 dark:bg-gray-800 text-gray-700 dark:text-gray-300 border-gray-200 dark:border-gray-700',
+      badge: 'bg-gray-50 text-gray-700 border-gray-200',
       progress: 'bg-gray-400',
       tooltip: 'Low activity, needs nurturing, early stage inquiry'
     },

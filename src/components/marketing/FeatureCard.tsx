@@ -22,8 +22,8 @@ export function FeatureCard({
   icon: Icon,
   title,
   description,
-  color = 'text-blue-600 dark:text-blue-400',
-  bgColor = 'bg-blue-50 dark:bg-blue-900/20',
+  color = 'text-blue-600',
+  bgColor = 'bg-blue-50',
   className,
 }: FeatureCardProps) {
   return (

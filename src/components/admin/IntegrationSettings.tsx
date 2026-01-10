@@ -359,24 +359,24 @@ export function IntegrationSettings({
     <div className="space-y-4">
       {/* Error/Success Messages */}
       {error && (
-        <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+        <div className="p-4 bg-red-50 border border-red-200/60 rounded-lg">
           <div className="flex items-start gap-2">
-            <XCircle className="h-5 w-5 text-red-600 mt-0.5" />
+            <XCircle className="h-5 w-5 text-red-700 mt-0.5" />
             <div className="flex-1">
-              <p className="text-sm font-medium text-red-800 dark:text-red-200">Error</p>
-              <p className="text-sm text-red-700 dark:text-red-300 whitespace-pre-line mt-1">{error}</p>
+              <p className="text-sm font-bold text-red-800 tracking-tight">Error</p>
+              <p className="text-sm text-red-700 whitespace-pre-line mt-1 font-medium">{error}</p>
             </div>
           </div>
         </div>
       )}
 
       {success && (
-        <div className="p-4 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded-lg">
+        <div className="p-4 bg-green-50 border border-green-200/60 rounded-lg">
           <div className="flex items-start gap-2">
-            <CheckCircle2 className="h-5 w-5 text-green-600 mt-0.5 flex-shrink-0" />
+            <CheckCircle2 className="h-5 w-5 text-green-700 mt-0.5 flex-shrink-0" />
             <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-green-800 dark:text-green-200 mb-1">Success!</p>
-              <p className="text-sm text-green-700 dark:text-green-300 whitespace-pre-line break-words">{success}</p>
+              <p className="text-sm font-bold text-green-800 mb-1 tracking-tight">Success!</p>
+              <p className="text-sm text-green-700 whitespace-pre-line break-words font-medium">{success}</p>
             </div>
           </div>
         </div>
@@ -463,7 +463,7 @@ export function IntegrationSettings({
                 <p className="text-xs text-muted-foreground">
                   Required for fetching approved templates. Found in Meta Business Manager → WhatsApp → Settings → WhatsApp Business Account ID (numeric ID, no dashes)
                 </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 font-medium">
+                <p className="text-xs text-blue-600 font-medium">
                   💡 This is different from App ID. WABA ID is used to fetch message templates.
                 </p>
               </div>
@@ -534,20 +534,20 @@ export function IntegrationSettings({
                 </p>
               </div>
 
-              <div className="p-4 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
-                <p className="text-sm font-semibold text-blue-900 dark:text-blue-100">
+              <div className="p-4 bg-blue-50 border border-blue-200 rounded-lg space-y-3">
+                <p className="text-sm font-semibold text-blue-900">
                   📋 Meta Webhook Configuration
                 </p>
                 <div className="space-y-3">
                   <div>
-                    <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
+                    <label className="block text-xs font-medium text-blue-800 mb-1">
                       Webhook URL (Copy this)
                     </label>
                     <div className="flex items-center gap-2">
                       <Input
                         value={webhookUrl}
                         readOnly
-                        className="bg-white dark:bg-gray-800 font-mono text-xs overflow-x-auto"
+                        className="bg-white font-mono text-xs overflow-x-auto"
                         style={{ minWidth: '300px' }}
                         title={webhookUrl}
                       />
@@ -562,20 +562,20 @@ export function IntegrationSettings({
                         Copy
                       </Button>
                     </div>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all font-mono">
+                    <p className="text-xs text-slate-500 mt-1 break-all font-mono">
                       {webhookUrl}
                     </p>
                   </div>
                   {whatsappConfig.webhookVerifyToken && (
                     <div>
-                      <label className="block text-xs font-medium text-blue-800 dark:text-blue-200 mb-1">
+                      <label className="block text-xs font-medium text-blue-800 mb-1">
                         Verify Token (Copy this)
                       </label>
                       <div className="flex items-center gap-2">
                         <Input
                           value={whatsappConfig.webhookVerifyToken}
                           readOnly
-                          className="bg-white dark:bg-gray-800 font-mono text-xs overflow-x-auto"
+                          className="bg-white font-mono text-xs overflow-x-auto"
                           style={{ minWidth: '300px' }}
                           title={whatsappConfig.webhookVerifyToken}
                         />
@@ -590,37 +590,37 @@ export function IntegrationSettings({
                           Copy
                         </Button>
                       </div>
-                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 break-all font-mono">
+                      <p className="text-xs text-slate-500 mt-1 break-all font-mono">
                         {whatsappConfig.webhookVerifyToken}
                       </p>
                     </div>
                   )}
-                  <div className="mt-2 pt-2 border-t border-blue-200 dark:border-blue-700">
+                  <div className="mt-2 pt-2 border-t border-blue-200">
                     {/* Vercel Detection Status */}
                     {typeof window !== 'undefined' && (window.location.hostname.includes('vercel.app') || window.location.hostname.includes('vercel.com')) && (
-                      <div className="mb-2 p-2 bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800 rounded">
-                        <p className="text-xs font-semibold text-green-800 dark:text-green-200 mb-1">
+                      <div className="mb-2 p-2 bg-green-50 border border-green-200 rounded">
+                        <p className="text-xs font-semibold text-green-800 mb-1">
                           ✅ Detected Vercel Deployment
                         </p>
-                        <p className="text-xs text-green-700 dark:text-green-300">
+                        <p className="text-xs text-green-700">
                           Your webhook URL is publicly accessible and ready for Meta webhook verification.
                         </p>
                       </div>
                     )}
-                    <p className="text-xs text-blue-700 dark:text-blue-300 mb-1">
+                    <p className="text-xs text-blue-700 mb-1">
                       <strong>Steps to Configure in Meta:</strong>
                     </p>
-                    <ol className="text-xs text-blue-600 dark:text-blue-400 mt-1 ml-4 list-decimal space-y-1">
+                    <ol className="text-xs text-blue-600 mt-1 ml-4 list-decimal space-y-1">
                       <li>Go to Meta Business Manager → WhatsApp → Configuration → Webhooks</li>
                       <li>Click "Edit" on your webhook</li>
-                      <li>Set Callback URL to your Vercel deployment URL + <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">/api/webhooks/whatsapp</code></li>
+                      <li>Set Callback URL to your Vercel deployment URL + <code className="bg-blue-100 px-1 rounded">/api/webhooks/whatsapp</code></li>
                       <li>Copy the Verify Token from above and paste it in Meta</li>
-                      <li>Subscribe to: <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">messages</code> and <code className="bg-blue-100 dark:bg-blue-900 px-1 rounded">message_status</code></li>
+                      <li>Subscribe to: <code className="bg-blue-100 px-1 rounded">messages</code> and <code className="bg-blue-100 px-1 rounded">message_status</code></li>
                       <li>Click "Verify and Save"</li>
                     </ol>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2">
-                      <strong>Example:</strong> If your Vercel URL is <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">https://your-app.vercel.app</code>, 
-                      use <code className="bg-slate-100 dark:bg-slate-800 px-1 rounded">https://your-app.vercel.app/api/webhooks/whatsapp</code> as the Callback URL.
+                    <p className="text-xs text-slate-600 mt-2">
+                      <strong>Example:</strong> If your Vercel URL is <code className="bg-slate-100 px-1 rounded">https://your-app.vercel.app</code>, 
+                      use <code className="bg-slate-100 px-1 rounded">https://your-app.vercel.app/api/webhooks/whatsapp</code> as the Callback URL.
                     </p>
                   </div>
                 </div>

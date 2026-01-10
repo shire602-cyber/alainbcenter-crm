@@ -416,8 +416,8 @@ export function WhatsAppSettingsClient() {
             <div
               className={`mt-4 p-4 rounded-lg flex items-center gap-3 ${
                 testResult.success
-                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-red-50 border border-red-200'
               }`}
             >
               {testResult.success ? (
@@ -428,8 +428,8 @@ export function WhatsAppSettingsClient() {
               <p
                 className={
                   testResult.success
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-red-700 dark:text-red-300'
+                    ? 'text-green-700'
+                    : 'text-red-700'
                 }
               >
                 {testResult.message}
@@ -440,7 +440,7 @@ export function WhatsAppSettingsClient() {
       </Card>
 
       {/* Test Auto-Reply */}
-      <Card className="shadow-lg border-blue-200 dark:border-blue-800">
+      <Card className="shadow-lg border-blue-200">
         <CardHeader>
           <CardTitle>Test Auto-Reply</CardTitle>
           <CardDescription>Test the AI auto-reply functionality for a lead</CardDescription>
@@ -540,8 +540,8 @@ export function WhatsAppSettingsClient() {
             <div
               className={`mt-4 p-4 rounded-lg flex items-center gap-3 ${
                 autoReplyTestResult.success
-                  ? 'bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800'
-                  : 'bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800'
+                  ? 'bg-green-50 border border-green-200'
+                  : 'bg-red-50 border border-red-200'
               }`}
             >
               {autoReplyTestResult.success ? (
@@ -552,8 +552,8 @@ export function WhatsAppSettingsClient() {
               <p
                 className={
                   autoReplyTestResult.success
-                    ? 'text-green-700 dark:text-green-300'
-                    : 'text-red-700 dark:text-red-300'
+                    ? 'text-green-700'
+                    : 'text-red-700'
                 }
               >
                 {autoReplyTestResult.message}
@@ -561,7 +561,7 @@ export function WhatsAppSettingsClient() {
             </div>
           )}
 
-          <div className="mt-4 p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg text-xs text-muted-foreground">
+          <div className="mt-4 p-3 bg-blue-50 rounded-lg text-xs text-muted-foreground">
             <p className="font-medium mb-1">💡 How it works:</p>
             <ul className="list-disc list-inside space-y-1">
               <li>This simulates an inbound message from the lead</li>
@@ -574,7 +574,7 @@ export function WhatsAppSettingsClient() {
       </Card>
 
       {/* Environment Variables Help */}
-      <Card className="shadow-lg border-yellow-200 dark:border-yellow-800 bg-yellow-50/50 dark:bg-yellow-900/10">
+      <Card className="shadow-lg border-yellow-200 bg-yellow-50/50">
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <AlertCircle className="h-5 w-5 text-yellow-600" />

@@ -30,7 +30,7 @@ export function RenewalRevenueWidget({
   const projectedRevenue = estimatedAmount ? estimatedAmount * probability : null
 
   return (
-    <Card className={cn('rounded-xl shadow-sm border-2 border-blue-200 dark:border-blue-800', className)}>
+    <Card className={cn('rounded-xl shadow-sm border-2 border-blue-200', className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-sm font-semibold uppercase tracking-wide text-muted-foreground flex items-center gap-2">
           <DollarSign className="h-4 w-4" />
@@ -66,9 +66,9 @@ export function RenewalRevenueWidget({
           </div>
         </div>
         {projectedRevenue && (
-          <div className="p-3 bg-blue-50 dark:bg-blue-900/20 rounded-lg border border-blue-200 dark:border-blue-800">
+          <div className="p-3 bg-blue-50 rounded-lg border border-blue-200">
             <p className="text-xs text-muted-foreground mb-1">Projected Revenue</p>
-            <p className="text-xl font-bold text-blue-700 dark:text-blue-300">
+            <p className="text-xl font-bold text-blue-700">
               {new Intl.NumberFormat('en-AE', { style: 'currency', currency: 'AED', minimumFractionDigits: 0 }).format(projectedRevenue)}
             </p>
             <p className="text-xs text-muted-foreground mt-1">

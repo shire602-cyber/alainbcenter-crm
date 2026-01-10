@@ -52,7 +52,7 @@ export function LeadProgressBar({ currentStage, leadId, onStageChange }: LeadPro
   }
 
   return (
-    <div className="w-full bg-slate-50 dark:bg-slate-900/50 border-b border-slate-200 dark:border-slate-800">
+    <div className="w-full bg-slate-50 border-b border-slate-200">
       <div className="px-4 sm:px-6 py-4">
         <div className="flex items-center justify-between gap-4">
           {/* Progress Steps */}
@@ -75,8 +75,8 @@ export function LeadProgressBar({ currentStage, leadId, onStageChange }: LeadPro
                       "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center transition-all",
                       isActive
                         ? "bg-primary text-primary-foreground shadow-sm"
-                        : "bg-slate-200 dark:bg-slate-800 text-slate-400",
-                      isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-white dark:ring-offset-slate-900"
+                        : "bg-slate-200 text-slate-400",
+                      isCurrent && "ring-2 ring-primary ring-offset-2 ring-offset-white"
                     )}>
                       {isActive ? (
                         <CheckCircle2 className="h-4 w-4" />
@@ -87,8 +87,8 @@ export function LeadProgressBar({ currentStage, leadId, onStageChange }: LeadPro
                     <span className={cn(
                       "text-xs font-medium hidden sm:block transition-colors",
                       isActive
-                        ? "text-slate-900 dark:text-slate-100"
-                        : "text-slate-500 dark:text-slate-400",
+                        ? "text-slate-900"
+                        : "text-slate-500",
                       isCurrent && "font-semibold"
                     )}>
                       {stage.label}
@@ -99,7 +99,7 @@ export function LeadProgressBar({ currentStage, leadId, onStageChange }: LeadPro
                       "flex-shrink-0 h-0.5 w-4 sm:w-8 transition-colors",
                       idx < currentPosition
                         ? "bg-primary"
-                        : "bg-slate-200 dark:bg-slate-800"
+                        : "bg-slate-200"
                     )} />
                   )}
                 </div>

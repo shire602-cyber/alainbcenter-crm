@@ -17,7 +17,7 @@ export function DashboardSkeleton() {
       {/* KPI Cards */}
       <div className="grid gap-2 grid-cols-2 md:grid-cols-4">
         {[1, 2, 3, 4].map((i) => (
-          <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+          <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <Skeleton className="h-3 w-20 mb-3" />
             <Skeleton className="h-8 w-16 mb-2" />
             <Skeleton className="h-6 w-full" />
@@ -30,7 +30,7 @@ export function DashboardSkeleton() {
         {/* Left Column */}
         <div className="md:col-span-2 space-y-2">
           {/* My Day */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="space-y-2">
               {[1, 2, 3, 4].map((i) => (
@@ -40,7 +40,7 @@ export function DashboardSkeleton() {
           </div>
 
           {/* Pipeline */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="grid grid-cols-4 gap-2">
               {[1, 2, 3, 4].map((i) => (
@@ -53,7 +53,7 @@ export function DashboardSkeleton() {
         {/* Right Column */}
         <div className="space-y-2">
           {/* Renewals */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (
@@ -63,7 +63,7 @@ export function DashboardSkeleton() {
           </div>
 
           {/* Lead Quality */}
-          <div className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+          <div className="bg-slate-50 border border-slate-200 rounded-xl p-4">
             <Skeleton className="h-5 w-24 mb-4" />
             <div className="space-y-2">
               {[1, 2, 3].map((i) => (

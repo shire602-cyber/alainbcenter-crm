@@ -203,8 +203,8 @@ export default function KanbanPage() {
         <div className="flex items-center justify-between">
           <div>
             <div className="flex items-center gap-3 mb-2">
-              <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/20">
-                <KanbanSquare className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+              <div className="p-2 rounded-lg bg-purple-100">
+                <KanbanSquare className="h-6 w-6 text-purple-600" />
               </div>
               <div>
                 <h1 className="text-3xl font-semibold tracking-tight">
@@ -302,7 +302,7 @@ export default function KanbanPage() {
                                   href={getWhatsAppLink(lead.contact.phone, lead.contact.fullName)}
                                   target="_blank"
                                   rel="noopener noreferrer"
-                                  className="p-1.5 text-green-600 hover:bg-green-50 dark:hover:bg-green-900/20 rounded transition-colors"
+                                  className="p-1.5 text-green-600 hover:bg-green-50:bg-green-900/20 rounded transition-colors"
                                   title="Open WhatsApp"
                                   onClick={(e) => e.stopPropagation()}
                                 >

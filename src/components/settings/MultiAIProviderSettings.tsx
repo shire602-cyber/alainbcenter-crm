@@ -290,12 +290,12 @@ export function MultiAIProviderSettings({ initialIntegrations }: { initialIntegr
 
   return (
     <div className="space-y-6">
-      <div className="bg-blue-50 dark:bg-blue-950/20 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
+      <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
         <div className="flex items-start gap-3">
-          <AlertCircle className="h-5 w-5 text-blue-600 dark:text-blue-400 mt-0.5" />
+          <AlertCircle className="h-5 w-5 text-blue-600 mt-0.5" />
           <div className="flex-1">
-            <h3 className="font-medium text-blue-900 dark:text-blue-100 mb-1">Multiple Provider Configuration</h3>
-            <p className="text-sm text-blue-700 dark:text-blue-300">
+            <h3 className="font-medium text-blue-900 mb-1">Multiple Provider Configuration</h3>
+            <p className="text-sm text-blue-700">
               Configure multiple AI providers simultaneously. The system will use DeepSeek as primary, with automatic fallback to OpenAI, then Anthropic, then Groq if the primary fails.
             </p>
           </div>
@@ -311,7 +311,7 @@ export function MultiAIProviderSettings({ initialIntegrations }: { initialIntegr
         if (!config) return null
 
         return (
-          <Card key={provider.name} className={isEnabled ? 'border-green-200 dark:border-green-800' : ''}>
+          <Card key={provider.name} className={isEnabled ? 'border-green-200' : ''}>
             <CardHeader>
               <div className="flex items-center justify-between">
                 <div>

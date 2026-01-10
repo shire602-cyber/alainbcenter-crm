@@ -126,21 +126,21 @@ export function AIScoreCircleAnimated({
 
   const colors = {
     hot: { 
-      bg: 'text-red-100 dark:text-red-900/30', 
-      ring: 'text-red-500 dark:text-red-400', 
-      text: 'text-red-700 dark:text-red-400',
+      bg: 'text-red-100', 
+      ring: 'text-red-500', 
+      text: 'text-red-700',
       gradient: 'from-red-500 via-red-600 to-red-700'
     },
     warm: { 
-      bg: 'text-orange-100 dark:text-orange-900/30', 
-      ring: 'text-orange-500 dark:text-orange-400', 
-      text: 'text-orange-700 dark:text-orange-400',
+      bg: 'text-orange-100', 
+      ring: 'text-orange-500', 
+      text: 'text-orange-700',
       gradient: 'from-orange-500 via-orange-600 to-orange-700'
     },
     cold: { 
-      bg: 'text-gray-100 dark:text-gray-800', 
-      ring: 'text-gray-500 dark:text-gray-400', 
-      text: 'text-gray-700 dark:text-gray-300',
+      bg: 'text-gray-100', 
+      ring: 'text-gray-500', 
+      text: 'text-gray-700',
       gradient: 'from-gray-500 via-gray-600 to-gray-700'
     },
   }

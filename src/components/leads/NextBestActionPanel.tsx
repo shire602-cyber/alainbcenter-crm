@@ -387,9 +387,9 @@ function NextBestActionPanelComponent({
       <div className="h-full overflow-y-auto p-6">
         <Card className="card-premium p-6">
           <div className="space-y-3">
-            <div className="h-6 w-3/4 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-4 w-full bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-11 w-full bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+            <div className="h-6 w-3/4 bg-slate-200 rounded animate-pulse" />
+            <div className="h-4 w-full bg-slate-200 rounded animate-pulse" />
+            <div className="h-11 w-full bg-slate-200 rounded animate-pulse" />
           </div>
         </Card>
       </div>
@@ -440,7 +440,7 @@ function NextBestActionPanelComponent({
                 )}
                 <Badge className="chip">{contextData.serviceType}</Badge>
                 {contextData.expirySoon && (
-                  <Badge className="chip bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+                  <Badge className="chip bg-amber-100 text-amber-700">
                     {contextData.expirySoon.label}
                   </Badge>
                 )}
@@ -468,15 +468,15 @@ function NextBestActionPanelComponent({
                         className={cn(
                           "p-3 rounded-[10px] border",
                           isOverdue
-                            ? "bg-red-50 dark:bg-red-900/10 border-red-200/60 dark:border-red-800/60"
+                            ? "bg-red-50 border-red-200/60"
                             : isDue
-                            ? "bg-amber-50 dark:bg-amber-900/10 border-amber-200/60 dark:border-amber-800/60"
-                            : "bg-card-muted border-slate-200/60 dark:border-slate-800/60"
+                            ? "bg-amber-50 border-amber-200/60"
+                            : "bg-card-muted border-slate-200/60"
                         )}
                       >
                         <div className="flex items-start justify-between gap-2">
                           <div className="flex-1 min-w-0">
-                            <p className="text-body font-medium text-slate-900 dark:text-slate-100">
+                            <p className="text-body font-medium text-slate-900">
                               {task.title}
                             </p>
                             {task.dueAt && (

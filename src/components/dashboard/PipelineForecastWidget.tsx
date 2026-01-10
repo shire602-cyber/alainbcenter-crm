@@ -29,13 +29,13 @@ const STAGE_LABELS: Record<string, string> = {
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  'NEW': 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200',
-  'CONTACTED': 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200',
-  'ENGAGED': 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
-  'QUALIFIED': 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
-  'PROPOSAL_SENT': 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200',
-  'IN_PROGRESS': 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200',
-  'ON_HOLD': 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200',
+  'NEW': 'bg-gray-100 text-gray-800',
+  'CONTACTED': 'bg-blue-100 text-blue-800',
+  'ENGAGED': 'bg-purple-100 text-purple-800',
+  'QUALIFIED': 'bg-yellow-100 text-yellow-800',
+  'PROPOSAL_SENT': 'bg-orange-100 text-orange-800',
+  'IN_PROGRESS': 'bg-indigo-100 text-indigo-800',
+  'ON_HOLD': 'bg-slate-100 text-slate-800',
 }
 
 export function PipelineForecastWidget() {
@@ -92,7 +92,7 @@ export function PipelineForecastWidget() {
       title="Pipeline Forecast"
       colSpan={2}
       action={
-        <Link href="/leads" className="text-xs text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
+        <Link href="/leads" className="text-xs text-slate-600 hover:text-primary transition-colors">
           View all →
         </Link>
       }
@@ -108,18 +108,18 @@ export function PipelineForecastWidget() {
               <Link
                 key={stage.stage}
                 href={`/leads?stage=${stage.stage}`}
-                className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800/50 hover:border-slate-300 dark:hover:border-slate-700 transition-all group"
+                className="p-3 rounded-lg border border-slate-200 hover:bg-slate-100:bg-slate-800/50 hover:border-slate-300:border-slate-700 transition-all group"
               >
                 <div className="flex items-center justify-between mb-2">
-                  <span className="text-xs font-medium text-slate-600 dark:text-slate-400">{label}</span>
+                  <span className="text-xs font-medium text-slate-600">{label}</span>
                   <Badge variant="outline" className="text-xs">
                     {stage.count}
                   </Badge>
                 </div>
-                <div className="text-lg font-semibold text-slate-900 dark:text-slate-100 group-hover:text-primary transition-colors">
+                <div className="text-lg font-semibold text-slate-900 group-hover:text-primary transition-colors">
                   {stage.expectedRevenue.toLocaleString()} <span className="text-xs font-normal text-slate-500">AED</span>
                 </div>
-                <div className="h-1.5 bg-slate-200 dark:bg-slate-800 rounded-full overflow-hidden mt-2">
+                <div className="h-1.5 bg-slate-200 rounded-full overflow-hidden mt-2">
                   <div
                     className={cn('h-full transition-all duration-300', color)}
                     style={{ width: `${revenuePercent}%` }}
@@ -129,12 +129,12 @@ export function PipelineForecastWidget() {
             )
           })}
         </div>
-        <div className="flex items-center justify-between pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center justify-between pt-2 border-t border-slate-200">
           <div className="flex items-center gap-2">
             <TrendingUp className="h-4 w-4 text-slate-500" />
-            <span className="text-xs text-slate-600 dark:text-slate-400">Total Pipeline Value</span>
+            <span className="text-xs text-slate-600">Total Pipeline Value</span>
           </div>
-          <span className="text-sm font-semibold text-slate-900 dark:text-slate-100">
+          <span className="text-sm font-semibold text-slate-900">
             {totalRevenue.toLocaleString()} AED
           </span>
         </div>

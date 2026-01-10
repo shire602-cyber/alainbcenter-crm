@@ -414,7 +414,7 @@ export function DocumentsCardEnhanced({
                   ) : isExpired ? (
                     <XCircle className="h-4 w-4 text-red-700 flex-shrink-0" />
                   ) : isExpiringSoon ? (
-                    <Clock className="h-4 w-4 text-yellow-600 dark:text-yellow-400 flex-shrink-0" />
+                    <Clock className="h-4 w-4 text-yellow-600 flex-shrink-0" />
                   ) : (
                     <AlertTriangle className="h-4 w-4 text-gray-400 flex-shrink-0" />
                   )}
@@ -422,9 +422,9 @@ export function DocumentsCardEnhanced({
                     <div className="flex items-center gap-2">
                       <p className={cn(
                         'font-medium',
-                        !matchingDoc && req.isMandatory && 'text-red-700 dark:text-red-400',
-                        isExpired && 'text-red-700 dark:text-red-400',
-                        isExpiringSoon && 'text-yellow-700 dark:text-yellow-400'
+                        !matchingDoc && req.isMandatory && 'text-red-700',
+                        isExpired && 'text-red-700',
+                        isExpiringSoon && 'text-yellow-700'
                       )}>
                         {req.label}
                       </p>
@@ -459,8 +459,8 @@ export function DocumentsCardEnhanced({
                         {matchingDoc.expiryDate && (
                           <span className={cn(
                             'ml-2',
-                            isExpired && 'text-red-600 dark:text-red-400 font-medium',
-                            isExpiringSoon && 'text-yellow-600 dark:text-yellow-400'
+                            isExpired && 'text-red-600 font-medium',
+                            isExpiringSoon && 'text-yellow-600'
                           )}>
                             {isExpired 
                               ? `Expired ${Math.abs(differenceInDays(parseISO(matchingDoc.expiryDate), new Date()))} days ago`
@@ -541,14 +541,14 @@ export function DocumentsCardEnhanced({
         {compliance && (compliance.missingMandatory.length > 0 || compliance.expired.length > 0 || compliance.expiringSoon.length > 0) && (
           <div className={cn(
             'p-3 rounded-lg border text-xs',
-            compliance.status === 'CRITICAL' && 'bg-red-50 dark:bg-red-900/20 border-red-200 dark:border-red-800',
-            compliance.status === 'WARNING' && 'bg-yellow-50 dark:bg-yellow-900/20 border-yellow-200 dark:border-yellow-800'
+            compliance.status === 'CRITICAL' && 'bg-red-50 border-red-200',
+            compliance.status === 'WARNING' && 'bg-yellow-50 border-yellow-200'
           )}>
             <p className="font-medium mb-2">Compliance Issues:</p>
             {compliance.expired.length > 0 && (
               <div className="space-y-1">
-                <p className="text-red-700 dark:text-red-400 font-medium">Expired:</p>
-                <ul className="list-disc list-inside space-y-0.5 text-red-600 dark:text-red-400">
+                <p className="text-red-700 font-medium">Expired:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-red-600">
                   {compliance.expired.map((item, idx) => (
                     <li key={idx}>{item}</li>
                   ))}
@@ -567,8 +567,8 @@ export function DocumentsCardEnhanced({
             )}
             {compliance.expiringSoon.length > 0 && (
               <div className="space-y-1 mt-2">
-                <p className="text-yellow-700 dark:text-yellow-400 font-medium">Expiring Soon:</p>
-                <ul className="list-disc list-inside space-y-0.5 text-yellow-600 dark:text-yellow-400">
+                <p className="text-yellow-700 font-medium">Expiring Soon:</p>
+                <ul className="list-disc list-inside space-y-0.5 text-yellow-600">
                   {compliance.expiringSoon.map((item, idx) => (
                     <li key={idx}>{item}</li>
                   ))}
@@ -655,7 +655,7 @@ function UploadModal({ isOpen, onClose, onUpload, uploading, uploadProgress }: U
         <div className="px-6 pb-6 pt-4 space-y-6">
           {/* File Upload Area */}
           <div>
-            <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+            <Label className="text-sm font-semibold text-slate-900 mb-2 block">
               File <span className="text-red-500">*</span>
             </Label>
             <div className="relative">
@@ -674,27 +674,27 @@ function UploadModal({ isOpen, onClose, onUpload, uploading, uploadProgress }: U
                   "flex flex-col items-center justify-center w-full h-32 border-2 border-dashed rounded-2xl cursor-pointer transition-all duration-200",
                   selectedFile
                     ? "border-primary bg-primary/5 hover:bg-primary/10"
-                    : "border-slate-300 dark:border-slate-700 hover:border-primary hover:bg-slate-50 dark:hover:bg-slate-800/50",
+                    : "border-slate-300 hover:border-primary hover:bg-slate-50:bg-slate-800/50",
                   uploading && "opacity-50 cursor-not-allowed"
                 )}
               >
                 {selectedFile ? (
                   <>
                     <FileText className="h-8 w-8 text-primary mb-2" />
-                    <p className="text-sm font-medium text-slate-900 dark:text-slate-100">
+                    <p className="text-sm font-medium text-slate-900">
                       {selectedFile.name}
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       {(selectedFile.size / 1024).toFixed(1)} KB
                     </p>
                   </>
                 ) : (
                   <>
-                    <Upload className="h-8 w-8 text-slate-400 dark:text-slate-500 mb-2" />
-                    <p className="text-sm font-medium text-slate-700 dark:text-slate-300">
+                    <Upload className="h-8 w-8 text-slate-400 mb-2" />
+                    <p className="text-sm font-medium text-slate-700">
                       Click to browse or drag and drop
                     </p>
-                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                    <p className="text-xs text-slate-500 mt-1">
                       PDF, Images, Word documents
                     </p>
                   </>
@@ -721,14 +721,14 @@ function UploadModal({ isOpen, onClose, onUpload, uploading, uploadProgress }: U
 
           {/* Document Type */}
           <div>
-            <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+            <Label className="text-sm font-semibold text-slate-900 mb-2 block">
               Document Type <span className="text-red-500">*</span>
             </Label>
             <select
               value={selectedDocType}
               onChange={(e: React.ChangeEvent<HTMLSelectElement>) => setSelectedDocType(e.target.value)}
               disabled={uploading}
-              className="flex h-11 w-full rounded-xl border-2 border-slate-200 dark:border-slate-700 bg-background px-4 py-2 text-sm font-medium transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
+              className="flex h-11 w-full rounded-xl border-2 border-slate-200 bg-background px-4 py-2 text-sm font-medium transition-all focus:border-primary focus:ring-2 focus:ring-primary/20 outline-none hover:border-slate-300:border-slate-600 disabled:opacity-50 disabled:cursor-not-allowed"
             >
               <option value="PASSPORT">Passport</option>
               <option value="EID">Emirates ID</option>
@@ -744,7 +744,7 @@ function UploadModal({ isOpen, onClose, onUpload, uploading, uploadProgress }: U
 
           {/* Expiry Date */}
           <div>
-            <Label className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-2 block">
+            <Label className="text-sm font-semibold text-slate-900 mb-2 block">
               Expiry Date <span className="text-slate-400 text-xs font-normal">(Optional)</span>
             </Label>
             <Input
@@ -752,16 +752,16 @@ function UploadModal({ isOpen, onClose, onUpload, uploading, uploadProgress }: U
               value={selectedExpiryDate}
               onChange={(e) => setSelectedExpiryDate(e.target.value)}
               disabled={uploading}
-              className="h-11 rounded-xl border-2 border-slate-200 dark:border-slate-700 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all hover:border-slate-300 dark:hover:border-slate-600 disabled:opacity-50"
+              className="h-11 rounded-xl border-2 border-slate-200 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-all hover:border-slate-300:border-slate-600 disabled:opacity-50"
             />
-            <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 flex items-center gap-1">
+            <p className="text-xs text-slate-500 mt-2 flex items-center gap-1">
               <Calendar className="h-3 w-3" />
               Set if this document expires (e.g., EID, Visa)
             </p>
           </div>
 
           {/* Action Buttons */}
-          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200 dark:border-slate-700">
+          <div className="flex justify-end gap-3 pt-4 border-t border-slate-200">
             <Button
               variant="outline"
               onClick={handleCancel}

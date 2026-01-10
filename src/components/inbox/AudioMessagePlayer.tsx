@@ -210,14 +210,14 @@ export function AudioMessagePlayer({ mediaId, mimeType, messageId, className }: 
 
   if (error) {
     return (
-      <div className={cn('p-3 bg-red-50 dark:bg-red-900/20 rounded-lg border border-red-200 dark:border-red-800', className)}>
-        <p className="text-sm text-red-700 dark:text-red-300">⚠️ {error}</p>
+      <div className={cn('p-3 bg-red-50 rounded-lg border border-red-200', className)}>
+        <p className="text-sm text-red-700">⚠️ {error}</p>
       </div>
     )
   }
 
   return (
-    <div className={cn('flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg', className)}>
+    <div className={cn('flex items-center gap-3 p-3 bg-slate-50 rounded-lg', className)}>
       {/* PART B FIX: Use proxy URL directly for Range support */}
       <audio ref={audioRef} src={audioUrl || undefined} preload="metadata" crossOrigin="anonymous" />
       
@@ -238,13 +238,13 @@ export function AudioMessagePlayer({ mediaId, mimeType, messageId, className }: 
       </Button>
 
       <div className="flex-1 min-w-0">
-        <div className="h-2 bg-slate-200 dark:bg-slate-700 rounded-full overflow-hidden mb-1">
+        <div className="h-2 bg-slate-200 rounded-full overflow-hidden mb-1">
           <div
             className="h-full bg-primary transition-all duration-100"
             style={{ width: `${progress}%` }}
           />
         </div>
-        <div className="flex items-center justify-between text-xs text-slate-600 dark:text-slate-400">
+        <div className="flex items-center justify-between text-xs text-slate-600">
           <span>{formatTime(currentTime)}</span>
           <span>{formatTime(duration)}</span>
         </div>

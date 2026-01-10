@@ -214,7 +214,7 @@ export function RemindersCard({ leadId }: RemindersCardProps) {
         {/* Add Reminder Modal */}
         {showAddModal && (
           <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
-            <div className="bg-white dark:bg-gray-800 rounded-lg p-6 w-full max-w-md space-y-4">
+            <div className="bg-white rounded-lg p-6 w-full max-w-md space-y-4">
               <h3 className="text-lg font-semibold">Add Reminder</h3>
               
               <div className="space-y-2">

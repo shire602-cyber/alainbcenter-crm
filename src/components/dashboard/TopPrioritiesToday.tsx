@@ -74,29 +74,29 @@ export function TopPrioritiesToday() {
     switch (priority) {
       case 'URGENT':
         return {
-          card: 'border-red-300 dark:border-red-700 bg-gradient-to-br from-red-50 to-red-100 dark:from-red-900/30 dark:to-red-800/20',
+          card: 'border-red-300 bg-gradient-to-br from-red-50 to-red-100',
           button: 'bg-red-600 hover:bg-red-700 text-white shadow-lg shadow-red-500/20',
           badge: 'bg-red-600 text-white',
         }
       case 'HIGH':
         return {
           card: isHighValue 
-            ? 'border-orange-300 dark:border-orange-700 bg-gradient-to-br from-orange-50 to-amber-50 dark:from-orange-900/30 dark:to-amber-900/20 ring-2 ring-orange-200 dark:ring-orange-800'
-            : 'border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20',
+            ? 'border-orange-300 bg-gradient-to-br from-orange-50 to-amber-50 ring-2 ring-orange-200'
+            : 'border-orange-200 bg-orange-50',
           button: 'bg-orange-600 hover:bg-orange-700 text-white',
           badge: 'bg-orange-600 text-white',
         }
       case 'NORMAL':
         return {
           card: isHighValue
-            ? 'border-blue-300 dark:border-blue-700 bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/30 dark:to-indigo-900/20 ring-2 ring-blue-200 dark:ring-blue-800'
-            : 'border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-900/20',
+            ? 'border-blue-300 bg-gradient-to-br from-blue-50 to-indigo-50 ring-2 ring-blue-200'
+            : 'border-blue-200 bg-blue-50',
           button: 'bg-blue-600 hover:bg-blue-700 text-white',
           badge: 'bg-blue-600 text-white',
         }
       default:
         return {
-          card: 'border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-900/50',
+          card: 'border-slate-200 bg-slate-50',
           button: 'bg-slate-600 hover:bg-slate-700 text-white',
           badge: 'bg-slate-600 text-white',
         }
@@ -107,7 +107,7 @@ export function TopPrioritiesToday() {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-24 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+          <div key={i} className="h-24 bg-slate-100 rounded-xl animate-pulse" />
         ))}
       </div>
     )
@@ -115,14 +115,14 @@ export function TopPrioritiesToday() {
 
   if (items.length === 0) {
     return (
-      <div className="p-12 text-center rounded-2xl bg-gradient-to-br from-green-50 to-emerald-50 dark:from-green-900/20 dark:to-emerald-900/10 border-2 border-green-200 dark:border-green-800">
-        <div className="w-20 h-20 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/10">
+      <div className="p-12 text-center rounded-2xl bg-gradient-to-br from-green-50 to-emerald-50 border-2 border-green-200">
+        <div className="w-20 h-20 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-green-500/10">
           <span className="text-4xl">🎉</span>
         </div>
-        <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <p className="text-lg font-bold text-slate-900 mb-2">
           All caught up!
         </p>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-slate-600">
           No urgent priorities right now. Great work!
         </p>
       </div>
@@ -147,12 +147,12 @@ export function TopPrioritiesToday() {
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-2 mb-2">
                   {item.priority === 'URGENT' && (
-                    <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400 flex-shrink-0 animate-pulse" />
+                    <AlertCircle className="h-4 w-4 text-red-600 flex-shrink-0 animate-pulse" />
                   )}
                   {isHighValue && (
-                    <Zap className="h-4 w-4 text-amber-600 dark:text-amber-400 flex-shrink-0" />
+                    <Zap className="h-4 w-4 text-amber-600 flex-shrink-0" />
                   )}
-                  <h4 className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                  <h4 className="text-sm font-semibold text-slate-900 truncate">
                     {item.title}
                   </h4>
                   {isHighValue && (
@@ -161,13 +161,13 @@ export function TopPrioritiesToday() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                <p className="text-xs text-slate-600 mb-2">
                   {item.reason}
                 </p>
                 {item.dueAt && (
                   <div className="flex items-center gap-1.5 mb-3">
                     <Clock className="h-3 w-3 text-slate-400" />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-xs text-slate-500">
                       {formatDistanceToNow(new Date(item.dueAt), { addSuffix: true })}
                     </span>
                   </div>
@@ -190,18 +190,18 @@ export function TopPrioritiesToday() {
                   <div className="flex items-center gap-1 justify-end mb-1">
                     <DollarSign className={cn(
                       "h-3.5 w-3.5",
-                      isHighValue ? "text-amber-600 dark:text-amber-400" : "text-slate-400"
+                      isHighValue ? "text-amber-600" : "text-slate-400"
                     )} />
                     <p className={cn(
                       "text-xs font-medium",
-                      isHighValue ? "text-amber-600 dark:text-amber-400" : "text-slate-500 dark:text-slate-400"
+                      isHighValue ? "text-amber-600" : "text-slate-500"
                     )}>
                       Estimated Value
                     </p>
                   </div>
                   <p className={cn(
                     "text-base font-bold",
-                    isHighValue ? "text-amber-700 dark:text-amber-300" : "text-slate-900 dark:text-slate-100"
+                    isHighValue ? "text-amber-700" : "text-slate-900"
                   )}>
                     AED {item.revenuePotential.toLocaleString()}
                   </p>

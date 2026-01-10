@@ -51,7 +51,7 @@ export function WaitingOnCustomer() {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+          <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
         ))}
       </div>
     )
@@ -59,9 +59,9 @@ export function WaitingOnCustomer() {
 
   if (items.length === 0) {
     return (
-      <div className="p-6 text-center rounded-2xl bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800">
+      <div className="p-6 text-center rounded-2xl bg-slate-50 border border-slate-200">
         <Hourglass className="h-8 w-8 text-slate-400 mx-auto mb-2" />
-        <p className="text-sm text-slate-500 dark:text-slate-400">
+        <p className="text-sm text-slate-500">
           No items waiting on customer
         </p>
       </div>
@@ -76,22 +76,22 @@ export function WaitingOnCustomer() {
           href={`/leads/${item.leadId}`}
           className="block"
         >
-          <Card className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700 hover:shadow-sm transition-all">
+          <Card className="p-4 rounded-xl border border-slate-200 hover:border-slate-300:border-slate-700 hover:shadow-sm transition-all">
             <div className="flex items-start gap-3">
-              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-orange-100 dark:bg-orange-900/20 flex items-center justify-center">
-                <Hourglass className="h-5 w-5 text-orange-600 dark:text-orange-400" />
+              <div className="flex-shrink-0 w-10 h-10 rounded-lg bg-orange-100 flex items-center justify-center">
+                <Hourglass className="h-5 w-5 text-orange-600" />
               </div>
               <div className="flex-1 min-w-0">
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 truncate">
+                <p className="text-sm font-medium text-slate-900 truncate">
                   {item.title}
                 </p>
-                <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                <p className="text-xs text-slate-500 mt-1">
                   {item.reason}
                 </p>
                 {item.daysWaiting !== undefined && (
                   <div className="flex items-center gap-2 mt-2">
                     <Clock className="h-3 w-3 text-slate-400" />
-                    <span className="text-xs text-slate-500 dark:text-slate-400">
+                    <span className="text-xs text-slate-500">
                       {item.daysWaiting} day{item.daysWaiting !== 1 ? 's' : ''} waiting
                     </span>
                   </div>

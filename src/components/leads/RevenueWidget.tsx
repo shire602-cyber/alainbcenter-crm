@@ -81,10 +81,10 @@ export function RevenueWidget({ leadId, expiryItems = [], serviceType, className
   }
 
   return (
-    <Card className={cn('rounded-2xl shadow-sm border-2 border-blue-200 dark:border-blue-800', className)}>
+    <Card className={cn('rounded-2xl shadow-sm border-2 border-blue-200', className)}>
       <CardHeader className="pb-3">
         <CardTitle className="text-base font-semibold flex items-center gap-2">
-          <DollarSign className="h-4 w-4 text-green-600 dark:text-green-400" />
+          <DollarSign className="h-4 w-4 text-green-600" />
           Renewal Revenue
         </CardTitle>
       </CardHeader>
@@ -93,7 +93,7 @@ export function RevenueWidget({ leadId, expiryItems = [], serviceType, className
         <div>
           <p className="text-xs text-muted-foreground mb-1">Projected Renewal Value</p>
           <div className="flex items-baseline gap-2">
-            <span className="text-2xl font-bold text-green-600 dark:text-green-400">
+            <span className="text-2xl font-bold text-green-600">
               AED {projectedRevenue.toLocaleString()}
             </span>
             <Badge variant="outline" className="text-xs">
@@ -104,17 +104,17 @@ export function RevenueWidget({ leadId, expiryItems = [], serviceType, className
 
         {/* Renewal Items */}
         {nextExpiry && (
-          <div className="p-3 rounded-lg bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800">
+          <div className="p-3 rounded-lg bg-blue-50 border border-blue-200">
             <div className="flex items-start gap-2">
-              <Calendar className="h-4 w-4 text-blue-600 dark:text-blue-400 mt-0.5" />
+              <Calendar className="h-4 w-4 text-blue-600 mt-0.5" />
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-blue-900 dark:text-blue-100">
+                <p className="text-xs font-medium text-blue-900">
                   Next Renewal
                 </p>
-                <p className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
+                <p className="text-xs text-blue-700 mt-0.5">
                   {nextExpiry.type.replace(/_/g, ' ')} - {format(parseISO(nextExpiry.expiryDate), 'MMM dd, yyyy')}
                 </p>
-                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1 font-medium">
+                <p className="text-xs text-blue-600 mt-1 font-medium">
                   AED {getRenewalValue(nextExpiry.type).toLocaleString()} potential
                 </p>
               </div>

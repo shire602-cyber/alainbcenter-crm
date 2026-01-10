@@ -363,8 +363,8 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
 
         {loading ? (
           <div className="space-y-2">
-            <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
-            <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+            <div className="h-16 bg-slate-100 rounded animate-pulse" />
+            <div className="h-16 bg-slate-100 rounded animate-pulse" />
           </div>
         ) : agents.length === 0 ? (
           <div className="text-center py-8 text-muted-foreground">
@@ -384,7 +384,7 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                 className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                   selectedAgent?.id === agent.id
                     ? 'bg-primary/10 border-primary'
-                    : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                    : 'bg-slate-50 border-slate-200 hover:bg-slate-100:bg-slate-800'
                 }`}
               >
                 <div className="flex items-start justify-between gap-2">
@@ -463,7 +463,7 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                       id="agent-language"
                       value={formData.defaultLanguage || 'en'}
                       onChange={(e) => setFormData({ ...formData, defaultLanguage: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white"
                     >
                       <option value="en">English</option>
                       <option value="ar">Arabic</option>
@@ -475,7 +475,7 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                       id="agent-tone"
                       value={formData.tone || 'friendly'}
                       onChange={(e) => setFormData({ ...formData, tone: e.target.value })}
-                      className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                      className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white"
                     >
                       <option value="professional">Professional</option>
                       <option value="friendly">Friendly</option>
@@ -698,7 +698,7 @@ export function ResponseSettingsTab({ trainingDocuments }: ResponseSettingsTabPr
                     id="agent-timezone"
                     value={formData.timezone || 'Asia/Dubai'}
                     onChange={(e) => setFormData({ ...formData, timezone: e.target.value })}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white"
                     disabled={true}
                   >
                     <option value="Asia/Dubai">Asia/Dubai (UAE)</option>

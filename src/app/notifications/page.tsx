@@ -236,7 +236,7 @@ export default function NotificationsPage() {
       <div className="p-6 max-w-4xl mx-auto">
         <div className="flex items-center justify-between mb-6">
           <div>
-            <h1 className="text-heading text-slate-900 dark:text-slate-100">
+            <h1 className="text-heading text-slate-900">
               Notifications
             </h1>
             <p className="text-meta muted-text mt-1">
@@ -248,7 +248,7 @@ export default function NotificationsPage() {
               variant="outline"
               size="sm"
               onClick={markAllAsRead}
-              className="rounded-[12px] border-slate-200/60 dark:border-slate-800/60"
+              className="rounded-[12px] border-slate-200/60"
             >
               Mark all as read
             </Button>
@@ -257,10 +257,10 @@ export default function NotificationsPage() {
 
         {notifications.length === 0 ? (
           <Card className="card-premium p-12 text-center">
-            <div className="w-16 h-16 rounded-full bg-green-100 dark:bg-green-900/20 flex items-center justify-center mx-auto mb-4">
-              <CheckCircle2 className="h-8 w-8 text-green-600 dark:text-green-400" />
+            <div className="w-16 h-16 rounded-full bg-green-100 flex items-center justify-center mx-auto mb-4">
+              <CheckCircle2 className="h-8 w-8 text-green-600" />
             </div>
-            <p className="text-heading text-slate-900 dark:text-slate-100 mb-2">
+            <p className="text-heading text-slate-900 mb-2">
               All caught up
             </p>
             <p className="text-body muted-text">
@@ -276,7 +276,7 @@ export default function NotificationsPage() {
               return createdAt >= today
             }).length > 0 && (
               <div>
-                <h2 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                <h2 className="text-body font-semibold text-slate-900 mb-4">
                   Today
                 </h2>
                 <div className="space-y-3">
@@ -307,7 +307,7 @@ export default function NotificationsPage() {
               return createdAt >= yesterday && createdAt < today
             }).length > 0 && (
               <div>
-                <h2 className="text-body font-semibold text-slate-900 dark:text-slate-100 mb-4">
+                <h2 className="text-body font-semibold text-slate-900 mb-4">
                   Yesterday
                 </h2>
                 <div className="space-y-3">

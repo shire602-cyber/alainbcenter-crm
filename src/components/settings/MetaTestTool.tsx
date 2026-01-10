@@ -68,8 +68,8 @@ export function MetaTestTool() {
     <div className="space-y-8 animate-fade-in">
       <div>
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-purple-100 dark:bg-purple-900/20">
-            <TestTube className="h-6 w-6 text-purple-600 dark:text-purple-400" />
+          <div className="p-2 rounded-lg bg-purple-100">
+            <TestTube className="h-6 w-6 text-purple-600" />
           </div>
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-purple-600 to-pink-600 bg-clip-text text-transparent">
@@ -143,12 +143,12 @@ export function MetaTestTool() {
           <CardContent>
             {result.success ? (
               <div className="space-y-6">
-                <div className="p-4 bg-green-50 dark:bg-green-900/20 rounded-lg">
-                  <p className="font-semibold text-green-900 dark:text-green-100 mb-1">
+                <div className="p-4 bg-green-50 rounded-lg">
+                  <p className="font-semibold text-green-900 mb-1">
                     {result.message || 'Lead ingested successfully!'}
                   </p>
                   {result.existing && (
-                    <p className="text-sm text-green-700 dark:text-green-300">
+                    <p className="text-sm text-green-700">
                       Note: This lead was already in the system
                     </p>
                   )}
@@ -225,12 +225,12 @@ export function MetaTestTool() {
                 )}
               </div>
             ) : (
-              <div className="p-4 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
+              <div className="p-4 bg-red-50 border border-red-200 rounded-lg">
                 <div className="flex items-start gap-2">
                   <AlertCircle className="h-5 w-5 text-red-600 mt-0.5" />
                   <div>
-                    <p className="font-semibold text-red-900 dark:text-red-100 mb-1">Error</p>
-                    <p className="text-sm text-red-700 dark:text-red-300">
+                    <p className="font-semibold text-red-900 mb-1">Error</p>
+                    <p className="text-sm text-red-700">
                       {result.error || 'Unknown error occurred'}
                     </p>
                   </div>

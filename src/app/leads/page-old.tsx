@@ -393,13 +393,13 @@ function LeadsPageContent() {
         <div className="flex items-center justify-between mb-2">
           <div>
             <h1 className="text-xl font-semibold tracking-tight">Leads</h1>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mt-0.5">
+            <p className="text-xs text-slate-600 mt-0.5">
               {leads.length} {leads.length === 1 ? 'lead' : 'leads'}
             </p>
           </div>
           <div className="flex items-center gap-2">
             {/* PHASE 5F: View Mode Toggle */}
-            <div className="flex items-center gap-1 border border-slate-200 dark:border-slate-800 rounded-lg p-1">
+            <div className="flex items-center gap-1 border border-slate-200 rounded-lg p-1">
               <Button
                 variant={viewMode === 'list' ? 'default' : 'ghost'}
                 size="sm"
@@ -454,7 +454,7 @@ function LeadsPageContent() {
 
             <div className="grid grid-cols-2 md:grid-cols-6 gap-2">
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Quick Filter</label>
+                <label className="block text-xs font-medium text-slate-700">Quick Filter</label>
                 <Select
                   value={filter}
                   onChange={(e) => setFilter(e.target.value as FilterType)}
@@ -469,7 +469,7 @@ function LeadsPageContent() {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Sort</label>
+                <label className="block text-xs font-medium text-slate-700">Sort</label>
                 <Select
                   value={sortBy}
                   onChange={(e) => setSortBy(e.target.value as SortType)}
@@ -483,7 +483,7 @@ function LeadsPageContent() {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Stage</label>
+                <label className="block text-xs font-medium text-slate-700">Stage</label>
                 <Select
                   value={pipelineStageFilter}
                   onChange={(e) => setPipelineStageFilter(e.target.value)}
@@ -499,7 +499,7 @@ function LeadsPageContent() {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Source</label>
+                <label className="block text-xs font-medium text-slate-700">Source</label>
                 <Select 
                   value={sourceFilter} 
                   onChange={(e) => setSourceFilter(e.target.value)} 
@@ -515,7 +515,7 @@ function LeadsPageContent() {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">AI Score</label>
+                <label className="block text-xs font-medium text-slate-700">AI Score</label>
                 <Select 
                   value={aiScoreFilter} 
                   onChange={(e) => setAiScoreFilter(e.target.value)} 
@@ -529,7 +529,7 @@ function LeadsPageContent() {
               </div>
 
               <div className="space-y-1">
-                <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">Service</label>
+                <label className="block text-xs font-medium text-slate-700">Service</label>
                 <Select 
                   value={serviceFilter} 
                   onChange={(e) => setServiceFilter(e.target.value)} 
@@ -546,7 +546,7 @@ function LeadsPageContent() {
 
               {(pipelineStageFilter || sourceFilter || aiScoreFilter || serviceFilter) && (
                 <div className="space-y-1">
-                  <label className="block text-xs font-medium text-slate-700 dark:text-slate-300">&nbsp;</label>
+                  <label className="block text-xs font-medium text-slate-700">&nbsp;</label>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -573,10 +573,10 @@ function LeadsPageContent() {
             <div className="flex gap-4 overflow-x-auto pb-4">
               {PIPELINE_STAGES.map((stage) => (
                 <div key={stage} className="flex-shrink-0 w-80 bg-card rounded-lg border p-4">
-                  <div className="h-8 bg-slate-200 dark:bg-slate-800 rounded mb-4 animate-pulse" />
+                  <div className="h-8 bg-slate-200 rounded mb-4 animate-pulse" />
                   <div className="space-y-3">
                     {[1, 2, 3].map((i) => (
-                      <div key={i} className="h-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+                      <div key={i} className="h-24 bg-slate-200 rounded animate-pulse" />
                     ))}
                   </div>
                 </div>
@@ -585,7 +585,7 @@ function LeadsPageContent() {
           ) : (
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
               {[1, 2, 3, 4, 5, 6].map((i) => (
-                <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+                <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                   <Skeleton className="h-4 w-24 mb-3" />
                   <Skeleton className="h-3 w-full mb-2" />
                   <Skeleton className="h-3 w-2/3" />
@@ -744,7 +744,7 @@ export default function LeadsPage() {
         <div className="space-y-2">
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
             {[1, 2, 3, 4, 5, 6].map((i) => (
-              <div key={i} className="bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-4">
+              <div key={i} className="bg-slate-50 border border-slate-200 rounded-xl p-4">
                 <Skeleton className="h-4 w-24 mb-3" />
                 <Skeleton className="h-3 w-full mb-2" />
                 <Skeleton className="h-3 w-2/3" />

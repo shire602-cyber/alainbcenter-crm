@@ -57,7 +57,7 @@ export function PricingCard({
         <CardTitle className="text-2xl mb-2">{name}</CardTitle>
         <div className="flex items-baseline justify-center gap-2 mb-4">
           <span className="text-5xl font-bold">{price}</span>
-          <span className="text-gray-600 dark:text-gray-400">{period}</span>
+          <span className="text-gray-600">{period}</span>
         </div>
         <CardDescription className="text-base">{description}</CardDescription>
       </CardHeader>
@@ -66,11 +66,11 @@ export function PricingCard({
           {features.map((feature, idx) => (
             <li key={idx} className="flex items-start gap-3">
               {feature.included ? (
-                <CheckCircle2 className="h-5 w-5 text-green-600 dark:text-green-400 flex-shrink-0 mt-0.5" />
+                <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0 mt-0.5" />
               ) : (
-                <div className="h-5 w-5 rounded-full border-2 border-gray-300 dark:border-gray-600 flex-shrink-0 mt-0.5" />
+                <div className="h-5 w-5 rounded-full border-2 border-gray-300 flex-shrink-0 mt-0.5" />
               )}
-              <span className={cn('text-sm', !feature.included && 'text-gray-400 dark:text-gray-600')}>
+              <span className={cn('text-sm', !feature.included && 'text-gray-400')}>
                 {feature.text}
               </span>
             </li>

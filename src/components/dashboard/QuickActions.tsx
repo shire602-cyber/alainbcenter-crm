@@ -48,12 +48,12 @@ export function QuickActions() {
         className={cn(
           "h-14 w-14 rounded-full shadow-lg transition-all duration-200",
           isOpen 
-            ? "bg-slate-900 hover:bg-slate-800 dark:bg-slate-100 dark:hover:bg-slate-200" 
+            ? "bg-slate-900 hover:bg-slate-800:bg-slate-200" 
             : "bg-primary hover:bg-primary/90"
         )}
       >
         {isOpen ? (
-          <X className="h-6 w-6 text-white dark:text-slate-900" />
+          <X className="h-6 w-6 text-white" />
         ) : (
           <Plus className="h-6 w-6 text-white" />
         )}

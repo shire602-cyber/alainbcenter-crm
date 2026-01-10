@@ -48,8 +48,8 @@ export function AutomationLogsView() {
       {/* Header */}
       <div>
         <div className="flex items-center gap-3 mb-2">
-          <div className="p-2 rounded-lg bg-blue-100 dark:bg-blue-900/20">
-            <Clock className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+          <div className="p-2 rounded-lg bg-blue-100">
+            <Clock className="h-6 w-6 text-blue-600" />
           </div>
           <div>
             <h1 className="text-4xl font-bold bg-gradient-to-r from-blue-600 to-indigo-600 bg-clip-text text-transparent">

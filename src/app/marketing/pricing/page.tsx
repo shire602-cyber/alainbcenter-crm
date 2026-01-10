@@ -101,9 +101,9 @@ export default function PricingPage() {
   ]
 
   return (
-    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50 dark:from-gray-900 dark:to-gray-950">
+    <div className="min-h-screen bg-gradient-to-b from-white to-gray-50">
       {/* Header */}
-      <div className="border-b bg-white dark:bg-gray-900">
+      <div className="border-b bg-white">
         <div className="container mx-auto px-4 py-4">
           <Link href="/marketing">
             <Button variant="ghost" size="sm">
@@ -119,7 +119,7 @@ export default function PricingPage() {
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto text-center">
             <h1 className="text-5xl font-bold mb-6">Simple, Transparent Pricing</h1>
-            <p className="text-xl text-gray-600 dark:text-gray-300 mb-8">
+            <p className="text-xl text-gray-600 mb-8">
               Choose the plan that fits your business. All plans include core features.
               Upgrade or downgrade anytime.
             </p>
@@ -140,7 +140,7 @@ export default function PricingPage() {
           </div>
 
           <div className="mt-16 text-center">
-            <p className="text-gray-600 dark:text-gray-400 mb-4">
+            <p className="text-gray-600 mb-4">
               All plans include 14-day free trial. No credit card required.
             </p>
             <Link href="/setup">
@@ -153,7 +153,7 @@ export default function PricingPage() {
       </section>
 
       {/* FAQ Section */}
-      <section className="py-24 bg-gray-50 dark:bg-gray-900/50 border-t">
+      <section className="py-24 bg-gray-50 border-t">
         <div className="container mx-auto px-4">
           <div className="max-w-3xl mx-auto">
             <h2 className="text-3xl font-bold text-center mb-12">Frequently Asked Questions</h2>
@@ -176,9 +176,9 @@ export default function PricingPage() {
                   a: 'Yes! Annual plans save you 20%. Contact us for custom enterprise pricing.',
                 },
               ].map((faq, idx) => (
-                <div key={idx} className="bg-white dark:bg-gray-800 rounded-lg p-6 border">
+                <div key={idx} className="bg-white rounded-lg p-6 border">
                   <h3 className="font-semibold text-lg mb-2">{faq.q}</h3>
-                  <p className="text-gray-600 dark:text-gray-400">{faq.a}</p>
+                  <p className="text-gray-600">{faq.a}</p>
                 </div>
               ))}
             </div>

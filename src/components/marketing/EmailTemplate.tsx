@@ -26,9 +26,9 @@ export function EmailTemplate({
 }: EmailTemplateProps) {
   return (
     <div className={preview ? 'max-w-2xl mx-auto p-4' : ''}>
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-lg overflow-hidden">
+      <div className="bg-white rounded-lg shadow-lg overflow-hidden">
         {/* Email Header */}
-        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 dark:from-blue-700 dark:to-indigo-700 text-white p-6 text-center">
+        <div className="bg-gradient-to-r from-blue-600 to-indigo-600 text-white p-6 text-center">
           <Building2 className="h-12 w-12 mx-auto mb-4" />
           <h1 className="text-2xl font-bold">Alain Business Center CRM</h1>
           <p className="text-blue-100 text-sm mt-2">The Complete Solution for UAE Business Services</p>
@@ -38,12 +38,12 @@ export function EmailTemplate({
         <div className="p-8">
           <h2 className="text-3xl font-bold mb-4">Hello {recipientName},</h2>
           
-          <p className="text-lg text-gray-700 dark:text-gray-300 mb-6">
+          <p className="text-lg text-gray-700 mb-6">
             Are you spending too much time managing leads manually? Missing follow-ups? 
             Losing track of renewals?
           </p>
 
-          <p className="text-gray-600 dark:text-gray-400 mb-6">
+          <p className="text-gray-600 mb-6">
             <strong>Alain CRM</strong> is the all-in-one solution built specifically for UAE business 
             services companies. Manage leads, automate workflows, and grow revenue—all in one place.
           </p>
@@ -60,7 +60,7 @@ export function EmailTemplate({
             ].map((feature, idx) => (
               <div key={idx} className="flex items-center gap-3">
                 <CheckCircle2 className="h-5 w-5 text-green-600 flex-shrink-0" />
-                <span className="text-gray-700 dark:text-gray-300">{feature}</span>
+                <span className="text-gray-700">{feature}</span>
               </div>
             ))}
           </div>
@@ -73,45 +73,45 @@ export function EmailTemplate({
                 <ArrowRight className="ml-2 h-5 w-5" />
               </Button>
             </a>
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-4">
+            <p className="text-sm text-gray-500 mt-4">
               No credit card required • Setup in 5 minutes
             </p>
           </div>
 
           {/* Social Proof */}
-          <Card className="bg-gray-50 dark:bg-gray-800 border-0 my-8">
+          <Card className="bg-gray-50 border-0 my-8">
             <CardContent className="p-6">
-              <p className="text-sm text-gray-600 dark:text-gray-400 italic mb-2">
+              <p className="text-sm text-gray-600 italic mb-2">
                 "Alain CRM transformed how we manage leads. The AI automation alone saves us hours every day."
               </p>
               <p className="text-sm font-semibold">— Ahmed Al Maktoum, Business Development Manager</p>
             </CardContent>
           </Card>
 
-          <p className="text-gray-600 dark:text-gray-400 mb-4">
+          <p className="text-gray-600 mb-4">
             Ready to see how Alain CRM can help your business? 
-            <a href={ctaLink} className="text-blue-600 dark:text-blue-400 hover:underline ml-1">
+            <a href={ctaLink} className="text-blue-600 hover:underline ml-1">
               Start your free trial today
             </a>.
           </p>
 
-          <p className="text-gray-600 dark:text-gray-400">
+          <p className="text-gray-600">
             Best regards,<br />
             <strong>The Alain CRM Team</strong>
           </p>
         </div>
 
         {/* Email Footer */}
-        <div className="bg-gray-100 dark:bg-gray-800 p-6 text-center text-sm text-gray-600 dark:text-gray-400">
+        <div className="bg-gray-100 p-6 text-center text-sm text-gray-600">
           <p className="mb-2">
             <strong>Alain Business Center</strong><br />
             Dubai, United Arab Emirates
           </p>
           <p className="mb-4">
-            <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline mr-4">
+            <a href="#" className="text-blue-600 hover:underline mr-4">
               Unsubscribe
             </a>
-            <a href="#" className="text-blue-600 dark:text-blue-400 hover:underline">
+            <a href="#" className="text-blue-600 hover:underline">
               Privacy Policy
             </a>
           </p>

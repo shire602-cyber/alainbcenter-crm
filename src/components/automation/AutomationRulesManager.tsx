@@ -506,7 +506,7 @@ export function AutomationRulesManager() {
           )}
           {runResult.processing ? (
             <div className="space-y-3">
-              <p className="text-sm text-slate-700 dark:text-slate-300">
+              <p className="text-sm text-slate-700">
                 {runResult.message || 'Automation run is queued and processing in the background. Results will appear in the logs below.'}
               </p>
               <p className="text-xs text-slate-500">
@@ -519,41 +519,41 @@ export function AutomationRulesManager() {
                 <KPICard
                   title="Rules Run"
                   value={runResult.rulesRun || 0}
-                  className="bg-slate-100 dark:bg-slate-800"
+                  className="bg-slate-100"
                 />
                 {runResult.mode === 'draft' ? (
                   <KPICard
                     title="Drafts Created"
                     value={runResult.draftsCreated || 0}
-                    className="bg-purple-50 dark:bg-purple-900/20"
+                    className="bg-purple-50"
                   />
                 ) : (
                   <>
                     <KPICard
                       title="Expiry Reminders"
                       value={runResult.expiryRemindersSent || 0}
-                      className="bg-green-50 dark:bg-green-900/20"
+                      className="bg-green-50"
                     />
                     <KPICard
                       title="Follow-ups Sent"
                       value={runResult.followUpsSent || 0}
-                      className="bg-blue-50 dark:bg-blue-900/20"
+                      className="bg-blue-50"
                     />
                   </>
                 )}
                 <KPICard
                   title="Skipped"
                   value={runResult.skippedDuplicates || 0}
-                  className="bg-yellow-50 dark:bg-yellow-900/20"
+                  className="bg-yellow-50"
                 />
               </div>
 
               {runResult.errors && runResult.errors.length > 0 && (
-                <div className="p-3 bg-yellow-50 dark:bg-yellow-900/20 border border-yellow-200 dark:border-yellow-800 rounded-lg">
-                  <p className="text-xs font-semibold text-yellow-800 dark:text-yellow-200 mb-2">
+                <div className="p-3 bg-yellow-50 border border-yellow-200 rounded-lg">
+                  <p className="text-xs font-semibold text-yellow-800 mb-2">
                     Warnings ({runResult.errors.length}):
                   </p>
-                  <ul className="list-disc list-inside space-y-0.5 text-xs text-yellow-700 dark:text-yellow-300">
+                  <ul className="list-disc list-inside space-y-0.5 text-xs text-yellow-700">
                     {runResult.errors.map((error, idx) => (
                       <li key={idx}>{error}</li>
                     ))}
@@ -562,9 +562,9 @@ export function AutomationRulesManager() {
               )}
             </div>
           ) : (
-            <div className="p-3 bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg">
-              <p className="text-xs font-semibold text-red-800 dark:text-red-200 mb-2">Error:</p>
-              <ul className="list-disc list-inside space-y-0.5 text-xs text-red-700 dark:text-red-300">
+            <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
+              <p className="text-xs font-semibold text-red-800 mb-2">Error:</p>
+              <ul className="list-disc list-inside space-y-0.5 text-xs text-red-700">
                 {runResult.errors?.map((error, idx) => <li key={idx}>{error}</li>) || (
                   <li>Unknown error occurred</li>
                 )}
@@ -614,7 +614,7 @@ export function AutomationRulesManager() {
                        log.message || log.ruleKey || 'Automation Run'}
                     </span>
                   </div>
-                  <span className="text-xs text-slate-500 dark:text-slate-500">
+                  <span className="text-xs text-slate-500">
                     {new Date(log.ranAt || log.createdAt).toLocaleString()}
                   </span>
                 </div>
@@ -701,8 +701,8 @@ export function AutomationRulesManager() {
         {seedResult && (
           <div className={`text-xs p-2 rounded ${
             seedResult.success
-              ? 'bg-green-50 dark:bg-green-900/20 text-green-700 dark:text-green-400'
-              : 'bg-red-50 dark:bg-red-900/20 text-red-700 dark:text-red-400'
+              ? 'bg-green-50 text-green-700'
+              : 'bg-red-50 text-red-700'
           }`}>
             {seedResult.success ? (
               <div className="flex items-center gap-1">

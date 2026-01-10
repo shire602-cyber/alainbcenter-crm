@@ -72,28 +72,28 @@ export function ForecastRevenueWidget() {
     <BentoCard
       title="Expected Revenue"
       action={
-        <Link href="/leads" className="text-xs text-slate-600 dark:text-slate-400 hover:text-primary transition-colors">
+        <Link href="/leads" className="text-xs text-slate-600 hover:text-primary transition-colors">
           View leads →
         </Link>
       }
     >
       <div className="space-y-3">
         <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-green-100 dark:bg-green-900/20">
-            <DollarSign className="h-5 w-5 text-green-600 dark:text-green-400" />
+          <div className="p-2 rounded-lg bg-green-100">
+            <DollarSign className="h-5 w-5 text-green-600" />
           </div>
           <div className="flex-1">
-            <div className="text-2xl font-bold text-slate-900 dark:text-slate-100">
+            <div className="text-2xl font-bold text-slate-900">
               {formattedRevenue} <span className="text-sm font-normal text-slate-500">AED</span>
             </div>
-            <div className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+            <div className="text-xs text-slate-500 mt-0.5">
               From {metrics.totalActiveLeads} active leads
             </div>
           </div>
         </div>
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
           <TrendingUp className="h-4 w-4 text-green-600" />
-          <span className="text-xs text-slate-600 dark:text-slate-400">
+          <span className="text-xs text-slate-600">
             Weighted by deal probability
           </span>
         </div>

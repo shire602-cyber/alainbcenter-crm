@@ -151,15 +151,15 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
           "flex items-center gap-3 p-3 rounded-lg border-2",
           isOutbound
             ? "bg-primary/20 border-primary/40"
-            : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+            : "bg-slate-200 border-slate-300"
         )}>
           <Image className={cn(
             "h-5 w-5 flex-shrink-0",
-            isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-300"
+            isOutbound ? "text-primary-foreground/70" : "text-slate-500"
           )} />
           <div className={cn(
             "text-sm font-medium",
-            isOutbound ? "text-primary-foreground/90" : "text-slate-700 dark:text-slate-200"
+            isOutbound ? "text-primary-foreground/90" : "text-slate-700"
           )}>
             Image unavailable
           </div>
@@ -233,15 +233,15 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
       return (
         <div className={cn(
           "flex items-center gap-3 p-3 rounded-lg border-2",
-          isOutbound ? "bg-primary/20 border-primary/40" : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+          isOutbound ? "bg-primary/20 border-primary/40" : "bg-slate-200 border-slate-300"
         )}>
           <Music className={cn(
             "h-5 w-5 flex-shrink-0",
-            isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-300"
+            isOutbound ? "text-primary-foreground/70" : "text-slate-500"
           )} />
           <div className={cn(
             "text-sm font-medium",
-            isOutbound ? "text-primary-foreground/90" : "text-slate-700 dark:text-slate-200"
+            isOutbound ? "text-primary-foreground/90" : "text-slate-700"
           )}>
             Audio message unavailable
           </div>
@@ -252,11 +252,11 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
     return (
       <div className={cn(
         "flex items-center gap-3 p-3 rounded-lg",
-        isOutbound ? "bg-primary/20" : "bg-slate-100 dark:bg-slate-800"
+        isOutbound ? "bg-primary/20" : "bg-slate-100"
       )}>
         <Music className={cn(
           "h-5 w-5 flex-shrink-0",
-          isOutbound ? "text-primary-foreground" : "text-slate-600 dark:text-slate-400"
+          isOutbound ? "text-primary-foreground" : "text-slate-600"
         )} />
         <audio 
           controls 
@@ -319,22 +319,22 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
           "flex items-center gap-3 p-3 rounded-lg border-2",
           isOutbound
             ? "bg-primary/20 border-primary/40"
-            : "bg-slate-200 dark:bg-slate-700 border-slate-300 dark:border-slate-600"
+            : "bg-slate-200 border-slate-300"
         )}>
           <FileText className={cn(
             "h-5 w-5 flex-shrink-0",
-            isOutbound ? "text-primary-foreground/70" : "text-slate-500 dark:text-slate-300"
+            isOutbound ? "text-primary-foreground/70" : "text-slate-500"
           )} />
           <div className="flex-1 min-w-0">
             <div className={cn(
               "text-sm font-medium truncate",
-              isOutbound ? "text-primary-foreground/90" : "text-slate-700 dark:text-slate-200"
+              isOutbound ? "text-primary-foreground/90" : "text-slate-700"
             )}>
               {attachment.filename || 'Document'}
             </div>
             <div className={cn(
               "text-xs mt-0.5 font-medium",
-              isOutbound ? "text-primary-foreground/70" : "text-slate-600 dark:text-slate-300"
+              isOutbound ? "text-primary-foreground/70" : "text-slate-600"
             )}>
               Media unavailable
             </div>
@@ -351,7 +351,7 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
           "flex items-center gap-3 p-3 rounded-lg border transition-colors",
           isOutbound
             ? "bg-primary/10 border-primary/20 hover:bg-primary/20"
-            : "bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-200 dark:hover:bg-slate-700"
+            : "bg-slate-100 border-slate-200 hover:bg-slate-200:bg-slate-700"
         )}
       >
         {isPdf ? (
@@ -362,13 +362,13 @@ function MediaAttachment({ attachment, isOutbound, messageId }: { attachment: Me
         ) : (
           <FileText className={cn(
             "h-5 w-5 flex-shrink-0",
-            isOutbound ? "text-primary-foreground" : "text-slate-600 dark:text-slate-400"
+            isOutbound ? "text-primary-foreground" : "text-slate-600"
           )} />
         )}
         <div className="flex-1 min-w-0">
           <div className={cn(
             "text-sm font-medium truncate",
-            isOutbound ? "text-primary-foreground" : "text-slate-900 dark:text-slate-100"
+            isOutbound ? "text-primary-foreground" : "text-slate-900"
           )}>
             {attachment.filename || 'Document'}
           </div>
@@ -527,7 +527,7 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
       {/* Avatar - only show for first message in group or if last in group */}
       {!isOutbound && (
         <div className={cn(
-          "flex-shrink-0 w-8 h-8 rounded-full bg-slate-200 dark:bg-slate-800 flex items-center justify-center transition-opacity duration-200",
+          "flex-shrink-0 w-8 h-8 rounded-full bg-slate-200 flex items-center justify-center transition-opacity duration-200",
           showAvatar ? "opacity-100" : "opacity-0"
         )}>
           <MessageSquare className="h-4 w-4 text-slate-500" />
@@ -581,7 +581,7 @@ function MessageBubble({ message, isOutbound, showAvatar, isLastInGroup }: {
          !hasMediaPlaceholder && (
           <p className={cn(
             "text-body leading-relaxed whitespace-pre-wrap break-words",
-            isOutbound ? "text-white" : "text-slate-900 dark:text-slate-100"
+            isOutbound ? "text-white" : "text-slate-900"
           )}>
             {message.body}
           </p>
@@ -628,7 +628,7 @@ function DateSeparator({ date }: { date: string }) {
 
   return (
     <div className="flex items-center justify-center my-6">
-      <Badge className="pill bg-slate-100 dark:bg-slate-800 border border-subtle px-3 py-1">
+      <Badge className="pill bg-slate-100 border border-subtle px-3 py-1">
         <span className="text-meta muted-text font-medium">{label}</span>
       </Badge>
     </div>
@@ -936,7 +936,7 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
       >
         {messageGroups.length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
-            <MessageSquare className="h-12 w-12 text-slate-300 dark:text-slate-700 mb-4" />
+            <MessageSquare className="h-12 w-12 text-slate-300 mb-4" />
             <p className="text-body muted-text">
               {messages.length === 0 ? 'No messages yet' : `No ${mediaFilter === 'all' ? '' : mediaFilter} messages`}
             </p>
@@ -975,7 +975,7 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
                 {/* System Chip for AI Detection - only on last inbound message */}
                 {!isOutbound && groupIdx === messageGroups.length - 1 && (
                   <div className="flex items-center gap-2 mt-2 mb-2 ml-10">
-                    <Badge className="chip bg-blue-50 dark:bg-blue-900/20 border-blue-200 dark:border-blue-800">
+                    <Badge className="chip bg-blue-50 border-blue-200">
                       <Sparkles className="h-3 w-3 mr-1" />
                       Understanding your message...
                     </Badge>
@@ -1023,7 +1023,7 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
               <Button
                 variant="outline"
                 size="sm"
-                className="rounded-[12px] border-slate-200/60 dark:border-slate-800/60"
+                className="rounded-[12px] border-slate-200/60"
               >
                 <Sparkles className="h-3.5 w-3.5 mr-2" />
                 Smart replies
@@ -1062,7 +1062,7 @@ export const ConversationWorkspace = memo(function ConversationWorkspace({
               disabled={sending}
               className={cn(
                 "flex-1 min-h-[60px] max-h-[120px] resize-none rounded-[14px]",
-                "border-slate-200/60 dark:border-slate-800/60",
+                "border-slate-200/60",
                 "focus-ring text-body",
                 "transition-all duration-200",
                 sending && "opacity-60 cursor-not-allowed"

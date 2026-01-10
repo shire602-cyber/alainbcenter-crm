@@ -17,17 +17,17 @@ export function ComplianceBadge({ status, className, showIcon = true }: Complian
     GOOD: {
       icon: CheckCircle2,
       variant: 'default',
-      colors: 'bg-green-100 text-green-800 border-green-300 dark:bg-green-900/20 dark:text-green-400 dark:border-green-800'
+      colors: 'bg-green-100 text-green-800 border-green-300'
     },
     WARNING: {
       icon: AlertTriangle,
       variant: 'default',
-      colors: 'bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/20 dark:text-yellow-400 dark:border-yellow-800'
+      colors: 'bg-yellow-100 text-yellow-800 border-yellow-300'
     },
     CRITICAL: {
       icon: XCircle,
       variant: 'destructive',
-      colors: 'bg-red-100 text-red-800 border-red-300 dark:bg-red-900/20 dark:text-red-400 dark:border-red-800'
+      colors: 'bg-red-100 text-red-800 border-red-300'
     }
   }
 

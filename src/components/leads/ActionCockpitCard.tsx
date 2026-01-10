@@ -52,12 +52,12 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
     >
       {/* Header */}
       <div className="flex items-start gap-4 mb-4">
-        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-50 dark:bg-blue-900/20 flex items-center justify-center">
-          <Target className="h-6 w-6 text-blue-600 dark:text-blue-400" />
+        <div className="flex-shrink-0 w-12 h-12 rounded-xl bg-blue-50 flex items-center justify-center">
+          <Target className="h-6 w-6 text-blue-600" />
         </div>
         <div className="flex-1 min-w-0">
           <div className="flex items-start justify-between gap-2 mb-2">
-            <h3 className="text-h2 font-semibold text-slate-900 dark:text-slate-100">
+            <h3 className="text-h2 font-semibold text-slate-900">
               {action.title}
             </h3>
             {(onSnooze || onMarkHandled || onAssign) && (
@@ -122,10 +122,10 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
                   className={cn(
                     "chip",
                     badge.includes('SLA') || badge.includes('breach')
-                      ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400"
+                      ? "bg-red-100 text-red-700"
                       : badge.includes('Expiry')
-                      ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400"
-                      : "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+                      ? "bg-amber-100 text-amber-700"
+                      : "bg-blue-100 text-blue-700"
                   )}
                 >
                   {badge}
@@ -140,9 +140,9 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
               {action.impact.urgency > 0 && (
                 <Badge className={cn(
                   "pill px-3 py-1.5",
-                  urgencyColor === 'red' && "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border-red-200/60 dark:border-red-800/60",
-                  urgencyColor === 'amber' && "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60",
-                  urgencyColor === 'blue' && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60"
+                  urgencyColor === 'red' && "bg-red-50 text-red-700 border-red-200/60",
+                  urgencyColor === 'amber' && "bg-amber-50 text-amber-700 border-amber-200/60",
+                  urgencyColor === 'blue' && "bg-blue-50 text-blue-700 border-blue-200/60"
                 )}>
                   <Clock className="h-3.5 w-3.5 mr-1.5" />
                   <span className="text-meta font-medium">Urgency</span>
@@ -151,8 +151,8 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
               {action.impact.revenue > 0 && (
                 <Badge className={cn(
                   "pill px-3 py-1.5",
-                  revenueColor === 'green' && "bg-green-50 text-green-700 dark:bg-green-900/20 dark:text-green-400 border-green-200/60 dark:border-green-800/60",
-                  revenueColor === 'blue' && "bg-blue-50 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400 border-blue-200/60 dark:border-blue-800/60"
+                  revenueColor === 'green' && "bg-green-50 text-green-700 border-green-200/60",
+                  revenueColor === 'blue' && "bg-blue-50 text-blue-700 border-blue-200/60"
                 )}>
                   <DollarSign className="h-3.5 w-3.5 mr-1.5" />
                   <span className="text-meta font-medium">Revenue</span>
@@ -161,8 +161,8 @@ export const ActionCockpitCard = memo(function ActionCockpitCard({
               {action.impact.risk > 0 && (
                 <Badge className={cn(
                   "pill px-3 py-1.5",
-                  riskColor === 'red' && "bg-red-50 text-red-700 dark:bg-red-900/20 dark:text-red-400 border-red-200/60 dark:border-red-800/60",
-                  riskColor === 'amber' && "bg-amber-50 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400 border-amber-200/60 dark:border-amber-800/60"
+                  riskColor === 'red' && "bg-red-50 text-red-700 border-red-200/60",
+                  riskColor === 'amber' && "bg-amber-50 text-amber-700 border-amber-200/60"
                 )}>
                   <AlertTriangle className="h-3.5 w-3.5 mr-1.5" />
                   <span className="text-meta font-medium">Risk</span>

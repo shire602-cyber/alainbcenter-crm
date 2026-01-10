@@ -79,10 +79,10 @@ export function ConversationDebugPanel({ leadId, isAdmin }: ConversationDebugPan
   }
 
   return (
-    <Card className="border-yellow-200 bg-yellow-50 dark:bg-yellow-950 dark:border-yellow-800">
+    <Card className="border-yellow-200 bg-yellow-50">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
-          <CardTitle className="text-sm font-semibold text-yellow-900 dark:text-yellow-100">
+          <CardTitle className="text-sm font-semibold text-yellow-900">
             🔍 Conversation Debug Panel (Admin)
           </CardTitle>
           <Button
@@ -98,7 +98,7 @@ export function ConversationDebugPanel({ leadId, isAdmin }: ConversationDebugPan
       </CardHeader>
       <CardContent className="space-y-3 text-xs">
         {error && (
-          <div className="flex items-center gap-2 text-red-600 dark:text-red-400">
+          <div className="flex items-center gap-2 text-red-600">
             <AlertCircle className="h-3 w-3" />
             <span>{error}</span>
           </div>
@@ -108,28 +108,28 @@ export function ConversationDebugPanel({ leadId, isAdmin }: ConversationDebugPan
           <>
             {/* Conversation Identity */}
             <div>
-              <div className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">Conversation Identity</div>
-              <div className="space-y-1 text-yellow-800 dark:text-yellow-200">
-                <div>ID: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{data.conversationId || 'N/A'}</code></div>
-                <div>External Thread ID: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{data.externalThreadId || 'N/A'}</code></div>
+              <div className="font-semibold text-yellow-900 mb-1">Conversation Identity</div>
+              <div className="space-y-1 text-yellow-800">
+                <div>ID: <code className="bg-yellow-100 px-1 rounded">{data.conversationId || 'N/A'}</code></div>
+                <div>External Thread ID: <code className="bg-yellow-100 px-1 rounded">{data.externalThreadId || 'N/A'}</code></div>
               </div>
             </div>
 
             {/* State Machine */}
             <div>
-              <div className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">State Machine</div>
-              <div className="space-y-1 text-yellow-800 dark:text-yellow-200">
+              <div className="font-semibold text-yellow-900 mb-1">State Machine</div>
+              <div className="space-y-1 text-yellow-800">
                 <div>State Version: <Badge variant="outline" className="text-xs">{data.stateVersion}</Badge></div>
                 <div>Stage: <Badge variant="outline" className="text-xs">{data.qualificationStage || 'N/A'}</Badge></div>
                 <div>Questions Asked: <Badge variant="outline" className="text-xs">{data.questionsAskedCount}/5</Badge></div>
-                <div>Last Question: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{data.lastQuestionKey || 'N/A'}</code></div>
+                <div>Last Question: <code className="bg-yellow-100 px-1 rounded">{data.lastQuestionKey || 'N/A'}</code></div>
               </div>
             </div>
 
             {/* Known Fields */}
             <div>
-              <div className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">Collected Fields</div>
-              <div className="space-y-1 text-yellow-800 dark:text-yellow-200">
+              <div className="font-semibold text-yellow-900 mb-1">Collected Fields</div>
+              <div className="space-y-1 text-yellow-800">
                 {Object.keys(data.knownFields).length > 0 ? (
                   <div className="flex flex-wrap gap-1">
                     {Object.entries(data.knownFields).map(([key, value]) => (
@@ -139,33 +139,33 @@ export function ConversationDebugPanel({ leadId, isAdmin }: ConversationDebugPan
                     ))}
                   </div>
                 ) : (
-                  <div className="text-yellow-600 dark:text-yellow-400">No fields collected yet</div>
+                  <div className="text-yellow-600">No fields collected yet</div>
                 )}
               </div>
             </div>
 
             {/* Lead Auto-Fill Status */}
             <div>
-              <div className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">Lead Auto-Fill</div>
-              <div className="space-y-1 text-yellow-800 dark:text-yellow-200">
-                <div>Service Type: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{data.leadFields.serviceTypeEnum || data.leadFields.requestedServiceRaw || 'N/A'}</code></div>
-                <div>Service ID: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{data.leadFields.serviceTypeId || 'N/A'}</code></div>
-                <div>Nationality: <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded">{data.leadFields.nationality || 'N/A'}</code></div>
+              <div className="font-semibold text-yellow-900 mb-1">Lead Auto-Fill</div>
+              <div className="space-y-1 text-yellow-800">
+                <div>Service Type: <code className="bg-yellow-100 px-1 rounded">{data.leadFields.serviceTypeEnum || data.leadFields.requestedServiceRaw || 'N/A'}</code></div>
+                <div>Service ID: <code className="bg-yellow-100 px-1 rounded">{data.leadFields.serviceTypeId || 'N/A'}</code></div>
+                <div>Nationality: <code className="bg-yellow-100 px-1 rounded">{data.leadFields.nationality || 'N/A'}</code></div>
               </div>
             </div>
 
             {/* Last 5 Outbound Dedupes */}
             <div>
-              <div className="font-semibold text-yellow-900 dark:text-yellow-100 mb-1">Recent Outbound (Last 5)</div>
-              <div className="space-y-1 text-yellow-800 dark:text-yellow-200">
+              <div className="font-semibold text-yellow-900 mb-1">Recent Outbound (Last 5)</div>
+              <div className="space-y-1 text-yellow-800">
                 {data.last5OutboundDedupes.length > 0 ? (
                   <div className="space-y-1 max-h-32 overflow-y-auto">
                     {data.last5OutboundDedupes.map((dedupe, idx) => (
-                      <div key={idx} className="border-l-2 border-yellow-300 dark:border-yellow-700 pl-2">
+                      <div key={idx} className="border-l-2 border-yellow-300 pl-2">
                         <div className="text-xs">
-                          <code className="bg-yellow-100 dark:bg-yellow-900 px-1 rounded text-[10px]">{dedupe.dedupeKey.substring(0, 16)}...</code>
+                          <code className="bg-yellow-100 px-1 rounded text-[10px]">{dedupe.dedupeKey.substring(0, 16)}...</code>
                         </div>
-                        <div className="text-[10px] text-yellow-600 dark:text-yellow-400">
+                        <div className="text-[10px] text-yellow-600">
                           {new Date(dedupe.timestamp).toLocaleTimeString()}
                         </div>
                         <div className="text-[10px] truncate">{dedupe.body.substring(0, 50)}...</div>
@@ -173,7 +173,7 @@ export function ConversationDebugPanel({ leadId, isAdmin }: ConversationDebugPan
                     ))}
                   </div>
                 ) : (
-                  <div className="text-yellow-600 dark:text-yellow-400">No outbound messages yet</div>
+                  <div className="text-yellow-600">No outbound messages yet</div>
                 )}
               </div>
             </div>

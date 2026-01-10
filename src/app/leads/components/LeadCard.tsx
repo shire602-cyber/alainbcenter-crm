@@ -63,7 +63,7 @@ export const LeadCard = memo(function LeadCard({
   const nearestExpiry = getNearestExpiry(lead)
 
   return (
-    <div className="group relative bg-slate-50 dark:bg-slate-900/50 border border-slate-200 dark:border-slate-800 rounded-xl p-3 transition-all duration-200 hover:shadow-md hover:border-slate-300 dark:hover:border-slate-700 hover:-translate-y-0.5 cursor-pointer">
+    <div className="group relative bg-slate-50 border border-slate-200 rounded-xl p-3 transition-all duration-200 hover:shadow-md hover:border-slate-300:border-slate-700 hover:-translate-y-0.5 cursor-pointer">
       <div className="space-y-2">
         {/* Header with Avatar and Name */}
         <div className="flex items-start justify-between gap-2">
@@ -72,12 +72,12 @@ export const LeadCard = memo(function LeadCard({
             <div className="flex-1 min-w-0">
               <Link
                 href={`/leads/${lead.id}`}
-                className="block font-semibold text-sm text-slate-900 dark:text-slate-100 hover:text-primary transition-colors truncate"
+                className="block font-semibold text-sm text-slate-900 hover:text-primary transition-colors truncate"
                 onClick={(e) => e.stopPropagation()}
               >
                 {lead.contact.fullName}
               </Link>
-              <p className="text-xs text-slate-500 dark:text-slate-400 truncate">{lead.contact.phone}</p>
+              <p className="text-xs text-slate-500 truncate">{lead.contact.phone}</p>
             </div>
           </div>
           {lead.aiScore !== null && (
@@ -106,7 +106,7 @@ export const LeadCard = memo(function LeadCard({
 
         {/* Pipeline Stage */}
         <div>
-          <label className="block text-xs font-medium mb-1.5 text-slate-700 dark:text-slate-300">Stage</label>
+          <label className="block text-xs font-medium mb-1.5 text-slate-700">Stage</label>
           <Select
             value={lead.pipelineStage || 'new'}
             onChange={(e) => {
@@ -114,7 +114,7 @@ export const LeadCard = memo(function LeadCard({
               onUpdateStage(lead.id, e.target.value)
             }}
             onClick={(e) => e.stopPropagation()}
-            className="h-9 text-sm font-medium w-full bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 hover:border-slate-400 dark:hover:border-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
+            className="h-9 text-sm font-medium w-full bg-white border-slate-300 hover:border-slate-400:border-slate-600 focus:border-primary focus:ring-2 focus:ring-primary/20 transition-colors"
           >
             {PIPELINE_STAGES.map((stage) => (
               <option key={stage} value={stage}>
@@ -126,7 +126,7 @@ export const LeadCard = memo(function LeadCard({
 
         {/* Expiry Chips */}
         {((lead.expiryItems && lead.expiryItems.length > 0) || lead.expiryDate) && (
-          <div className="flex flex-wrap gap-1 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex flex-wrap gap-1 pt-1.5 border-t border-slate-200">
             {lead.expiryItems && lead.expiryItems.length > 0 ? (
               <>
                 {lead.expiryItems.slice(0, 3).map((expiry) => (
@@ -146,7 +146,7 @@ export const LeadCard = memo(function LeadCard({
 
         {/* Deal Forecast */}
         {(lead.dealProbability !== null && lead.dealProbability !== undefined) && (
-          <div className="flex items-center gap-2 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-2 pt-1.5 border-t border-slate-200">
             <Badge
               variant="outline"
               className={cn(
@@ -180,21 +180,21 @@ export const LeadCard = memo(function LeadCard({
 
         {/* Next Follow-up */}
         {lead.nextFollowUpAt && (
-          <div className="flex items-center gap-1.5 text-xs text-slate-500 dark:text-slate-400 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+          <div className="flex items-center gap-1.5 text-xs text-slate-500 pt-1.5 border-t border-slate-200">
             <Clock className="h-3 w-3" />
             <span>Follow-up: {formatDate(lead.nextFollowUpAt)}</span>
           </div>
         )}
 
         {/* Quick Actions */}
-        <div className="flex items-center gap-1 pt-1.5 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-1 pt-1.5 border-t border-slate-200">
           {lead.contact.phone && (
             <a
               href={getWhatsAppLink(lead.contact.phone, lead.contact.fullName)}
               target="_blank"
               rel="noopener noreferrer"
               onClick={(e) => e.stopPropagation()}
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              className="p-1 rounded hover:bg-slate-200:bg-slate-800 transition-colors"
               title="WhatsApp"
             >
               <MessageSquare className="h-3.5 w-3.5 text-green-600" />
@@ -204,7 +204,7 @@ export const LeadCard = memo(function LeadCard({
             <a
               href={`tel:${lead.contact.phone}`}
               onClick={(e) => e.stopPropagation()}
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              className="p-1 rounded hover:bg-slate-200:bg-slate-800 transition-colors"
               title="Call"
             >
               <Phone className="h-3.5 w-3.5 text-blue-600" />
@@ -214,7 +214,7 @@ export const LeadCard = memo(function LeadCard({
             <a
               href={`mailto:${lead.contact.email}`}
               onClick={(e) => e.stopPropagation()}
-              className="p-1 rounded hover:bg-slate-200 dark:hover:bg-slate-800 transition-colors"
+              className="p-1 rounded hover:bg-slate-200:bg-slate-800 transition-colors"
               title="Email"
             >
               <Mail className="h-3.5 w-3.5 text-slate-600" />

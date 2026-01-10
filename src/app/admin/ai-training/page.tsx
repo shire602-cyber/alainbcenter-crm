@@ -289,18 +289,18 @@ export default function AITrainingPage() {
       <div className="space-y-4">
         {/* Error Banner */}
         {tableError && (
-          <div className="bg-red-50 dark:bg-red-900/20 border border-red-200 dark:border-red-800 rounded-lg p-4 flex items-center justify-between">
+          <div className="bg-red-50 border border-red-200 rounded-lg p-4 flex items-center justify-between">
             <div className="flex items-center gap-3">
-              <div className="text-red-600 dark:text-red-400">
+              <div className="text-red-600">
                 <svg className="h-5 w-5" fill="currentColor" viewBox="0 0 20 20">
                   <path fillRule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.707 7.293a1 1 0 00-1.414 1.414L8.586 10l-1.293 1.293a1 1 0 101.414 1.414L10 11.414l1.293 1.293a1 1 0 001.414-1.414L11.414 10l1.293-1.293a1 1 0 00-1.414-1.414L10 8.586 8.707 7.293z" clipRule="evenodd" />
                 </svg>
               </div>
-              <p className="text-sm font-medium text-red-800 dark:text-red-200">{tableError}</p>
+              <p className="text-sm font-medium text-red-800">{tableError}</p>
             </div>
             <button
               onClick={() => setTableError(null)}
-              className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200"
+              className="text-red-600 hover:text-red-800:text-red-200"
             >
               <svg className="h-5 w-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                 <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
@@ -345,13 +345,13 @@ export default function AITrainingPage() {
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* Left: Document List */}
           <BentoCard className="lg:col-span-1" title="Training Documents">
-            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+            <p className="text-xs text-slate-600 mb-3">
               {documents.length} document{documents.length !== 1 ? 's' : ''} available
             </p>
             {loading ? (
               <div className="space-y-2">
-                <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
-                <div className="h-16 bg-slate-100 dark:bg-slate-800 rounded animate-pulse" />
+                <div className="h-16 bg-slate-100 rounded animate-pulse" />
+                <div className="h-16 bg-slate-100 rounded animate-pulse" />
               </div>
             ) : documents.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground">
@@ -368,7 +368,7 @@ export default function AITrainingPage() {
                     className={`p-3 rounded-lg border cursor-pointer transition-colors ${
                       selectedDoc?.id === doc.id
                         ? 'bg-primary/10 border-primary'
-                        : 'bg-slate-50 dark:bg-slate-900 border-slate-200 dark:border-slate-800 hover:bg-slate-100 dark:hover:bg-slate-800'
+                        : 'bg-slate-50 border-slate-200 hover:bg-slate-100:bg-slate-800'
                     }`}
                   >
                     <div className="flex items-start justify-between gap-2">
@@ -400,7 +400,7 @@ export default function AITrainingPage() {
 
           {/* Right: Editor */}
           <BentoCard className="lg:col-span-2" title={selectedDoc ? 'Edit Document' : 'New Training Document'}>
-            <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+            <p className="text-xs text-slate-600 mb-3">
               {selectedDoc
                 ? 'Update the training document content'
                 : 'Create a new training document for the AI autopilot'}
@@ -422,7 +422,7 @@ export default function AITrainingPage() {
                   id="type"
                   value={type}
                   onChange={(e) => setType(e.target.value as any)}
-                  className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                  className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white"
                 >
                   <option value="guidance">Guidance</option>
                   <option value="examples">Examples</option>
@@ -439,7 +439,7 @@ export default function AITrainingPage() {
                     id="language"
                     value={language}
                     onChange={(e) => setLanguage(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white"
                   >
                     <option value="">All Languages</option>
                     <option value="en">English</option>
@@ -457,7 +457,7 @@ export default function AITrainingPage() {
                     id="stage"
                     value={stage}
                     onChange={(e) => setStage(e.target.value)}
-                    className="w-full px-3 py-2 border border-slate-300 dark:border-slate-700 rounded-md bg-white dark:bg-slate-900"
+                    className="w-full px-3 py-2 border border-slate-300 rounded-md bg-white"
                   >
                     <option value="">All Stages</option>
                     <option value="GREETING">Greeting</option>

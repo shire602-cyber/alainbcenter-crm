@@ -147,7 +147,7 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
   if (loading) {
     return (
       <Card className="card-premium p-4">
-        <div className="h-24 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+        <div className="h-24 bg-slate-200 rounded animate-pulse" />
       </Card>
     )
   }
@@ -157,16 +157,16 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
       {/* Progress Header: 0/5 pill + progress bar */}
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
-          <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+          <Badge className="chip bg-blue-100 text-blue-700">
             {completedCount}/{requiredFields.length}
           </Badge>
           <span className="text-meta muted-text">Complete</span>
         </div>
-        <div className="flex-1 h-2 bg-slate-200 dark:bg-slate-800 rounded-full mx-3 overflow-hidden">
+        <div className="flex-1 h-2 bg-slate-200 rounded-full mx-3 overflow-hidden">
           <div 
             className={cn(
               "h-full transition-all duration-300",
-              progressPercent === 100 ? "bg-green-500 dark:bg-green-400" : progressPercent >= 60 ? "bg-blue-500 dark:bg-blue-400" : "bg-amber-500 dark:bg-amber-400"
+              progressPercent === 100 ? "bg-green-500" : progressPercent >= 60 ? "bg-blue-500" : "bg-amber-500"
             )}
             style={{ width: `${(completedCount / requiredFields.length) * 100}%` }}
           />
@@ -183,18 +183,18 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
               className={cn(
                 "flex items-center gap-3 p-2.5 rounded-lg transition-all duration-200",
                 hasValue 
-                  ? "bg-green-50/50 dark:bg-green-900/10 border border-green-200/40 dark:border-green-800/40" 
-                  : "bg-slate-50/50 dark:bg-slate-900/30 border border-slate-200/40 dark:border-slate-800/40"
+                  ? "bg-green-50/50 border border-green-200/40" 
+                  : "bg-slate-50/50 border border-slate-200/40"
               )}
             >
               {hasValue ? (
-                <CheckCircle2 className="h-4 w-4 text-green-600 dark:text-green-400 flex-shrink-0" />
+                <CheckCircle2 className="h-4 w-4 text-green-600 flex-shrink-0" />
               ) : (
-                <Circle className="h-4 w-4 text-slate-400 dark:text-slate-500 flex-shrink-0" />
+                <Circle className="h-4 w-4 text-slate-400 flex-shrink-0" />
               )}
               <span className={cn(
                 "text-body",
-                hasValue ? "text-slate-900 dark:text-slate-100 font-medium" : "text-slate-500 dark:text-slate-400"
+                hasValue ? "text-slate-900 font-medium" : "text-slate-500"
               )}>
                 {field.label}
               </span>
@@ -205,11 +205,11 @@ function QualificationProgress({ lead }: { lead: LeadDNAProps['lead'] }) {
 
       {/* Missing Fields + CTA */}
       {missingFields.length > 0 && (
-        <div className="pt-3 border-t border-slate-200/60 dark:border-slate-800/60">
+        <div className="pt-3 border-t border-slate-200/60">
           <div className="flex items-center gap-2 mb-2 flex-wrap">
             <span className="text-meta muted-text">Missing:</span>
             {missingFields.map((field) => (
-              <Badge key={field.key} className="chip bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">
+              <Badge key={field.key} className="chip bg-amber-100 text-amber-700">
                 {field.label}
               </Badge>
             ))}
@@ -245,7 +245,7 @@ function QuoteCadenceSection({ leadId, quotationSentAtStr }: { leadId: number; q
   // Always return same structure - ALWAYS render QuoteCadence to maintain hook order
   return (
     <div>
-      <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Quote Follow-ups</h2>
+      <h2 className="text-h2 font-semibold text-slate-900 mb-3">Quote Follow-ups</h2>
       <QuoteCadence leadId={leadId} quotationSentAt={quotationSentAt} />
     </div>
   )
@@ -305,7 +305,7 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
   if (loading) {
     return (
       <Card className="card-premium p-4">
-        <div className="h-20 bg-slate-200 dark:bg-slate-800 rounded animate-pulse" />
+        <div className="h-20 bg-slate-200 rounded animate-pulse" />
       </Card>
     )
   }
@@ -315,7 +315,7 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
       <Card className="card-premium p-4">
         <div className="flex items-center gap-2 mb-3">
           <Target className="h-4 w-4 text-slate-500" />
-          <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+          <h3 className="text-body font-semibold text-slate-900">
             Quote Cadence
           </h3>
         </div>
@@ -330,14 +330,14 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
     <Card className="card-premium p-4">
       <div className="flex items-center gap-2 mb-3">
         <Target className="h-4 w-4 text-slate-500" />
-        <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+        <h3 className="text-body font-semibold text-slate-900">
           Quote Cadence
         </h3>
       </div>
       <div className="space-y-2">
-        <div className="flex items-center justify-between p-2 rounded-[10px] bg-slate-50 dark:bg-slate-900/50">
+        <div className="flex items-center justify-between p-2 rounded-[10px] bg-slate-50">
           <div>
-            <p className="text-body font-medium text-slate-900 dark:text-slate-100">
+            <p className="text-body font-medium text-slate-900">
               Next follow-up: D+{quoteFollowup.task.cadenceDays}
             </p>
             <p className="text-meta muted-text">
@@ -346,9 +346,9 @@ function QuoteCadence({ leadId, quotationSentAt }: { leadId: number; quotationSe
           </div>
           <Badge className={cn(
             "chip",
-            quoteFollowup.daysUntil !== null && quoteFollowup.daysUntil <= 1 ? "bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400" :
-            quoteFollowup.daysUntil !== null && quoteFollowup.daysUntil <= 3 ? "bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400" :
-            "bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400"
+            quoteFollowup.daysUntil !== null && quoteFollowup.daysUntil <= 1 ? "bg-red-100 text-red-700" :
+            quoteFollowup.daysUntil !== null && quoteFollowup.daysUntil <= 3 ? "bg-amber-100 text-amber-700" :
+            "bg-blue-100 text-blue-700"
           )}>
             {quoteFollowup.daysUntil !== null ? `${quoteFollowup.daysUntil}d` : 'Due'}
           </Badge>
@@ -401,9 +401,9 @@ function ExpiryTimeline({ lead }: { lead: LeadDNAProps['lead'] }) {
   }
 
   function getExpiryBadge(daysUntil: number) {
-    if (daysUntil <= 7) return <Badge className="chip bg-red-100 text-red-700 dark:bg-red-900/20 dark:text-red-400">{daysUntil}d</Badge>
-    if (daysUntil <= 30) return <Badge className="chip bg-amber-100 text-amber-700 dark:bg-amber-900/20 dark:text-amber-400">{daysUntil}d</Badge>
-    if (daysUntil <= 60) return <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">{daysUntil}d</Badge>
+    if (daysUntil <= 7) return <Badge className="chip bg-red-100 text-red-700 font-semibold">{daysUntil}d</Badge>
+    if (daysUntil <= 30) return <Badge className="chip bg-amber-100 text-amber-700 font-semibold">{daysUntil}d</Badge>
+    if (daysUntil <= 60) return <Badge className="chip bg-blue-100 text-blue-700 font-semibold">{daysUntil}d</Badge>
     return <Badge className="chip">{daysUntil}d</Badge>
   }
 
@@ -411,15 +411,15 @@ function ExpiryTimeline({ lead }: { lead: LeadDNAProps['lead'] }) {
     <Card className="card-premium p-4">
       <div className="flex items-center gap-2 mb-3">
         <Calendar className="h-4 w-4 text-slate-500" />
-        <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+        <h3 className="text-body font-bold text-slate-900 tracking-tight">
           Expiry Timeline
         </h3>
       </div>
       <div className="space-y-2">
         {expiries.map((expiry, idx) => (
-          <div key={idx} className="flex items-center justify-between p-2 rounded-[10px] bg-slate-50 dark:bg-slate-900/50">
+          <div key={idx} className="flex items-center justify-between p-2 rounded-[10px] bg-slate-50 border border-slate-200/60">
             <div>
-              <p className="text-body font-medium text-slate-900 dark:text-slate-100">
+              <p className="text-body font-bold text-slate-900 tracking-tight">
                 {expiry.type}
               </p>
               <p className="text-meta muted-text">
@@ -489,7 +489,7 @@ function SponsorSearch({ lead, onUpdate }: { lead: LeadDNAProps['lead']; onUpdat
     <Card className="card-premium p-4">
       <div className="flex items-center gap-2 mb-3">
         <Search className="h-4 w-4 text-slate-500" />
-        <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+        <h3 className="text-body font-bold text-slate-900 tracking-tight">
           Sponsor
         </h3>
       </div>
@@ -509,9 +509,9 @@ function SponsorSearch({ lead, onUpdate }: { lead: LeadDNAProps['lead']; onUpdat
               <button
                 key={idx}
                 onClick={() => handleSelectSponsor(sponsor.name)}
-                className="w-full text-left p-2 rounded-[10px] hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+                className="w-full text-left p-2 rounded-[10px] hover:bg-slate-100:bg-slate-800 transition-colors"
               >
-                <p className="text-body font-medium text-slate-900 dark:text-slate-100">
+                <p className="text-body font-medium text-slate-900">
                   {sponsor.name}
                 </p>
                 <p className="text-meta muted-text">
@@ -549,15 +549,15 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
       <div className="stack-6 inset-hero">
         {/* Identity Section */}
         <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Identity</h2>
+          <h2 className="text-h2 font-semibold text-slate-900 mb-3">Identity</h2>
           <Card className="card-premium inset-card">
         <div className="space-y-3">
           <div className="flex items-start gap-3">
-            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-slate-100 dark:bg-slate-800 flex items-center justify-center">
-              <User className="h-5 w-5 text-slate-500 dark:text-slate-400" />
+            <div className="flex-shrink-0 w-10 h-10 rounded-full bg-slate-100 flex items-center justify-center">
+              <User className="h-5 w-5 text-slate-500" />
             </div>
             <div className="flex-1 min-w-0">
-                <p className="text-body font-semibold text-slate-900 dark:text-slate-100 truncate">
+                <p className="text-body font-semibold text-slate-900 truncate">
                 {contact?.fullName || 'Unknown'}
               </p>
               {contact?.nationality && (
@@ -573,7 +573,7 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
               <Phone className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
               <a 
                 href={`tel:${contact.phone}`}
-                  className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors truncate"
+                  className="text-slate-600 hover:text-primary transition-colors truncate"
               >
                 {contact.phone}
               </a>
@@ -585,7 +585,7 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
               <Mail className="h-3.5 w-3.5 text-slate-400 flex-shrink-0" />
               <a 
                 href={`mailto:${contact.email}`}
-                  className="text-slate-600 dark:text-slate-400 hover:text-primary transition-colors truncate"
+                  className="text-slate-600 hover:text-primary transition-colors truncate"
               >
                 {contact.email}
               </a>
@@ -616,11 +616,11 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
 
         {/* Service */}
         <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Service</h2>
+          <h2 className="text-h2 font-semibold text-slate-900 mb-3">Service</h2>
           <Card className="card-premium inset-card">
             <div className="flex items-center gap-2">
               <Target className="h-4 w-4 text-slate-500" />
-              <span className="text-body font-medium text-slate-900 dark:text-slate-100">
+              <span className="text-body font-medium text-slate-900">
                 {serviceName}
               </span>
             </div>
@@ -634,13 +634,13 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
 
         {/* Qualification Progress - ALWAYS render to maintain hook order */}
         <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Qualification</h2>
+          <h2 className="text-h2 font-semibold text-slate-900 mb-3">Qualification</h2>
           <QualificationProgress lead={lead || { id: 0, contact: null, serviceTypeEnum: null, serviceType: null, requestedServiceRaw: null, conversations: [] } as any} />
         </div>
 
         {/* Expiry Timeline - ALWAYS render to maintain hook order */}
         <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Expiry</h2>
+          <h2 className="text-h2 font-semibold text-slate-900 mb-3">Expiry</h2>
           <ExpiryTimeline lead={lead || { expiryDate: null, visaExpiryDate: null, permitExpiryDate: null } as any} />
         </div>
 
@@ -649,7 +649,7 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
 
         {/* Sponsor Search - ALWAYS render to maintain hook order */}
         <div>
-          <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Sponsor</h2>
+          <h2 className="text-h2 font-semibold text-slate-900 mb-3">Sponsor</h2>
           <SponsorSearch lead={lead || { id: 0, contact: null } as any} />
         </div>
 
@@ -663,11 +663,11 @@ export const LeadDNA = memo(function LeadDNA({ lead }: LeadDNAProps) {
           </div>
         ) : (
           <div>
-            <h2 className="text-h2 font-semibold text-slate-900 dark:text-slate-100 mb-3">Documents</h2>
+            <h2 className="text-h2 font-semibold text-slate-900 mb-3">Documents</h2>
             <Card className="card-premium inset-card">
               <div className="flex items-center gap-2 mb-3">
                 <FileText className="h-4 w-4 text-slate-500" />
-                <h3 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+                <h3 className="text-body font-semibold text-slate-900">
                   Documents
                 </h3>
               </div>

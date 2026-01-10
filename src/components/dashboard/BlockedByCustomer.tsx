@@ -52,7 +52,7 @@ export function BlockedByCustomer() {
     return (
       <div className="space-y-3">
         {[1, 2, 3].map((i) => (
-          <div key={i} className="h-16 bg-slate-100 dark:bg-slate-800 rounded-xl animate-pulse" />
+          <div key={i} className="h-16 bg-slate-100 rounded-xl animate-pulse" />
         ))}
       </div>
     )
@@ -60,14 +60,14 @@ export function BlockedByCustomer() {
 
   if (items.length === 0) {
     return (
-      <div className="p-12 text-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 dark:from-blue-900/20 dark:to-indigo-900/10 border-2 border-blue-200 dark:border-blue-800">
-        <div className="w-20 h-20 rounded-full bg-blue-100 dark:bg-blue-900/30 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/10">
-          <Hourglass className="h-10 w-10 text-blue-600 dark:text-blue-400" />
+      <div className="p-12 text-center rounded-2xl bg-gradient-to-br from-blue-50 to-indigo-50 border-2 border-blue-200">
+        <div className="w-20 h-20 rounded-full bg-blue-100 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-blue-500/10">
+          <Hourglass className="h-10 w-10 text-blue-600" />
         </div>
-        <p className="text-lg font-bold text-slate-900 dark:text-slate-100 mb-2">
+        <p className="text-lg font-bold text-slate-900 mb-2">
           No blockers 🎯
         </p>
-        <p className="text-sm text-slate-600 dark:text-slate-400">
+        <p className="text-sm text-slate-600">
           All customers are engaged. Keep the momentum!
         </p>
       </div>
@@ -89,26 +89,26 @@ export function BlockedByCustomer() {
             <Card className={cn(
               "p-4 rounded-xl border-2 transition-all hover:shadow-md",
               isLongWait 
-                ? "border-orange-200 dark:border-orange-800 bg-orange-50 dark:bg-orange-900/20"
-                : "border-slate-200 dark:border-slate-800 hover:border-slate-300 dark:hover:border-slate-700"
+                ? "border-orange-200 bg-orange-50"
+                : "border-slate-200 hover:border-slate-300:border-slate-700"
             )}>
               <div className="flex items-start gap-3">
                 <div className={cn(
                   "flex-shrink-0 w-10 h-10 rounded-lg flex items-center justify-center",
                   isLongWait 
-                    ? "bg-orange-100 dark:bg-orange-900/30"
-                    : "bg-slate-100 dark:bg-slate-800"
+                    ? "bg-orange-100"
+                    : "bg-slate-100"
                 )}>
                   <Hourglass className={cn(
                     "h-5 w-5",
                     isLongWait 
-                      ? "text-orange-600 dark:text-orange-400"
+                      ? "text-orange-600"
                       : "text-slate-400"
                   )} />
                 </div>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 mb-1">
-                    <p className="text-sm font-semibold text-slate-900 dark:text-slate-100 truncate">
+                    <p className="text-sm font-semibold text-slate-900 truncate">
                       {item.title}
                     </p>
                     {isHighValue && (
@@ -122,7 +122,7 @@ export function BlockedByCustomer() {
                       </Badge>
                     )}
                   </div>
-                  <p className="text-xs text-slate-600 dark:text-slate-400 mb-2">
+                  <p className="text-xs text-slate-600 mb-2">
                     {item.reason}
                   </p>
                   {item.daysWaiting !== undefined && (
@@ -131,19 +131,19 @@ export function BlockedByCustomer() {
                       <span className={cn(
                         "text-xs font-medium",
                         isLongWait 
-                          ? "text-orange-600 dark:text-orange-400"
-                          : "text-slate-500 dark:text-slate-400"
+                          ? "text-orange-600"
+                          : "text-slate-500"
                       )}>
                         Blocked for {item.daysWaiting} day{item.daysWaiting !== 1 ? 's' : ''}
                       </span>
                     </div>
                   )}
                   {item.revenuePotential && (
-                    <div className="mt-2 pt-2 border-t border-slate-200 dark:border-slate-700">
-                      <p className="text-xs text-slate-500 dark:text-slate-400">
+                    <div className="mt-2 pt-2 border-t border-slate-200">
+                      <p className="text-xs text-slate-500">
                         Potential value: <span className={cn(
                           "font-semibold",
-                          isHighValue ? "text-amber-600 dark:text-amber-400" : "text-slate-700 dark:text-slate-300"
+                          isHighValue ? "text-amber-600" : "text-slate-700"
                         )}>
                           AED {item.revenuePotential.toLocaleString()}
                         </span>

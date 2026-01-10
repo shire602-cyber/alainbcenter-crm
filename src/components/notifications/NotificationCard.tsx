@@ -56,13 +56,13 @@ export const NotificationCard = memo(function NotificationCard({
   function getIcon() {
     switch (notification.type) {
       case 'sla_breach_imminent':
-        return <AlertCircle className="h-4 w-4 text-red-600 dark:text-red-400" />
+        return <AlertCircle className="h-4 w-4 text-red-600" />
       case 'customer_reply':
-        return <MessageSquare className="h-4 w-4 text-blue-600 dark:text-blue-400" />
+        return <MessageSquare className="h-4 w-4 text-blue-600" />
       case 'quote_ready':
-        return <FileText className="h-4 w-4 text-green-600 dark:text-green-400" />
+        return <FileText className="h-4 w-4 text-green-600" />
       case 'deadline_today':
-        return <Clock className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+        return <Clock className="h-4 w-4 text-amber-600" />
       default:
         return <AlertCircle className="h-4 w-4 text-slate-500" />
     }
@@ -101,8 +101,8 @@ export const NotificationCard = memo(function NotificationCard({
         <div className={cn(
           "flex-shrink-0 w-10 h-10 rounded-[12px] flex items-center justify-center",
           isUrgent 
-            ? "bg-red-50 dark:bg-red-900/20"
-            : "bg-slate-100 dark:bg-slate-800"
+            ? "bg-red-50"
+            : "bg-slate-100"
         )}>
           {getIcon()}
         </div>
@@ -112,18 +112,18 @@ export const NotificationCard = memo(function NotificationCard({
           <div className="flex items-start justify-between gap-3 mb-2">
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2 mb-1.5">
-                <h4 className="text-body font-semibold text-slate-900 dark:text-slate-100">
+                <h4 className="text-body font-semibold text-slate-900">
                   {notification.title}
                 </h4>
                 {notification.count && notification.count > 1 && (
-                  <Badge className="chip bg-blue-100 text-blue-700 dark:bg-blue-900/20 dark:text-blue-400">
+                  <Badge className="chip bg-blue-100 text-blue-700">
                     (x{notification.count})
                   </Badge>
                 )}
                 {isUrgent && (
                   <div className="flex items-center gap-1">
                     <div className="w-1.5 h-1.5 rounded-full bg-red-500" />
-                    <span className="text-meta text-red-600 dark:text-red-400">Urgent</span>
+                    <span className="text-meta text-red-600">Urgent</span>
                   </div>
                 )}
               </div>
@@ -134,7 +134,7 @@ export const NotificationCard = memo(function NotificationCard({
 
             <button
               onClick={() => onDismiss(notification.id)}
-              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+              className="flex-shrink-0 p-1.5 rounded-lg hover:bg-slate-100:bg-slate-800 transition-colors"
               title="Dismiss"
             >
               <X className="h-4 w-4 text-slate-400" />
@@ -163,7 +163,7 @@ export const NotificationCard = memo(function NotificationCard({
                   <Button 
                     variant="outline" 
                     size="icon" 
-                    className="h-9 w-9 rounded-[12px] border-slate-200/60 dark:border-slate-800/60"
+                    className="h-9 w-9 rounded-[12px] border-slate-200/60"
                   >
                     <ChevronDown className="h-4 w-4" />
                   </Button>

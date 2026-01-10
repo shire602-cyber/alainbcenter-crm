@@ -203,8 +203,8 @@ export default function UsersPage() {
         </div>
 
         {error && (
-          <BentoCard className="border-red-200 dark:border-red-800">
-            <div className="flex items-center gap-2 text-red-800 dark:text-red-200">
+          <BentoCard className="border-red-200">
+            <div className="flex items-center gap-2 text-red-800">
               <AlertCircle className="h-4 w-4" />
               <span className="text-sm font-medium">{error}</span>
             </div>
@@ -216,7 +216,7 @@ export default function UsersPage() {
           title="All Users"
           icon={<Users className="h-4 w-4" />}
         >
-          <p className="text-xs text-slate-600 dark:text-slate-400 mb-3">
+          <p className="text-xs text-slate-600 mb-3">
             Manage user roles and permissions
           </p>
           {loading ? (
@@ -242,7 +242,7 @@ export default function UsersPage() {
               {users.map((user) => (
                 <div
                   key={user.id}
-                  className="p-3 rounded-lg border border-slate-200 dark:border-slate-800 hover:bg-slate-50 dark:hover:bg-slate-900/50 transition-colors"
+                  className="p-3 rounded-lg border border-slate-200 hover:bg-slate-50:bg-slate-900/50 transition-colors"
                 >
                   <div className="flex items-center justify-between">
                     <div className="flex items-center gap-3 flex-1">
@@ -250,8 +250,8 @@ export default function UsersPage() {
                         <UserIcon className="h-4 w-4 text-primary" />
                       </div>
                       <div className="flex-1 min-w-0">
-                        <h3 className="text-sm font-semibold text-slate-900 dark:text-slate-100 mb-1">{user.name}</h3>
-                        <div className="flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+                        <h3 className="text-sm font-semibold text-slate-900 mb-1">{user.name}</h3>
+                        <div className="flex items-center gap-3 text-xs text-slate-600">
                           <div className="flex items-center gap-1">
                             <Mail className="h-3 w-3" />
                             <span className="truncate">{user.email}</span>

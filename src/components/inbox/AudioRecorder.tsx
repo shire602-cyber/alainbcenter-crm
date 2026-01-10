@@ -108,7 +108,7 @@ export function AudioRecorder({ onRecordingComplete, onCancel, className }: Audi
   }
 
   return (
-    <div className={cn('flex items-center gap-3 p-3 bg-slate-50 dark:bg-slate-900 rounded-lg border', className)}>
+    <div className={cn('flex items-center gap-3 p-3 bg-slate-50 rounded-lg border', className)}>
       {!isRecording ? (
         <>
           <Button

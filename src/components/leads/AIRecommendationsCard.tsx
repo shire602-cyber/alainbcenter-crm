@@ -104,7 +104,7 @@ export function AIRecommendationsCard({
   }
 
   return (
-    <Card className="rounded-xl border-slate-200 dark:border-slate-800">
+    <Card className="rounded-xl border-slate-200">
       <CardHeader className="pb-3">
         <div className="flex items-center justify-between">
           <CardTitle className="text-base font-semibold flex items-center gap-2">
@@ -129,29 +129,29 @@ export function AIRecommendationsCard({
         {/* Summary */}
         {lead.aiNotes ? (
           <div>
-            <p className="text-sm text-slate-700 dark:text-slate-300 leading-relaxed">
+            <p className="text-sm text-slate-700 leading-relaxed">
               {lead.aiNotes}
             </p>
           </div>
         ) : (
-          <p className="text-sm text-slate-500 dark:text-slate-400 italic">
+          <p className="text-sm text-slate-500 italic">
             No AI summary available. Click "Rescore" to generate recommendations.
           </p>
         )}
 
         {/* Next Best Action Task */}
         {hasOpenTask && (
-          <div className="pt-3 border-t border-slate-200 dark:border-slate-800">
+          <div className="pt-3 border-t border-slate-200">
             <div className="flex items-start justify-between gap-3">
               <div className="flex-1 min-w-0">
-                <p className="text-xs font-medium text-slate-600 dark:text-slate-400 mb-1">
+                <p className="text-xs font-medium text-slate-600 mb-1">
                   Next Best Action
                 </p>
-                <p className="text-sm font-medium text-slate-900 dark:text-slate-100 mb-1">
+                <p className="text-sm font-medium text-slate-900 mb-1">
                   {task.title}
                 </p>
                 {task.dueAt && (
-                  <p className="text-xs text-slate-500 dark:text-slate-400">
+                  <p className="text-xs text-slate-500">
                     Due {formatDistanceToNow(new Date(task.dueAt), { addSuffix: true })}
                     {' '}
                     ({format(new Date(task.dueAt), 'MMM d, h:mm a')})
@@ -184,7 +184,7 @@ export function AIRecommendationsCard({
         )}
 
         {/* Actions */}
-        <div className="flex items-center gap-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+        <div className="flex items-center gap-2 pt-2 border-t border-slate-200">
           <Button
             size="sm"
             variant="outline"
