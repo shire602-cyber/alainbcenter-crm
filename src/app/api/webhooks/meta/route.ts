@@ -325,7 +325,7 @@ export async function POST(req: NextRequest) {
             }
           }
         }
-      })
+    })
 
     return response
   } catch (error: any) {
@@ -966,17 +966,17 @@ async function processWebhookPayload(payload: any) {
               })
             } else {
               // For Facebook, use standard processing
-              await processInboundMessage({
+          await processInboundMessage({
                 pageId: pageId!,
-                workspaceId: workspaceId ?? 1,
+            workspaceId: workspaceId ?? 1,
                 senderId: event.senderId!,
-                message: { 
-                  text: event.text, 
-                  mid: event.messageId,
+            message: { 
+              text: event.text, 
+              mid: event.messageId,
                   attachments: attachments,
-                },
-                timestamp: event.timestamp || new Date(),
-                channel,
+            },
+            timestamp: event.timestamp || new Date(),
+            channel,
                 instagramProfile: instagramProfile || undefined, // Pass Instagram profile if fetched
               })
             }
@@ -1192,7 +1192,6 @@ async function processInstagramMessageRobust(data: {
     // Step 1: Upsert Contact (already working)
     const { getExternalThreadId } = await import('@/lib/conversation/getExternalThreadId')
     const { upsertConversation } = await import('@/lib/conversation/upsert')
-    const { createInstagramLeadMinimal } = await import('@/lib/inbound/autoMatchPipeline')
     const { prisma } = await import('@/lib/prisma')
     const { upsertContact } = await import('@/lib/contact/upsert')
 
@@ -1330,8 +1329,17 @@ async function processInstagramMessageRobust(data: {
 
     let lead = null
     try {
-      // First try minimal lead creation
-      lead = await createInstagramLeadMinimal(contact.id)
+      // Create minimal lead directly
+      lead = await prisma.lead.create({
+        data: {
+          contactId: contact.id,
+          stage: 'NEW',
+          status: 'new',
+          pipelineStage: 'new',
+          lastContactChannel: 'instagram',
+          lastInboundAt: timestamp,
+        },
+      })
 
       if (lead) {
         console.log('✅ [INSTAGRAM-ROBUST] Lead created successfully', {
@@ -1462,7 +1470,7 @@ async function processInboundMessage(data: {
   // Use the autoMatchPipeline which is the safe, isolated function
   // Declare providerMessageId outside try block so it's accessible in catch
   const providerMessageId = message?.mid || `meta_${channel.toLowerCase()}_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
-  
+
   try {
 
     // Extract attachment metadata - handle both Instagram and Facebook structures
