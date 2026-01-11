@@ -295,7 +295,7 @@ export async function GET(req: NextRequest) {
               unreadCount: conv.unreadCount,
             })
           }
-          
+    
           return {
             id: conv.id,
             contact: {
@@ -350,7 +350,7 @@ export async function GET(req: NextRequest) {
             }, {} as Record<string, number>),
           })
         }
-        
+    
         // Sort by lastMessageAt descending (most recent messages on top)
         // Secondary sort by priorityScore for conversations with same timestamp
         formatted.sort((a: any, b: any) => {

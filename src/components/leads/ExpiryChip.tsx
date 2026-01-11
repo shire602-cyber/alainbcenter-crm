@@ -18,7 +18,7 @@ export function ExpiryChip({ expiryDate, type, className, showIcon = true, compa
   const isOverdue = days < 0
 
   // Format type for display (e.g. "VISA_EXPIRY" -> "Visa")
-  const typeLabel = type
+  const typeLabel = (type || 'UNKNOWN')
     .replace(/_EXPIRY$/, '')
     .split('_')
     .map(word => word.charAt(0) + word.slice(1).toLowerCase())

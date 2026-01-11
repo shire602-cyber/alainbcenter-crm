@@ -331,9 +331,9 @@ export function MetaTesterIntegration({
       } else {
         // Fallback: direct healthcheck
         const res = await fetch('/api/webhooks/meta', {
-          method: 'GET',
-        })
-        
+        method: 'GET',
+      })
+      
         if (res.status === 200) {
           const data = await res.json()
           if (data.ok && data.mode === 'healthcheck') {
@@ -343,7 +343,7 @@ export function MetaTesterIntegration({
             setSuccess('✅ Webhook endpoint is reachable')
             setError(null)
           }
-        } else {
+      } else {
           setError(`Webhook endpoint returned status ${res.status}`)
           setSuccess(null)
         }
@@ -550,7 +550,7 @@ export function MetaTesterIntegration({
                           : igStatusUnknown
                           ? 'Status unknown - verify manually or check if DMs are received'
                           : 'NOT SUBSCRIBED - DMs will not be received'}
-                      </span>
+                </span>
                     </div>
                     {igFields.length > 0 && (
                       <p className="text-xs text-slate-500 pl-4">Fields: {igFields.join(', ')}</p>
@@ -654,22 +654,22 @@ export function MetaTesterIntegration({
 
                 {conn.status === 'error' && conn.lastError && (
                   <div className="flex items-center gap-2">
-                    <span className="text-xs text-red-600" title={conn.lastError}>
+                  <span className="text-xs text-red-600" title={conn.lastError}>
                       <AlertCircle className="h-3 w-3 inline" /> Error
-                    </span>
+                  </span>
                   </div>
                 )}
                 
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="mt-2 h-6 text-xs"
-                  onClick={() => handleDisconnect(conn.id)}
-                  disabled={disconnecting}
-                >
-                  {disconnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
-                </Button>
-              </div>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2 h-6 text-xs"
+                onClick={() => handleDisconnect(conn.id)}
+                disabled={disconnecting}
+              >
+                {disconnecting ? <Loader2 className="h-3 w-3 animate-spin" /> : 'Disconnect'}
+              </Button>
+            </div>
             )
           })}
         </div>
@@ -718,11 +718,11 @@ export function MetaTesterIntegration({
               </div>
             </div>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
+            <Button
+              variant="outline"
+              size="sm"
                 className="flex-1 text-xs h-7"
-                onClick={handleTestWebhook}
+              onClick={handleTestWebhook}
                 disabled={testingWebhook}
               >
                 {testingWebhook ? (
@@ -894,7 +894,7 @@ export function MetaTesterIntegration({
                     ) : (
                       'View Events'
                     )}
-                  </Button>
+            </Button>
                 </div>
                 
                 {webhookEvents && (

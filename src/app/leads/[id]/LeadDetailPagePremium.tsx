@@ -274,7 +274,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       const res = await fetch(`/api/leads/${leadId}`)
       if (res.ok) {
         const data = await res.json()
-        setLead(data)
+        setLead(data.lead || data)
       } else {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
         console.error(`Failed to load lead ${leadId}:`, errorData)
@@ -1634,9 +1634,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       >
                         <div className="flex items-center justify-between mb-3">
                           <Badge variant="outline" className="text-sm px-2.5 py-1 rounded-full">
-                            {expiry.type.replace(/_/g, ' ')}
+                            {(expiry.type || 'UNKNOWN').replace(/_/g, ' ')}
                           </Badge>
-                          <ExpiryCountdown expiryDate={expiry.expiryDate} type={expiry.type} />
+                          <ExpiryCountdown expiryDate={expiry.expiryDate} type={expiry.type || 'UNKNOWN'} />
                         </div>
                         <div className="space-y-2">
                           <div>
@@ -1680,7 +1680,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                             expiryDate={expiry.expiryDate}
                             onAction={(action) => {
                               if (action === 'add-task') {
-                                setTaskTitle(`Renewal: ${expiry.type.replace(/_/g, ' ')}`)
+                                setTaskTitle(`Renewal: ${(expiry.type || 'UNKNOWN').replace(/_/g, ' ')}`)
                                 setTaskType('RENEWAL')
                                 setShowTaskModal(true)
                               } else if (action === 'renew') {

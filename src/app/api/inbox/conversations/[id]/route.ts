@@ -375,7 +375,7 @@ export async function GET(
     // Reverse messages array if ordered desc (to get chronological order for display)
     // We fetched most recent 50 in desc order, so reverse to show oldest first
     const messagesInOrder = conversation.messages.slice().reverse()
-    
+
     // Format messages for frontend - PHASE 5A: Include attachments
     const formattedMessages = messagesInOrder.map((msg: any) => {
       // Use canonical isMedia() function

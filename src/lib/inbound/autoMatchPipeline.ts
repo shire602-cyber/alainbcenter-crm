@@ -148,23 +148,23 @@ export async function handleInboundMessageAutoMatch(
     contactName = input.fromName || undefined
   } else if (isWhatsApp) {
     // For WhatsApp, normalize phone number
-    let normalizedPhone: string | null = null
+  let normalizedPhone: string | null = null
     if (input.fromPhone) {
-      try {
-        normalizedPhone = normalizeInboundPhone(input.fromPhone)
-        console.log(`✅ [AUTO-MATCH] Normalized phone: ${input.fromPhone} → ${normalizedPhone}`)
-      } catch (normalizeError: any) {
-        // Log structured error but don't abort - use raw phone
-        console.error(`❌ [AUTO-MATCH] Failed to normalize phone`, {
-          conversationId: null, // Will be set after conversation creation
-          inboundProviderMessageId: input.providerMessageId,
-          rawFrom: input.fromPhone,
-          normalizedPhoneAttempt: null,
-          error: normalizeError.message,
-        })
-        // Continue with raw phone - upsertContact will try to normalize again
-      }
+    try {
+      normalizedPhone = normalizeInboundPhone(input.fromPhone)
+      console.log(`✅ [AUTO-MATCH] Normalized phone: ${input.fromPhone} → ${normalizedPhone}`)
+    } catch (normalizeError: any) {
+      // Log structured error but don't abort - use raw phone
+      console.error(`❌ [AUTO-MATCH] Failed to normalize phone`, {
+        conversationId: null, // Will be set after conversation creation
+        inboundProviderMessageId: input.providerMessageId,
+        rawFrom: input.fromPhone,
+        normalizedPhoneAttempt: null,
+        error: normalizeError.message,
+      })
+      // Continue with raw phone - upsertContact will try to normalize again
     }
+  }
     contactPhone = normalizedPhone || input.fromPhone || input.fromEmail || 'unknown'
     contactName = input.fromName || undefined
   } else {
@@ -190,9 +190,9 @@ export async function handleInboundMessageAutoMatch(
       phone: contactPhone,
       fullName: contactName,
       email: contactEmail,
-      source: input.channel.toLowerCase(),
+    source: input.channel.toLowerCase(),
       webhookPayload: webhookPayload, // For extracting waId (WhatsApp only)
-    })
+  })
     
     if (isInstagram) {
       console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: CONTACT_CREATION - Success`, {
@@ -299,11 +299,11 @@ export async function handleInboundMessageAutoMatch(
     
     try {
       lead = await findOrCreateLead({
-        contactId: contactResult.id,
-        channel: input.channel,
-        providerMessageId: input.providerMessageId,
-        timestamp: input.timestamp, // Use actual message timestamp
-      })
+    contactId: contactResult.id,
+    channel: input.channel,
+    providerMessageId: input.providerMessageId,
+    timestamp: input.timestamp, // Use actual message timestamp
+  })
       
       console.log(`✅ [AUTO-MATCH] IMMEDIATELY AFTER findOrCreateLead call - SUCCESS`, {
         leadId: lead?.id || 'NULL',
@@ -450,12 +450,12 @@ export async function handleInboundMessageAutoMatch(
     }
     
     conversationResult = await upsertConversation({
-      contactId: contactResult.id,
-      channel: input.channel,
-      leadId: lead.id, // CRITICAL: Link conversation to lead
-      timestamp: input.timestamp, // Use actual message timestamp
-      externalThreadId, // Canonical external thread ID
-      language: detectedLanguage, // CRITICAL FIX 4: Store detected language
+    contactId: contactResult.id,
+    channel: input.channel,
+    leadId: lead.id, // CRITICAL: Link conversation to lead
+    timestamp: input.timestamp, // Use actual message timestamp
+    externalThreadId, // Canonical external thread ID
+    language: detectedLanguage, // CRITICAL FIX 4: Store detected language
       knownFields: knownFields ? JSON.stringify(knownFields) : undefined, // Store Instagram profile info
     })
     
@@ -555,23 +555,23 @@ export async function handleInboundMessageAutoMatch(
       })
     }
     
-    // #region agent log
-    try {
-      fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:createCommunicationLog-call',message:'Calling createCommunicationLog with metadata',data:{conversationId:conversation.id,hasMetadata:!!input.metadata,mediaUrl:input.metadata?.mediaUrl,mediaMimeType:input.metadata?.mediaMimeType,filename:input.metadata?.filename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I2'})}).catch(()=>{});
-    } catch (e) {}
-    // #endregion
+  // #region agent log
+  try {
+    fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'autoMatchPipeline.ts:createCommunicationLog-call',message:'Calling createCommunicationLog with metadata',data:{conversationId:conversation.id,hasMetadata:!!input.metadata,mediaUrl:input.metadata?.mediaUrl,mediaMimeType:input.metadata?.mediaMimeType,filename:input.metadata?.filename},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'I2'})}).catch(()=>{});
+  } catch (e) {}
+  // #endregion
     
     message = await createCommunicationLog({
-      conversationId: conversation.id,
-      leadId: lead.id,
-      contactId: contact.id, // CRITICAL: Include contactId
-      channel: input.channel,
-      direction: 'in',
-      text: input.text,
-      providerMessageId: input.providerMessageId,
-      timestamp: input.timestamp || new Date(),
-      metadata: input.metadata, // CRITICAL FIX 3: Pass metadata for audio detection (includes mediaUrl, mediaMimeType, filename)
-    })
+    conversationId: conversation.id,
+    leadId: lead.id,
+    contactId: contact.id, // CRITICAL: Include contactId
+    channel: input.channel,
+    direction: 'in',
+    text: input.text,
+    providerMessageId: input.providerMessageId,
+    timestamp: input.timestamp || new Date(),
+    metadata: input.metadata, // CRITICAL FIX 3: Pass metadata for audio detection (includes mediaUrl, mediaMimeType, filename)
+  })
     
     if (isInstagram) {
       console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: MESSAGE_CREATION - Success`, {
@@ -1233,7 +1233,7 @@ export async function handleInboundMessageAutoMatch(
       channel: input.channel.toLowerCase(),
     })
   }
-  
+
   return {
     contact,
     conversation,
@@ -1388,7 +1388,7 @@ async function findOrCreateLead(input: {
   }
   
   try {
-    // BUG FIX: Use actual message timestamp instead of webhook processing time
+  // BUG FIX: Use actual message timestamp instead of webhook processing time
     // Use let to allow reassignment if validation fails
     let messageTimestamp = input.timestamp || new Date()
     
@@ -1398,35 +1398,35 @@ async function findOrCreateLead(input: {
       })
     }
     
-    // Check if this providerMessageId already linked to a lead (idempotency)
+  // Check if this providerMessageId already linked to a lead (idempotency)
     if (isInstagram) {
       console.log(`📸 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Checking existing message`, {
         providerMessageId: input.providerMessageId,
       })
     }
     
-    const existingMessage = await prisma.message.findFirst({
-      where: {
-        providerMessageId: input.providerMessageId,
-      },
-      include: { lead: true },
-    })
+  const existingMessage = await prisma.message.findFirst({
+    where: {
+      providerMessageId: input.providerMessageId,
+    },
+    include: { lead: true },
+  })
 
-    if (existingMessage?.lead) {
+  if (existingMessage?.lead) {
       if (isInstagram) {
         console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Message already linked to lead`, {
           messageId: existingMessage.id,
           leadId: existingMessage.lead.id,
         })
       } else {
-        console.log(`✅ [AUTO-MATCH] Message already linked to lead: ${existingMessage.lead.id}`)
+    console.log(`✅ [AUTO-MATCH] Message already linked to lead: ${existingMessage.lead.id}`)
       }
-      return existingMessage.lead
-    }
+    return existingMessage.lead
+  }
 
-    // Find open lead (not Won/Lost/Cold) created within last 30 days
-    const thirtyDaysAgo = new Date()
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
+  // Find open lead (not Won/Lost/Cold) created within last 30 days
+  const thirtyDaysAgo = new Date()
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30)
 
     if (isInstagram) {
       console.log(`📸 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Searching for open lead`, {
@@ -1435,43 +1435,43 @@ async function findOrCreateLead(input: {
       })
     }
 
-    const openLead = await prisma.lead.findFirst({
-      where: {
-        contactId: input.contactId,
-        stage: {
-          notIn: ['COMPLETED_WON', 'LOST', 'ON_HOLD'],
-        },
-        createdAt: {
-          gte: thirtyDaysAgo,
-        },
+  const openLead = await prisma.lead.findFirst({
+    where: {
+      contactId: input.contactId,
+      stage: {
+        notIn: ['COMPLETED_WON', 'LOST', 'ON_HOLD'],
       },
-      orderBy: { createdAt: 'desc' },
-    })
+      createdAt: {
+        gte: thirtyDaysAgo,
+      },
+    },
+    orderBy: { createdAt: 'desc' },
+  })
 
-    if (openLead) {
+  if (openLead) {
       if (isInstagram) {
         console.log(`✅ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Found open lead`, {
           leadId: openLead.id,
           stage: openLead.stage,
         })
       } else {
-        console.log(`✅ [AUTO-MATCH] Found open lead: ${openLead.id}`)
+    console.log(`✅ [AUTO-MATCH] Found open lead: ${openLead.id}`)
       }
       
-      // CRITICAL FIX: Link conversations to this lead if not already linked
+    // CRITICAL FIX: Link conversations to this lead if not already linked
       try {
-        await prisma.conversation.updateMany({
-          where: {
-            contactId: input.contactId,
-            OR: [
-              { leadId: null },
-              { leadId: { not: openLead.id } },
-            ],
-          },
-          data: {
-            leadId: openLead.id,
-          },
-        })
+    await prisma.conversation.updateMany({
+      where: {
+        contactId: input.contactId,
+        OR: [
+          { leadId: null },
+          { leadId: { not: openLead.id } },
+        ],
+      },
+      data: {
+        leadId: openLead.id,
+      },
+    })
       } catch (linkError: any) {
         if (isInstagram) {
           console.warn(`⚠️ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Failed to link conversations`, {
@@ -1484,12 +1484,12 @@ async function findOrCreateLead(input: {
         // Continue - not critical
       }
       
-      // Update lastInboundAt with actual message timestamp
+    // Update lastInboundAt with actual message timestamp
       try {
-        await prisma.lead.update({
-          where: { id: openLead.id },
-          data: { lastInboundAt: messageTimestamp },
-        })
+    await prisma.lead.update({
+      where: { id: openLead.id },
+      data: { lastInboundAt: messageTimestamp },
+    })
       } catch (updateError: any) {
         if (isInstagram) {
           console.warn(`⚠️ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Failed to update lead`, {
@@ -1502,13 +1502,13 @@ async function findOrCreateLead(input: {
         // Continue - not critical
       }
       
-      return openLead
-    }
+    return openLead
+  }
 
-    // Create new lead
+  // Create new lead
     if (isInstagram) {
       console.log(`📸 [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Creating new lead`, {
-        contactId: input.contactId,
+      contactId: input.contactId,
         channel: input.channel.toLowerCase(),
         messageTimestamp: messageTimestamp.toISOString(),
       })
@@ -1713,18 +1713,18 @@ async function findOrCreateLead(input: {
       // Re-throw to trigger outer catch block
       throw createError
     }
-    
-    // CRITICAL FIX: Link all existing conversations for this contact to the new lead
+  
+  // CRITICAL FIX: Link all existing conversations for this contact to the new lead
     try {
-      await prisma.conversation.updateMany({
-        where: {
-          contactId: input.contactId,
-          leadId: null, // Only update conversations not linked to a lead
-        },
-        data: {
-          leadId: newLead.id,
-        },
-      })
+  await prisma.conversation.updateMany({
+    where: {
+      contactId: input.contactId,
+      leadId: null, // Only update conversations not linked to a lead
+    },
+    data: {
+      leadId: newLead.id,
+    },
+  })
     } catch (linkError: any) {
       if (isInstagram) {
         console.warn(`⚠️ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Failed to link conversations to new lead`, {
@@ -1736,15 +1736,15 @@ async function findOrCreateLead(input: {
       }
       // Continue - not critical
     }
-    
-    // Update contact source if not set
+  
+  // Update contact source if not set
     try {
-      await prisma.contact.update({
-        where: { id: input.contactId },
-        data: {
-          source: input.channel.toLowerCase(),
-        },
-      })
+  await prisma.contact.update({
+    where: { id: input.contactId },
+    data: {
+      source: input.channel.toLowerCase(),
+    },
+  })
     } catch (updateError: any) {
       if (isInstagram) {
         console.warn(`⚠️ [AUTO-MATCH-INSTAGRAM] Step: FIND_OR_CREATE_LEAD - Failed to update contact source`, {
@@ -1757,7 +1757,7 @@ async function findOrCreateLead(input: {
       // Continue - not critical
     }
 
-    return newLead
+  return newLead
   } catch (error: any) {
     // Capture full error object for debugging
     const errorDetails = {

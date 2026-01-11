@@ -39,8 +39,8 @@ export async function POST(req: NextRequest) {
     try {
       await setWebhookVerifyToken(finalVerifyToken)
       console.log('✅ Stored webhook verify token (redacted for security)')
-    } catch (error: any) {
-      console.error('Failed to store webhook verify token:', error)
+      } catch (error: any) {
+        console.error('Failed to store webhook verify token:', error)
       // Continue - connection can still succeed, token can be set later
     }
 
