@@ -132,6 +132,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const { showToast } = useToast()
   const [lead, setLead] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
   const [activeChannel, setActiveChannel] = useState('whatsapp')
   const [messageText, setMessageText] = useState('')
   const [sending, setSending] = useState(false)
@@ -271,18 +272,54 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   async function loadLead() {
     try {
       setLoading(true)
+      setError(null)
       const res = await fetch(`/api/leads/${leadId}`)
-      if (res.ok) {
-        const data = await res.json()
-        setLead(data.lead || data)
-      } else {
+      
+      if (!res.ok) {
         const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
+        const errorMessage = errorData.error || `HTTP ${res.status}`
+        setError(errorMessage)
         console.error(`Failed to load lead ${leadId}:`, errorData)
-        showToast(`Lead ${leadId} not found: ${errorData.error || 'Unknown error'}`, 'error')
+        showToast(`Lead ${leadId} not found: ${errorMessage}`, 'error')
+        return
       }
+      
+      const data = await res.json()
+      const leadData = data.lead || data
+      
+      if (!leadData || !leadData.id) {
+        const errorMessage = 'Invalid lead data received from server'
+        setError(errorMessage)
+        console.error('Invalid lead data:', data)
+        showToast(errorMessage, 'error')
+        return
+      }
+      
+      // Normalize data: ensure all nested objects have defaults
+      const normalizedLead = {
+        ...leadData,
+        contact: leadData.contact || null,
+        tasks: leadData.tasks || leadData.tasksGrouped?.open?.concat(leadData.tasksGrouped?.done || []).concat(leadData.tasksGrouped?.snoozed || []) || [],
+        tasksGrouped: leadData.tasksGrouped || {
+          open: [],
+          done: [],
+          snoozed: [],
+        },
+        expiryItems: leadData.expiryItems || [],
+        documents: leadData.documents || [],
+        conversations: leadData.conversations || [],
+        messages: leadData.messages || [],
+        communicationLogs: leadData.communicationLogs || [],
+        notifications: leadData.notifications || [],
+      }
+      
+      setLead(normalizedLead)
+      setError(null)
     } catch (err: any) {
+      const errorMessage = err.message || 'Network error'
+      setError(errorMessage)
       console.error('Failed to load lead:', err)
-      showToast(`Failed to load lead: ${err.message || 'Network error'}`, 'error')
+      showToast(`Failed to load lead: ${errorMessage}`, 'error')
     } finally {
       setLoading(false)
     }
@@ -708,15 +745,36 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     )
   }
 
+  if (error) {
+    return (
+      <MainLayout>
+        <div className="p-6 text-center">
+          <AlertCircle className="h-12 w-12 mx-auto mb-4 text-red-500" />
+          <p className="text-lg text-red-600 mb-2">Error loading lead</p>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <div className="flex gap-2 justify-center">
+            <Button onClick={loadLead}>Retry</Button>
+            <Link href="/leads">
+              <Button variant="outline">Back to Leads</Button>
+            </Link>
+          </div>
+        </div>
+      </MainLayout>
+    )
+  }
+
   if (!lead) {
     return (
       <MainLayout>
         <div className="p-6 text-center">
           <AlertCircle className="h-12 w-12 mx-auto mb-4 text-muted-foreground" />
           <p className="text-lg text-muted-foreground">Lead not found</p>
-          <Link href="/leads">
-            <Button className="mt-4">Back to Leads</Button>
-          </Link>
+          <div className="flex gap-2 justify-center mt-4">
+            <Button onClick={loadLead}>Retry</Button>
+            <Link href="/leads">
+              <Button variant="outline">Back to Leads</Button>
+            </Link>
+          </div>
         </div>
       </MainLayout>
     )
@@ -818,7 +876,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               <div className="flex items-center gap-3 flex-shrink-0">
                 {lead.contact?.phone && (
                   <Button
-                    onClick={() => openWhatsApp(lead.contact.phone, messageText || undefined)}
+                    onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
                     className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
                     size="lg"
                   >
@@ -827,7 +885,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </Button>
                 )}
                 {lead.contact?.phone && (
-                  <Button variant="outline" size="sm" onClick={() => window.open(`tel:${lead.contact.phone}`)}>
+                  <Button variant="outline" size="sm" onClick={() => lead.contact?.phone && window.open(`tel:${lead.contact.phone}`)}>
                     <Phone className="h-4 w-4" />
                   </Button>
                 )}

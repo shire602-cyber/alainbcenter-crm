@@ -1580,7 +1580,10 @@ async function createCommunicationLog(input: {
     }
     
     // If prod Prisma client is stale and rejects providerMediaId/media fields:
-    if (msg.includes("Unknown argument `providerMediaId`") || msg.includes("Unknown argument providerMediaId")) {
+    if (msg.includes("Unknown argument `providerMediaId`") || 
+        msg.includes("Unknown argument providerMediaId") ||
+        msg.includes("Unknown argument `mediaCaption`") ||
+        msg.includes("Unknown argument mediaCaption")) {
       // Fallback: Strip all media-related fields and retry
       const {
         providerMediaId: _providerMediaId,

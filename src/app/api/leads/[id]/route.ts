@@ -257,14 +257,17 @@ export async function GET(
           if (lead) {
             // Return redirect hint with preserved query params
             const redirectUrl = `/leads/${lead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
+            const tasks = (lead as any).tasks || []
             return NextResponse.json({
-              ...lead,
-              _redirect: redirectUrl,
-              _fallbackReason: 'Found via conversationId query param',
-              tasksGrouped: {
-                open: (lead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
-                done: (lead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
-                snoozed: (lead as any).tasks?.filter((t: any) => t.status === 'SNOOZED') || [],
+              lead: {
+                ...lead,
+                _redirect: redirectUrl,
+                _fallbackReason: 'Found via conversationId query param',
+                tasksGrouped: {
+                  open: tasks.filter((t: any) => t.status === 'OPEN') || [],
+                  done: tasks.filter((t: any) => t.status === 'DONE') || [],
+                  snoozed: tasks.filter((t: any) => t.status === 'SNOOZED') || [],
+                }
               }
             })
           }
@@ -341,14 +344,17 @@ export async function GET(
           if (latestLead) {
             console.log(`[API] Found latest lead ${latestLead.id} via contactId ${conversation.contactId}`)
             const redirectUrl = `/leads/${latestLead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
+            const tasks = (latestLead as any).tasks || []
             return NextResponse.json({
-              ...latestLead,
-              _redirect: redirectUrl,
-              _fallbackReason: 'Found latest lead via contactId',
-              tasksGrouped: {
-                open: (latestLead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
-                done: (latestLead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
-                snoozed: (latestLead as any).tasks?.filter((t: any) => t.status === 'SNOOZED') || [],
+              lead: {
+                ...latestLead,
+                _redirect: redirectUrl,
+                _fallbackReason: 'Found latest lead via contactId',
+                tasksGrouped: {
+                  open: tasks.filter((t: any) => t.status === 'OPEN') || [],
+                  done: tasks.filter((t: any) => t.status === 'DONE') || [],
+                  snoozed: tasks.filter((t: any) => t.status === 'SNOOZED') || [],
+                }
               }
             })
           }
@@ -423,14 +429,17 @@ export async function GET(
         if (latestLead) {
           console.log(`[API] Found latest lead ${latestLead.id} via contactId ${contactId}`)
           const redirectUrl = `/leads/${latestLead.id}${action ? `?action=${action}` : ''}${searchParams.toString() ? `&${searchParams.toString()}` : ''}`
+          const tasks = (latestLead as any).tasks || []
           return NextResponse.json({
-            ...latestLead,
-            _redirect: redirectUrl,
-            _fallbackReason: 'Found latest lead via contactId',
-            tasksGrouped: {
-              open: (latestLead as any).tasks?.filter((t: any) => t.status === 'OPEN') || [],
-              done: (latestLead as any).tasks?.filter((t: any) => t.status === 'DONE') || [],
-              snoozed: (latestLead as any).tasks?.filter((t: any) => t.status === 'SNOOZED') || [],
+            lead: {
+              ...latestLead,
+              _redirect: redirectUrl,
+              _fallbackReason: 'Found latest lead via contactId',
+              tasksGrouped: {
+                open: tasks.filter((t: any) => t.status === 'OPEN') || [],
+                done: tasks.filter((t: any) => t.status === 'DONE') || [],
+                snoozed: tasks.filter((t: any) => t.status === 'SNOOZED') || [],
+              }
             }
           })
         }
@@ -467,6 +476,7 @@ export async function GET(
     const response = NextResponse.json({
       lead: {
         ...lead,
+        tasks: tasks, // Preserve original tasks array
         tasksGrouped: {
           open: tasksOpen,
           done: tasksDone,
