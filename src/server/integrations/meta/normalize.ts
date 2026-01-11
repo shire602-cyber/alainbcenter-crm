@@ -87,9 +87,12 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
             normalizedEvent.recipientId = event.recipient.id || event.recipient
           }
 
-          // Extract timestamp
+          // Extract timestamp - check if already in milliseconds (>= 1e12)
           if (event.timestamp) {
-            normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+            const timestampMs = event.timestamp >= 1e12 
+              ? event.timestamp  // Already in milliseconds
+              : event.timestamp * 1000  // Convert seconds to milliseconds
+            normalizedEvent.timestamp = new Date(timestampMs)
           }
 
           // Extract message ID and text from event.message
@@ -173,12 +176,15 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
                 : (message.to.id || message.to)
             }
 
-            // Extract timestamp (Instagram uses Unix timestamp in seconds as string or number)
+            // Extract timestamp - check if already in milliseconds (>= 1e12)
             if (message.timestamp) {
               const timestampValue = typeof message.timestamp === 'string' 
                 ? parseInt(message.timestamp, 10) 
                 : message.timestamp
-              normalizedEvent.timestamp = new Date(timestampValue * 1000)
+              const timestampMs = timestampValue >= 1e12 
+                ? timestampValue  // Already in milliseconds
+                : timestampValue * 1000  // Convert seconds to milliseconds
+              normalizedEvent.timestamp = new Date(timestampMs)
             }
 
             // Extract message ID (can be 'id' or 'mid')
@@ -253,9 +259,12 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
             normalizedEvent.recipientId = event.recipient.id || event.recipient
           }
 
-          // Extract timestamp
+          // Extract timestamp - check if already in milliseconds (>= 1e12)
           if (event.timestamp) {
-            normalizedEvent.timestamp = new Date(event.timestamp * 1000)
+            const timestampMs = event.timestamp >= 1e12 
+              ? event.timestamp  // Already in milliseconds
+              : event.timestamp * 1000  // Convert seconds to milliseconds
+            normalizedEvent.timestamp = new Date(timestampMs)
           }
 
           // Extract message ID and text from event.message

@@ -30,4 +30,3 @@ UPDATE "OutboundMessageLog" SET "status" = 'SENT' WHERE "status" IS NULL;
 UPDATE "OutboundMessageLog" 
 SET "outboundDedupeKey" = 'legacy_' || id || '_' || "conversationId" || '_' || COALESCE("triggerProviderMessageId", 'none') || '_' || EXTRACT(EPOCH FROM "createdAt")::bigint
 WHERE "outboundDedupeKey" IS NULL;
-
