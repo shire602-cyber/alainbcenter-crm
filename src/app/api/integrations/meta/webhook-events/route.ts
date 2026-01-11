@@ -97,8 +97,35 @@ export async function GET(req: NextRequest) {
         
         if (messages.length > 0) {
           const firstMessage = messages[0]
+          const senderId = firstMessage.from?.id || firstMessage.from || null
+          
+          // Try to find contact by Instagram user ID to get username
+          let senderName = 'unknown'
+          if (senderId) {
+            try {
+              // Instagram contacts use phone format "ig:{userId}"
+              const instagramPhone = `ig:${senderId}`
+              const contact = await prisma.contact.findFirst({
+                where: {
+                  phone: instagramPhone,
+                },
+                select: {
+                  fullName: true,
+                },
+              })
+              
+              if (contact?.fullName) {
+                senderName = contact.fullName
+              }
+            } catch (contactError: any) {
+              // Non-blocking - continue with 'unknown'
+              console.warn('Failed to lookup contact for Instagram sender:', contactError.message)
+            }
+          }
+          
           messagePreview = {
-            from: firstMessage.from?.id || firstMessage.from || 'unknown',
+            from: senderId || 'unknown',
+            fromName: senderName,
             text: firstMessage.text ? `${firstMessage.text.substring(0, 50)}${firstMessage.text.length > 50 ? '...' : ''}` : '[no text]',
             hasText: !!firstMessage.text,
             hasAttachments: !!firstMessage.attachments,
