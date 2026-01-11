@@ -72,7 +72,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Parse payloads and prepare response
-    const formattedEvents = events.map((event) => {
+    const formattedEvents = await Promise.all(events.map(async (event) => {
       let payload = null
       try {
         payload = typeof event.payload === 'string' 
@@ -162,7 +162,7 @@ export async function GET(req: NextRequest) {
         // Include full payload for debugging (can be large)
         fullPayload: payload,
       }
-    })
+    }))
 
     // Get total count for pagination info
     const total = await prisma.metaWebhookEvent.count({ where })
