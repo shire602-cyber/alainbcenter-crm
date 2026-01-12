@@ -30,19 +30,14 @@ export function isPublicUrl(url: string): boolean {
 /**
  * Get the public URL for webhooks
  * Priority:
- * 1. VERCEL_URL (auto-detected on Vercel)
- * 2. APP_PUBLIC_URL environment variable
- * 3. NEXT_PUBLIC_APP_URL environment variable
+ * 1. APP_PUBLIC_URL (explicit production domain - highest priority)
+ * 2. NEXT_PUBLIC_APP_URL (client-accessible production domain)
+ * 3. VERCEL_URL (auto-detected on Vercel - fallback for preview deployments)
  * 4. Request origin (if available and not localhost)
  * 5. Default localhost (dev only)
  */
 export function getPublicUrl(request?: Request): string {
-  // Vercel deployment (highest priority for production)
-  if (process.env.VERCEL_URL) {
-    return `https://${process.env.VERCEL_URL}`
-  }
-
-  // Check environment variable
+  // Priority 1: Explicit production domain (highest priority)
   if (process.env.APP_PUBLIC_URL) {
     const url = process.env.APP_PUBLIC_URL.replace(/\/$/, '')
     // If it's a public URL (not localhost), use it
@@ -51,7 +46,20 @@ export function getPublicUrl(request?: Request): string {
     }
   }
 
-  // Try to get from request (if it's a public URL)
+  // Priority 2: NEXT_PUBLIC_APP_URL (client-accessible)
+  if (process.env.NEXT_PUBLIC_APP_URL) {
+    const url = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
+    if (isPublicUrl(url)) {
+      return url
+    }
+  }
+
+  // Priority 3: Vercel deployment URL (fallback for preview deployments)
+  if (process.env.VERCEL_URL) {
+    return `https://${process.env.VERCEL_URL}`
+  }
+
+  // Priority 4: Request origin (if available and not localhost)
   if (request) {
     const url = new URL(request.url)
     const fullUrl = `${url.protocol}//${url.host}`
@@ -60,20 +68,12 @@ export function getPublicUrl(request?: Request): string {
     }
   }
 
-  // Fallback for server-side without request
-  if (process.env.NEXT_PUBLIC_APP_URL) {
-    const url = process.env.NEXT_PUBLIC_APP_URL.replace(/\/$/, '')
-    if (isPublicUrl(url)) {
-      return url
-    }
-  }
-
   // Last resort: localhost (dev only) - only if we're not on Vercel
   if (process.env.NODE_ENV === 'development' && !isVercel()) {
     return 'http://localhost:3000'
   }
 
-  // Production fallback (should not happen if VERCEL_URL is set)
+  // Production fallback
   return 'https://your-domain.com'
 }
 

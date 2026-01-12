@@ -59,6 +59,15 @@ SMTP_FROM=noreply@example.com
 META_VERIFY_TOKEN=your_token
 META_APP_SECRET=your_secret
 META_PAGE_ACCESS_TOKEN=your_token
+
+# Webhook URL Configuration (REQUIRED for Production)
+# Set this to your main domain to use stable webhook URLs instead of dynamic Vercel URLs
+# This prevents needing to update webhook URLs in Meta Developer Console after each deployment
+# IMPORTANT: This must be set in Vercel Environment Variables for production
+NEXT_PUBLIC_APP_URL=https://www.implseai.com
+# Alternative: Use APP_PUBLIC_URL (server-side only, not exposed to client)
+# Both variables are checked, but NEXT_PUBLIC_APP_URL takes priority
+APP_PUBLIC_URL=https://www.implseai.com
 ```
 
 ## Environment-Specific Setup

@@ -11,7 +11,7 @@ interface CardProps extends React.HTMLAttributes<HTMLDivElement> {
 }
 
 const Card = React.forwardRef<HTMLDivElement, CardProps>(
-  ({ className, selectable, selected, onSelect, onClick, ...props }, ref) => {
+  ({ className, selectable, selected, onSelect, onClick, children, ...props }, ref) => {
     const handleClick = (e: React.MouseEvent<HTMLDivElement>) => {
       if (selectable && onSelect) {
         onSelect()
@@ -38,6 +38,7 @@ const Card = React.forwardRef<HTMLDivElement, CardProps>(
             <Check className="h-3 w-3 text-white" />
           </div>
         )}
+        {children}
       </div>
     )
   }

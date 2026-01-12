@@ -334,26 +334,30 @@ export function IntegrationSettings({
   const isEnabled = integration?.isEnabled || false
   const canEdit = !isEnabled || true // Always allow editing
 
-  // Compute webhook URL for WhatsApp
-  // On Vercel, window.location.origin will automatically have the correct Vercel URL
-  // This works for both preview and production deployments
-  const getWebhookUrl = () => {
-    if (typeof window !== 'undefined') {
-      // Client-side: use current origin (guaranteed to be correct on Vercel)
-      const origin = window.location.origin
-      return `${origin}/api/webhooks/whatsapp`
-    }
-    // Server-side fallbacks
-    if (process.env.NEXT_PUBLIC_APP_URL) {
-      return `${process.env.NEXT_PUBLIC_APP_URL}/api/webhooks/whatsapp`
-    }
-    if (process.env.VERCEL_URL) {
-      return `https://${process.env.VERCEL_URL}/api/webhooks/whatsapp`
-    }
-    return 'https://your-app.vercel.app/api/webhooks/whatsapp'
-  }
+  // Fetch webhook URL from API to respect environment variables
+  const [webhookUrl, setWebhookUrl] = useState('')
   
-  const webhookUrl = getWebhookUrl()
+  useEffect(() => {
+    const loadWebhookUrl = async () => {
+      if (type.name === 'whatsapp') {
+        try {
+          const res = await fetch('/api/admin/integrations/webhook-url')
+          if (res.ok) {
+            const data = await res.json()
+            if (data.webhookUrl) {
+              setWebhookUrl(data.webhookUrl)
+            }
+          }
+        } catch (err) {
+          // Fallback to window.location.origin if API fails
+          if (typeof window !== 'undefined') {
+            setWebhookUrl(`${window.location.origin}/api/webhooks/whatsapp`)
+          }
+        }
+      }
+    }
+    loadWebhookUrl()
+  }, [type.name])
 
   return (
     <div className="space-y-4">

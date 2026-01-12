@@ -48,9 +48,17 @@ The Meta integration allows you to:
 1. In your Meta App dashboard, go to **Instagram** → **API Setup** → **Webhooks**
 2. **Important**: The webhook URL should be:
    ```
-   https://your-domain.vercel.app/api/webhooks/meta
+   https://your-domain.com/api/webhooks/meta
    ```
    **NOT** `/api/webhooks/whatsapp` (that's for WhatsApp, not Meta/Instagram)
+   
+   **For Production**: To use a stable webhook URL that doesn't change with each deployment, set the `NEXT_PUBLIC_APP_URL` environment variable in Vercel:
+   ```bash
+   NEXT_PUBLIC_APP_URL=https://www.implseai.com
+   ```
+   This ensures the webhook URL uses your main domain instead of the dynamic Vercel deployment URL.
+   
+   The webhook URL will be displayed in the admin UI after connecting - copy it from there.
 3. Enter your **Verify Token** (you can set this in the admin UI when connecting, or use `META_VERIFY_TOKEN` env var)
 4. Click **Verify and Save**
 5. Subscribe to the following webhook fields:
@@ -102,6 +110,13 @@ META_APP_SECRET=your_app_secret
 
 # Optional: For encryption (server-side only, defaults to SESSION_SECRET)
 META_ENCRYPTION_KEY=your_encryption_key
+
+# Recommended for Production: Stable webhook URL
+# Set this to your main domain to use a stable webhook URL instead of dynamic Vercel URLs
+# This prevents needing to update webhook URLs in Meta Developer Console after each deployment
+NEXT_PUBLIC_APP_URL=https://www.implseai.com
+# Alternative: Use APP_PUBLIC_URL (server-side only, not exposed to client)
+APP_PUBLIC_URL=https://www.implseai.com
 ```
 
 **Note**: 
@@ -114,6 +129,22 @@ META_ENCRYPTION_KEY=your_encryption_key
 The webhook endpoint (`/api/webhooks/meta`) handles verification automatically:
 - **GET**: Returns the challenge token when Meta verifies the webhook
 - **POST**: Receives and stores webhook events
+
+## Webhook URL Configuration
+
+**Important for Production**: To avoid updating webhook URLs in Meta Developer Console after each deployment, set the `NEXT_PUBLIC_APP_URL` environment variable in Vercel to your main domain:
+
+```bash
+NEXT_PUBLIC_APP_URL=https://www.implseai.com
+```
+
+This ensures all webhook URLs use your stable main domain instead of the dynamic Vercel deployment URL (e.g., `https://alainbcenter-ppnt8d5n1-...vercel.app`).
+
+The webhook URL priority order is:
+1. `APP_PUBLIC_URL` (if set)
+2. `NEXT_PUBLIC_APP_URL` (if set)
+3. `VERCEL_URL` (auto-detected, changes with each deployment)
+4. Request origin (fallback)
 
 ## Testing
 

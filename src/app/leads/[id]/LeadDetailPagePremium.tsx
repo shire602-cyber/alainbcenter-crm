@@ -265,24 +265,53 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       setError(null)
       const res = await fetch(`/api/leads/${leadId}`)
       
-      if (!res.ok) {
-        const errorData = await res.json().catch(() => ({ error: 'Unknown error' }))
-        const errorMessage = errorData.error || `HTTP ${res.status}`
-        setError(errorMessage)
-        console.error(`Failed to load lead ${leadId}:`, errorData)
-        showToast(`Lead ${leadId} not found: ${errorMessage}`, 'error')
+      // API now always returns 200, so check response data instead of res.ok
+      const data = await res.json().catch(() => ({ error: 'Failed to parse response' }))
+      
+      // Handle redirect responses (404 with _redirect)
+      if (data._redirect) {
+        window.location.href = data._redirect
         return
       }
       
-      const data = await res.json()
       const leadData = data.lead || data
       
       if (!leadData || !leadData.id) {
-        const errorMessage = 'Invalid lead data received from server'
+        const errorMessage = data.error || 'Invalid lead data received from server'
         setError(errorMessage)
         console.error('Invalid lead data:', data)
         showToast(errorMessage, 'error')
         return
+      }
+      
+      // Handle skeleton data (ultra-minimal fallback failed)
+      if (leadData._skeleton) {
+        const skeletonError = leadData._error || 'Lead data unavailable due to memory constraints'
+        setError(skeletonError)
+        console.warn(`[LEAD-PAGE] Skeleton data for lead ${leadId}:`, skeletonError)
+        // Still set lead data so UI can render basic info
+        setLead({
+          ...leadData,
+          contact: leadData.contact || { id: 0, fullName: 'Unknown', phone: '', email: '' },
+          tasks: [],
+          expiryItems: [],
+          documents: [],
+          conversations: [],
+          messages: [],
+          communicationLogs: [],
+          notifications: [],
+        })
+        showToast(skeletonError, 'warning')
+        return
+      }
+      
+      // Handle partial data (some relations failed to load)
+      if (data._partial || data._errors?.length > 0) {
+        const errorMessages = data._errors || []
+        if (errorMessages.length > 0) {
+          console.warn(`[LEAD-PAGE] Partial data for lead ${leadId}:`, errorMessages)
+          showToast(`Some data could not be loaded: ${errorMessages.join(', ')}`, 'warning')
+        }
       }
       
       // Normalize data: ensure all nested objects have defaults
@@ -304,7 +333,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       }
       
       setLead(normalizedLead)
-      setError(null)
+      // Only set error if it's a skeleton (complete failure), not partial data
+      if (!leadData._skeleton) {
+        setError(null)
+      }
     } catch (err: any) {
       const errorMessage = err.message || 'Network error'
       setError(errorMessage)
@@ -800,22 +832,22 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
   return (
     <MainLayout>
-      <div className="flex flex-col min-h-screen">
-        {/* Sticky Header Bar */}
-        <div className="sticky top-0 z-30 bg-white border-b shadow-sm">
-          <div className="px-8 py-5">
-            <div className="flex items-center justify-between gap-6">
+      <div className="flex flex-col min-h-screen bg-gray-50">
+        {/* Sticky Header Bar - Professional & Clean */}
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200/80 shadow-sm backdrop-blur-sm">
+          <div className="px-10 py-6">
+            <div className="flex items-start justify-between gap-8">
               {/* Left: Breadcrumb + Lead Info */}
-              <div className="flex items-center gap-6 flex-1 min-w-0">
+              <div className="flex items-start gap-4 flex-1 min-w-0">
                 <Link href="/leads">
-                  <Button variant="ghost" size="sm" className="gap-2">
+                  <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900 -ml-2">
                     <ArrowLeft className="h-4 w-4" />
                     Back
                   </Button>
                 </Link>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-4">
-                    <h1 className="text-display truncate">
+                  <div className="flex items-center gap-3 mb-3">
+                    <h1 className="text-2xl font-semibold text-gray-900 truncate tracking-tight">
                       {lead.contact?.fullName && lead.contact.fullName !== 'Unknown' && !lead.contact.fullName.startsWith('Contact +')
                         ? lead.contact.fullName
                         : lead.contact?.phone
@@ -826,35 +858,35 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     {compliance && compliance.status !== 'GOOD' && (
                       <Badge
                         className={cn(
-                          'text-xs',
-                          compliance.status === 'CRITICAL' && 'bg-red-100 text-red-700 font-semibold',
-                          compliance.status === 'WARNING' && 'bg-amber-100 text-amber-700 font-semibold'
+                          'text-xs font-medium px-2.5 py-0.5',
+                          compliance.status === 'CRITICAL' && 'bg-red-50 text-red-700 border border-red-200',
+                          compliance.status === 'WARNING' && 'bg-amber-50 text-amber-700 border border-amber-200'
                         )}
                         title={compliance.notes}
                       >
-                        Compliance: {compliance.status}
+                        {compliance.status}
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-3 mt-2">
+                  <div className="flex items-center gap-4 flex-wrap">
                     {lead.contact?.phone && (
-                      <Badge variant="outline" className="text-sm px-3 py-1">
-                        <Phone className="h-4 w-4 mr-1.5" />
-                        {lead.contact.phone}
-                      </Badge>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Phone className="h-4 w-4 text-gray-400" />
+                        <span className="font-medium">{lead.contact.phone}</span>
+                      </div>
                     )}
                     {lead.contact?.email && (
-                      <Badge variant="outline" className="text-sm px-3 py-1">
-                        <Mail className="h-4 w-4 mr-1.5" />
-                        {lead.contact.email}
-                      </Badge>
+                      <div className="flex items-center gap-2 text-sm text-gray-600">
+                        <Mail className="h-4 w-4 text-gray-400" />
+                        <span className="font-medium">{lead.contact.email}</span>
+                      </div>
                     )}
                     {lead.contact?.source && (
-                      <Badge variant="outline" className="text-sm px-3 py-1 capitalize">
+                      <Badge variant="outline" className="text-xs px-2.5 py-0.5 text-gray-600 border-gray-300 capitalize font-normal">
                         {lead.contact.source}
                       </Badge>
                     )}
-                    <span className="text-sm text-muted-foreground">
+                    <span className="text-sm text-gray-500">
                       Created {differenceInDays(new Date(), parseISO(lead.createdAt))} days ago
                     </span>
                   </div>
@@ -862,27 +894,27 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </div>
 
               {/* Right: Action Buttons */}
-              <div className="flex items-center gap-3 flex-shrink-0">
+              <div className="flex items-center gap-2 flex-shrink-0">
                 {lead.contact?.phone && (
                   <Button
                     onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
-                    className="bg-green-600 hover:bg-green-700 text-white shadow-lg"
-                    size="lg"
+                    className="bg-green-600 hover:bg-green-700 text-white shadow-sm font-medium"
+                    size="default"
                   >
-                    <MessageSquare className="h-5 w-5 mr-2" />
+                    <MessageSquare className="h-4 w-4 mr-2" />
                     WhatsApp
                   </Button>
                 )}
                 {lead.contact?.phone && (
-                  <Button variant="outline" size="sm" onClick={() => lead.contact?.phone && window.open(`tel:${lead.contact.phone}`)}>
+                  <Button variant="outline" size="sm" onClick={() => lead.contact?.phone && window.open(`tel:${lead.contact.phone}`)} className="border-gray-300">
                     <Phone className="h-4 w-4" />
                   </Button>
                 )}
-                <Button variant="ghost" size="sm" onClick={() => setShowTaskModal(true)}>
+                <Button variant="outline" size="sm" onClick={() => setShowTaskModal(true)} className="border-gray-300">
                   <Plus className="h-4 w-4 mr-2" />
                   Task
                 </Button>
-                <Button variant="ghost" size="sm">
+                <Button variant="ghost" size="sm" className="text-gray-600">
                   <MoreVertical className="h-4 w-4" />
                 </Button>
               </div>
@@ -890,54 +922,56 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           </div>
         </div>
 
-        {/* Main 2-Column Layout (Odoo-style) */}
-        <div className="flex-1 overflow-y-auto grid grid-cols-12 gap-8 p-8 relative">
-          {/* LEFT COLUMN: Main Content (2/3 width) */}
-          <div className="col-span-12 lg:col-span-8 flex flex-col gap-6 overflow-y-auto">
-            {/* Pipeline Card - Moved to top of main content */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-4 pt-5 px-6 border-b">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Pipeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 pt-5">
-                <div className="pipeline-highlight">
-                  <PipelineProgress
-                    currentStage={lead.stage || lead.pipelineStage || 'NEW'}
-                    onStageClick={handleStageChange}
-                  />
-                </div>
-              </CardContent>
-            </Card>
+        {/* Main 2-Column Layout - Professional & Clean */}
+        <div className="flex-1 overflow-y-auto">
+          <div className="max-w-[1600px] mx-auto px-10 py-8">
+            <div className="grid grid-cols-12 gap-6">
+              {/* LEFT COLUMN: Main Content (2/3 width) */}
+              <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
+                {/* Pipeline Card - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
+                      <Target className="h-4 w-4 text-gray-500" />
+                      Pipeline
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-6 pb-6 pt-6">
+                    <div className="pipeline-highlight">
+                      <PipelineProgress
+                        currentStage={lead.stage || lead.pipelineStage || 'NEW'}
+                        onStageClick={handleStageChange}
+                      />
+                    </div>
+                  </CardContent>
+                </Card>
 
-            {/* Internal Notes Section */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-4 pt-5 px-6 border-b">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <FileText className="h-4 w-4" />
-                  Internal Notes
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-6 pb-6 pt-5">
-                <div className="space-y-3">
-                  {lead.communicationLogs
-                    ?.filter((log: any) => log.channel === 'internal')
-                    .map((log: any) => (
-                      <div key={log.id} className="border rounded-lg p-4">
-                        <p className="text-sm">{log.message || log.messageSnippet}</p>
-                        <p className="text-xs text-muted-foreground mt-2">
-                          {formatMessageTime(log.createdAt)}
-                        </p>
-                      </div>
-                    ))}
-                  {(!lead.communicationLogs || lead.communicationLogs.filter((log: any) => log.channel === 'internal').length === 0) && (
-                    <p className="text-sm text-muted-foreground text-center py-4">No internal notes yet</p>
-                  )}
-                </div>
-              </CardContent>
-            </Card>
+                {/* Internal Notes Section - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
+                      <FileText className="h-4 w-4 text-gray-500" />
+                      Internal Notes
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="px-6 pb-6 pt-6">
+                    <div className="space-y-4">
+                      {lead.communicationLogs
+                        ?.filter((log: any) => log.channel === 'internal')
+                        .map((log: any) => (
+                          <div key={log.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50/50 hover:bg-gray-50 transition-colors">
+                            <p className="text-sm text-gray-700 leading-relaxed">{log.message || log.messageSnippet}</p>
+                            <p className="text-xs text-gray-500 mt-2.5">
+                              {formatMessageTime(log.createdAt)}
+                            </p>
+                          </div>
+                        ))}
+                      {(!lead.communicationLogs || lead.communicationLogs.filter((log: any) => log.channel === 'internal').length === 0) && (
+                        <p className="text-sm text-gray-500 text-center py-8">No internal notes yet</p>
+                      )}
+                    </div>
+                  </CardContent>
+                </Card>
 
             {/* Extracted Data Panel - Keep for auto-detection */}
             <ExtractedDataPanel
@@ -947,21 +981,21 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               businessActivityRaw={lead.businessActivityRaw || undefined}
               expiryDate={lead.expiryDate || undefined}
             />
-          </div>
+              </div>
 
-          {/* RIGHT COLUMN: Sidebar (1/3 width) */}
-          <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-y-auto">
-            {/* Contact Card */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-3 pt-5 px-6 border-b">
-                <CardTitle className="text-base font-semibold flex items-center gap-2">
-                  <User className="h-4 w-4" />
-                  Contact
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-4 px-6 pb-6 pt-5">
+              {/* RIGHT COLUMN: Sidebar (1/3 width) */}
+              <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
+                {/* Contact Card - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
+                      <User className="h-4 w-4 text-gray-500" />
+                      Contact
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-5 px-6 pb-6 pt-6">
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Name</Label>
+                  <Label className="text-sm font-medium text-gray-600 mb-2 block">Name</Label>
                   <InlineEditableField
                     value={
                       lead.contact?.fullName && 
@@ -983,7 +1017,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 </div>
                 {lead.contact?.phone && (
                   <div className="group">
-                    <Label className="text-sm font-medium text-muted-foreground mb-2 block">Phone</Label>
+                    <Label className="text-sm font-medium text-gray-600 mb-2 block">Phone</Label>
                     <div className="flex items-center gap-2">
                       <span className="text-base flex-1">{lead.contact.phone}</span>
                       <QuickActionsMenu 
@@ -996,7 +1030,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
                 {lead.contact?.email && (
                   <div className="group">
-                    <Label className="text-sm font-medium text-muted-foreground mb-2 block">Email</Label>
+                    <Label className="text-sm font-medium text-gray-600 mb-2 block">Email</Label>
                     <div className="flex items-center gap-2">
                       <a href={`mailto:${lead.contact.email}`} className="text-base flex-1 hover:underline">
                         {lead.contact.email}
@@ -1011,12 +1045,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
                 {lead.contact?.nationality && (
                   <div>
-                    <Label className="text-sm font-medium text-muted-foreground mb-2 block">Nationality</Label>
+                    <Label className="text-sm font-medium text-gray-600 mb-2 block">Nationality</Label>
                     <span className="text-base">{lead.contact.nationality}</span>
                   </div>
                 )}
                 <div>
-                  <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Needed</Label>
+                  <Label className="text-sm font-medium text-gray-600 mb-2 block">Service Needed</Label>
                   {lead.requestedServiceRaw && !lead.serviceTypeId && (
                     <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
                       <p className="text-sm font-bold text-blue-900">
@@ -1063,15 +1097,15 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* AI Assistant - Moved to top-right for quick access */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-2 pt-5 px-6 border-b">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Assistant
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5 px-6 pb-6 pt-5">
+                {/* AI Assistant - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
+                      <Sparkles className="h-4 w-4 text-gray-500" />
+                      AI Assistant
+                    </CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-2 px-6 pb-6 pt-6">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1289,21 +1323,22 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Expiry Tracker */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-4 pt-5 px-6 border-b">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold">Expiry Tracker</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowExpiryModal(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 px-6 pb-6 pt-5">
+                {/* Expiry Tracker - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base font-semibold text-gray-900">Expiry Tracker</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowExpiryModal(true)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-4 px-6 pb-6 pt-6">
                 {/* Unverified Expiry Hints */}
                 {lead.dataJson && (() => {
                   try {
@@ -1429,21 +1464,22 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             </Card>
 
 
-            {/* Tasks Card */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-4 pt-5 px-6 border-b">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold">Tasks</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowTaskModal(true)}
-                  >
-                    <Plus className="h-4 w-4" />
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-3 px-6 pb-6 pt-5">
+                {/* Tasks Card - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base font-semibold text-gray-900">Tasks</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowTaskModal(true)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        <Plus className="h-4 w-4" />
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-3 px-6 pb-6 pt-6">
                 {lead.tasks && lead.tasks.length > 0 ? (
                   lead.tasks
                     .filter((t: any) => t.status === 'OPEN')
@@ -1471,7 +1507,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       </div>
                     ))
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
+                  <div className="text-center py-8 text-gray-500 text-sm">
                     <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
                     <p>No tasks</p>
                   </div>
@@ -1482,22 +1518,23 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             {/* Reminders Card */}
             <RemindersCard leadId={leadId} />
 
-            {/* Documents Card */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-4 pt-5 px-6 border-b">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold">Documents</CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setShowDocumentModal(true)}
-                  >
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-1.5 px-6 pb-6 pt-5">
+                {/* Documents Card - Professional styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                    <div className="flex items-center justify-between">
+                      <CardTitle className="text-base font-semibold text-gray-900">Documents</CardTitle>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setShowDocumentModal(true)}
+                        className="text-gray-600 hover:text-gray-900"
+                      >
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload
+                      </Button>
+                    </div>
+                  </CardHeader>
+                  <CardContent className="space-y-2 px-6 pb-6 pt-6">
                 {lead.documents && lead.documents.length > 0 ? (
                   lead.documents.slice(0, 5).map((doc: any) => (
                     <div
@@ -1536,7 +1573,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-3 text-muted-foreground text-xs">
+                  <div className="text-center py-3 text-gray-500 text-xs">
                     <FileText className="h-6 w-6 mx-auto mb-1 opacity-50" />
                     <p>No documents</p>
                   </div>
@@ -1551,16 +1588,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               serviceType={lead.serviceType?.name}
             />
 
-            {/* Alerts/Notifications Card */}
-            {lead.notifications && lead.notifications.length > 0 && (
-              <Card className="rounded-lg border shadow-sm">
-                <CardHeader className="pb-4 pt-5 px-6 border-b">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    Alerts
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 px-6 pb-6 pt-5">
+                {/* Alerts/Notifications Card - Professional styling */}
+                {lead.notifications && lead.notifications.length > 0 && (
+                  <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+                    <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                      <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
+                        <AlertCircle className="h-4 w-4 text-gray-500" />
+                        Alerts
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3 px-6 pb-6 pt-6">
                   {lead.notifications
                     .filter((n: any) => !n.isRead)
                     .slice(0, 5)
@@ -1584,7 +1621,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       </div>
                     ))}
                   {lead.notifications.filter((n: any) => !n.isRead).length === 0 && (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
+                    <div className="text-center py-4 text-gray-500 text-sm">
                       <CheckCircle2 className="h-6 w-6 mx-auto mb-2 opacity-50" />
                       <p>No unread alerts</p>
                     </div>
@@ -1592,13 +1629,26 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 </CardContent>
               </Card>
             )}
+              </div>
+            </div>
           </div>
         </div>
 
-        {/* Bottom Communication Section (Odoo-style) */}
-        <div className="border-t bg-white pt-6 pb-6 px-8">
-          {/* Communication Action Buttons */}
-          <div className="flex items-center gap-3 mb-6">
+        {/* Activity Timeline Section - Professional styling */}
+        <div className="border-t border-gray-200 bg-gray-50" data-activity-timeline>
+          <div className="max-w-[1600px] mx-auto px-10 py-10">
+            <h2 className="text-xl font-semibold text-gray-900 mb-6">Activity Timeline</h2>
+            <div className="border border-gray-200 rounded-xl p-8 bg-white shadow-sm">
+              <ActivityTimeline activities={activities} />
+            </div>
+          </div>
+        </div>
+
+        {/* Bottom Communication Section - Professional styling */}
+        <div className="border-t border-gray-200 bg-white">
+          <div className="max-w-[1600px] mx-auto px-10 py-8">
+            {/* Communication Action Buttons */}
+            <div className="flex items-center gap-3 mb-6">
             <Button
               onClick={() => {
                 setActiveChannel('whatsapp')
@@ -1607,7 +1657,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   setTimeout(() => composer.focus(), 100)
                 }
               }}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="bg-green-600 hover:bg-green-700 text-white shadow-sm font-medium"
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               Send message
@@ -1622,6 +1672,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   showToast('Internal note feature coming soon', 'info')
                 }
               }}
+              className="border-gray-300"
             >
               <FileText className="h-4 w-4 mr-2" />
               Log note
@@ -1630,6 +1681,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               <Button
                 variant="outline"
                 onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
+                className="border-gray-300"
               >
                 <MessageSquare className="h-4 w-4 mr-2" />
                 WhatsApp
@@ -1644,57 +1696,62 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   timeline.scrollIntoView({ behavior: 'smooth', block: 'start' })
                 }
               }}
+              className="border-gray-300"
             >
               <Clock className="h-4 w-4 mr-2" />
               Activities
             </Button>
           </div>
 
-          {/* Channel Selector */}
-          <div className="mb-6 flex items-center gap-2 border-b pb-3">
+            {/* Channel Selector */}
+            <div className="mb-6 flex items-center gap-2 border-b border-gray-200 pb-4">
             <Button
-              variant={activeChannel === 'whatsapp' ? 'default' : 'ghost'}
+              variant={activeChannel === 'whatsapp' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('whatsapp')}
+              className={activeChannel === 'whatsapp' ? '' : 'border-gray-300'}
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               WhatsApp
             </Button>
             <Button
-              variant={activeChannel === 'email' ? 'default' : 'ghost'}
+              variant={activeChannel === 'email' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('email')}
+              className={activeChannel === 'email' ? '' : 'border-gray-300'}
             >
               <Mail className="h-4 w-4 mr-2" />
               Email
             </Button>
             <Button
-              variant={activeChannel === 'instagram' ? 'default' : 'ghost'}
+              variant={activeChannel === 'instagram' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('instagram')}
+              className={activeChannel === 'instagram' ? '' : 'border-gray-300'}
             >
               <Instagram className="h-4 w-4 mr-2" />
               Instagram
             </Button>
             <Button
-              variant={activeChannel === 'facebook' ? 'default' : 'ghost'}
+              variant={activeChannel === 'facebook' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('facebook')}
+              className={activeChannel === 'facebook' ? '' : 'border-gray-300'}
             >
               <Facebook className="h-4 w-4 mr-2" />
               Facebook
             </Button>
           </div>
 
-          {/* Message History */}
-          <div className="border rounded-lg p-6 bg-gray-50 min-h-[300px] max-h-[500px] overflow-y-auto mb-6" data-activity-timeline>
+            {/* Message History - Professional styling */}
+            <div className="border border-gray-200 rounded-xl p-6 bg-gray-50/50 min-h-[300px] max-h-[500px] overflow-y-auto mb-6">
             {loadingMessages ? (
-              <div className="text-center py-8 text-muted-foreground">
+              <div className="text-center py-8 text-gray-500">
                 <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
                 <p className="text-sm">Loading messages...</p>
               </div>
             ) : messages.length === 0 ? (
-              <div className="text-center py-12 text-muted-foreground">
+              <div className="text-center py-12 text-gray-500">
                 <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
                 <p className="text-sm">No messages yet. Start a conversation below.</p>
               </div>
@@ -1731,14 +1788,14 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         )}
                         <div
                           className={cn(
-                            'max-w-[70%] rounded-lg p-4',
+                            'max-w-[70%] rounded-xl p-4 shadow-sm',
                             isInbound
-                              ? 'bg-white border text-gray-900'
+                              ? 'bg-white border border-gray-200 text-gray-900'
                               : 'bg-blue-600 text-white'
                           )}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words">{msg.body || msg.messageSnippet || '[Media message]'}</p>
-                          <p className={cn('text-xs mt-2', isInbound ? 'text-gray-500' : 'text-blue-100')}>
+                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet || '[Media message]'}</p>
+                          <p className={cn('text-xs mt-2.5', isInbound ? 'text-gray-500' : 'text-blue-100')}>
                             {formatMessageTime(msg.createdAt)}
                           </p>
                         </div>
@@ -1754,16 +1811,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             )}
           </div>
 
-          {/* Activity Timeline */}
-          <div className="border rounded-lg p-6 bg-white mb-6">
-            <h3 className="text-base font-semibold mb-4">Activity Timeline</h3>
-            <div className="space-y-3">
-              <ActivityTimeline activities={activities} />
-            </div>
-          </div>
-
-          {/* Message Composer */}
-          <div className="border rounded-lg p-4 bg-white">
+            {/* Message Composer - Professional styling */}
+            <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
             <MessageComposerEnhanced
               value={messageText}
               onChange={setMessageText}
@@ -1775,6 +1824,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               expiryDate={lead.expiryItems?.[0]?.expiryDate}
               serviceType={lead.serviceType?.name}
             />
+            </div>
           </div>
         </div>
       </div>

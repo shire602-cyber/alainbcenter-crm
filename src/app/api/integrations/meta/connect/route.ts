@@ -9,6 +9,7 @@ import { validateToken, getUserPages, getInstagramBusinessAccount } from '@/serv
 import { subscribePageToWebhook, subscribeInstagramAccountToWebhook } from '@/server/integrations/meta/subscribe'
 import { upsertConnection } from '@/server/integrations/meta/storage'
 import { setWebhookVerifyToken } from '@/server/integrations/meta/config'
+import { getWebhookUrl } from '@/lib/publicUrl'
 import { prisma } from '@/lib/prisma'
 import crypto from 'crypto'
 
@@ -162,10 +163,11 @@ export async function POST(req: NextRequest) {
     let igSubscriptionError: string | null = null
     try {
       console.log(`🔄 [CONNECT] Attempting to subscribe Instagram Business Account ${igAccount.id} to webhooks...`)
+      const webhookUrl = getWebhookUrl('/api/webhooks/meta', req)
       console.log(`🔍 [CONNECT] Instagram subscription attempt`, {
         igBusinessId: igAccount.id,
         igUsername: igAccount.username,
-        webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/api/webhooks/meta`,
+        webhookUrl,
         verifyToken: finalVerifyToken ? `${finalVerifyToken.substring(0, 4)}...${finalVerifyToken.substring(finalVerifyToken.length - 4)}` : 'NOT SET',
       })
       
@@ -182,7 +184,7 @@ export async function POST(req: NextRequest) {
         console.warn(`⚠️ [CONNECT] Instagram Business Account webhook subscription via API failed or is not supported.`)
         console.warn(`⚠️ [CONNECT] You may need to configure the webhook manually in Meta Developer Console:`)
         console.warn(`⚠️ [CONNECT] Meta Developers → Your App → Instagram → Webhooks`)
-        console.warn(`⚠️ [CONNECT] Webhook URL: ${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/api/webhooks/meta`)
+        console.warn(`⚠️ [CONNECT] Webhook URL: ${webhookUrl}`)
         console.warn(`⚠️ [CONNECT] Verify Token: ${finalVerifyToken || 'NOT SET'}`)
         console.warn(`⚠️ [CONNECT] Subscribe to fields: messages, messaging_postbacks`)
       }
@@ -272,7 +274,7 @@ export async function POST(req: NextRequest) {
         igBusinessId: igAccount.id,
         igUsername: igAccount.username,
         webhookVerifyToken: finalVerifyToken,
-        webhookUrl: `${process.env.NEXT_PUBLIC_APP_URL || req.nextUrl.origin}/api/webhooks/meta`,
+        webhookUrl: getWebhookUrl('/api/webhooks/meta', req),
         pageSubscribed: pageSubscribed,
         instagramSubscribed: igSubscribed,
         instagramSubscriptionError: igSubscriptionError || null,
@@ -288,7 +290,7 @@ export async function POST(req: NextRequest) {
         'Instagram Business Account webhook subscription via API failed or is not supported.',
         'You may need to configure the webhook manually in Meta Developer Console:',
         'Meta Developers → Your App → Instagram → Webhooks',
-        `Webhook URL: ${process.env.NEXT_PUBLIC_APP_URL || 'https://yourdomain.com'}/api/webhooks/meta`,
+        `Webhook URL: ${getWebhookUrl('/api/webhooks/meta', req)}`,
         `Verify Token: ${finalVerifyToken}`,
       ] : [],
     })

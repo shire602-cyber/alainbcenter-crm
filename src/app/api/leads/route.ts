@@ -294,76 +294,142 @@ export async function GET(req: NextRequest) {
 
     // Pagination support
     const page = parseInt(searchParams.get('page') || '1')
-    const limit = parseInt(searchParams.get('limit') || '50')
+    const limit = Math.min(parseInt(searchParams.get('limit') || '25'), 100) // Reduced default from 50 to 25, max 100
     const skip = (page - 1) * limit
+    const includeLastContact = searchParams.get('includeLastContact') === 'true' // Optional parameter
 
     // Optimized: Use select to only fetch needed fields, limit nested data
-    const [leads, total] = await Promise.all([
-      prisma.lead.findMany({
-      where: whereClause,
-      select: {
-        id: true,
-        leadType: true,
-        status: true,
-        pipelineStage: true,
-        stage: true,
-        aiScore: true,
-        expiryDate: true,
-        nextFollowUpAt: true,
-        assignedUserId: true,
-        createdAt: true,
-        contact: {
+    let leads: any[] = []
+    let total = 0
+    
+    try {
+      [leads, total] = await Promise.all([
+        prisma.lead.findMany({
+          where: whereClause,
           select: {
             id: true,
-            fullName: true,
-            phone: true,
-            email: true,
-            source: true,
-          }
-        },
-        assignedUser: {
-          select: { id: true, name: true, email: true }
-        },
-        serviceType: {
-          select: { id: true, name: true }
-        },
-          // Only get latest communication log (optimized)
-        communicationLogs: {
-          orderBy: { createdAt: 'desc' },
-          take: 1,
-          select: {
-            id: true,
-            channel: true,
-            direction: true,
-            createdAt: true,
-          }
-        },
-          // Only get nearest 3 expiry items (optimized)
-        expiryItems: {
-          orderBy: { expiryDate: 'asc' },
-          take: 3,
-          select: {
-            id: true,
-            type: true,
+            leadType: true,
+            status: true,
+            pipelineStage: true,
+            stage: true,
+            aiScore: true,
             expiryDate: true,
-            renewalStatus: true,
-          }
-        },
-        renewalProbability: true,
-        estimatedRenewalValue: true,
-      },
-      orderBy: { createdAt: 'desc' },
-        skip,
-        take: Math.min(limit, 100), // Max 100 per page
-      }),
-      // Count query runs in parallel
-      prisma.lead.count({ where: whereClause })
-    ])
+            nextFollowUpAt: true,
+            assignedUserId: true,
+            createdAt: true,
+            contact: {
+              select: {
+                id: true,
+                fullName: true,
+                phone: true,
+                email: true,
+                source: true,
+              }
+            },
+            assignedUser: {
+              select: { id: true, name: true, email: true }
+            },
+            serviceType: {
+              select: { id: true, name: true }
+            },
+            // Only load communication logs if explicitly requested (reduces memory usage)
+            ...(includeLastContact ? {
+              communicationLogs: {
+                orderBy: { createdAt: 'desc' },
+                take: 1,
+                select: {
+                  id: true,
+                  channel: true,
+                  direction: true,
+                  createdAt: true,
+                }
+              }
+            } : {}),
+            // Reduced from 3 to 1 expiry item to save memory
+            expiryItems: {
+              orderBy: { expiryDate: 'asc' },
+              take: 1,
+              select: {
+                id: true,
+                type: true,
+                expiryDate: true,
+                renewalStatus: true,
+              }
+            },
+            renewalProbability: true,
+            estimatedRenewalValue: true,
+          },
+          orderBy: { createdAt: 'desc' },
+          skip,
+          take: limit,
+        }),
+        // Count query runs in parallel with error handling
+        prisma.lead.count({ where: whereClause }).catch((err) => {
+          console.error('[LEADS-API] Count query error:', err.message)
+          return 0 // Return 0 on error to allow partial results
+        })
+      ])
+    } catch (error: any) {
+      // Log detailed error information
+      console.error('[LEADS-API] Query error:', {
+        message: error.message,
+        code: error.code,
+        meta: error.meta,
+        whereClausePreview: JSON.stringify(whereClause).substring(0, 500),
+        page,
+        limit,
+        skip
+      })
+      
+      // Handle memory errors with fallback query
+      if (error?.code === '53200' || error?.message?.includes('out of memory') || error?.meta?.code === '53200') {
+        console.log('[LEADS-API] Memory error detected, retrying with minimal data')
+        try {
+          // Fallback query with minimal fields only
+          [leads, total] = await Promise.all([
+            prisma.lead.findMany({
+              where: whereClause,
+              select: {
+                id: true,
+                stage: true,
+                pipelineStage: true,
+                aiScore: true,
+                createdAt: true,
+                contact: {
+                  select: {
+                    id: true,
+                    fullName: true,
+                    phone: true,
+                    email: true,
+                  }
+                },
+                // No nested relations in fallback
+              },
+              orderBy: { createdAt: 'desc' },
+              skip,
+              take: limit,
+            }),
+            prisma.lead.count({ where: whereClause }).catch(() => 0)
+          ])
+          console.log(`[LEADS-API] Fallback query succeeded: ${leads.length} leads`)
+        } catch (fallbackError: any) {
+          console.error('[LEADS-API] Fallback query also failed:', fallbackError.message)
+          // Return empty results instead of 500 error
+          leads = []
+          total = 0
+        }
+      } else {
+        // Re-throw non-memory errors to be caught by outer catch block
+        throw error
+      }
+    }
 
-    // Transform to include lastContact
+    // Transform to include lastContact (only if communicationLogs were loaded)
     const leadsWithLastContact = leads.map((lead: any) => ({
       ...lead,
       lastContact: lead.communicationLogs?.[0] || null,
+      // Remove communicationLogs from response to reduce payload size
+      ...(lead.communicationLogs ? { communicationLogs: undefined } : {})
     }))
 
     return NextResponse.json({
@@ -376,9 +442,22 @@ export async function GET(req: NextRequest) {
       }
     });
   } catch (error: any) {
-    console.error('GET /api/leads error:', error)
+    // Enhanced error logging
+    const errorDetails = {
+      message: error?.message,
+      code: error?.code,
+      meta: error?.meta,
+      stack: error?.stack?.substring(0, 500)
+    }
+    console.error('[LEADS-API] GET /api/leads error:', errorDetails)
+    
+    // Return more specific error information for debugging (in development)
+    const isDev = process.env.NODE_ENV === 'development'
     return NextResponse.json(
-      { error: error?.message ?? 'Unknown error in GET /api/leads' },
+      { 
+        error: error?.message ?? 'Unknown error in GET /api/leads',
+        ...(isDev ? { code: error?.code, details: errorDetails } : {})
+      },
       { status: 500 }
     )
   }

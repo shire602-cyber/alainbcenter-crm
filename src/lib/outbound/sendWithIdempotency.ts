@@ -347,6 +347,28 @@ export async function sendOutboundWithIdempotency(
       // #region agent log
       fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'outbound/sendWithIdempotency.ts:293',message:'sendTextMessage succeeded',data:{messageId},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'F'})}).catch(()=>{});
       // #endregion
+    } else if (provider === 'instagram') {
+      // Get Instagram configuration
+      const { getInstagramMetaConfig, sendInstagramViaMeta } = await import('../instagramMeta')
+      const config = await getInstagramMetaConfig()
+      
+      if (!config) {
+        throw new Error('Instagram integration not configured. Please configure in /admin/integrations')
+      }
+      
+      // Extract Instagram user ID from phone (remove 'ig:' prefix if present)
+      const instagramUserId = phone.startsWith('ig:') ? phone.substring(3) : phone
+      
+      console.log(`📤 [OUTBOUND-IDEMPOTENCY] Sending Instagram message to ${instagramUserId} (conversationId: ${conversationId})`)
+      
+      const result = await sendInstagramViaMeta(instagramUserId, text, config)
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to send Instagram message')
+      }
+      
+      messageId = result.messageId
+      console.log(`✅ [OUTBOUND-IDEMPOTENCY] Instagram API send succeeded messageId=${messageId} conversationId=${conversationId}`)
     } else {
       // Other providers not implemented yet
       throw new Error(`Provider ${provider} not implemented`)

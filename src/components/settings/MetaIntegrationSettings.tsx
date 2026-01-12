@@ -31,9 +31,25 @@ export function MetaIntegrationSettings() {
 
   useEffect(() => {
     checkEnvVars()
-    if (typeof window !== 'undefined') {
-      setWebhookUrl(`${window.location.origin}/api/webhooks/meta-leads`)
+    // Fetch webhook URL from API instead of using window.location.origin
+    // This ensures it respects NEXT_PUBLIC_APP_URL or APP_PUBLIC_URL environment variables
+    const loadWebhookUrl = async () => {
+      try {
+        const res = await fetch('/api/integrations/meta/status')
+        if (res.ok) {
+          const data = await res.json()
+          if (data.webhookUrl) {
+            setWebhookUrl(data.webhookUrl.replace('/api/webhooks/meta', '/api/webhooks/meta-leads'))
+          }
+        }
+      } catch (err) {
+        // Fallback to window.location.origin if API fails
+        if (typeof window !== 'undefined') {
+          setWebhookUrl(`${window.location.origin}/api/webhooks/meta-leads`)
+        }
+      }
     }
+    loadWebhookUrl()
   }, [])
 
   function checkEnvVars() {

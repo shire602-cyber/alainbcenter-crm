@@ -11,6 +11,7 @@ import {
   subscribeInstagramAccountToWebhook,
   subscribePageToWebhook 
 } from '@/server/integrations/meta/subscribe'
+import { getWebhookUrl } from '@/lib/publicUrl'
 import { prisma } from '@/lib/prisma'
 import { getWebhookVerifyToken } from '@/server/integrations/meta/config'
 
@@ -19,7 +20,7 @@ export async function GET(req: NextRequest) {
     await requireAdmin()
 
     const verifyToken = await getWebhookVerifyToken()
-    const webhookUrl = `${req.nextUrl.origin}/api/webhooks/meta`
+    const webhookUrl = getWebhookUrl('/api/webhooks/meta', req)
     
     // Get webhook verify token for display
     const verifyTokenDisplay = verifyToken 
