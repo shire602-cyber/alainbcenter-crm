@@ -30,21 +30,11 @@ import { AIScoreBadgePremium } from '@/components/leads/AIScoreBadgePremium'
 import { AIScoreCircleAnimated } from '@/components/leads/AIScoreCircleAnimated'
 import { QuickActionsMenu } from '@/components/leads/QuickActionsMenu'
 import { MessageComposerEnhanced } from '@/components/leads/MessageComposerEnhanced'
-import { AutomationInspector } from '@/components/leads/AutomationInspector'
-import { ReplyEngineDebug } from '@/components/leads/ReplyEngineDebug'
-import { ConversationDebugPanel } from '@/components/leads/ConversationDebugPanel'
 import { RevenueWidget } from '@/components/leads/RevenueWidget'
-import { RenewalRevenueWidget } from '@/components/leads/RenewalRevenueWidget'
-import { RenewalRevenueCard } from '@/components/leads/RenewalRevenueCard'
-import { DocumentsCardEnhanced } from '@/components/leads/DocumentsCardEnhanced'
 import { InlineEditableField } from '@/components/leads/InlineEditableField'
 import { ExpiryCountdown } from '@/components/leads/ExpiryCountdown'
-import { AutopilotCard } from '@/components/leads/AutopilotCard'
 import { RemindersCard } from '@/components/leads/RemindersCard'
 import { ExtractedDataPanel } from '@/components/leads/ExtractedDataPanel'
-import { NextBestAction } from '@/components/leads/NextBestAction'
-import { LeadSummary } from '@/components/leads/LeadSummary'
-import { ForecastCard } from '@/components/leads/ForecastCard'
 import {
   ArrowLeft,
   MessageSquare,
@@ -1073,54 +1063,231 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Test Tools (Admin Only) */}
-            {currentUser?.role === 'ADMIN' && (
-              <Card className="rounded-lg border shadow-sm border-orange-200">
-                <CardHeader className="pb-3 pt-4 px-5">
-                  <CardTitle className="text-base font-bold text-section-header tracking-tight">Test Tools</CardTitle>
-                </CardHeader>
-                <CardContent className="px-5 pb-5">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full gap-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50 border-orange-300/60 font-semibold"
-                    onClick={async () => {
-                      if (!confirm('⚠️ Wipe all test data for this lead?\n\nThis will:\n- Delete all messages\n- Delete all OutboundJobs\n- Clear conversation state (AI memory)\n- Delete all logs\n\nThis action cannot be undone. Use for testing AI behavior from scratch.')) {
-                        return
-                      }
-                      try {
-                        setDeletingChat(true)
-                        const res = await fetch(`/api/admin/data/wipe-test-data?leadId=${leadId}`, {
-                          method: 'DELETE',
-                          credentials: 'include',
-                        })
+            {/* AI Assistant - Moved to top-right for quick access */}
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-2 pt-5 px-6 border-b">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  AI Assistant
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-1.5 px-6 pb-6 pt-5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-sm h-10"
+                  onClick={async () => {
+                    setGeneratingAI('summary')
+                    try {
+                      const res = await fetch(`/api/leads/${leadId}/ai/summary`, {
+                        method: 'POST',
+                      })
+                      if (res.ok) {
                         const data = await res.json()
-                        if (data.ok) {
-                          showToast(`Wiped test data: ${data.deletionLog?.length || 0} operations completed`, 'success')
-                          await loadLead()
-                          await loadMessages()
-                          setConversationId(null)
-                        } else {
-                          showToast(data.error || 'Failed to wipe test data', 'error')
-                        }
-                      } catch (err: any) {
-                        showToast('Failed to wipe test data', 'error')
-                      } finally {
-                        setDeletingChat(false)
+                        setAiOutput({ type: 'summary', content: data.summary })
                       }
-                    }}
-                    disabled={deletingChat}
-                  >
-                    {deletingChat ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <Trash2 className="h-4 w-4" />
-                    )}
-                    Wipe Test Data
-                  </Button>
-                </CardContent>
-              </Card>
-            )}
+                    } catch (err) {
+                      showToast('Failed to generate summary', 'error')
+                    } finally {
+                      setGeneratingAI(null)
+                    }
+                  }}
+                  disabled={generatingAI === 'summary'}
+                >
+                  {generatingAI === 'summary' ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  Summarize
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-sm h-10"
+                  onClick={async () => {
+                    setGeneratingAI('next-action')
+                    try {
+                      const res = await fetch(`/api/leads/${leadId}/ai/next-action`, {
+                        method: 'POST',
+                      })
+                      if (res.ok) {
+                        const data = await res.json()
+                        setAiOutput({ type: 'next-action', content: data.actions })
+                      }
+                    } catch (err) {
+                      showToast('Failed to generate next actions', 'error')
+                    } finally {
+                      setGeneratingAI(null)
+                    }
+                  }}
+                  disabled={generatingAI === 'next-action'}
+                >
+                  {generatingAI === 'next-action' ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : (
+                    <Target className="h-4 w-4 mr-2" />
+                  )}
+                  Next Best Action
+                </Button>
+                <Button
+                  variant="outline"
+                  className="w-full justify-start"
+                  onClick={() => handleGenerateAIDraft('renewal')}
+                  disabled={generatingAI === 'renewal'}
+                >
+                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
+                  Renewal
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="w-full justify-start text-sm h-10"
+                  onClick={async () => {
+                    setGeneratingAI('docs-checklist')
+                    try {
+                      const res = await fetch(`/api/leads/${leadId}/ai/docs-checklist`, {
+                        method: 'POST',
+                      })
+                      if (res.ok) {
+                        const data = await res.json()
+                        setAiOutput({ type: 'docs-checklist', content: data.checklist })
+                      }
+                    } catch (err) {
+                      showToast('Failed to generate checklist', 'error')
+                    } finally {
+                      setGeneratingAI(null)
+                    }
+                  }}
+                  disabled={generatingAI === 'docs-checklist'}
+                >
+                  <FileText className="h-3.5 w-3.5 mr-1.5" />
+                  Docs Checklist
+                </Button>
+                {compliance && (compliance.missingMandatory.length > 0 || compliance.expired.length > 0) && (
+                  <>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start text-sm h-10"
+                      onClick={async () => {
+                        setGeneratingAI('docs-reminder-wa')
+                        try {
+                          const res = await fetch(`/api/leads/${leadId}/docs/ai-reminder`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ channel: 'WHATSAPP' }),
+                          })
+                          if (res.ok) {
+                            const data = await res.json()
+                            if (data.draft) {
+                              setMessageText(data.draft)
+                              setActiveChannel('whatsapp')
+                              showToast('AI docs reminder generated for WhatsApp', 'success')
+                            }
+                          }
+                        } catch (err) {
+                          showToast('Failed to generate docs reminder', 'error')
+                        } finally {
+                          setGeneratingAI(null)
+                        }
+                      }}
+                      disabled={generatingAI === 'docs-reminder-wa'}
+                    >
+                      {generatingAI === 'docs-reminder-wa' ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Docs Reminder (WhatsApp)
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="w-full justify-start text-sm h-10"
+                      onClick={async () => {
+                        setGeneratingAI('docs-reminder-email')
+                        try {
+                          const res = await fetch(`/api/leads/${leadId}/docs/ai-reminder`, {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ channel: 'EMAIL' }),
+                          })
+                          if (res.ok) {
+                            const data = await res.json()
+                            if (data.draft) {
+                              setMessageText(data.draft)
+                              setActiveChannel('email')
+                              showToast('AI docs reminder generated for Email', 'success')
+                            }
+                          }
+                        } catch (err) {
+                          showToast('Failed to generate docs reminder', 'error')
+                        } finally {
+                          setGeneratingAI(null)
+                        }
+                      }}
+                      disabled={generatingAI === 'docs-reminder-email'}
+                    >
+                      {generatingAI === 'docs-reminder-email' ? (
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      ) : (
+                        <Mail className="h-3.5 w-3.5 mr-1.5" />
+                      )}
+                      Docs Reminder (Email)
+                    </Button>
+                  </>
+                )}
+
+                {aiOutput && (
+                  <div className="mt-2 p-2 bg-muted rounded-lg">
+                    <div className="flex items-center justify-between mb-1.5">
+                      <span className="text-[10px] font-medium text-muted-foreground uppercase">
+                        {aiOutput.type === 'summary' && 'Summary'}
+                        {aiOutput.type === 'next-action' && 'Next Actions'}
+                        {aiOutput.type === 'docs-checklist' && 'Checklist'}
+                      </span>
+                      <div className="flex gap-0.5">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => {
+                            navigator.clipboard.writeText(
+                              typeof aiOutput.content === 'string' ? aiOutput.content : JSON.stringify(aiOutput.content)
+                            )
+                            showToast('Copied to clipboard', 'success')
+                          }}
+                        >
+                          <Copy className="h-3 w-3" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-6 w-6 p-0"
+                          onClick={() => setAiOutput(null)}
+                        >
+                          <X className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    </div>
+                    <div className="text-xs text-foreground max-h-40 overflow-y-auto">
+                      {typeof aiOutput.content === 'string' ? (
+                        <p className="whitespace-pre-wrap">{aiOutput.content}</p>
+                      ) : Array.isArray(aiOutput.content) ? (
+                        <ul className="list-disc list-inside space-y-1">
+                          {(aiOutput.content as string[]).map((item: string, idx: number) => (
+                            <li key={idx}>{item}</li>
+                          ))}
+                        </ul>
+                      ) : (
+                        <pre className="text-xs">{JSON.stringify(aiOutput.content, null, 2)}</pre>
+                      )}
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
 
             {/* Expiry Tracker */}
             <Card className="rounded-lg border shadow-sm">
@@ -1312,61 +1479,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Autopilot Card */}
-            <AutopilotCard 
-              leadId={leadId}
-              lead={{
-                autoReplyEnabled: lead.autoReplyEnabled,
-                allowOutsideHours: lead.allowOutsideHours,
-                autoReplyMode: lead.autoReplyMode,
-              }}
-              onUpdate={loadLead}
-            />
-
             {/* Reminders Card */}
             <RemindersCard leadId={leadId} />
-
-            {/* Alerts/Notifications Card */}
-            {lead.notifications && lead.notifications.length > 0 && (
-              <Card className="rounded-lg border shadow-sm">
-                <CardHeader className="pb-4 pt-5 px-6 border-b">
-                  <CardTitle className="text-base font-semibold flex items-center gap-2">
-                    <AlertCircle className="h-4 w-4" />
-                    Alerts
-                  </CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-2 px-6 pb-6 pt-5">
-                  {lead.notifications
-                    .filter((n: any) => !n.isRead)
-                    .slice(0, 5)
-                    .map((notification: any) => (
-                      <div
-                        key={notification.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border bg-yellow-50 border-yellow-200/60"
-                      >
-                        <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-bold text-yellow-900 tracking-tight">
-                            {notification.title}
-                          </p>
-                          <p className="text-xs text-yellow-800 mt-1 font-medium">
-                            {notification.message}
-                          </p>
-                          <p className="text-xs text-yellow-700 mt-1 font-semibold">
-                            {format(parseISO(notification.createdAt), 'MMM dd, yyyy HH:mm')}
-                          </p>
-                        </div>
-                      </div>
-                    ))}
-                  {lead.notifications.filter((n: any) => !n.isRead).length === 0 && (
-                    <div className="text-center py-4 text-muted-foreground text-sm">
-                      <CheckCircle2 className="h-6 w-6 mx-auto mb-2 opacity-50" />
-                      <p>No unread alerts</p>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            )}
 
             {/* Documents Card */}
             <Card className="rounded-lg border shadow-sm">
@@ -1437,241 +1551,47 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               serviceType={lead.serviceType?.name}
             />
 
-            {/* Automation Inspector */}
-            <AutomationInspector leadId={leadId} />
-
-            {/* Reply Engine Debug (Admin Only) */}
-            {currentUser?.role === 'ADMIN' && (
-              <ReplyEngineDebug conversationId={conversationId} leadId={leadId} />
-            )}
-
-            {/* AI Assistant Panel */}
-            <Card className="rounded-lg border shadow-sm">
-              <CardHeader className="pb-2 pt-5 px-6 border-b">
-                <CardTitle className="text-sm font-semibold flex items-center gap-2">
-                  <Sparkles className="h-3.5 w-3.5" />
-                  AI Assistant
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="space-y-1.5 px-6 pb-6 pt-5">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start text-sm h-10"
-                  onClick={async () => {
-                    setGeneratingAI('summary')
-                    try {
-                      const res = await fetch(`/api/leads/${leadId}/ai/summary`, {
-                        method: 'POST',
-                      })
-                      if (res.ok) {
-                        const data = await res.json()
-                        setAiOutput({ type: 'summary', content: data.summary })
-                      }
-                    } catch (err) {
-                      showToast('Failed to generate summary', 'error')
-                    } finally {
-                      setGeneratingAI(null)
-                    }
-                  }}
-                  disabled={generatingAI === 'summary'}
-                >
-                  {generatingAI === 'summary' ? (
-                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                  ) : (
-                    <FileText className="h-3.5 w-3.5 mr-1.5" />
-                  )}
-                  Summarize
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start text-sm h-10"
-                  onClick={async () => {
-                    setGeneratingAI('next-action')
-                    try {
-                      const res = await fetch(`/api/leads/${leadId}/ai/next-action`, {
-                        method: 'POST',
-                      })
-                      if (res.ok) {
-                        const data = await res.json()
-                        setAiOutput({ type: 'next-action', content: data.actions })
-                      }
-                    } catch (err) {
-                      showToast('Failed to generate next actions', 'error')
-                    } finally {
-                      setGeneratingAI(null)
-                    }
-                  }}
-                  disabled={generatingAI === 'next-action'}
-                >
-                  {generatingAI === 'next-action' ? (
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  ) : (
-                    <Target className="h-4 w-4 mr-2" />
-                  )}
-                  Next Best Action
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full justify-start"
-                  onClick={() => handleGenerateAIDraft('renewal')}
-                  disabled={generatingAI === 'renewal'}
-                >
-                  <RefreshCw className="h-3.5 w-3.5 mr-1.5" />
-                  Renewal
-                </Button>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full justify-start text-sm h-10"
-                  onClick={async () => {
-                    setGeneratingAI('docs-checklist')
-                    try {
-                      const res = await fetch(`/api/leads/${leadId}/ai/docs-checklist`, {
-                        method: 'POST',
-                      })
-                      if (res.ok) {
-                        const data = await res.json()
-                        setAiOutput({ type: 'docs-checklist', content: data.checklist })
-                      }
-                    } catch (err) {
-                      showToast('Failed to generate checklist', 'error')
-                    } finally {
-                      setGeneratingAI(null)
-                    }
-                  }}
-                  disabled={generatingAI === 'docs-checklist'}
-                >
-                  <FileText className="h-3.5 w-3.5 mr-1.5" />
-                  Docs Checklist
-                </Button>
-                {compliance && (compliance.missingMandatory.length > 0 || compliance.expired.length > 0) && (
-                  <>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-start text-sm h-10"
-                      onClick={async () => {
-                        setGeneratingAI('docs-reminder-wa')
-                        try {
-                          const res = await fetch(`/api/leads/${leadId}/docs/ai-reminder`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ channel: 'WHATSAPP' }),
-                          })
-                          if (res.ok) {
-                            const data = await res.json()
-                            if (data.draft) {
-                              // Fill composer with draft
-                              setMessageText(data.draft)
-                              setActiveChannel('whatsapp')
-                              showToast('AI docs reminder generated for WhatsApp', 'success')
-                            }
-                          }
-                        } catch (err) {
-                          showToast('Failed to generate docs reminder', 'error')
-                        } finally {
-                          setGeneratingAI(null)
-                        }
-                      }}
-                      disabled={generatingAI === 'docs-reminder-wa'}
-                    >
-                      {generatingAI === 'docs-reminder-wa' ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <Sparkles className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Docs Reminder (WhatsApp)
-                    </Button>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className="w-full justify-start text-sm h-10"
-                      onClick={async () => {
-                        setGeneratingAI('docs-reminder-email')
-                        try {
-                          const res = await fetch(`/api/leads/${leadId}/docs/ai-reminder`, {
-                            method: 'POST',
-                            headers: { 'Content-Type': 'application/json' },
-                            body: JSON.stringify({ channel: 'EMAIL' }),
-                          })
-                          if (res.ok) {
-                            const data = await res.json()
-                            if (data.draft) {
-                              // Fill composer with draft
-                              setMessageText(data.draft)
-                              setActiveChannel('email')
-                              showToast('AI docs reminder generated for Email', 'success')
-                            }
-                          }
-                        } catch (err) {
-                          showToast('Failed to generate docs reminder', 'error')
-                        } finally {
-                          setGeneratingAI(null)
-                        }
-                      }}
-                      disabled={generatingAI === 'docs-reminder-email'}
-                    >
-                      {generatingAI === 'docs-reminder-email' ? (
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      ) : (
-                        <Mail className="h-3.5 w-3.5 mr-1.5" />
-                      )}
-                      Docs Reminder (Email)
-                    </Button>
-                  </>
-                )}
-
-                {aiOutput && (
-                  <div className="mt-2 p-2 bg-muted rounded-lg">
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[10px] font-medium text-muted-foreground uppercase">
-                        {aiOutput.type === 'summary' && 'Summary'}
-                        {aiOutput.type === 'next-action' && 'Next Actions'}
-                        {aiOutput.type === 'docs-checklist' && 'Checklist'}
-                      </span>
-                      <div className="flex gap-0.5">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => {
-                            navigator.clipboard.writeText(
-                              typeof aiOutput.content === 'string' ? aiOutput.content : JSON.stringify(aiOutput.content)
-                            )
-                            showToast('Copied to clipboard', 'success')
-                          }}
-                        >
-                          <Copy className="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-6 w-6 p-0"
-                          onClick={() => setAiOutput(null)}
-                        >
-                          <X className="h-3 w-3" />
-                        </Button>
+            {/* Alerts/Notifications Card */}
+            {lead.notifications && lead.notifications.length > 0 && (
+              <Card className="rounded-lg border shadow-sm">
+                <CardHeader className="pb-4 pt-5 px-6 border-b">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
+                    <AlertCircle className="h-4 w-4" />
+                    Alerts
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2 px-6 pb-6 pt-5">
+                  {lead.notifications
+                    .filter((n: any) => !n.isRead)
+                    .slice(0, 5)
+                    .map((notification: any) => (
+                      <div
+                        key={notification.id}
+                        className="flex items-start gap-3 p-3 rounded-lg border bg-yellow-50 border-yellow-200/60"
+                      >
+                        <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-bold text-yellow-900 tracking-tight">
+                            {notification.title}
+                          </p>
+                          <p className="text-xs text-yellow-800 mt-1 font-medium">
+                            {notification.message}
+                          </p>
+                          <p className="text-xs text-yellow-700 mt-1 font-semibold">
+                            {format(parseISO(notification.createdAt), 'MMM dd, yyyy HH:mm')}
+                          </p>
+                        </div>
                       </div>
+                    ))}
+                  {lead.notifications.filter((n: any) => !n.isRead).length === 0 && (
+                    <div className="text-center py-4 text-muted-foreground text-sm">
+                      <CheckCircle2 className="h-6 w-6 mx-auto mb-2 opacity-50" />
+                      <p>No unread alerts</p>
                     </div>
-                    <div className="text-xs text-foreground max-h-40 overflow-y-auto">
-                      {typeof aiOutput.content === 'string' ? (
-                        <p className="whitespace-pre-wrap">{aiOutput.content}</p>
-                      ) : Array.isArray(aiOutput.content) ? (
-                        <ul className="list-disc list-inside space-y-1">
-                          {(aiOutput.content as string[]).map((item: string, idx: number) => (
-                            <li key={idx}>{item}</li>
-                          ))}
-                        </ul>
-                      ) : (
-                        <pre className="text-xs">{JSON.stringify(aiOutput.content, null, 2)}</pre>
-                      )}
-                    </div>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                  )}
+                </CardContent>
+              </Card>
+            )}
           </div>
         </div>
 

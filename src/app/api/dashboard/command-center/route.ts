@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
-import { getAllSignals } from '@/lib/dashboard/signals'
+import { getAllSignals, type SignalsData } from '@/lib/dashboard/signals'
 import { startOfDay, endOfDay, addDays, differenceInDays } from 'date-fns'
 import type { CommandItem, CommandCenterData } from '@/lib/dashboard/commandCenterTypes'
 
@@ -22,55 +22,103 @@ export async function GET(req: NextRequest) {
     const twoDaysAgo = addDays(now, -2)
 
     // 1. Get signals (reuse existing logic)
-    const signals = await getAllSignals()
+    let signals: SignalsData
+    try {
+      signals = await getAllSignals()
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get signals:', error.message)
+      // Continue with empty signals
+      signals = {
+        renewals: [],
+        waiting: [],
+        alerts: [],
+        counts: { renewalsTotal: 0, waitingTotal: 0, alertsTotal: 0 },
+      }
+    }
 
     // 2. Get momentum metrics
-    const [repliesToday, quotesToday, renewals7d] = await Promise.all([
-      prisma.message.count({
-        where: {
-          direction: 'OUTBOUND',
-          createdAt: { gte: todayStart, lte: todayEnd },
-        },
-      }),
-      prisma.task.count({
-        where: {
-          type: { in: ['QUOTE', 'PROPOSAL'] },
-          createdAt: { gte: todayStart, lte: todayEnd },
-        },
-      }),
-      prisma.lead.count({
-        where: {
-          expiryDate: { gte: now, lte: sevenDaysFromNow },
-          stage: { notIn: ['COMPLETED_WON', 'LOST'] },
-        },
-      }),
-    ])
+    let repliesToday = 0
+    let quotesToday = 0
+    let renewals7d = 0
+    try {
+      [repliesToday, quotesToday, renewals7d] = await Promise.all([
+        prisma.message.count({
+          where: {
+            direction: 'OUTBOUND',
+            createdAt: { gte: todayStart, lte: todayEnd },
+          },
+        }).catch((err) => {
+          console.error('[DASHBOARD] Failed to count replies today:', err.message)
+          return 0
+        }),
+        prisma.task.count({
+          where: {
+            type: { in: ['QUOTE', 'PROPOSAL'] },
+            createdAt: { gte: todayStart, lte: todayEnd },
+          },
+        }).catch((err) => {
+          console.error('[DASHBOARD] Failed to count quotes today:', err.message)
+          return 0
+        }),
+        prisma.lead.count({
+          where: {
+            expiryDate: { gte: now, lte: sevenDaysFromNow },
+            stage: { notIn: ['COMPLETED_WON', 'LOST'] },
+          },
+        }).catch((err) => {
+          console.error('[DASHBOARD] Failed to count renewals 7d:', err.message)
+          return 0
+        }),
+      ])
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get momentum metrics:', error.message)
+      // Continue with zeros
+    }
 
-    const qualifiedLeads = await prisma.lead.count({
-      where: {
-        stage: { in: ['QUALIFIED', 'PROPOSAL_SENT'] },
-        createdAt: { gte: todayStart, lte: todayEnd },
-      },
-    })
-    const revenuePotentialToday = qualifiedLeads > 0 ? qualifiedLeads * 5000 : null
+    let qualifiedLeads = 0
+    let revenuePotentialToday: number | null = null
+    try {
+      qualifiedLeads = await prisma.lead.count({
+        where: {
+          stage: { in: ['QUALIFIED', 'PROPOSAL_SENT'] },
+          createdAt: { gte: todayStart, lte: todayEnd },
+        },
+      }).catch((err) => {
+        console.error('[DASHBOARD] Failed to count qualified leads:', err.message)
+        return 0
+      })
+      revenuePotentialToday = qualifiedLeads > 0 ? qualifiedLeads * 5000 : null
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get qualified leads:', error.message)
+      // Continue with null
+    }
 
     // 3. Get completed today
-    const [tasksDone, messagesSent, quotesSent] = await Promise.all([
-      prisma.task.count({
+    let tasksDone = 0
+    let messagesSent = repliesToday
+    let quotesSent = quotesToday
+    try {
+      tasksDone = await prisma.task.count({
         where: {
           status: 'COMPLETED',
           updatedAt: { gte: todayStart, lte: todayEnd },
         },
-      }),
-      repliesToday, // Reuse from above
-      quotesToday, // Reuse from above
-    ])
+      }).catch((err) => {
+        console.error('[DASHBOARD] Failed to count tasks done:', err.message)
+        return 0
+      })
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get completed today:', error.message)
+      // Continue with zeros
+    }
 
     // 4. Build focusNow + upNext (prioritized)
     const candidates: CommandItem[] = []
 
     // Priority 1: Conversations needing reply
-    const conversationsNeedingReply = await prisma.conversation.findMany({
+    let conversationsNeedingReply: any[] = []
+    try {
+      conversationsNeedingReply = await prisma.conversation.findMany({
       where: {
         OR: [
           { unreadCount: { gt: 0 } },
@@ -99,7 +147,11 @@ export async function GET(req: NextRequest) {
         { lastMessageAt: 'desc' },
       ],
       take: 5,
-    })
+      })
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get conversations needing reply:', error.message)
+      conversationsNeedingReply = []
+    }
 
     for (const conv of conversationsNeedingReply) {
       const lead = conv.lead
@@ -136,7 +188,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Priority 2: Tasks overdue
-    const overdueTasks = await prisma.task.findMany({
+    let overdueTasks: any[] = []
+    try {
+      overdueTasks = await prisma.task.findMany({
       where: {
         status: 'OPEN',
         dueAt: { lte: now },
@@ -154,7 +208,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { dueAt: 'asc' },
       take: 5,
-    })
+      })
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get overdue tasks:', error.message)
+      overdueTasks = []
+    }
 
     for (const task of overdueTasks) {
       const lead = task.lead
@@ -176,7 +234,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Priority 3: Leads ready for quote
-    const quoteTasks = await prisma.task.findMany({
+    let quoteTasks: any[] = []
+    try {
+      quoteTasks = await prisma.task.findMany({
       where: {
         type: { in: ['QUOTE', 'PROPOSAL'] },
         status: 'OPEN',
@@ -195,7 +255,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { dueAt: 'asc' },
       take: 5,
-    })
+      })
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get quote tasks:', error.message)
+      quoteTasks = []
+    }
 
     for (const task of quoteTasks) {
       const lead = task.lead
@@ -218,7 +282,9 @@ export async function GET(req: NextRequest) {
     }
 
     // Priority 4: Renewals today/7d
-    const renewals = await prisma.lead.findMany({
+    let renewals: any[] = []
+    try {
+      renewals = await prisma.lead.findMany({
       where: {
         expiryDate: { gte: now, lte: sevenDaysFromNow },
         stage: { notIn: ['COMPLETED_WON', 'LOST'] },
@@ -229,7 +295,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { expiryDate: 'asc' },
       take: 5,
-    })
+      })
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get renewals:', error.message)
+      renewals = []
+    }
 
     for (const lead of renewals) {
       const daysUntil = differenceInDays(lead.expiryDate!, now)
@@ -251,7 +321,9 @@ export async function GET(req: NextRequest) {
 
     // Priority 5: Waiting on customer > 2 days
     // Filter in memory since Prisma can't compare fields directly
-    const waitingLeadsRaw = await prisma.lead.findMany({
+    let waitingLeadsRaw: any[] = []
+    try {
+      waitingLeadsRaw = await prisma.lead.findMany({
       where: {
         lastOutboundAt: { not: null, lte: twoDaysAgo },
         stage: { notIn: ['COMPLETED_WON', 'LOST'] },
@@ -262,7 +334,11 @@ export async function GET(req: NextRequest) {
       },
       orderBy: { lastOutboundAt: 'asc' },
       take: 10, // Get more to filter in memory
-    })
+      })
+    } catch (error: any) {
+      console.error('[DASHBOARD] Failed to get waiting leads:', error.message)
+      waitingLeadsRaw = []
+    }
 
     // Filter: lastInboundAt is null OR older than lastOutboundAt
     const waitingLeads = waitingLeadsRaw.filter((lead) => {
@@ -325,7 +401,8 @@ export async function GET(req: NextRequest) {
       generatedAt: now.toISOString(),
     } as CommandCenterData)
   } catch (error: any) {
-    console.error('Failed to load command center data:', error)
+    console.error('[DASHBOARD] Failed to load command center data:', error)
+    // Return 200 with safe defaults instead of 500 to prevent infinite retries
     return NextResponse.json(
       {
         focusNow: null,
@@ -349,7 +426,7 @@ export async function GET(req: NextRequest) {
         },
         generatedAt: new Date().toISOString(),
       },
-      { status: 500 }
+      { status: 200 }
     )
   }
 }
