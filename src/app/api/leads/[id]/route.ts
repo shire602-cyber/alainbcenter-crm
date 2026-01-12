@@ -929,6 +929,39 @@ export async function PATCH(
       }
     }
     
+    // Handle serviceTypeId (direct service type selection)
+    if (body.serviceTypeId !== undefined) {
+      if (body.serviceTypeId === null || body.serviceTypeId === '') {
+        updateData.serviceTypeId = null
+        // Also clear related fields when serviceTypeId is cleared
+        updateData.leadType = null
+      } else {
+        const serviceTypeId = parseInt(String(body.serviceTypeId))
+        if (isNaN(serviceTypeId)) {
+          return NextResponse.json(
+            { error: 'Invalid serviceTypeId' },
+            { status: 400 }
+          )
+        }
+        // Verify service type exists
+        const serviceType = await prisma.serviceType.findUnique({
+          where: { id: serviceTypeId }
+        })
+        if (!serviceType) {
+          return NextResponse.json(
+            { error: 'Service type not found' },
+            { status: 404 }
+          )
+        }
+        updateData.serviceTypeId = serviceTypeId
+        updateData.leadType = serviceType.name
+        // Optionally sync serviceTypeEnum if it exists
+        if (serviceType.code) {
+          updateData.serviceTypeEnum = serviceType.code
+        }
+      }
+    }
+    
     if (body.priority !== undefined) {
       updateData.priority = body.priority || null
     }

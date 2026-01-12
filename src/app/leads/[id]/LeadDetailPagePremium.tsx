@@ -833,21 +833,21 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   return (
     <MainLayout>
       <div className="flex flex-col min-h-screen bg-gray-50">
-        {/* Sticky Header Bar - Professional & Clean */}
-        <div className="sticky top-0 z-30 bg-white border-b border-gray-200/80 shadow-sm backdrop-blur-sm">
-          <div className="px-10 py-6">
+        {/* Sticky Header Bar - Enhanced Professional Design */}
+        <div className="sticky top-0 z-30 bg-white border-b border-gray-200 shadow-sm">
+          <div className="px-10 py-7">
             <div className="flex items-start justify-between gap-8">
               {/* Left: Breadcrumb + Lead Info */}
-              <div className="flex items-start gap-4 flex-1 min-w-0">
+              <div className="flex items-start gap-5 flex-1 min-w-0">
                 <Link href="/leads">
-                  <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900 -ml-2">
+                  <Button variant="ghost" size="sm" className="gap-2 text-gray-600 hover:text-gray-900 hover:bg-gray-50 -ml-2">
                     <ArrowLeft className="h-4 w-4" />
                     Back
                   </Button>
                 </Link>
                 <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-3 mb-3">
-                    <h1 className="text-2xl font-semibold text-gray-900 truncate tracking-tight">
+                  <div className="flex items-center gap-3 mb-4">
+                    <h1 className="text-3xl font-bold text-gray-900 truncate tracking-tight">
                       {lead.contact?.fullName && lead.contact.fullName !== 'Unknown' && !lead.contact.fullName.startsWith('Contact +')
                         ? lead.contact.fullName
                         : lead.contact?.phone
@@ -858,7 +858,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     {compliance && compliance.status !== 'GOOD' && (
                       <Badge
                         className={cn(
-                          'text-xs font-medium px-2.5 py-0.5',
+                          'text-xs font-semibold px-3 py-1',
                           compliance.status === 'CRITICAL' && 'bg-red-50 text-red-700 border border-red-200',
                           compliance.status === 'WARNING' && 'bg-amber-50 text-amber-700 border border-amber-200'
                         )}
@@ -868,75 +868,77 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       </Badge>
                     )}
                   </div>
-                  <div className="flex items-center gap-4 flex-wrap">
+                  <div className="flex items-center gap-5 flex-wrap">
                     {lead.contact?.phone && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Phone className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium">{lead.contact.phone}</span>
+                      <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <span className="font-semibold">{lead.contact.phone}</span>
                       </div>
                     )}
                     {lead.contact?.email && (
-                      <div className="flex items-center gap-2 text-sm text-gray-600">
-                        <Mail className="h-4 w-4 text-gray-400" />
-                        <span className="font-medium">{lead.contact.email}</span>
+                      <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                        <Mail className="h-4 w-4 text-gray-500" />
+                        <span className="font-semibold">{lead.contact.email}</span>
                       </div>
                     )}
                     {lead.contact?.source && (
-                      <Badge variant="outline" className="text-xs px-2.5 py-0.5 text-gray-600 border-gray-300 capitalize font-normal">
+                      <Badge variant="outline" className="text-xs px-3 py-1 text-gray-700 border-gray-300 capitalize font-medium">
                         {lead.contact.source}
                       </Badge>
                     )}
-                    <span className="text-sm text-gray-500">
+                    <span className="text-sm text-gray-500 font-medium">
                       Created {differenceInDays(new Date(), parseISO(lead.createdAt))} days ago
                     </span>
                   </div>
                 </div>
               </div>
 
-              {/* Right: Action Buttons */}
-              <div className="flex items-center gap-2 flex-shrink-0">
+              {/* Right: Action Buttons - Better Grouping */}
+              <div className="flex items-center gap-3 flex-shrink-0">
                 {lead.contact?.phone && (
                   <Button
                     onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
-                    className="bg-green-600 hover:bg-green-700 text-white shadow-sm font-medium"
+                    className="bg-green-600 hover:bg-green-700 text-white shadow-md font-semibold px-5"
                     size="default"
                   >
                     <MessageSquare className="h-4 w-4 mr-2" />
                     WhatsApp
                   </Button>
                 )}
-                {lead.contact?.phone && (
-                  <Button variant="outline" size="sm" onClick={() => lead.contact?.phone && window.open(`tel:${lead.contact.phone}`)} className="border-gray-300">
-                    <Phone className="h-4 w-4" />
+                <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
+                  {lead.contact?.phone && (
+                    <Button variant="outline" size="sm" onClick={() => lead.contact?.phone && window.open(`tel:${lead.contact.phone}`)} className="border-gray-300 hover:bg-gray-50">
+                      <Phone className="h-4 w-4" />
+                    </Button>
+                  )}
+                  <Button variant="outline" size="sm" onClick={() => setShowTaskModal(true)} className="border-gray-300 hover:bg-gray-50">
+                    <Plus className="h-4 w-4 mr-1.5" />
+                    Task
                   </Button>
-                )}
-                <Button variant="outline" size="sm" onClick={() => setShowTaskModal(true)} className="border-gray-300">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Task
-                </Button>
-                <Button variant="ghost" size="sm" className="text-gray-600">
-                  <MoreVertical className="h-4 w-4" />
-                </Button>
+                  <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-50">
+                    <MoreVertical className="h-4 w-4" />
+                  </Button>
+                </div>
               </div>
             </div>
           </div>
         </div>
 
-        {/* Main 2-Column Layout - Professional & Clean */}
+        {/* Main 2-Column Layout - Enhanced Professional Design */}
         <div className="flex-1 overflow-y-auto">
-          <div className="max-w-[1600px] mx-auto px-10 py-8">
-            <div className="grid grid-cols-12 gap-6">
+          <div className="max-w-[1800px] mx-auto px-12 py-10">
+            <div className="grid grid-cols-12 gap-8">
               {/* LEFT COLUMN: Main Content (2/3 width) */}
-              <div className="col-span-12 lg:col-span-8 flex flex-col gap-6">
-                {/* Pipeline Card - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
-                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
-                      <Target className="h-4 w-4 text-gray-500" />
+              <div className="col-span-12 lg:col-span-8 flex flex-col gap-8">
+                {/* Pipeline Card - Enhanced styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-md">
+                  <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                      <Target className="h-5 w-5 text-gray-600" />
                       Pipeline
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-6 pb-6 pt-6">
+                  <CardContent className="px-7 pb-7 pt-7">
                     <div className="pipeline-highlight">
                       <PipelineProgress
                         currentStage={lead.stage || lead.pipelineStage || 'NEW'}
@@ -946,28 +948,31 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </CardContent>
                 </Card>
 
-                {/* Internal Notes Section - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
-                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
-                      <FileText className="h-4 w-4 text-gray-500" />
+                {/* Internal Notes Section - Enhanced styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-md">
+                  <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                      <FileText className="h-5 w-5 text-gray-600" />
                       Internal Notes
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="px-6 pb-6 pt-6">
-                    <div className="space-y-4">
+                  <CardContent className="px-7 pb-7 pt-7">
+                    <div className="space-y-3">
                       {lead.communicationLogs
                         ?.filter((log: any) => log.channel === 'internal')
                         .map((log: any) => (
-                          <div key={log.id} className="border border-gray-200 rounded-lg p-4 bg-gray-50/50 hover:bg-gray-50 transition-colors">
-                            <p className="text-sm text-gray-700 leading-relaxed">{log.message || log.messageSnippet}</p>
-                            <p className="text-xs text-gray-500 mt-2.5">
+                          <div key={log.id} className="border border-gray-200 rounded-lg p-5 bg-gray-50/50 hover:bg-gray-50 transition-all hover:shadow-sm">
+                            <p className="text-sm font-medium text-gray-800 leading-relaxed">{log.message || log.messageSnippet}</p>
+                            <p className="text-xs text-gray-500 mt-3 font-medium">
                               {formatMessageTime(log.createdAt)}
                             </p>
                           </div>
                         ))}
                       {(!lead.communicationLogs || lead.communicationLogs.filter((log: any) => log.channel === 'internal').length === 0) && (
-                        <p className="text-sm text-gray-500 text-center py-8">No internal notes yet</p>
+                        <div className="text-center py-12">
+                          <FileText className="h-10 w-10 mx-auto mb-3 text-gray-400" />
+                          <p className="text-sm font-medium text-gray-500">No internal notes yet</p>
+                        </div>
                       )}
                     </div>
                   </CardContent>
@@ -984,18 +989,18 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </div>
 
               {/* RIGHT COLUMN: Sidebar (1/3 width) */}
-              <div className="col-span-12 lg:col-span-4 flex flex-col gap-6">
-                {/* Contact Card - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
-                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
-                      <User className="h-4 w-4 text-gray-500" />
+              <div className="col-span-12 lg:col-span-4 flex flex-col gap-8">
+                {/* Contact Card - Enhanced styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-md">
+                  <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                      <User className="h-5 w-5 text-gray-600" />
                       Contact
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-5 px-6 pb-6 pt-6">
+                  <CardContent className="space-y-6 px-7 pb-7 pt-7">
                 <div>
-                  <Label className="text-sm font-medium text-gray-600 mb-2 block">Name</Label>
+                  <Label className="text-sm font-semibold text-gray-700 mb-3 block">Name</Label>
                   <InlineEditableField
                     value={
                       lead.contact?.fullName && 
@@ -1011,15 +1016,15 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       showToast('Contact update coming soon', 'info')
                       return Promise.resolve()
                     }}
-                    className="text-base font-medium"
+                    className="text-base font-semibold text-gray-900"
                     placeholder="Enter contact name"
                   />
                 </div>
                 {lead.contact?.phone && (
                   <div className="group">
-                    <Label className="text-sm font-medium text-gray-600 mb-2 block">Phone</Label>
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Phone</Label>
                     <div className="flex items-center gap-2">
-                      <span className="text-base flex-1">{lead.contact.phone}</span>
+                      <span className="text-base font-semibold text-gray-900 flex-1">{lead.contact.phone}</span>
                       <QuickActionsMenu 
                         type="phone" 
                         value={lead.contact.phone}
@@ -1030,9 +1035,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
                 {lead.contact?.email && (
                   <div className="group">
-                    <Label className="text-sm font-medium text-gray-600 mb-2 block">Email</Label>
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Email</Label>
                     <div className="flex items-center gap-2">
-                      <a href={`mailto:${lead.contact.email}`} className="text-base flex-1 hover:underline">
+                      <a href={`mailto:${lead.contact.email}`} className="text-base font-semibold text-gray-900 flex-1 hover:underline hover:text-blue-600">
                         {lead.contact.email}
                       </a>
                       <QuickActionsMenu 
@@ -1045,12 +1050,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
                 {lead.contact?.nationality && (
                   <div>
-                    <Label className="text-sm font-medium text-gray-600 mb-2 block">Nationality</Label>
-                    <span className="text-base">{lead.contact.nationality}</span>
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Nationality</Label>
+                    <span className="text-base font-semibold text-gray-900">{lead.contact.nationality}</span>
                   </div>
                 )}
                 <div>
-                  <Label className="text-sm font-medium text-gray-600 mb-2 block">Service Needed</Label>
+                  <Label className="text-sm font-semibold text-gray-700 mb-3 block">Service Needed</Label>
                   {lead.requestedServiceRaw && !lead.serviceTypeId && (
                     <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
                       <p className="text-sm font-bold text-blue-900">
@@ -1097,15 +1102,15 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-                {/* AI Assistant - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
-                    <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
-                      <Sparkles className="h-4 w-4 text-gray-500" />
+                {/* AI Assistant - Enhanced styling */}
+                <Card className="rounded-xl border border-gray-200 bg-white shadow-md">
+                  <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
+                    <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                      <Sparkles className="h-5 w-5 text-gray-600" />
                       AI Assistant
                     </CardTitle>
                   </CardHeader>
-                  <CardContent className="space-y-2 px-6 pb-6 pt-6">
+                  <CardContent className="space-y-3 px-7 pb-7 pt-7">
                 <Button
                   variant="outline"
                   size="sm"
@@ -1323,22 +1328,24 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
+            {/* Compact 4-Box Grid - 2x2 layout */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 {/* Expiry Tracker - Professional styling */}
                 <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                  <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base font-semibold text-gray-900">Expiry Tracker</CardTitle>
+                      <CardTitle className="text-sm font-semibold text-gray-900">Expiry Tracker</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowExpiryModal(true)}
-                        className="text-gray-600 hover:text-gray-900"
+                        className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
                       >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-4 px-6 pb-6 pt-6">
+                  <CardContent className="space-y-3 px-4 pb-4 pt-4">
                 {/* Unverified Expiry Hints */}
                 {lead.dataJson && (() => {
                   try {
@@ -1455,31 +1462,30 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     )
                   })
                 ) : (
-                  <div className="text-center py-8 text-muted-foreground text-sm">
-                    <Calendar className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <div className="text-center py-4 text-muted-foreground text-xs">
+                    <Calendar className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
                     <p>No expiry items</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-
                 {/* Tasks Card - Professional styling */}
                 <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                  <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base font-semibold text-gray-900">Tasks</CardTitle>
+                      <CardTitle className="text-sm font-semibold text-gray-900">Tasks</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowTaskModal(true)}
-                        className="text-gray-600 hover:text-gray-900"
+                        className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
                       >
-                        <Plus className="h-4 w-4" />
+                        <Plus className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-3 px-6 pb-6 pt-6">
+                  <CardContent className="space-y-2 px-4 pb-4 pt-4">
                 {lead.tasks && lead.tasks.length > 0 ? (
                   lead.tasks
                     .filter((t: any) => t.status === 'OPEN')
@@ -1507,34 +1513,35 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       </div>
                     ))
                 ) : (
-                  <div className="text-center py-8 text-gray-500 text-sm">
-                    <CheckCircle2 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                  <div className="text-center py-4 text-gray-500 text-xs">
+                    <CheckCircle2 className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
                     <p>No tasks</p>
                   </div>
                 )}
               </CardContent>
             </Card>
 
-            {/* Reminders Card */}
-            <RemindersCard leadId={leadId} />
+            {/* Reminders Card - Wrapped for grid */}
+            <div className="md:col-span-1">
+              <RemindersCard leadId={leadId} />
+            </div>
 
                 {/* Documents Card - Professional styling */}
                 <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
+                  <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
                     <div className="flex items-center justify-between">
-                      <CardTitle className="text-base font-semibold text-gray-900">Documents</CardTitle>
+                      <CardTitle className="text-sm font-semibold text-gray-900">Documents</CardTitle>
                       <Button
                         variant="ghost"
                         size="sm"
                         onClick={() => setShowDocumentModal(true)}
-                        className="text-gray-600 hover:text-gray-900"
+                        className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
                       >
-                        <Upload className="h-4 w-4 mr-2" />
-                        Upload
+                        <Upload className="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </CardHeader>
-                  <CardContent className="space-y-2 px-6 pb-6 pt-6">
+                  <CardContent className="space-y-2 px-4 pb-4 pt-4">
                 {lead.documents && lead.documents.length > 0 ? (
                   lead.documents.slice(0, 5).map((doc: any) => (
                     <div
@@ -1573,13 +1580,14 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
                   ))
                 ) : (
-                  <div className="text-center py-3 text-gray-500 text-xs">
-                    <FileText className="h-6 w-6 mx-auto mb-1 opacity-50" />
+                  <div className="text-center py-4 text-gray-500 text-xs">
+                    <FileText className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
                     <p>No documents</p>
                   </div>
                 )}
               </CardContent>
             </Card>
+            </div>
 
             {/* Revenue Widget */}
             <RevenueWidget 
@@ -1588,16 +1596,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               serviceType={lead.serviceType?.name}
             />
 
-                {/* Alerts/Notifications Card - Professional styling */}
+                {/* Alerts/Notifications Card - Enhanced styling */}
                 {lead.notifications && lead.notifications.length > 0 && (
-                  <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                    <CardHeader className="pb-3 pt-6 px-6 border-b border-gray-100">
-                      <CardTitle className="text-base font-semibold text-gray-900 flex items-center gap-2.5">
-                        <AlertCircle className="h-4 w-4 text-gray-500" />
+                  <Card className="rounded-xl border border-gray-200 bg-white shadow-md">
+                    <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
+                      <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                        <AlertCircle className="h-5 w-5 text-gray-600" />
                         Alerts
                       </CardTitle>
                     </CardHeader>
-                    <CardContent className="space-y-3 px-6 pb-6 pt-6">
+                    <CardContent className="space-y-3 px-7 pb-7 pt-7">
                   {lead.notifications
                     .filter((n: any) => !n.isRead)
                     .slice(0, 5)
@@ -1634,21 +1642,21 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           </div>
         </div>
 
-        {/* Activity Timeline Section - Professional styling */}
+        {/* Activity Timeline Section - Enhanced styling */}
         <div className="border-t border-gray-200 bg-gray-50" data-activity-timeline>
-          <div className="max-w-[1600px] mx-auto px-10 py-10">
-            <h2 className="text-xl font-semibold text-gray-900 mb-6">Activity Timeline</h2>
-            <div className="border border-gray-200 rounded-xl p-8 bg-white shadow-sm">
+          <div className="max-w-[1800px] mx-auto px-12 py-12">
+            <h2 className="text-2xl font-bold text-gray-900 mb-8">Activity Timeline</h2>
+            <div className="border border-gray-200 rounded-xl p-10 bg-white shadow-md">
               <ActivityTimeline activities={activities} />
             </div>
           </div>
         </div>
 
-        {/* Bottom Communication Section - Professional styling */}
+        {/* Bottom Communication Section - Enhanced styling */}
         <div className="border-t border-gray-200 bg-white">
-          <div className="max-w-[1600px] mx-auto px-10 py-8">
-            {/* Communication Action Buttons */}
-            <div className="flex items-center gap-3 mb-6">
+          <div className="max-w-[1800px] mx-auto px-12 py-10">
+            {/* Communication Action Buttons - Better Grouping */}
+            <div className="flex items-center gap-4 mb-8">
             <Button
               onClick={() => {
                 setActiveChannel('whatsapp')
@@ -1657,59 +1665,65 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   setTimeout(() => composer.focus(), 100)
                 }
               }}
-              className="bg-green-600 hover:bg-green-700 text-white shadow-sm font-medium"
+              className="bg-green-600 hover:bg-green-700 text-white shadow-md font-semibold px-6"
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               Send message
             </Button>
-            <Button
-              variant="outline"
-              onClick={() => {
-                // Add internal note functionality
-                const note = prompt('Enter internal note:')
-                if (note) {
-                  // Would need API endpoint for internal notes
-                  showToast('Internal note feature coming soon', 'info')
-                }
-              }}
-              className="border-gray-300"
-            >
-              <FileText className="h-4 w-4 mr-2" />
-              Log note
-            </Button>
-            {lead.contact?.phone && (
+            <div className="flex items-center gap-2 border-l border-gray-200 pl-4">
               <Button
                 variant="outline"
-                onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
-                className="border-gray-300"
+                onClick={() => {
+                  // Add internal note functionality
+                  const note = prompt('Enter internal note:')
+                  if (note) {
+                    // Would need API endpoint for internal notes
+                    showToast('Internal note feature coming soon', 'info')
+                  }
+                }}
+                className="border-gray-300 hover:bg-gray-50 font-medium"
               >
-                <MessageSquare className="h-4 w-4 mr-2" />
-                WhatsApp
+                <FileText className="h-4 w-4 mr-2" />
+                Log note
               </Button>
-            )}
-            <Button
-              variant="outline"
-              onClick={() => {
-                // Scroll to activity timeline
-                const timeline = document.querySelector('[data-activity-timeline]')
-                if (timeline) {
-                  timeline.scrollIntoView({ behavior: 'smooth', block: 'start' })
-                }
-              }}
-              className="border-gray-300"
-            >
-              <Clock className="h-4 w-4 mr-2" />
-              Activities
-            </Button>
+              {lead.contact?.phone && (
+                <Button
+                  variant="outline"
+                  onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
+                  className="border-gray-300 hover:bg-gray-50 font-medium"
+                >
+                  <MessageSquare className="h-4 w-4 mr-2" />
+                  WhatsApp
+                </Button>
+              )}
+              <Button
+                variant="outline"
+                onClick={() => {
+                  // Scroll to activity timeline
+                  const timeline = document.querySelector('[data-activity-timeline]')
+                  if (timeline) {
+                    timeline.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                  }
+                }}
+                className="border-gray-300 hover:bg-gray-50 font-medium"
+              >
+                <Clock className="h-4 w-4 mr-2" />
+                Activities
+              </Button>
+            </div>
           </div>
 
-            {/* Channel Selector */}
-            <div className="mb-6 flex items-center gap-2 border-b border-gray-200 pb-4">
+            {/* Channel Selector - Enhanced */}
+            <div className="mb-8 flex items-center gap-3 border-b border-gray-200 pb-6">
+            <span className="text-sm font-semibold text-gray-700 mr-2">Channel:</span>
             <Button
               variant={activeChannel === 'whatsapp' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('whatsapp')}
-              className={activeChannel === 'whatsapp' ? '' : 'border-gray-300'}
+              className={cn(
+                'font-medium',
+                activeChannel === 'whatsapp' ? 'bg-green-600 hover:bg-green-700 text-white' : 'border-gray-300 hover:bg-gray-50'
+              )}
             >
               <MessageSquare className="h-4 w-4 mr-2" />
               WhatsApp
@@ -1718,7 +1732,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               variant={activeChannel === 'email' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('email')}
-              className={activeChannel === 'email' ? '' : 'border-gray-300'}
+              className={cn(
+                'font-medium',
+                activeChannel === 'email' ? '' : 'border-gray-300 hover:bg-gray-50'
+              )}
             >
               <Mail className="h-4 w-4 mr-2" />
               Email
@@ -1727,7 +1744,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               variant={activeChannel === 'instagram' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('instagram')}
-              className={activeChannel === 'instagram' ? '' : 'border-gray-300'}
+              className={cn(
+                'font-medium',
+                activeChannel === 'instagram' ? '' : 'border-gray-300 hover:bg-gray-50'
+              )}
             >
               <Instagram className="h-4 w-4 mr-2" />
               Instagram
@@ -1736,27 +1756,30 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               variant={activeChannel === 'facebook' ? 'default' : 'outline'}
               size="sm"
               onClick={() => setActiveChannel('facebook')}
-              className={activeChannel === 'facebook' ? '' : 'border-gray-300'}
+              className={cn(
+                'font-medium',
+                activeChannel === 'facebook' ? '' : 'border-gray-300 hover:bg-gray-50'
+              )}
             >
               <Facebook className="h-4 w-4 mr-2" />
               Facebook
             </Button>
           </div>
 
-            {/* Message History - Professional styling */}
-            <div className="border border-gray-200 rounded-xl p-6 bg-gray-50/50 min-h-[300px] max-h-[500px] overflow-y-auto mb-6">
+            {/* Message History - Enhanced styling */}
+            <div className="border border-gray-200 rounded-xl p-8 bg-gray-50/50 min-h-[350px] max-h-[550px] overflow-y-auto mb-8">
             {loadingMessages ? (
-              <div className="text-center py-8 text-gray-500">
-                <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                <p className="text-sm">Loading messages...</p>
+              <div className="text-center py-12 text-gray-500">
+                <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin text-gray-400" />
+                <p className="text-sm font-medium">Loading messages...</p>
               </div>
             ) : messages.length === 0 ? (
-              <div className="text-center py-12 text-gray-500">
-                <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                <p className="text-sm">No messages yet. Start a conversation below.</p>
+              <div className="text-center py-16 text-gray-500">
+                <MessageSquare className="h-16 w-16 mx-auto mb-4 opacity-50" />
+                <p className="text-sm font-medium">No messages yet. Start a conversation below.</p>
               </div>
             ) : (
-              <div className="space-y-4">
+              <div className="space-y-5">
                 {messages
                   .slice()
                   .reverse()
@@ -1777,31 +1800,31 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       <div
                         key={msg.id}
                         className={cn(
-                          'flex gap-3',
+                          'flex gap-4',
                           isInbound ? 'justify-start' : 'justify-end'
                         )}
                       >
                         {isInbound && (
-                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
-                            <User className="h-4 w-4" />
+                          <div className="w-10 h-10 rounded-full bg-gray-300 flex items-center justify-center flex-shrink-0 shadow-sm">
+                            <User className="h-5 w-5 text-gray-600" />
                           </div>
                         )}
                         <div
                           className={cn(
-                            'max-w-[70%] rounded-xl p-4 shadow-sm',
+                            'max-w-[75%] rounded-xl p-5 shadow-md',
                             isInbound
                               ? 'bg-white border border-gray-200 text-gray-900'
                               : 'bg-blue-600 text-white'
                           )}
                         >
-                          <p className="text-sm whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet || '[Media message]'}</p>
-                          <p className={cn('text-xs mt-2.5', isInbound ? 'text-gray-500' : 'text-blue-100')}>
+                          <p className="text-sm font-medium whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet || '[Media message]'}</p>
+                          <p className={cn('text-xs mt-3 font-semibold', isInbound ? 'text-gray-500' : 'text-blue-100')}>
                             {formatMessageTime(msg.createdAt)}
                           </p>
                         </div>
                         {!isInbound && (
-                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
-                            <User className="h-4 w-4 text-white" />
+                          <div className="w-10 h-10 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0 shadow-sm">
+                            <User className="h-5 w-5 text-white" />
                           </div>
                         )}
                       </div>
@@ -1811,8 +1834,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             )}
           </div>
 
-            {/* Message Composer - Professional styling */}
-            <div className="border border-gray-200 rounded-xl p-6 bg-white shadow-sm">
+            {/* Message Composer - Enhanced styling */}
+            <div className="border border-gray-200 rounded-xl p-8 bg-white shadow-md">
             <MessageComposerEnhanced
               value={messageText}
               onChange={setMessageText}

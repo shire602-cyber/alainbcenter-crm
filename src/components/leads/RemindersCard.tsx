@@ -118,28 +118,27 @@ export function RemindersCard({ leadId }: RemindersCardProps) {
     .slice(0, 5)
 
   return (
-    <Card>
-      <CardHeader>
+    <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+      <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2">
-            <Clock className="h-4 w-4" />
+          <CardTitle className="text-sm font-semibold text-gray-900 flex items-center gap-2">
+            <Clock className="h-3.5 w-3.5 text-gray-500" />
             Reminders
           </CardTitle>
-          <Button onClick={() => setShowAddModal(true)} size="sm" variant="outline" className="gap-2">
+          <Button onClick={() => setShowAddModal(true)} size="sm" variant="ghost" className="h-6 w-6 p-0 text-gray-600 hover:text-gray-900">
             <Plus className="h-3.5 w-3.5" />
-            Add
           </Button>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-2 px-4 pb-4 pt-4">
         {loading ? (
-          <p className="text-sm text-muted-foreground">Loading...</p>
+          <p className="text-xs text-muted-foreground">Loading...</p>
         ) : (
           <>
             {/* Upcoming Reminders */}
             {upcomingReminders.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground">Upcoming</Label>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Upcoming</Label>
                 {upcomingReminders.map(reminder => (
                   <div
                     key={reminder.id}
@@ -175,8 +174,8 @@ export function RemindersCard({ leadId }: RemindersCardProps) {
 
             {/* Past Reminders */}
             {pastReminders.length > 0 && (
-              <div className="space-y-2">
-                <Label className="text-xs font-semibold text-muted-foreground">Sent</Label>
+              <div className="space-y-1.5">
+                <Label className="text-[10px] font-semibold text-muted-foreground uppercase">Sent</Label>
                 {pastReminders.map(reminder => (
                   <div
                     key={reminder.id}
@@ -204,9 +203,10 @@ export function RemindersCard({ leadId }: RemindersCardProps) {
             )}
 
             {upcomingReminders.length === 0 && pastReminders.length === 0 && (
-              <p className="text-sm text-muted-foreground text-center py-4">
-                No reminders scheduled
-              </p>
+              <div className="text-center py-4 text-gray-500 text-xs">
+                <Clock className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
+                <p>No reminders</p>
+              </div>
             )}
           </>
         )}
