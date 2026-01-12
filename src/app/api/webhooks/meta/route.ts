@@ -946,7 +946,7 @@ async function processWebhookPayload(payload: any) {
             // For Instagram, use robust processing pipeline that prioritizes inbox display
             if (channelLower === 'instagram') {
               console.log('🚀 [META-WEBHOOK-INSTAGRAM] Using robust processing pipeline')
-              await processInstagramMessageRobust({
+              const instagramResult = await processInstagramMessageRobust({
                 pageId: pageId!,
                 workspaceId: workspaceId ?? 1,
                 senderId: event.senderId!,
@@ -964,6 +964,46 @@ async function processWebhookPayload(payload: any) {
                   providerMediaId: attachments?.[0]?.payload?.media_id || attachments?.[0]?.payload?.id || null,
                 },
               })
+
+              // Enqueue outbound job for Instagram (similar to WhatsApp)
+              const providerMessageId = event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
+              
+              // Check if conversation is assigned to a user (skip auto-reply if assigned)
+              if (instagramResult?.conversation?.id) {
+                const conversation = await prisma.conversation.findUnique({
+                  where: { id: instagramResult.conversation?.id },
+                  select: { assignedUserId: true },
+                })
+                
+                const isAssignedToUser = conversation?.assignedUserId !== null && conversation?.assignedUserId !== undefined
+                
+                if (isAssignedToUser) {
+                  console.log(`⏭️ [META-WEBHOOK-INSTAGRAM] Skipping auto-reply - conversation assigned to user ${conversation.assignedUserId}`)
+                } else {
+                  // Enqueue outbound job
+                  const { enqueueOutboundJob } = await import('@/lib/jobs/enqueueOutbound')
+                  
+                  try {
+                    const enqueueResult = await enqueueOutboundJob({
+                      conversationId: instagramResult.conversation.id,
+                      inboundMessageId: instagramResult.message.id,
+                      inboundProviderMessageId: providerMessageId,
+                      channel: 'instagram',
+                    })
+                    
+                    console.log(`✅ [META-WEBHOOK-INSTAGRAM] Job enqueued jobId=${enqueueResult.jobId} wasDuplicate=${enqueueResult.wasDuplicate}`)
+                    
+                    if (enqueueResult.wasDuplicate) {
+                      console.log(`⚠️ [META-WEBHOOK-INSTAGRAM] Duplicate job blocked inboundProviderMessageId=${providerMessageId}`)
+                    } else {
+                      console.log(`✅ [META-WEBHOOK-INSTAGRAM] Job enqueued, will be processed by cron jobId=${enqueueResult.jobId}`)
+                    }
+                  } catch (enqueueError: any) {
+                    console.error(`❌ [META-WEBHOOK-INSTAGRAM] Failed to enqueue job:`, enqueueError.message)
+                    // Don't fail webhook - job can be retried later
+                  }
+                }
+              }
             } else {
               // For Facebook, use standard processing
           await processInboundMessage({
@@ -1217,7 +1257,7 @@ async function processInstagramMessageRobust(data: {
     })
 
     // Fetch full contact details
-    const contact = await prisma.contact.findUnique({
+    let contact = await prisma.contact.findUnique({
       where: { id: contactResult.id },
       select: {
         id: true,
@@ -1230,6 +1270,29 @@ async function processInstagramMessageRobust(data: {
 
     if (!contact) {
       throw new Error(`Failed to fetch contact after creation: ${contactResult.id}`)
+    }
+
+    // Update contact with Instagram profile name if available (ensures profile name is stored)
+    if (instagramProfile && (instagramProfile.name || instagramProfile.username)) {
+      const profileName = instagramProfile.name || instagramProfile.username || 'Instagram User'
+      if (contact.fullName !== profileName) {
+        contact = await prisma.contact.update({
+          where: { id: contact.id },
+          data: { fullName: profileName },
+          select: {
+            id: true,
+            phone: true,
+            fullName: true,
+            phoneNormalized: true,
+            waId: true,
+          },
+        })
+        console.log('✅ [INSTAGRAM-ROBUST] Contact fullName updated with profile name', {
+          contactId: contact.id,
+          oldName: contact.fullName,
+          newName: profileName,
+        })
+      }
     }
 
     console.log('✅ [INSTAGRAM-ROBUST] Contact upserted', {

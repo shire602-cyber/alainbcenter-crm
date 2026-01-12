@@ -735,10 +735,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       <MainLayout>
         <div className="p-6 space-y-4">
           <Skeleton className="h-16 w-full" />
-          <div className="grid grid-cols-12 gap-4">
-            <div className="col-span-3"><Skeleton className="h-96" /></div>
-            <div className="col-span-6"><Skeleton className="h-96" /></div>
-            <div className="col-span-3"><Skeleton className="h-96" /></div>
+          <div className="grid grid-cols-12 gap-8">
+            <div className="col-span-8"><Skeleton className="h-96" /></div>
+            <div className="col-span-4"><Skeleton className="h-96" /></div>
           </div>
         </div>
       </MainLayout>
@@ -811,10 +810,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
   return (
     <MainLayout>
-      <div className="flex flex-col h-[calc(100vh-4rem)]">
+      <div className="flex flex-col min-h-screen">
         {/* Sticky Header Bar */}
-        <div className="sticky top-0 z-30 glass-premium border-b shadow-conversation">
-          <div className="px-6 py-4">
+        <div className="sticky top-0 z-30 bg-white border-b shadow-sm">
+          <div className="px-8 py-5">
             <div className="flex items-center justify-between gap-6">
               {/* Left: Breadcrumb + Lead Info */}
               <div className="flex items-center gap-6 flex-1 min-w-0">
@@ -901,19 +900,76 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           </div>
         </div>
 
-        {/* Main 3-Column Layout */}
-        <div className="flex-1 overflow-hidden grid grid-cols-12 gap-6 p-6 relative min-h-0">
-          {/* LEFT COLUMN: Lead Snapshot */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
+        {/* Main 2-Column Layout (Odoo-style) */}
+        <div className="flex-1 overflow-y-auto grid grid-cols-12 gap-8 p-8 relative">
+          {/* LEFT COLUMN: Main Content (2/3 width) */}
+          <div className="col-span-12 lg:col-span-8 flex flex-col gap-6 overflow-y-auto">
+            {/* Pipeline Card - Moved to top of main content */}
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-4 pt-5 px-6 border-b">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Pipeline
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-6 pb-6 pt-5">
+                <div className="pipeline-highlight">
+                  <PipelineProgress
+                    currentStage={lead.stage || lead.pipelineStage || 'NEW'}
+                    onStageClick={handleStageChange}
+                  />
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Internal Notes Section */}
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-4 pt-5 px-6 border-b">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
+                  <FileText className="h-4 w-4" />
+                  Internal Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-6 pb-6 pt-5">
+                <div className="space-y-3">
+                  {lead.communicationLogs
+                    ?.filter((log: any) => log.channel === 'internal')
+                    .map((log: any) => (
+                      <div key={log.id} className="border rounded-lg p-4">
+                        <p className="text-sm">{log.message || log.messageSnippet}</p>
+                        <p className="text-xs text-muted-foreground mt-2">
+                          {formatMessageTime(log.createdAt)}
+                        </p>
+                      </div>
+                    ))}
+                  {(!lead.communicationLogs || lead.communicationLogs.filter((log: any) => log.channel === 'internal').length === 0) && (
+                    <p className="text-sm text-muted-foreground text-center py-4">No internal notes yet</p>
+                  )}
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Extracted Data Panel - Keep for auto-detection */}
+            <ExtractedDataPanel
+              dataJson={lead.dataJson}
+              serviceTypeEnum={lead.serviceTypeEnum}
+              nationality={lead.contact?.nationality}
+              businessActivityRaw={lead.businessActivityRaw || undefined}
+              expiryDate={lead.expiryDate || undefined}
+            />
+          </div>
+
+          {/* RIGHT COLUMN: Sidebar (1/3 width) */}
+          <div className="col-span-12 lg:col-span-4 flex flex-col gap-6 overflow-y-auto">
             {/* Contact Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover-lift card-ultra-premium">
-              <CardHeader className="pb-3 pt-4 px-5 border-b border-border/50">
-                <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-3 pt-5 px-6 border-b">
+                <CardTitle className="text-base font-semibold flex items-center gap-2">
                   <User className="h-4 w-4" />
                   Contact
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-4 px-5 pb-5 pt-4">
+              <CardContent className="space-y-4 px-6 pb-6 pt-5">
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">Name</Label>
                   <InlineEditableField
@@ -971,13 +1027,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
                 <div>
                   <Label className="text-sm font-medium text-muted-foreground mb-2 block">Service Needed</Label>
-                  {/* Show requestedServiceRaw prominently if serviceTypeId not set */}
                   {lead.requestedServiceRaw && !lead.serviceTypeId && (
-                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200/60 rounded">
-                      <p className="text-sm font-bold text-blue-900 tracking-tight">
+                    <div className="mb-2 p-2 bg-blue-50 border border-blue-200 rounded">
+                      <p className="text-sm font-bold text-blue-900">
                         {lead.requestedServiceRaw}
                       </p>
-                      <p className="text-xs text-blue-700 mt-1 font-medium">
+                      <p className="text-xs text-blue-700 mt-1">
                         Detected from messages - select service type below to confirm
                       </p>
                     </div>
@@ -991,26 +1046,26 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       }
                       return ''
                     })()}
-                        onChange={(e) => {
-                          const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
-                          handleSaveField('serviceTypeId', serviceTypeId)
-                        }}
-                        className="text-base"
-                      >
-                        <option value="">Select service...</option>
-                        {serviceTypes.map((st) => (
-                          <option key={st.id} value={st.id.toString()}>
-                            {st.name}
-                          </option>
-                        ))}
-                      </Select>
+                    onChange={(e) => {
+                      const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
+                      handleSaveField('serviceTypeId', serviceTypeId)
+                    }}
+                    className="text-base"
+                  >
+                    <option value="">Select service...</option>
+                    {serviceTypes.map((st) => (
+                      <option key={st.id} value={st.id.toString()}>
+                        {st.name}
+                      </option>
+                    ))}
+                  </Select>
                   {lead.serviceTypeEnum && !lead.serviceTypeId && (
-                    <p className="text-xs text-slate-600 mt-1 font-medium">
+                    <p className="text-xs text-slate-600 mt-1">
                       Detected: {lead.serviceTypeEnum.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
                     </p>
                   )}
                   {lead.requestedServiceRaw && (
-                    <p className="text-xs text-blue-700 mt-1 italic font-medium">
+                    <p className="text-xs text-blue-700 mt-1 italic">
                       Customer mentioned: "{lead.requestedServiceRaw}"
                     </p>
                   )}
@@ -1018,556 +1073,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Pipeline Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover-lift card-ultra-premium">
-              <CardHeader className="pb-4 pt-4 px-5 border-b border-border/50">
-                <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
-                  <Target className="h-4 w-4" />
-                  Pipeline
-                </CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-6 pt-4">
-                <div className="pipeline-highlight">
-                  <PipelineProgress
-                    currentStage={lead.stage || lead.pipelineStage || 'NEW'}
-                    onStageClick={handleStageChange}
-                  />
-                </div>
-              </CardContent>
-            </Card>
-
-            {/* AI Insight Card */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot border-2 border-transparent hover:border-primary/10 transition-all duration-300 hover-lift card-ultra-premium">
-              <CardHeader className="pb-3 border-b border-border/50">
-                <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
-                    <Sparkles className="h-4 w-4" />
-                    AI Insight
-                  </CardTitle>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={async () => {
-                      setGeneratingAI('refresh')
-                      try {
-                        const res = await fetch(`/api/leads/${leadId}/ai-refresh`, {
-                          method: 'POST',
-                        })
-                        if (res.ok) {
-                          showToast('AI insight refreshed', 'success')
-                          await loadLead()
-                        }
-                      } catch (err) {
-                        showToast('Failed to refresh AI insight', 'error')
-                      } finally {
-                        setGeneratingAI(null)
-                      }
-                    }}
-                    disabled={generatingAI === 'refresh'}
-                  >
-                    {generatingAI === 'refresh' ? (
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4" />
-                    )}
-                  </Button>
-                </div>
-              </CardHeader>
-              <CardContent className="space-y-4 px-5 pb-6">
-                <div className="flex justify-center py-2">
-                  <AIScoreCircleAnimated 
-                    score={lead.aiScore} 
-                    size={80}
-                    animateOnUpdate={true}
-                  />
-                </div>
-                {lead.aiNotes ? (
-                  <div>
-                    <Label className="text-sm font-medium text-muted-foreground mb-2 block">Notes</Label>
-                    <p className="text-sm text-muted-foreground leading-relaxed">{lead.aiNotes}</p>
-                  </div>
-                ) : (
-                  <div className="text-center py-4">
-                    <p className="text-sm text-muted-foreground">No AI insights yet</p>
-                    <p className="text-xs text-muted-foreground mt-1">AI will analyze this lead as more data is collected</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-
-            {/* Lead Summary - Phase 5 Feature */}
-            <LeadSummary leadId={leadId} lead={lead} />
-
-            {/* Forecast Card - Deal Probability & Revenue */}
-            <ForecastCard
-              leadId={leadId}
-              dealProbability={lead.dealProbability}
-              expectedRevenueAED={lead.expectedRevenueAED}
-              forecastReasonJson={lead.forecastReasonJson}
-            />
-
-            {/* Extracted Data Panel - Phase 5 Feature */}
-                <ExtractedDataPanel
-                  dataJson={lead.dataJson}
-                  serviceTypeEnum={lead.serviceTypeEnum}
-                  nationality={lead.contact?.nationality}
-                  businessActivityRaw={lead.businessActivityRaw || undefined}
-                  expiryDate={lead.expiryDate || undefined}
-                />
-          </div>
-
-          {/* MIDDLE COLUMN: Conversation + Activity */}
-          <div className="col-span-12 lg:col-span-6 flex flex-col gap-4 overflow-hidden">
-            {/* Conversation Tabs */}
-            <Card className="rounded-2xl glass-medium shadow-conversation flex-[2] flex flex-col overflow-hidden min-h-0">
-              <CardHeader className="pb-3 flex-shrink-0 p-0">
-                <div className="sticky top-16 z-20 glass-premium border-b px-4 py-2">
-                  <div className="flex items-center justify-between mb-2">
-                  <Tabs value={activeChannel} onValueChange={setActiveChannel}>
-                    <TabsList>
-                    <TabsTrigger value="whatsapp">
-                      <MessageSquare className="h-4 w-4 mr-2" />
-                      WhatsApp
-                    </TabsTrigger>
-                    <TabsTrigger value="email">
-                      <Mail className="h-4 w-4 mr-2" />
-                      Email
-                    </TabsTrigger>
-                    <TabsTrigger value="instagram">
-                      <Instagram className="h-4 w-4 mr-2" />
-                      Instagram
-                    </TabsTrigger>
-                    <TabsTrigger value="facebook">
-                      <Facebook className="h-4 w-4 mr-2" />
-                      Facebook
-                    </TabsTrigger>
-                    <TabsTrigger value="notes">
-                      <FileText className="h-4 w-4 mr-2" />
-                      Notes
-                    </TabsTrigger>
-                  </TabsList>
-                  </Tabs>
-                    {currentUser?.role === 'ADMIN' && (
-                      <div className="flex items-center gap-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="gap-1.5 text-xs text-orange-600 hover:text-orange-700 hover:bg-orange-50 font-semibold"
-                          onClick={async () => {
-                            if (!confirm('⚠️ Wipe all test data for this lead?\n\nThis will:\n- Delete all messages\n- Delete all OutboundJobs\n- Clear conversation state (AI memory)\n- Delete all logs\n\nThis action cannot be undone. Use for testing AI behavior from scratch.')) {
-                              return
-                            }
-                            try {
-                              setDeletingChat(true)
-                              const res = await fetch(`/api/admin/data/wipe-test-data?leadId=${leadId}`, {
-                                method: 'DELETE',
-                                credentials: 'include',
-                              })
-                              const data = await res.json()
-                              if (data.ok) {
-                                showToast(`Wiped test data: ${data.deletionLog?.length || 0} operations completed`, 'success')
-                                await loadLead()
-                                await loadMessages()
-                                setConversationId(null) // Reset conversation ID since it may have been deleted
-                              } else {
-                                showToast(data.error || 'Failed to wipe test data', 'error')
-                              }
-                            } catch (err: any) {
-                              showToast('Failed to wipe test data', 'error')
-                            } finally {
-                              setDeletingChat(false)
-                            }
-                          }}
-                          disabled={deletingChat}
-                        >
-                          {deletingChat ? (
-                            <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                          ) : (
-                            <Trash2 className="h-3.5 w-3.5" />
-                          )}
-                          Wipe Test Data
-                        </Button>
-                        {conversationId && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="gap-1.5 text-xs text-red-600 hover:text-red-700 hover:bg-red-50 font-semibold"
-                            onClick={async () => {
-                              if (!confirm('⚠️ Delete this conversation and all messages? This action cannot be undone. This is for testing purposes only.')) {
-                                return
-                              }
-                              try {
-                                setDeletingChat(true)
-                                const res = await fetch(`/api/admin/conversations/${conversationId}/delete`, {
-                                  method: 'DELETE',
-                                  credentials: 'include',
-                                })
-                                const data = await res.json()
-                                if (data.ok) {
-                                  showToast(`Deleted conversation and ${data.deletedMessages} messages`, 'success')
-                                  setConversationId(null)
-                                  setMessages([])
-                                  await loadLead()
-                                  await loadMessages()
-                                } else {
-                                  showToast(data.error || 'Failed to delete conversation', 'error')
-                                }
-                              } catch (err: any) {
-                                showToast('Failed to delete conversation', 'error')
-                              } finally {
-                                setDeletingChat(false)
-                              }
-                            }}
-                            disabled={deletingChat}
-                          >
-                            {deletingChat ? (
-                              <Loader2 className="h-3.5 w-3.5 animate-spin" />
-                            ) : (
-                              <Trash2 className="h-3.5 w-3.5" />
-                            )}
-                            Delete Chat
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </div>
-                </div>
-              </CardHeader>
-
-              <CardContent className="flex-1 flex flex-col overflow-hidden p-0 min-h-0">
-                <Tabs value={activeChannel} onValueChange={setActiveChannel} className="flex-1 flex flex-col overflow-hidden min-h-0">
-                  {/* WhatsApp Tab */}
-                  <TabsContent value="whatsapp" className="flex-1 flex flex-col overflow-hidden m-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 min-h-0" style={{ maxHeight: 'calc(100vh - 400px)' }} ref={(el) => {
-                      // Auto-scroll to bottom
-                      if (el && messages.length > 0) {
-                        setTimeout(() => {
-                          el.scrollTop = el.scrollHeight
-                        }, 100)
-                      }
-                    }}>
-                      {loadingMessages ? (
-                        <div className="text-center py-4 text-muted-foreground">
-                          <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                          <p className="text-xs">Loading messages...</p>
-                        </div>
-                      ) : messages.length === 0 ? (
-                        <div className="text-center py-4 text-muted-foreground">
-                          <MessageSquare className="h-8 w-8 mx-auto mb-1 opacity-50" />
-                          <p className="text-xs">No messages yet. Start a conversation below.</p>
-                        </div>
-                      ) : (
-                        messages
-                          .slice()
-                          .reverse()
-                          .map((msg: any, idx: number) => {
-                            const isInbound = msg.direction === 'INBOUND' || msg.direction === 'IN' || msg.direction === 'inbound'
-                            const isNewMessage = idx === messages.length - 1 && !isInbound && sending
-                            return (
-                              <div
-                                key={msg.id}
-                                className={cn(
-                                  'flex gap-3 animate-slide-in',
-                                  isInbound ? 'justify-start' : 'justify-end',
-                                  isNewMessage && 'animate-message-send'
-                                )}
-                                style={{ animationDelay: `${idx * 0.05}s` }}
-                              >
-                                {isInbound && (
-                                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                                    <User className="h-3 w-3" />
-                                  </div>
-                                )}
-                                                                <div
-                                  className={cn(
-                                    'max-w-[75%] animate-fade-in-up',
-                                    isInbound
-                                      ? 'message-bubble-inbound rounded-tl-none'
-                                      : 'message-bubble-outbound rounded-tr-none'
-                                  )}
-                                  style={{ animationDelay: `${idx * 30}ms` }}
-                                >
-                                  <p className="text-base whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet}</p>
-                                  <div className="flex items-center justify-between mt-3">
-                                    <p className={cn('text-xs', isInbound ? 'text-muted-foreground' : 'text-primary-foreground/70')}>
-                                      {formatMessageTime(msg.createdAt)}
-                                    </p>
-                                    {!isInbound && msg.status && (
-                                      <div className="flex items-center gap-1 ml-2">
-                                                                                {msg.status === 'READ' ? (
-                                          <span title="Read"><CheckCheck className="h-3 w-3 text-blue-500" /></span>
-                                        ) : msg.status === 'DELIVERED' ? (
-                                          <span title="Delivered"><CheckCheck className="h-3 w-3 text-gray-400" /></span>
-                                        ) : msg.status === 'SENT' ? (
-                                          <span title="Sent"><CheckCircle2 className="h-3 w-3 text-gray-400" /></span>
-                                        ) : msg.status === 'FAILED' ? (
-                                          <span title="Failed"><XCircle className="h-3 w-3 text-red-500" /></span>
-                                        ) : (
-                                          <span title="Pending"><Clock className="h-3 w-3 text-gray-400" /></span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                {!isInbound && (
-                                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                                    <User className="h-3 w-3 text-primary-foreground" />
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })
-                      )}
-                    </div>
-
-                    {/* Message Composer */}
-                    <div className="border-t p-4 bg-card/50 flex-shrink-0">
-                      <MessageComposerEnhanced
-                        value={messageText}
-                        onChange={setMessageText}
-                        onSend={handleSendMessage}
-                        sending={sending}
-                        onAIDraft={handleGenerateAIDraft}
-                        generatingAI={generatingAI}
-                        leadName={lead.contact?.fullName}
-                        expiryDate={lead.expiryItems?.[0]?.expiryDate}
-                        serviceType={lead.serviceType?.name}
-                      />
-                    </div>
-                  </TabsContent>
-
-                  {/* Email Tab */}
-                  <TabsContent value="email" className="flex-1 flex flex-col overflow-hidden m-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 min-h-0" style={{ maxHeight: 'calc(100vh - 400px)' }}>
-                      {loadingMessages ? (
-                        <div className="text-center py-4 text-muted-foreground">
-                          <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                          <p className="text-xs">Loading messages...</p>
-                        </div>
-                      ) : messages.filter((m: any) => m.channel === 'email').length === 0 ? (
-                        <div className="text-center py-12 text-muted-foreground">
-                          <Mail className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                          <p className="text-sm">No email messages yet. Start a conversation below.</p>
-                        </div>
-                      ) : (
-                        messages
-                          .filter((m: any) => m.channel === 'email')
-                          .slice()
-                          .reverse()
-                          .map((msg: any, idx: number) => {
-                            const isInbound = msg.direction === 'INBOUND' || msg.direction === 'IN' || msg.direction === 'inbound'
-                            return (
-                              <div
-                                key={msg.id}
-                                className={cn(
-                                  'flex gap-3 animate-slide-in',
-                                  isInbound ? 'justify-start' : 'justify-end'
-                                )}
-                              >
-                                {isInbound && (
-                                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                                    <User className="h-3 w-3" />
-                                  </div>
-                                )}
-                                <div
-                                  className={cn(
-                                    'max-w-[70%] animate-fade-in-up',
-                                    isInbound
-                                      ? 'message-bubble-inbound rounded-tl-none'
-                                      : 'message-bubble-outbound rounded-tr-none'
-                                  )}
-                                  style={{ animationDelay: `${idx * 30}ms` }}
-                                >
-                                  <p className="text-sm whitespace-pre-wrap break-words">{msg.body}</p>
-                                  <div className="flex items-center justify-between mt-2">
-                                    <p className={cn('text-xs', isInbound ? 'text-muted-foreground' : 'text-primary-foreground/70')}>
-                                      {formatMessageTime(msg.createdAt)}
-                                    </p>
-                                    {!isInbound && msg.status && (
-                                      <div className="flex items-center gap-1 ml-2">
-                                        {msg.status === 'READ' ? (
-                                          <span title="Read"><CheckCheck className="h-3 w-3 text-blue-500" /></span>
-                                        ) : msg.status === 'DELIVERED' ? (
-                                          <span title="Delivered"><CheckCheck className="h-3 w-3 text-gray-400" /></span>
-                                        ) : msg.status === 'SENT' ? (
-                                          <span title="Sent"><CheckCircle2 className="h-3 w-3 text-gray-400" /></span>
-                                        ) : msg.status === 'FAILED' ? (
-                                          <span title="Failed"><XCircle className="h-3 w-3 text-red-500" /></span>
-                                        ) : (
-                                          <span title="Pending"><Clock className="h-3 w-3 text-gray-400" /></span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                {!isInbound && (
-                                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                                    <User className="h-3 w-3 text-primary-foreground" />
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })
-                      )}
-                    </div>
-                    {/* Email Composer */}
-                    <div className="border-t p-4 bg-card/50 flex-shrink-0">
-                      <MessageComposerEnhanced
-                        value={messageText}
-                        onChange={setMessageText}
-                        onSend={handleSendMessage}
-                        sending={sending}
-                        onAIDraft={handleGenerateAIDraft}
-                        generatingAI={generatingAI}
-                        leadName={lead.contact?.fullName}
-                        expiryDate={lead.expiryItems?.[0]?.expiryDate}
-                        serviceType={lead.serviceType?.name}
-                      />
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="instagram" className="flex-1 flex flex-col overflow-hidden m-0 min-h-0">
-                    <div className="flex-1 overflow-y-auto px-6 py-6 space-y-4 min-h-0" style={{ maxHeight: 'calc(100vh - 400px)' }} ref={(el) => {
-                      // Auto-scroll to bottom
-                      if (el && messages.length > 0) {
-                        setTimeout(() => {
-                          el.scrollTop = el.scrollHeight
-                        }, 100)
-                      }
-                    }}>
-                      {loadingMessages ? (
-                        <div className="text-center py-4 text-muted-foreground">
-                          <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
-                          <p className="text-xs">Loading messages...</p>
-                        </div>
-                      ) : messages.length === 0 ? (
-                        <div className="text-center py-4 text-muted-foreground">
-                          <Instagram className="h-8 w-8 mx-auto mb-1 opacity-50" />
-                          <p className="text-xs">No Instagram messages yet. Start a conversation below.</p>
-                        </div>
-                      ) : (
-                        messages
-                          .slice()
-                          .reverse()
-                          .map((msg: any, idx: number) => {
-                            const isInbound = msg.direction === 'INBOUND' || msg.direction === 'IN' || msg.direction === 'inbound'
-                            const isNewMessage = idx === messages.length - 1 && !isInbound && sending
-                            return (
-                              <div
-                                key={msg.id}
-                                className={cn(
-                                  'flex gap-3 animate-slide-in',
-                                  isInbound ? 'justify-start' : 'justify-end',
-                                  isNewMessage && 'animate-message-send'
-                                )}
-                                style={{ animationDelay: `${idx * 0.05}s` }}
-                              >
-                                {isInbound && (
-                                  <div className="w-6 h-6 rounded-full bg-muted flex items-center justify-center flex-shrink-0">
-                                    <User className="h-3 w-3" />
-                                  </div>
-                                )}
-                                <div
-                                  className={cn(
-                                    'max-w-[75%] animate-fade-in-up',
-                                    isInbound
-                                      ? 'message-bubble-inbound rounded-tl-none'
-                                      : 'message-bubble-outbound rounded-tr-none'
-                                  )}
-                                  style={{ animationDelay: `${idx * 30}ms` }}
-                                >
-                                  <p className="text-base whitespace-pre-wrap break-words leading-relaxed">{msg.body || msg.messageSnippet || '[Media message]'}</p>
-                                  <div className="flex items-center justify-between mt-3">
-                                    <p className={cn('text-xs', isInbound ? 'text-muted-foreground' : 'text-primary-foreground/70')}>
-                                      {formatMessageTime(msg.createdAt)}
-                                    </p>
-                                    {!isInbound && msg.status && (
-                                      <div className="flex items-center gap-1 ml-2">
-                                        {msg.status === 'READ' ? (
-                                          <span title="Read"><CheckCheck className="h-3 w-3 text-blue-500" /></span>
-                                        ) : msg.status === 'DELIVERED' ? (
-                                          <span title="Delivered"><CheckCheck className="h-3 w-3 text-gray-400" /></span>
-                                        ) : msg.status === 'SENT' ? (
-                                          <span title="Sent"><CheckCircle2 className="h-3 w-3 text-gray-400" /></span>
-                                        ) : msg.status === 'FAILED' ? (
-                                          <span title="Failed"><XCircle className="h-3 w-3 text-red-500" /></span>
-                                        ) : (
-                                          <span title="Pending"><Clock className="h-3 w-3 text-gray-400" /></span>
-                                        )}
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                                {!isInbound && (
-                                  <div className="w-6 h-6 rounded-full bg-primary flex items-center justify-center flex-shrink-0">
-                                    <User className="h-3 w-3 text-primary-foreground" />
-                                  </div>
-                                )}
-                              </div>
-                            )
-                          })
-                      )}
-                    </div>
-
-                    {/* Message Composer */}
-                    <div className="border-t p-4 bg-card/50 flex-shrink-0">
-                      <MessageComposerEnhanced
-                        value={messageText}
-                        onChange={setMessageText}
-                        onSend={handleSendMessage}
-                        sending={sending}
-                        onAIDraft={handleGenerateAIDraft}
-                        generatingAI={generatingAI}
-                        leadName={lead.contact?.fullName}
-                        expiryDate={lead.expiryItems?.[0]?.expiryDate}
-                        serviceType={lead.serviceType?.name}
-                      />
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="facebook" className="flex-1 flex items-center justify-center p-4">
-                    <div className="text-center text-muted-foreground">
-                      <Facebook className="h-8 w-8 mx-auto mb-1 opacity-50" />
-                      <p className="text-xs">Facebook integration coming soon</p>
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="notes" className="flex-1 px-5 py-4">
-                    <div className="space-y-3">
-                      {lead.communicationLogs
-                        ?.filter((log: any) => log.channel === 'internal')
-                        .map((log: any) => (
-                          <div key={log.id} className="border rounded-lg p-3">
-                            <p className="text-sm">{log.message || log.messageSnippet}</p>
-                            <p className="text-xs text-muted-foreground mt-2">
-                              {formatMessageTime(log.createdAt)}
-                            </p>
-                          </div>
-                        ))}
-                    </div>
-                  </TabsContent>
-                </Tabs>
-              </CardContent>
-            </Card>
-
-            {/* Activity Timeline */}
-            <Card className="rounded-2xl glass-soft shadow-snapshot flex-1 flex flex-col overflow-hidden min-h-0">
-              <CardHeader className="pb-4 pt-4 px-5 flex-shrink-0">
-                <CardTitle className="text-base font-semibold text-section-header">Activity Timeline</CardTitle>
-              </CardHeader>
-              <CardContent className="px-5 pb-6 flex-1 overflow-y-auto min-h-0">
-                <div className="space-y-3">
-                  <ActivityTimeline activities={activities} />
-                </div>
-              </CardContent>
-            </Card>
-          </div>
-
-          {/* RIGHT COLUMN: Expiry, Tasks, Docs, AI */}
-          <div className="col-span-12 lg:col-span-3 flex flex-col gap-4 overflow-y-auto">
             {/* Test Tools (Admin Only) */}
             {currentUser?.role === 'ADMIN' && (
-              <Card className="rounded-2xl glass-soft shadow-sidebar border-orange-200/60">
+              <Card className="rounded-lg border shadow-sm border-orange-200">
                 <CardHeader className="pb-3 pt-4 px-5">
                   <CardTitle className="text-base font-bold text-section-header tracking-tight">Test Tools</CardTitle>
                 </CardHeader>
@@ -1613,18 +1121,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 </CardContent>
               </Card>
             )}
-            {/* Debug Panel (Admin Only) */}
-            {currentUser?.role === 'ADMIN' && (
-              <ConversationDebugPanel leadId={leadId} isAdmin={true} />
-            )}
-            {/* Next Best Action - Phase 5 Feature */}
-            <NextBestAction leadId={leadId} />
 
             {/* Expiry Tracker */}
-            <Card className="rounded-2xl glass-soft shadow-sidebar">
-              <CardHeader className="pb-4 pt-4 px-5 sticky top-16 bg-card/95 backdrop-blur z-10">
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-4 pt-5 px-6 border-b">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold text-section-header">Expiry Tracker</CardTitle>
+                  <CardTitle className="text-base font-semibold">Expiry Tracker</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1634,7 +1136,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3 px-5 pb-5">
+              <CardContent className="space-y-3 px-6 pb-6 pt-5">
                 {/* Unverified Expiry Hints */}
                 {lead.dataJson && (() => {
                   try {
@@ -1680,10 +1182,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     const isWarning = daysLeft > 7 && daysLeft <= 30
 
                     return (
-                      <div
+                        <div
                         key={expiry.id}
                         className={cn(
-                          'group p-4 rounded-2xl border-2 text-sm hover:shadow-lg transition-all cursor-pointer',
+                          'group p-4 rounded-lg border text-sm hover:bg-muted/50 transition-all cursor-pointer',
                           isOverdue && 'border-red-200/60 bg-red-50',
                           isUrgent && 'border-orange-200/60 bg-orange-50',
                           isWarning && 'border-amber-200/60 bg-amber-50',
@@ -1759,24 +1261,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Renewal Revenue Card */}
-            {lead.expiryItems && lead.expiryItems.length > 0 && (
-              <RenewalRevenueCard
-                leadId={leadId}
-                estimatedRenewalValue={lead.estimatedRenewalValue}
-                renewalProbability={lead.renewalProbability}
-                renewalNotes={lead.renewalNotes}
-                expiryItems={lead.expiryItems}
-                onDraftRenewalMessage={() => handleGenerateAIDraft('renewal')}
-                onRefresh={loadLead}
-              />
-            )}
 
             {/* Tasks Card */}
-            <Card className="rounded-2xl glass-soft shadow-sidebar">
-              <CardHeader className="pb-4 pt-4 px-5 sticky top-16 bg-card/95 backdrop-blur z-10">
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-4 pt-5 px-6 border-b">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-base font-semibold text-section-header">Tasks</CardTitle>
+                  <CardTitle className="text-base font-semibold">Tasks</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
@@ -1786,7 +1276,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-3 px-5 pb-5">
+              <CardContent className="space-y-3 px-6 pb-6 pt-5">
                 {lead.tasks && lead.tasks.length > 0 ? (
                   lead.tasks
                     .filter((t: any) => t.status === 'OPEN')
@@ -1838,14 +1328,14 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
             {/* Alerts/Notifications Card */}
             {lead.notifications && lead.notifications.length > 0 && (
-              <Card className="rounded-2xl glass-soft shadow-sidebar">
-                <CardHeader className="pb-4 pt-4 px-5 sticky top-16 bg-card/95 backdrop-blur z-10">
-                  <CardTitle className="text-base font-semibold text-section-header flex items-center gap-2">
+              <Card className="rounded-lg border shadow-sm">
+                <CardHeader className="pb-4 pt-5 px-6 border-b">
+                  <CardTitle className="text-base font-semibold flex items-center gap-2">
                     <AlertCircle className="h-4 w-4" />
                     Alerts
                   </CardTitle>
                 </CardHeader>
-                <CardContent className="space-y-2 px-5 pb-5">
+                <CardContent className="space-y-2 px-6 pb-6 pt-5">
                   {lead.notifications
                     .filter((n: any) => !n.isRead)
                     .slice(0, 5)
@@ -1878,27 +1368,22 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </Card>
             )}
 
-            {/* Documents Card - Enhanced with Compliance */}
-            <DocumentsCardEnhanced 
-              leadId={leadId}
-              serviceType={lead.serviceTypeEnum || lead.serviceType?.name}
-            />
-            
-            {/* Legacy Documents Card - Hidden, using enhanced version above */}
-            <Card className="hidden rounded-2xl glass-soft shadow-sidebar">
-              <CardHeader className="pb-2 pt-3 sticky top-16 bg-card/95 backdrop-blur z-10">
+            {/* Documents Card */}
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-4 pt-5 px-6 border-b">
                 <div className="flex items-center justify-between">
-                  <CardTitle className="text-sm font-semibold text-section-header">Documents</CardTitle>
+                  <CardTitle className="text-base font-semibold">Documents</CardTitle>
                   <Button
                     variant="ghost"
                     size="sm"
                     onClick={() => setShowDocumentModal(true)}
                   >
-                    <Upload className="h-4 w-4" />
+                    <Upload className="h-4 w-4 mr-2" />
+                    Upload
                   </Button>
                 </div>
               </CardHeader>
-              <CardContent className="space-y-1.5">
+              <CardContent className="space-y-1.5 px-6 pb-6 pt-5">
                 {lead.documents && lead.documents.length > 0 ? (
                   lead.documents.slice(0, 5).map((doc: any) => (
                     <div
@@ -1945,31 +1430,30 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            
             {/* Revenue Widget */}
             <RevenueWidget 
               leadId={leadId}
               expiryItems={lead.expiryItems}
               serviceType={lead.serviceType?.name}
-              />
+            />
 
-              {/* Automation Inspector */}
-              <AutomationInspector leadId={leadId} />
+            {/* Automation Inspector */}
+            <AutomationInspector leadId={leadId} />
 
-              {/* Reply Engine Debug (Admin Only) */}
-              {currentUser?.role === 'ADMIN' && (
-                <ReplyEngineDebug conversationId={conversationId} leadId={leadId} />
-              )}
-  
-              {/* AI Assistant Panel */}
-            <Card className="rounded-2xl glass-soft shadow-sidebar">
-              <CardHeader className="pb-2 pt-3">
-                <CardTitle className="text-sm font-semibold text-section-header flex items-center gap-2">
+            {/* Reply Engine Debug (Admin Only) */}
+            {currentUser?.role === 'ADMIN' && (
+              <ReplyEngineDebug conversationId={conversationId} leadId={leadId} />
+            )}
+
+            {/* AI Assistant Panel */}
+            <Card className="rounded-lg border shadow-sm">
+              <CardHeader className="pb-2 pt-5 px-6 border-b">
+                <CardTitle className="text-sm font-semibold flex items-center gap-2">
                   <Sparkles className="h-3.5 w-3.5" />
                   AI Assistant
                 </CardTitle>
               </CardHeader>
-              <CardContent className="space-y-1.5">
+              <CardContent className="space-y-1.5 px-6 pb-6 pt-5">
                 <Button
                   variant="outline"
                   size="sm"
@@ -2188,6 +1672,189 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 )}
               </CardContent>
             </Card>
+          </div>
+        </div>
+
+        {/* Bottom Communication Section (Odoo-style) */}
+        <div className="border-t bg-white pt-6 pb-6 px-8">
+          {/* Communication Action Buttons */}
+          <div className="flex items-center gap-3 mb-6">
+            <Button
+              onClick={() => {
+                setActiveChannel('whatsapp')
+                const composer = document.querySelector('textarea[placeholder*="message"]') as HTMLTextAreaElement
+                if (composer) {
+                  setTimeout(() => composer.focus(), 100)
+                }
+              }}
+              className="bg-green-600 hover:bg-green-700 text-white"
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Send message
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Add internal note functionality
+                const note = prompt('Enter internal note:')
+                if (note) {
+                  // Would need API endpoint for internal notes
+                  showToast('Internal note feature coming soon', 'info')
+                }
+              }}
+            >
+              <FileText className="h-4 w-4 mr-2" />
+              Log note
+            </Button>
+            {lead.contact?.phone && (
+              <Button
+                variant="outline"
+                onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
+              >
+                <MessageSquare className="h-4 w-4 mr-2" />
+                WhatsApp
+              </Button>
+            )}
+            <Button
+              variant="outline"
+              onClick={() => {
+                // Scroll to activity timeline
+                const timeline = document.querySelector('[data-activity-timeline]')
+                if (timeline) {
+                  timeline.scrollIntoView({ behavior: 'smooth', block: 'start' })
+                }
+              }}
+            >
+              <Clock className="h-4 w-4 mr-2" />
+              Activities
+            </Button>
+          </div>
+
+          {/* Channel Selector */}
+          <div className="mb-6 flex items-center gap-2 border-b pb-3">
+            <Button
+              variant={activeChannel === 'whatsapp' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveChannel('whatsapp')}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              WhatsApp
+            </Button>
+            <Button
+              variant={activeChannel === 'email' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveChannel('email')}
+            >
+              <Mail className="h-4 w-4 mr-2" />
+              Email
+            </Button>
+            <Button
+              variant={activeChannel === 'instagram' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveChannel('instagram')}
+            >
+              <Instagram className="h-4 w-4 mr-2" />
+              Instagram
+            </Button>
+            <Button
+              variant={activeChannel === 'facebook' ? 'default' : 'ghost'}
+              size="sm"
+              onClick={() => setActiveChannel('facebook')}
+            >
+              <Facebook className="h-4 w-4 mr-2" />
+              Facebook
+            </Button>
+          </div>
+
+          {/* Message History */}
+          <div className="border rounded-lg p-6 bg-gray-50 min-h-[300px] max-h-[500px] overflow-y-auto mb-6" data-activity-timeline>
+            {loadingMessages ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Loader2 className="h-6 w-6 mx-auto mb-2 animate-spin" />
+                <p className="text-sm">Loading messages...</p>
+              </div>
+            ) : messages.length === 0 ? (
+              <div className="text-center py-12 text-muted-foreground">
+                <MessageSquare className="h-12 w-12 mx-auto mb-3 opacity-50" />
+                <p className="text-sm">No messages yet. Start a conversation below.</p>
+              </div>
+            ) : (
+              <div className="space-y-4">
+                {messages
+                  .slice()
+                  .reverse()
+                  .map((msg: any, idx: number) => {
+                    const isInbound = msg.direction === 'INBOUND' || msg.direction === 'IN' || msg.direction === 'inbound'
+                    const channelMap: Record<string, string> = {
+                      whatsapp: 'WHATSAPP',
+                      email: 'EMAIL',
+                      instagram: 'INSTAGRAM',
+                      facebook: 'FACEBOOK',
+                    }
+                    const msgChannel = msg.channel?.toUpperCase() || 'WHATSAPP'
+                    const activeChannelUpper = channelMap[activeChannel] || 'WHATSAPP'
+                    const matchesChannel = msgChannel === activeChannelUpper || (activeChannel === 'whatsapp' && !msg.channel)
+                    if (!matchesChannel) return null
+                    
+                    return (
+                      <div
+                        key={msg.id}
+                        className={cn(
+                          'flex gap-3',
+                          isInbound ? 'justify-start' : 'justify-end'
+                        )}
+                      >
+                        {isInbound && (
+                          <div className="w-8 h-8 rounded-full bg-gray-200 flex items-center justify-center flex-shrink-0">
+                            <User className="h-4 w-4" />
+                          </div>
+                        )}
+                        <div
+                          className={cn(
+                            'max-w-[70%] rounded-lg p-4',
+                            isInbound
+                              ? 'bg-white border text-gray-900'
+                              : 'bg-blue-600 text-white'
+                          )}
+                        >
+                          <p className="text-sm whitespace-pre-wrap break-words">{msg.body || msg.messageSnippet || '[Media message]'}</p>
+                          <p className={cn('text-xs mt-2', isInbound ? 'text-gray-500' : 'text-blue-100')}>
+                            {formatMessageTime(msg.createdAt)}
+                          </p>
+                        </div>
+                        {!isInbound && (
+                          <div className="w-8 h-8 rounded-full bg-blue-600 flex items-center justify-center flex-shrink-0">
+                            <User className="h-4 w-4 text-white" />
+                          </div>
+                        )}
+                      </div>
+                    )
+                  })}
+              </div>
+            )}
+          </div>
+
+          {/* Activity Timeline */}
+          <div className="border rounded-lg p-6 bg-white mb-6">
+            <h3 className="text-base font-semibold mb-4">Activity Timeline</h3>
+            <div className="space-y-3">
+              <ActivityTimeline activities={activities} />
+            </div>
+          </div>
+
+          {/* Message Composer */}
+          <div className="border rounded-lg p-4 bg-white">
+            <MessageComposerEnhanced
+              value={messageText}
+              onChange={setMessageText}
+              onSend={handleSendMessage}
+              sending={sending}
+              onAIDraft={handleGenerateAIDraft}
+              generatingAI={generatingAI}
+              leadName={lead.contact?.fullName}
+              expiryDate={lead.expiryItems?.[0]?.expiryDate}
+              serviceType={lead.serviceType?.name}
+            />
           </div>
         </div>
       </div>

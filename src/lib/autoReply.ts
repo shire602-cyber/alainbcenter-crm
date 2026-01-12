@@ -1134,7 +1134,32 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
     const channelUpper = channel.toUpperCase()
     console.log(`🔍 [OUTBOUND] Checking channel support: ${channelUpper}, has phone: ${!!phoneNumber}`)
     
-    if (channelUpper === 'WHATSAPP' && phoneNumber) {
+    // For Instagram, get user ID from conversation's externalThreadId
+    let instagramUserId: string | null = null
+    if (channelUpper === 'INSTAGRAM') {
+      // Ensure conversation exists before proceeding (find or create)
+      let conversationForInstagram: { id: number; externalThreadId?: string | null } | null = conversation as any
+      if (!conversationForInstagram) {
+        conversationForInstagram = await prisma.conversation.findUnique({
+          where: {
+            contactId_channel: {
+              contactId: contactId,
+              channel: channel.toLowerCase(),
+            },
+          },
+          select: { id: true, externalThreadId: true },
+        })
+      }
+      
+      if (conversationForInstagram?.externalThreadId) {
+        instagramUserId = conversationForInstagram.externalThreadId
+      } else if (phoneNumber && phoneNumber.startsWith('ig:')) {
+        // Fallback: extract from phone (format: ig:${senderId})
+        instagramUserId = phoneNumber.substring(3)
+      }
+    }
+    
+    if ((channelUpper === 'WHATSAPP' && phoneNumber) || (channelUpper === 'INSTAGRAM' && instagramUserId)) {
       // FIX: Ensure conversation exists before proceeding (find or create)
       let conversationForOutbound = conversation
       if (!conversationForOutbound) {
@@ -1164,6 +1189,23 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         }
       }
       
+      // For Instagram, ensure we have the user ID from conversation's externalThreadId
+      if (channelUpper === 'INSTAGRAM' && !instagramUserId && conversationForOutbound) {
+        // Fetch conversation with externalThreadId if not already fetched
+        const conversationWithThreadId = conversationForOutbound as { id: number; externalThreadId?: string | null }
+        if (!conversationWithThreadId.externalThreadId) {
+          const convWithThreadId = await prisma.conversation.findUnique({
+            where: { id: conversationForOutbound.id },
+            select: { externalThreadId: true },
+          })
+          if (convWithThreadId?.externalThreadId) {
+            instagramUserId = convWithThreadId.externalThreadId
+          }
+        } else {
+          instagramUserId = conversationWithThreadId.externalThreadId || null
+        }
+      }
+      
       // FIX B: Hard idempotency check BEFORE sending (transaction-based)
       const { checkOutboundIdempotency, logOutboundMessage } = await import('./webhook/idempotency')
       
@@ -1186,7 +1228,8 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       // Check idempotency BEFORE sending
       if (effectiveTriggerId) {
-        const outboundCheck = await checkOutboundIdempotency('whatsapp', effectiveTriggerId)
+        const providerForIdempotency = channelUpper === 'INSTAGRAM' ? 'instagram' : 'whatsapp'
+        const outboundCheck = await checkOutboundIdempotency(providerForIdempotency, effectiveTriggerId)
         if (outboundCheck.alreadySent) {
           console.log(`⚠️ [OUTBOUND-IDEMPOTENCY] Already sent for inbound ${effectiveTriggerId} - skipping`)
           return { replied: false, reason: 'Outbound already sent for this inbound message' }
@@ -1211,9 +1254,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         // Fallback: Check for duplicate outbound messages within last 30 seconds
         // using conversationId + outboundTextHash
         const thirtySecondsAgo = new Date(Date.now() - 30 * 1000)
+        const providerForFallback = channelUpper === 'INSTAGRAM' ? 'instagram' : 'whatsapp'
         const recentDuplicate = await (prisma as any).outboundMessageLog.findFirst({
           where: {
-            provider: 'whatsapp',
+            provider: providerForFallback,
             conversationId: conversationForOutbound.id,
             outboundTextHash: outboundTextHash,
             createdAt: {
@@ -1239,10 +1283,11 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
         await prisma.$transaction(async (tx) => {
           // Check again inside transaction (double-check)
           if (effectiveTriggerId) {
+            const providerForTx = channelUpper === 'INSTAGRAM' ? 'instagram' : 'whatsapp'
             const existing = await (tx as any).outboundMessageLog.findUnique({
               where: {
                 provider_triggerProviderMessageId: {
-                  provider: 'whatsapp',
+                  provider: providerForTx,
                   triggerProviderMessageId: effectiveTriggerId,
                 },
               },
@@ -1253,9 +1298,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           } else {
             // BUG FIX #2: Double-check fallback idempotency inside transaction
             const thirtySecondsAgo = new Date(Date.now() - 30 * 1000)
+            const providerForTxFallback = channelUpper === 'INSTAGRAM' ? 'instagram' : 'whatsapp'
             const existing = await (tx as any).outboundMessageLog.findFirst({
               where: {
-                provider: 'whatsapp',
+                provider: providerForTxFallback,
                 conversationId: conversationForOutbound.id,
                 outboundTextHash: outboundTextHash,
                 createdAt: {
@@ -1270,9 +1316,10 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           }
           
           // Create outbound log BEFORE sending (idempotency guarantee)
+          const providerForLog = channelUpper === 'INSTAGRAM' ? 'instagram' : 'whatsapp'
           const outboundLog = await (tx as any).outboundMessageLog.create({
             data: {
-              provider: 'whatsapp',
+              provider: providerForLog,
               conversationId: conversationForOutbound.id,
               triggerProviderMessageId: effectiveTriggerId || null,
               outboundTextHash: outboundTextHash,
@@ -1297,7 +1344,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
       
       // Use centralized idempotency system (replaces manual transaction logic)
       try {
-        console.log(`📤 [SEND] Sending WhatsApp message to ${phoneNumber} (lead ${leadId})`)
+        const providerForSend = channelUpper === 'INSTAGRAM' ? 'instagram' : 'whatsapp'
+        const recipientForSend = channelUpper === 'INSTAGRAM' ? (instagramUserId || '') : phoneNumber
+        console.log(`📤 [SEND] Sending ${providerForSend} message to ${recipientForSend} (lead ${leadId})`)
         console.log(`📝 [SEND] Message text (first 100 chars): ${replyText.substring(0, 100)}...`)
         
         const { sendOutboundWithIdempotency } = await import('./outbound/sendWithIdempotency')
@@ -1305,9 +1354,9 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           conversationId: conversationForOutbound.id,
             contactId: contactId,
             leadId: leadId,
-          phone: phoneNumber,
+          phone: recipientForSend, // For Instagram, this is the Instagram user ID (or 'ig:' prefix will be removed in sendWithIdempotency)
           text: replyText,
-          provider: 'whatsapp',
+          provider: providerForSend,
           triggerProviderMessageId: effectiveTriggerId || null,
           replyType: 'answer',
           lastQuestionKey: lastQuestionKey || null,
@@ -1323,7 +1372,7 @@ export async function handleInboundAutoReply(options: AutoReplyOptions): Promise
           throw new Error(result.error || 'Failed to send message')
         }
 
-        console.log(`✅ [SEND] WhatsApp API response:`, { messageId: result.messageId })
+        console.log(`✅ [SEND] ${providerForSend} API response:`, { messageId: result.messageId })
 
         // Save outbound message (if not already created by idempotency system)
         let savedMessage: any = null
