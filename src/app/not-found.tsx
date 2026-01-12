@@ -1,9 +1,13 @@
-import Link from 'next/link'
+'use client'
+
+import { useRouter } from 'next/navigation'
 import { Button } from '@/components/ui/button'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { AlertCircle } from 'lucide-react'
 
 export default function NotFound() {
+  const router = useRouter()
+  
   return (
     <div className="flex min-h-screen items-center justify-center p-4">
       <Card className="w-full max-w-md">
@@ -17,8 +21,8 @@ export default function NotFound() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <Button asChild>
-            <Link href="/">Go home</Link>
+          <Button onClick={() => router.push('/')}>
+            Go home
           </Button>
         </CardContent>
       </Card>
