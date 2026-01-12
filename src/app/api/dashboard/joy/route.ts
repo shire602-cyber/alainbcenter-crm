@@ -22,6 +22,7 @@ export async function GET(req: NextRequest) {
     })
   } catch (error: any) {
     console.error('Failed to compute joy metrics:', error)
+    // Return 200 with safe defaults instead of 500 to prevent infinite retries
     return NextResponse.json(
       {
         ttfrMedianMinutes: null,
@@ -39,7 +40,7 @@ export async function GET(req: NextRequest) {
           waitingLong: 0,
         },
       },
-      { status: 500 }
+      { status: 200 }
     )
   }
 }

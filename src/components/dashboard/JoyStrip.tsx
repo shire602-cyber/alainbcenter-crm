@@ -81,9 +81,46 @@ export const JoyStrip = memo(function JoyStrip() {
       if (res.ok) {
         const data = await res.json()
         setMetrics(data)
+      } else {
+        // Handle non-200 status codes gracefully
+        console.error('Failed to load joy metrics: HTTP', res.status)
+        // Set safe defaults instead of crashing
+        setMetrics({
+          ttfrMedianMinutes: null,
+          tasksDone: 0,
+          leadsAdvanced: 0,
+          savedFromSla: 0,
+          revenueActions: 0,
+          streak: {
+            daysActive: 0,
+            todayDone: false,
+          },
+          friction: {
+            highTtfr: false,
+            overdueTasks: 0,
+            waitingLong: 0,
+          },
+        })
       }
     } catch (error) {
       console.error('Failed to load joy metrics:', error)
+      // Set safe defaults on network error
+      setMetrics({
+        ttfrMedianMinutes: null,
+        tasksDone: 0,
+        leadsAdvanced: 0,
+        savedFromSla: 0,
+        revenueActions: 0,
+        streak: {
+          daysActive: 0,
+          todayDone: false,
+        },
+        friction: {
+          highTtfr: false,
+          overdueTasks: 0,
+          waitingLong: 0,
+        },
+      })
     } finally {
       setLoading(false)
     }

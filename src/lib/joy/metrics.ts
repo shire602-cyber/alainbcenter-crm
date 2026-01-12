@@ -37,11 +37,12 @@ export interface FrictionAlerts {
  * TTFR = time between first inbound message and first outbound reply
  */
 async function computeTTFRMedianToday(): Promise<number | null> {
-  const todayStart = startOfDay(new Date())
-  const todayEnd = endOfDay(new Date())
+  try {
+    const todayStart = startOfDay(new Date())
+    const todayEnd = endOfDay(new Date())
 
-  // Get conversations that had first reply today
-  const conversations = await prisma.conversation.findMany({
+    // Get conversations that had first reply today
+    const conversations = await prisma.conversation.findMany({
     where: {
       lastOutboundAt: {
         gte: todayStart,
@@ -94,22 +95,27 @@ async function computeTTFRMedianToday(): Promise<number | null> {
 
   if (ttfrValues.length === 0) return null
 
-  // Calculate median
-  ttfrValues.sort((a, b) => a - b)
-  const mid = Math.floor(ttfrValues.length / 2)
-  return ttfrValues.length % 2 === 0
-    ? (ttfrValues[mid - 1] + ttfrValues[mid]) / 2
-    : ttfrValues[mid]
+    // Calculate median
+    ttfrValues.sort((a, b) => a - b)
+    const mid = Math.floor(ttfrValues.length / 2)
+    return ttfrValues.length % 2 === 0
+      ? (ttfrValues[mid - 1] + ttfrValues[mid]) / 2
+      : ttfrValues[mid]
+  } catch (error: any) {
+    console.error('Error computing TTFR median:', error)
+    return null
+  }
 }
 
 /**
  * Count tasks completed today
  */
 async function countTasksDoneToday(): Promise<number> {
-  const todayStart = startOfDay(new Date())
-  const todayEnd = endOfDay(new Date())
+  try {
+    const todayStart = startOfDay(new Date())
+    const todayEnd = endOfDay(new Date())
 
-  return prisma.task.count({
+    return await prisma.task.count({
     where: {
       status: 'COMPLETED',
       updatedAt: {
@@ -117,7 +123,11 @@ async function countTasksDoneToday(): Promise<number> {
         lte: todayEnd,
       },
     },
-  })
+    })
+  } catch (error: any) {
+    console.error('Error counting tasks done today:', error)
+    return 0
+  }
 }
 
 /**
@@ -127,12 +137,13 @@ async function countTasksDoneToday(): Promise<number> {
  * - OR a task was marked handled/completed that indicates progress
  */
 async function countLeadsAdvancedToday(): Promise<number> {
-  const todayStart = startOfDay(new Date())
-  const todayEnd = endOfDay(new Date())
+  try {
+    const todayStart = startOfDay(new Date())
+    const todayEnd = endOfDay(new Date())
 
-  // Count leads with stage changes today (if we track stage history)
-  // For now, count leads that moved to higher stages via tasks
-  const advancedLeads = await prisma.task.groupBy({
+    // Count leads with stage changes today (if we track stage history)
+    // For now, count leads that moved to higher stages via tasks
+    const advancedLeads = await prisma.task.groupBy({
     by: ['leadId'],
     where: {
       status: 'COMPLETED',
@@ -149,9 +160,13 @@ async function countLeadsAdvancedToday(): Promise<number> {
         },
       },
     },
-  })
+    })
 
-  return advancedLeads.length
+    return advancedLeads.length
+  } catch (error: any) {
+    console.error('Error counting leads advanced today:', error)
+    return 0
+  }
 }
 
 /**
@@ -161,12 +176,13 @@ async function countLeadsAdvancedToday(): Promise<number> {
  * - An outbound message was sent today before breach threshold (e.g., 24h)
  */
 async function countSavedFromSla(): Promise<number> {
-  const todayStart = startOfDay(new Date())
-  const todayEnd = endOfDay(new Date())
-  const breachThresholdHours = 24
+  try {
+    const todayStart = startOfDay(new Date())
+    const todayEnd = endOfDay(new Date())
+    const breachThresholdHours = 24
 
-  // Get conversations that had SLA risk and were replied to today
-  const savedConversations = await prisma.conversation.findMany({
+    // Get conversations that had SLA risk and were replied to today
+    const savedConversations = await prisma.conversation.findMany({
     where: {
       needsReplySince: {
         not: null,
@@ -183,12 +199,16 @@ async function countSavedFromSla(): Promise<number> {
     if (!conv.needsReplySince || !conv.lastOutboundAt) continue
     
     const hoursSince = differenceInHours(conv.lastOutboundAt, conv.needsReplySince)
-    if (hoursSince < breachThresholdHours) {
-      savedCount++
+      if (hoursSince < breachThresholdHours) {
+        savedCount++
+      }
     }
-  }
 
-  return savedCount
+    return savedCount
+  } catch (error: any) {
+    console.error('Error counting saved from SLA:', error)
+    return 0
+  }
 }
 
 /**
@@ -196,10 +216,11 @@ async function countSavedFromSla(): Promise<number> {
  * Revenue actions = quotes sent + renewals initiated
  */
 async function countRevenueActionsToday(): Promise<number> {
-  const todayStart = startOfDay(new Date())
-  const todayEnd = endOfDay(new Date())
+  try {
+    const todayStart = startOfDay(new Date())
+    const todayEnd = endOfDay(new Date())
 
-  const [quotesSent, renewalsInitiated] = await Promise.all([
+    const [quotesSent, renewalsInitiated] = await Promise.all([
     prisma.task.count({
       where: {
         type: {
@@ -221,9 +242,13 @@ async function countRevenueActionsToday(): Promise<number> {
         },
       },
     }),
-  ])
+    ])
 
-  return quotesSent + renewalsInitiated
+    return quotesSent + renewalsInitiated
+  } catch (error: any) {
+    console.error('Error counting revenue actions today:', error)
+    return 0
+  }
 }
 
 /**
@@ -234,11 +259,12 @@ async function countRevenueActionsToday(): Promise<number> {
  * - At least one lead advanced
  */
 async function computeStreak(): Promise<{ daysActive: number; todayDone: boolean }> {
-  const todayStart = startOfDay(new Date())
-  const todayEnd = endOfDay(new Date())
+  try {
+    const todayStart = startOfDay(new Date())
+    const todayEnd = endOfDay(new Date())
 
-  // Check if today is done
-  const [tasksToday, messagesToday, leadsToday] = await Promise.all([
+    // Check if today is done
+    const [tasksToday, messagesToday, leadsToday] = await Promise.all([
     prisma.task.count({
       where: {
         status: 'COMPLETED',
@@ -284,14 +310,18 @@ async function computeStreak(): Promise<{ daysActive: number; todayDone: boolean
       }),
     ])
 
-    if (tasks > 0 || messages > 0 || leads > 0) {
-      daysActive++
-    } else {
-      break // Streak broken
+      if (tasks > 0 || messages > 0 || leads > 0) {
+        daysActive++
+      } else {
+        break // Streak broken
+      }
     }
-  }
 
-  return { daysActive, todayDone }
+    return { daysActive, todayDone }
+  } catch (error: any) {
+    console.error('Error computing streak:', error)
+    return { daysActive: 0, todayDone: false }
+  }
 }
 
 /**
@@ -328,10 +358,11 @@ export async function computeJoyMetrics(): Promise<JoyMetrics> {
  * Compute friction alerts (quiet, subtle)
  */
 export async function computeFrictionAlerts(): Promise<FrictionAlerts> {
-  const now = new Date()
-  const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+  try {
+    const now = new Date()
+    const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
 
-  const [ttfrMedian, overdueTasks, waitingLeadsRaw] = await Promise.all([
+    const [ttfrMedian, overdueTasks, waitingLeadsRaw] = await Promise.all([
     computeTTFRMedianToday(),
     prisma.task.count({
       where: {
@@ -366,13 +397,22 @@ export async function computeFrictionAlerts(): Promise<FrictionAlerts> {
     return lead.lastInboundAt < lead.lastOutboundAt
   }).length
 
-  // High TTFR = median > 2 hours (120 minutes)
-  const highTtfr = ttfrMedian !== null && ttfrMedian > 120
+    // High TTFR = median > 2 hours (120 minutes)
+    const highTtfr = ttfrMedian !== null && ttfrMedian > 120
 
-  return {
-    highTtfr,
-    overdueTasks,
-    waitingLong,
+    return {
+      highTtfr,
+      overdueTasks,
+      waitingLong,
+    }
+  } catch (error: any) {
+    console.error('Error computing friction alerts:', error)
+    // Return safe defaults
+    return {
+      highTtfr: false,
+      overdueTasks: 0,
+      waitingLong: 0,
+    }
   }
 }
 
