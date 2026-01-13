@@ -1453,11 +1453,44 @@ export async function sendAiReply(
       throw new Error(`Conversation ${conversationId} or contact not found`);
     }
 
+    // For Instagram, phone is stored as "ig:USER_ID", which is valid
+    // For WhatsApp, phone is a regular phone number
     const phone =
       conversation.contact.phoneNormalized || conversation.contact.phone;
     if (!phone) {
-      throw new Error(`Contact ${conversation.contact.id} has no phone number`);
+      throw new Error(`Contact ${conversation.contact.id} has no phone number or Instagram ID`);
     }
+    
+    // Log phone/ID for debugging
+    if (provider === 'instagram') {
+      console.log(`[ORCHESTRATOR] Instagram contact ID: ${phone} (conversationId: ${conversationId})`)
+    }
+
+    // Step 7.5: Map conversation channel to provider format
+    // Support both lowercase and uppercase channel names
+    const channelToProvider: Record<string, 'whatsapp' | 'email' | 'instagram' | 'facebook'> = {
+      'whatsapp': 'whatsapp',
+      'email': 'email',
+      'instagram': 'instagram',
+      'facebook': 'facebook',
+      // Also support uppercase variants
+      'WHATSAPP': 'whatsapp',
+      'EMAIL': 'email',
+      'INSTAGRAM': 'instagram',
+      'FACEBOOK': 'facebook',
+    }
+    
+    const normalizedChannel = conversation.channel?.toLowerCase() || 'whatsapp'
+    const provider = channelToProvider[normalizedChannel] || channelToProvider[conversation.channel || ''] || 'whatsapp'
+    
+    console.log(`[ORCHESTRATOR] Channel mapping:`, {
+      originalChannel: conversation.channel,
+      normalizedChannel,
+      mappedProvider: provider,
+      conversationId: conversationId,
+      contactId: conversation.contact.id,
+      leadId: conversation.leadId,
+    })
 
     // Step 7.5: Create OutboundMessageDedup record BEFORE sending (atomic protection)
     let outboundDedupId: number | undefined = undefined;
@@ -1500,7 +1533,7 @@ export async function sendAiReply(
       leadId: conversation.leadId || null,
       phone,
       text: finalReplyText, // Use combined single message
-      provider: "whatsapp",
+      provider, // Use actual channel instead of hardcoded "whatsapp"
       triggerProviderMessageId: inboundProviderMessageId,
       replyType: orchestratorResult.nextStepKey ? "question" : "answer",
       lastQuestionKey: orchestratorResult.nextStepKey || null,

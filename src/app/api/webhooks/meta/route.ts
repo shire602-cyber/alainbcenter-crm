@@ -1273,26 +1273,74 @@ async function processInstagramMessageRobust(data: {
     }
 
     // Update contact with Instagram profile name if available (ensures profile name is stored)
+    // This is critical for inbox display - always update if we have a better name
     if (instagramProfile && (instagramProfile.name || instagramProfile.username)) {
       const profileName = instagramProfile.name || instagramProfile.username || 'Instagram User'
-      if (contact.fullName !== profileName) {
-        contact = await prisma.contact.update({
-          where: { id: contact.id },
-          data: { fullName: profileName },
-          select: {
-            id: true,
-            phone: true,
-            fullName: true,
-            phoneNormalized: true,
-            waId: true,
-          },
-        })
-        console.log('✅ [INSTAGRAM-ROBUST] Contact fullName updated with profile name', {
+      const oldName = contact.fullName
+      
+      // Determine if current name is generic/placeholder
+      const isCurrentNameGeneric = !oldName || 
+        oldName === 'Instagram User' || 
+        oldName.includes('Unknown') ||
+        oldName.startsWith('Contact +') ||
+        oldName.trim() === ''
+      
+      // Always update if we have a better name (not "Instagram User" or matches existing)
+      const shouldUpdate = profileName !== 'Instagram User' && 
+        profileName !== oldName &&
+        !profileName.includes('Unknown') &&
+        (isCurrentNameGeneric || profileName.length > oldName.length)
+      
+      if (shouldUpdate) {
+        try {
+          contact = await prisma.contact.update({
+            where: { id: contact.id },
+            data: { fullName: profileName },
+            select: {
+              id: true,
+              phone: true,
+              fullName: true,
+              phoneNormalized: true,
+              waId: true,
+            },
+          })
+          console.log('✅ [INSTAGRAM-ROBUST] Contact fullName updated with profile name', {
+            contactId: contact.id,
+            oldName,
+            newName: profileName,
+            profileSource: instagramProfile.name ? 'name' : 'username',
+            wasGeneric: isCurrentNameGeneric,
+            senderId,
+            providerMessageId,
+          })
+        } catch (updateError: any) {
+          console.error('❌ [INSTAGRAM-ROBUST] Failed to update contact fullName:', {
+            contactId: contact.id,
+            error: updateError.message,
+            errorCode: updateError.code,
+            profileName,
+            oldName,
+            senderId,
+          })
+        }
+      } else {
+        console.log('ℹ️ [INSTAGRAM-ROBUST] Contact name already correct or not better', {
           contactId: contact.id,
-          oldName: contact.fullName,
-          newName: profileName,
+          currentName: oldName,
+          profileName,
+          shouldUpdate,
+          isCurrentNameGeneric,
+          senderId,
         })
       }
+    } else if (!instagramProfile) {
+      console.warn('⚠️ [INSTAGRAM-ROBUST] No Instagram profile available - contact may show as "Instagram User"', {
+        contactId: contact.id,
+        senderId,
+        providerMessageId,
+        currentName: contact.fullName,
+        note: 'Profile fetch may have failed or profile data not available',
+      })
     }
 
     console.log('✅ [INSTAGRAM-ROBUST] Contact upserted', {
@@ -1328,15 +1376,23 @@ async function processInstagramMessageRobust(data: {
 
     const conversationResult = await upsertConversation({
       contactId: contact.id,
-      channel: 'INSTAGRAM',
+      channel: 'INSTAGRAM', // Will be normalized to 'instagram' by upsertConversation
       leadId: undefined, // Create without lead initially
       externalThreadId: externalThreadId,
       timestamp: timestamp,
       knownFields: knownFields,
     })
 
+    // Verify conversation channel is normalized to lowercase
+    // Note: upsertConversation normalizes channel to lowercase internally via normalizeChannel()
+    // The channel 'INSTAGRAM' is normalized to 'instagram' before storage
     console.log('✅ [INSTAGRAM-ROBUST] Conversation created', {
       conversationId: conversationResult.id,
+      channel: 'instagram', // Normalized by upsertConversation from 'INSTAGRAM' to 'instagram'
+      contactId: contact.id,
+      externalThreadId,
+      senderId,
+      note: 'Channel is normalized to lowercase "instagram" by upsertConversation for proper AI reply routing',
     })
 
     // Step 3: Create Message SECOND (before lead)
@@ -1353,7 +1409,7 @@ async function processInstagramMessageRobust(data: {
         conversationId: conversationResult.id,
         contactId: contact.id,
         direction: 'INBOUND',
-        channel: 'instagram', // Lowercase for database
+        channel: 'instagram', // Lowercase for database - must match conversation channel
         body: text,
         providerMessageId: providerMessageId,
         mediaUrl: metadata?.mediaUrl || null,
@@ -1366,6 +1422,11 @@ async function processInstagramMessageRobust(data: {
     console.log('✅ [INSTAGRAM-ROBUST] Message created', {
       messageId: messageRecord.id,
       conversationId: messageRecord.conversationId,
+      channel: messageRecord.channel, // Should be 'instagram' (lowercase)
+      conversationChannel: conversationResult.channel, // Should match message channel
+      contactId: contact.id,
+      senderId,
+      providerMessageId,
     })
 
     // Create communication log for lead linking (create without leadId initially)

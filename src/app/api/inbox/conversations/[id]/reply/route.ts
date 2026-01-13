@@ -5,7 +5,7 @@ import { sendOutboundWithIdempotency } from '@/lib/outbound/sendWithIdempotency'
 
 /**
  * POST /api/inbox/conversations/[id]/reply
- * Sends a WhatsApp reply and creates outbound message
+ * Sends a reply (WhatsApp or Instagram) and creates outbound message
  * Requires authentication (staff allowed)
  */
 export async function POST(
@@ -75,31 +75,47 @@ export async function POST(
       )
     }
 
-    // Validate contact has phone
+    // Validate contact has phone or Instagram ID
+    const channelLower = conversation.channel?.toLowerCase() || 'whatsapp'
+    const isInstagram = channelLower === 'instagram'
+    const isWhatsApp = channelLower === 'whatsapp'
+    
     if (!conversation.contact.phone || !conversation.contact.phone.trim()) {
       return NextResponse.json(
         {
           ok: false,
-          error: 'Contact does not have a phone number',
-          hint: 'Please add a phone number to this contact before sending WhatsApp messages.',
+          error: 'Contact does not have a phone number or Instagram ID',
+          hint: isInstagram 
+            ? 'Please ensure the contact has an Instagram ID before sending messages.'
+            : 'Please add a phone number to this contact before sending WhatsApp messages.',
         },
         { status: 400 }
       )
     }
 
-    // Only allow WhatsApp channel for now (case-insensitive check)
-    if (conversation.channel.toLowerCase() !== 'whatsapp') {
+    // Map channel to provider
+    const channelToProvider: Record<string, 'whatsapp' | 'email' | 'instagram' | 'facebook'> = {
+      'whatsapp': 'whatsapp',
+      'instagram': 'instagram',
+      'email': 'email',
+      'facebook': 'facebook',
+    }
+    const provider = channelToProvider[channelLower] || 'whatsapp'
+    
+    // Only support WhatsApp and Instagram for now
+    if (!isWhatsApp && !isInstagram) {
       return NextResponse.json(
         {
           ok: false,
           error: `Reply not supported for ${conversation.channel} channel`,
+          hint: 'Currently only WhatsApp and Instagram are supported.',
         },
         { status: 400 }
       )
     }
 
-    // Send WhatsApp message with idempotency
-    let whatsappMessageId: string | null = null
+    // Send message with idempotency
+    let messageId: string | null = null
     let sendError: any = null
     const sentAt = new Date()
     
@@ -110,7 +126,7 @@ export async function POST(
         leadId: conversation.leadId,
         phone: conversation.contact.phone,
         text: text.trim(),
-        provider: 'whatsapp',
+        provider, // Use mapped provider (whatsapp or instagram)
         triggerProviderMessageId: null, // Manual send
         replyType: 'answer',
         lastQuestionKey: null,
@@ -118,32 +134,33 @@ export async function POST(
       })
 
       if (result.wasDuplicate) {
-        console.log(`⚠️ [INBOX-REPLY] Duplicate outbound blocked by idempotency`)
+        console.log(`⚠️ [INBOX-REPLY] Duplicate outbound blocked by idempotency (channel: ${channelLower}, provider: ${provider})`)
         sendError = 'Duplicate message blocked (idempotency)'
       } else if (!result.success) {
         throw new Error(result.error || 'Failed to send message')
       } else {
-        whatsappMessageId = result.messageId || null
+        messageId = result.messageId || null
+        console.log(`✅ [INBOX-REPLY] Message sent successfully (channel: ${channelLower}, provider: ${provider}, messageId: ${messageId})`)
       }
-    } catch (whatsappError: any) {
-      console.error('WhatsApp send error:', whatsappError)
-      sendError = whatsappError
+    } catch (sendError_: any) {
+      console.error(`❌ [INBOX-REPLY] Send error (channel: ${channelLower}, provider: ${provider}):`, sendError_)
+      sendError = sendError_
       // Continue to create message record with FAILED status
     }
 
     // Create outbound message with new schema fields
     // Check for duplicate first (idempotency)
     let message
-    if (whatsappMessageId) {
+    if (messageId) {
       try {
         message = await prisma.message.findFirst({
           where: {
-            channel: 'whatsapp',
-            providerMessageId: whatsappMessageId,
+            channel: channelLower,
+            providerMessageId: messageId,
           },
         })
         if (message) {
-          console.log(`[INBOX-REPLY] Message already exists (idempotency): ${message.id} for providerMessageId ${whatsappMessageId}`)
+          console.log(`[INBOX-REPLY] Message already exists (idempotency): ${message.id} for providerMessageId ${messageId}`)
           // Return existing message - don't create duplicate
         }
       } catch (findError: any) {
@@ -152,7 +169,7 @@ export async function POST(
     }
 
     if (!message) {
-      const messageStatus = whatsappMessageId ? 'SENT' : 'FAILED'
+      const messageStatus = messageId ? 'SENT' : 'FAILED'
       try {
         message = await prisma.message.create({
           data: {
@@ -160,10 +177,10 @@ export async function POST(
             leadId: conversation.leadId,
             contactId: conversation.contactId,
             direction: 'OUTBOUND', // OUTBOUND for outbound
-            channel: 'whatsapp',
+            channel: channelLower, // Use actual channel (whatsapp or instagram)
             type: 'text',
             body: text.trim(),
-            providerMessageId: whatsappMessageId || null, // Store WhatsApp message ID
+            providerMessageId: messageId || null, // Store provider message ID
             status: messageStatus,
             sentAt: sentAt,
             createdByUserId: user.id,
@@ -175,12 +192,12 @@ export async function POST(
       } catch (createError: any) {
         // Handle unique constraint violation (duplicate message)
         if (createError.code === 'P2002' || createError.message?.includes('Unique constraint') || createError.message?.includes('duplicate key')) {
-          console.log(`[INBOX-REPLY] Duplicate message detected, fetching existing: providerMessageId=${whatsappMessageId}`)
-          if (whatsappMessageId) {
+          console.log(`[INBOX-REPLY] Duplicate message detected, fetching existing: providerMessageId=${messageId}`)
+          if (messageId) {
             message = await prisma.message.findFirst({
               where: {
-                channel: 'whatsapp',
-                providerMessageId: whatsappMessageId,
+                channel: channelLower,
+                providerMessageId: messageId,
               },
             })
             if (message) {
@@ -198,7 +215,7 @@ export async function POST(
     }
 
     // Create initial status event
-    if (whatsappMessageId) {
+    if (messageId) {
       try {
         await prisma.messageStatusEvent.create({
           data: {
@@ -206,7 +223,7 @@ export async function POST(
             conversationId: conversation.id,
             status: 'SENT',
             providerStatus: 'sent',
-            rawPayload: JSON.stringify({ messageId: whatsappMessageId }),
+            rawPayload: JSON.stringify({ messageId: messageId, provider }),
             receivedAt: sentAt,
           },
         })
@@ -233,7 +250,7 @@ export async function POST(
       
       const updateData: any = {
         lastContactAt: sentAt,
-        lastContactChannel: 'whatsapp',
+        lastContactChannel: channelLower, // Use actual channel
       }
 
       if (detection.isInfoShared && detection.infoType) {
@@ -249,11 +266,12 @@ export async function POST(
 
     // Return error if send failed
     if (sendError) {
+      const channelName = isInstagram ? 'Instagram' : 'WhatsApp'
       return NextResponse.json(
         {
           ok: false,
-          error: 'Failed to send WhatsApp message',
-          hint: sendError.message || 'Check WhatsApp configuration and try again.',
+          error: `Failed to send ${channelName} message`,
+          hint: sendError.message || `Check ${channelName} configuration and try again.`,
           message: {
             id: message.id,
             direction: message.direction,

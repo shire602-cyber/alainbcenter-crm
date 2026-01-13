@@ -99,35 +99,57 @@ export async function POST(
       )
     }
 
-    // Only allow WhatsApp channel (check both lowercase and uppercase for compatibility)
-    const channelLower = conversation.channel?.toLowerCase()
-    if (channelLower !== 'whatsapp') {
+    // Map channel to provider and check support
+    const channelLower = conversation.channel?.toLowerCase() || 'whatsapp'
+    const isInstagram = channelLower === 'instagram'
+    const isWhatsApp = channelLower === 'whatsapp'
+    
+    // Only support WhatsApp and Instagram for now
+    if (!isWhatsApp && !isInstagram) {
       return NextResponse.json(
         {
           ok: false,
           error: `Reply not supported for ${conversation.channel} channel`,
+          hint: 'Currently only WhatsApp and Instagram are supported.',
         },
         { status: 400 }
       )
     }
 
-    // Check 24-hour messaging window for WhatsApp
+    // For Instagram: Only text messages are supported (no templates/media via this route)
+    if (isInstagram && (templateName || mediaUrl || mediaId)) {
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Instagram only supports text messages via this route',
+          hint: 'Templates and media are not supported for Instagram through this endpoint.',
+        },
+        { status: 400 }
+      )
+    }
+
+    // Check 24-hour messaging window for WhatsApp (Instagram doesn't have this restriction)
     // WhatsApp Business API only allows free-form messages within 24 hours of customer's last message
     // Outside 24 hours, MUST use pre-approved templates
     const now = new Date()
     const lastInboundAt = conversation.lastInboundAt || null
     
     let within24HourWindow = false
-    if (lastInboundAt) {
-      const hoursSinceLastInbound = (now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)
-      within24HourWindow = hoursSinceLastInbound <= 24
+    if (isWhatsApp) {
+      if (lastInboundAt) {
+        const hoursSinceLastInbound = (now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)
+        within24HourWindow = hoursSinceLastInbound <= 24
+      } else {
+        // If no inbound message, we can send (first message to customer)
+        within24HourWindow = true
+      }
     } else {
-      // If no inbound message, we can send (first message to customer)
+      // Instagram doesn't have 24-hour window restriction
       within24HourWindow = true
     }
 
-    // If trying to send free-form text outside 24-hour window, require template instead
-    if (text && !templateName && !within24HourWindow) {
+    // If trying to send free-form text outside 24-hour window (WhatsApp only), require template instead
+    if (isWhatsApp && text && !templateName && !within24HourWindow) {
       return NextResponse.json(
         {
           ok: false,
@@ -142,18 +164,131 @@ export async function POST(
       )
     }
 
-    // Normalize phone number (ensure E.164 format)
+    // Normalize phone number (ensure E.164 format for WhatsApp, keep as-is for Instagram)
     let normalizedPhone = conversation.contact.phone
-    if (!normalizedPhone.startsWith('+')) {
+    if (isWhatsApp && !normalizedPhone.startsWith('+')) {
       normalizedPhone = '+' + normalizedPhone.replace(/^\+/, '')
     }
+    // For Instagram, phone is stored as 'ig:USER_ID', which is already correct
 
-    // Send WhatsApp message via Meta Graph API
+    // Map channel to provider
+    const channelToProvider: Record<string, 'whatsapp' | 'email' | 'instagram' | 'facebook'> = {
+      'whatsapp': 'whatsapp',
+      'instagram': 'instagram',
+      'email': 'email',
+      'facebook': 'facebook',
+    }
+    const provider = channelToProvider[channelLower] || 'whatsapp'
+
+    // Send message via appropriate provider
     const sentAt = new Date()
-    let whatsappMessageId: string | null = null
+    let messageId: string | null = null
     let sendError: any = null
     let messageContent = text || ''
 
+    // For Instagram: Use sendOutboundWithIdempotency directly (simpler, no 24-hour window)
+    if (isInstagram && text) {
+      try {
+        const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
+        const result = await sendOutboundWithIdempotency({
+          conversationId: conversation.id,
+          contactId: conversation.contactId,
+          leadId: conversation.leadId,
+          phone: normalizedPhone, // 'ig:USER_ID' format
+          text: text.trim(),
+          provider: 'instagram',
+          triggerProviderMessageId: null, // Manual send
+          replyType: 'answer',
+          lastQuestionKey: null,
+          flowStep: null,
+        })
+
+        if (result.wasDuplicate) {
+          console.log(`⚠️ [INBOX-MESSAGES] Duplicate Instagram outbound blocked by idempotency`)
+          throw new Error('Duplicate message blocked (idempotency)')
+        } else if (!result.success) {
+          throw new Error(result.error || 'Failed to send Instagram message')
+        }
+
+        messageId = result.messageId || null
+        messageContent = text.trim()
+        
+        console.log(`✅ [INBOX-MESSAGES] Instagram message sent successfully (messageId: ${messageId})`)
+        
+        // sendOutboundWithIdempotency already created the Message record, so find it
+        let message = null
+        if (messageId) {
+          message = await prisma.message.findFirst({
+            where: {
+              conversationId: conversation.id,
+              providerMessageId: messageId,
+              channel: 'instagram',
+            },
+            orderBy: { createdAt: 'desc' },
+          })
+        }
+        
+        if (!message) {
+          console.warn(`[INBOX-MESSAGES] Instagram message not found after sendOutboundWithIdempotency: conversationId=${conversation.id}, providerMessageId=${messageId}`)
+        }
+        
+        // Update conversation
+        await prisma.conversation.update({
+          where: { id: conversation.id },
+          data: {
+            lastMessageAt: sentAt,
+            lastOutboundAt: sentAt,
+            unreadCount: 0,
+          },
+        })
+        
+        // Update lead lastContactAt
+        if (conversation.leadId) {
+          const { detectInfoOrQuotationShared, markInfoShared } = await import('@/lib/automation/infoShared')
+          const detection = detectInfoOrQuotationShared(messageContent)
+          
+          const updateData: any = {
+            lastContactAt: sentAt,
+            lastContactChannel: 'instagram',
+          }
+
+          if (detection.isInfoShared && detection.infoType) {
+            await markInfoShared(conversation.leadId, detection.infoType)
+          }
+
+          await prisma.lead.update({
+            where: { id: conversation.leadId },
+            data: updateData,
+          })
+        }
+        
+        // Return success - message was created by sendOutboundWithIdempotency
+        return NextResponse.json({
+          ok: true,
+          message: message ? {
+            id: message.id,
+            direction: message.direction,
+            body: message.body,
+            status: message.status,
+            providerMessageId: message.providerMessageId,
+            createdAt: message.createdAt.toISOString(),
+          } : {
+            id: 0, // Placeholder if not found
+            direction: 'OUTBOUND',
+            body: messageContent,
+            status: 'SENT',
+            providerMessageId: messageId,
+            createdAt: sentAt.toISOString(),
+          },
+        })
+      } catch (error: any) {
+        console.error('Instagram send error:', error)
+        sendError = error
+        // Continue to create message record with FAILED status
+      }
+    }
+
+    // For WhatsApp: Continue with existing logic (templates, media, 24-hour window)
     try {
       if ((mediaUrl || mediaId) && mediaType) {
         // Send media message (works within 24-hour window)
@@ -201,17 +336,17 @@ export async function POST(
           throw new Error('Either mediaId or mediaUrl must be provided')
         }
         
-        whatsappMessageId = result.messageId
+        messageId = result.messageId
         messageContent = mediaCaption || `[${mediaType}]`
       } else if (templateName) {
-        // Send template message (works outside 24-hour window)
+        // Send template message (works outside 24-hour window) - WhatsApp only
         const result = await sendTemplateMessage(
           normalizedPhone,
           templateName,
           'en_US', // Default language, can be made configurable
           templateParams || []
         )
-        whatsappMessageId = result.messageId
+        messageId = result.messageId
         messageContent = `Template: ${templateName}`
       } else if (text && within24HourWindow) {
         // Send free-form text message (only within 24-hour window) with idempotency
@@ -231,25 +366,25 @@ export async function POST(
         })
 
         if (result.wasDuplicate) {
-          console.log(`⚠️ [INBOX-MESSAGES] Duplicate outbound blocked by idempotency`)
+          console.log(`⚠️ [INBOX-MESSAGES] Duplicate WhatsApp outbound blocked by idempotency`)
           throw new Error('Duplicate message blocked (idempotency)')
         } else if (!result.success) {
           throw new Error(result.error || 'Failed to send message')
         }
 
-        whatsappMessageId = result.messageId || null
+        messageId = result.messageId || null
         messageContent = text.trim()
         
         // sendOutboundWithIdempotency already created the Message record, so find it
         // Note: sendOutboundWithIdempotency uses uppercase channel ('WHATSAPP'), but we search case-insensitively
         let message = null
-        if (whatsappMessageId) {
+        if (messageId) {
           // Try to find the message created by sendOutboundWithIdempotency
           // It uses uppercase 'WHATSAPP', but the unique constraint is case-insensitive (LOWER(channel))
           message = await prisma.message.findFirst({
             where: {
               conversationId: conversation.id,
-              providerMessageId: whatsappMessageId,
+              providerMessageId: messageId,
               // Channel can be 'WHATSAPP' (from sendOutboundWithIdempotency) or 'whatsapp' (normalized)
               // The unique index uses LOWER(channel), so both match
             },
@@ -261,7 +396,7 @@ export async function POST(
         // sendOutboundWithIdempotency should have created it, so if it's missing, log a warning
         // but don't create a duplicate - the send succeeded, so we'll proceed with updates
         if (!message) {
-          console.warn(`[INBOX-MESSAGES] Message not found after sendOutboundWithIdempotency: conversationId=${conversation.id}, providerMessageId=${whatsappMessageId}`)
+          console.warn(`[INBOX-MESSAGES] WhatsApp message not found after sendOutboundWithIdempotency: conversationId=${conversation.id}, providerMessageId=${messageId}`)
         }
         
         // Update conversation (sendOutboundWithIdempotency already did this, but ensure it's done)
@@ -269,6 +404,7 @@ export async function POST(
           where: { id: conversation.id },
           data: {
             lastMessageAt: sentAt,
+            lastOutboundAt: sentAt,
             unreadCount: 0,
           },
         })
@@ -280,7 +416,7 @@ export async function POST(
           
           const updateData: any = {
             lastContactAt: sentAt,
-            lastContactChannel: 'whatsapp',
+            lastContactChannel: channelLower,
           }
 
           if (detection.isInfoShared && detection.infoType) {
@@ -308,7 +444,7 @@ export async function POST(
             direction: 'OUTBOUND',
             body: messageContent,
             status: 'SENT',
-            providerMessageId: whatsappMessageId,
+            providerMessageId: messageId,
             createdAt: sentAt.toISOString(),
           },
         })
@@ -316,14 +452,14 @@ export async function POST(
         throw new Error('Invalid message type or outside 24-hour window')
       }
     } catch (error: any) {
-      console.error('WhatsApp send error:', error)
+      console.error(`❌ [INBOX-MESSAGES] Send error (channel: ${channelLower}, provider: ${provider}):`, error)
       sendError = error
       // Continue to create message record with FAILED status (only for template/media, not text)
     }
 
     // Create outbound Message(OUT) record (only for template/media messages, not text)
     // Text messages are handled above via sendOutboundWithIdempotency
-    const messageStatus = whatsappMessageId ? 'SENT' : 'FAILED'
+    const messageStatus = messageId ? 'SENT' : 'FAILED'
     
     // FIX #1, #8: Validate and store providerMediaId (mediaId from request - this is the providerMediaId)
     let providerMediaId: string | null = null
@@ -372,7 +508,7 @@ export async function POST(
         leadId: conversation.leadId,
         contactId: conversation.contactId,
         direction: 'OUTBOUND', // Direction: OUTBOUND for outbound
-        channel: 'whatsapp',
+        channel: channelLower, // Use actual channel
         type: messageType, // CRITICAL: Use validatedMediaType (in MEDIA_TYPES) for media messages
         body: messageContent,
         // CRITICAL: Store providerMediaId (Meta media ID from upload/send) for media proxy retrieval
@@ -383,7 +519,7 @@ export async function POST(
         mediaFilename: mediaFilename || null,
         mediaSize: parsedMediaSize,
         // Note: mediaCaption is not in schema - captions can be stored in body or payload
-        providerMessageId: whatsappMessageId || null,
+        providerMessageId: messageId || null,
         status: messageStatus,
         sentAt: sentAt,
         createdByUserId: user.id,
@@ -394,7 +530,7 @@ export async function POST(
     })
 
     // Create initial status event
-    if (whatsappMessageId) {
+    if (messageId) {
       try {
         await prisma.messageStatusEvent.create({
           data: {
@@ -402,7 +538,7 @@ export async function POST(
             conversationId: conversation.id,
             status: 'SENT',
             providerStatus: 'sent',
-            rawPayload: JSON.stringify({ messageId: whatsappMessageId }),
+            rawPayload: JSON.stringify({ messageId: messageId, provider }),
             receivedAt: sentAt,
           },
         })
@@ -429,7 +565,7 @@ export async function POST(
       
       const updateData: any = {
         lastContactAt: sentAt,
-        lastContactChannel: 'whatsapp',
+        lastContactChannel: channelLower,
       }
 
       if (detection.isInfoShared && detection.infoType) {

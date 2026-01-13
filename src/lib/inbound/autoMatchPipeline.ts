@@ -132,23 +132,71 @@ export async function handleInboundMessageAutoMatch(
     const instagramProfile = input.metadata.instagramProfile as { name: string | null; username: string | null; profilePic: string | null } | null
     if (instagramProfile) {
       // Use name if available, otherwise username, otherwise keep existing
+      // Prioritize name over username, but use username if name is not available
       const newFullName = instagramProfile.name || instagramProfile.username || contact.fullName
-      if (newFullName && newFullName !== contact.fullName) {
+      
+      // Determine if current name is generic/placeholder
+      const isCurrentNameGeneric = !contact.fullName || 
+        contact.fullName === 'Instagram User' || 
+        contact.fullName.includes('Unknown') ||
+        contact.fullName.startsWith('Contact +') ||
+        contact.fullName.trim() === ''
+      
+      // Always update if:
+      // 1. Current name is generic AND we have a better name, OR
+      // 2. New name is better than current (not generic) AND different
+      const shouldUpdate = newFullName && 
+        newFullName !== 'Instagram User' &&
+        !newFullName.includes('Unknown') &&
+        (
+          (isCurrentNameGeneric && newFullName !== contact.fullName) ||
+          (!isCurrentNameGeneric && newFullName !== contact.fullName && newFullName.length > contact.fullName.length)
+        )
+      
+      if (shouldUpdate) {
         try {
+          const oldName = contact.fullName
           await prisma.contact.update({
             where: { id: contact.id },
             data: { fullName: newFullName },
           })
-          console.log(`✅ [AUTO-MATCH] Updated Instagram contact ${contact.id} with name: ${newFullName}`)
+          console.log(`✅ [AUTO-MATCH] Updated Instagram contact ${contact.id} with name: ${newFullName} (from: ${oldName})`, {
+            contactId: contact.id,
+            oldName,
+            newName: newFullName,
+            profileSource: instagramProfile.name ? 'name' : 'username',
+            wasGeneric: isCurrentNameGeneric,
+          })
           // Refresh contact to get updated fullName
           contact = await prisma.contact.findUnique({
             where: { id: contact.id },
             select: { id: true, phone: true, phoneNormalized: true, waId: true, fullName: true, email: true, nationality: true },
           }) || contact
         } catch (updateError: any) {
-          console.warn(`⚠️ [AUTO-MATCH] Failed to update Instagram contact name:`, updateError.message)
+          console.error(`❌ [AUTO-MATCH] Failed to update Instagram contact name:`, {
+            contactId: contact.id,
+            error: updateError.message,
+            errorCode: updateError.code,
+            newFullName,
+            currentFullName: contact.fullName,
+          })
         }
+      } else if (newFullName && newFullName === contact.fullName) {
+        console.log(`ℹ️ [AUTO-MATCH] Instagram contact ${contact.id} already has correct name: ${newFullName}`)
+      } else {
+        console.log(`ℹ️ [AUTO-MATCH] Skipping Instagram contact update`, {
+          contactId: contact.id,
+          currentName: contact.fullName,
+          newName: newFullName,
+          reason: isCurrentNameGeneric ? 'new name is generic' : 'current name is better',
+        })
       }
+    } else {
+      console.warn(`⚠️ [AUTO-MATCH] Instagram profile metadata missing for contact ${contact.id}`, {
+        contactId: contact.id,
+        hasMetadata: !!input.metadata,
+        hasInstagramProfile: !!input.metadata?.instagramProfile,
+      })
     }
   }
   

@@ -173,6 +173,36 @@ function getMessageDisplayText(msg: any): string | null {
   return null
 }
 
+// Helper to extract Instagram username from phone
+function getInstagramUsername(phone: string): string | null {
+  if (phone && phone.startsWith('ig:')) {
+    return phone.substring(3)
+  }
+  return null
+}
+
+// Helper to get display name for contact in inbox
+function getContactDisplayName(contact: Contact, channel: string): string {
+  // If we have a good fullName, use it
+  if (contact.fullName && 
+      !contact.fullName.includes('Unknown') && 
+      contact.fullName !== 'Instagram User' &&
+      !contact.fullName.startsWith('Contact +')) {
+    return contact.fullName
+  }
+  
+  // For Instagram, try to show username from phone
+  if (channel === 'instagram' && contact.phone) {
+    const username = getInstagramUsername(contact.phone)
+    if (username) {
+      return `@${username}`
+    }
+  }
+  
+  // Fallback to phone
+  return contact.phone || 'Unknown'
+}
+
 // STEP 3: Removed renderPlaceholderMedia - always try proxy first
 // The proxy will return 404 if media is truly unavailable
 // This ensures we don't show "unavailable" for messages that might have media in metadata/rawPayload
@@ -885,9 +915,7 @@ function InboxPageContent() {
                               "text-caption truncate text-slate-900 font-semibold",
                               conv.unreadCount > 0 && "font-semibold"
                             )}>
-                              {conv.contact.fullName && !conv.contact.fullName.includes('Unknown') 
-                                ? conv.contact.fullName 
-                                : conv.contact.phone}
+                              {getContactDisplayName(conv.contact, conv.channel)}
                             </p>
                             {conv.unreadCount > 0 && (
                               <div className="h-2 w-2 rounded-full bg-indigo-500 flex-shrink-0"></div>
@@ -933,10 +961,7 @@ function InboxPageContent() {
                     <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2">
                       <h3 className="text-body font-semibold truncate">
-                        {selectedConversation.contact.fullName && 
-                         !selectedConversation.contact.fullName.includes('Unknown') 
-                          ? selectedConversation.contact.fullName 
-                          : selectedConversation.contact.phone}
+                        {getContactDisplayName(selectedConversation.contact, selectedConversation.channel)}
                       </h3>
                       {selectedLead?.aiScore !== null && selectedLead?.aiScore !== undefined && (
                         <Badge
