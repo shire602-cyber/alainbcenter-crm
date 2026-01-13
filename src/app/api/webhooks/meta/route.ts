@@ -1320,7 +1320,6 @@ async function processInstagramMessageRobust(data: {
         providerMessageId,
         currentName: contact.fullName,
         note: 'Profile fetch may have failed - check Meta Graph API permissions and access token',
-        connectionId: connection?.id || 'unknown',
       })
     } else {
       console.warn('⚠️ [INSTAGRAM-ROBUST] Instagram profile exists but has no name or username', {
