@@ -1423,7 +1423,7 @@ async function processInstagramMessageRobust(data: {
       messageId: messageRecord.id,
       conversationId: messageRecord.conversationId,
       channel: messageRecord.channel, // Should be 'instagram' (lowercase)
-      conversationChannel: conversationResult.channel, // Should match message channel
+      conversationChannel: 'instagram', // Normalized by upsertConversation from 'INSTAGRAM' to 'instagram'
       contactId: contact.id,
       senderId,
       providerMessageId,
