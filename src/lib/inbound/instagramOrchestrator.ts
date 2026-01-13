@@ -19,7 +19,7 @@ import { prisma } from '../prisma'
 import { handleInboundMessageAutoMatch } from './autoMatchPipeline'
 import { fetchInstagramUserProfile } from '@/server/integrations/meta/profile'
 import { sendAiReply } from '../ai/orchestrator'
-import { getDecryptedPageToken } from '@/server/integrations/meta/connection'
+import { getDecryptedPageToken } from '@/server/integrations/meta/storage'
 
 export interface OrchestrateInstagramInboundInput {
   senderId: string
