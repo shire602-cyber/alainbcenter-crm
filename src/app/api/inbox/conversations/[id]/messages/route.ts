@@ -581,11 +581,12 @@ export async function POST(
 
     // Return error if send failed
     if (sendError) {
+      const channelName = isInstagram ? 'Instagram' : 'WhatsApp'
       return NextResponse.json(
         {
           ok: false,
-          error: 'Failed to send WhatsApp message',
-          hint: sendError.message || 'Check WhatsApp configuration and try again.',
+          error: `Failed to send ${channelName} message`,
+          hint: sendError.message || `Check ${channelName} configuration and try again.`,
           message: {
             id: message.id,
             direction: message.direction,
