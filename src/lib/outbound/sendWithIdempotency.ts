@@ -406,7 +406,12 @@ export async function sendOutboundWithIdempotency(
         console.log(`ℹ️ [OUTBOUND-IDEMPOTENCY] Phone is real number (${phone}), using Instagram ID from conversation: ${instagramUserId}`)
       }
       
-      console.log(`📤 [OUTBOUND-IDEMPOTENCY] Sending Instagram message to ${instagramUserId} (conversationId: ${conversationId}, phone: ${phone})`)
+      console.log(`[OUTBOUND-IDEMPOTENCY] Instagram outbound → sender`, {
+        instagramUserId,
+        conversationId,
+        phone,
+        textLength: text.length,
+      })
       
       const result = await sendInstagramViaMeta(instagramUserId, text, config)
       

@@ -1478,8 +1478,18 @@ export async function sendAiReply(
     const normalizedChannel = conversation.channel?.toLowerCase() || 'whatsapp'
     const provider = channelToProvider[normalizedChannel] || channelToProvider[conversation.channel || ''] || 'whatsapp'
     
+    // SAFETY CHECK: Never fall back to WhatsApp for Instagram conversations
+    if (normalizedChannel === 'instagram' && provider !== 'instagram') {
+      throw new Error(`[ORCHESTRATOR] SAFETY CHECK FAILED: Instagram conversation mapped to ${provider} instead of instagram. This should never happen.`)
+    }
+    
     // Log phone/ID for debugging
     if (provider === 'instagram') {
+      console.log(`[ORCHESTRATOR] Instagram inbound → orchestrator`, {
+        conversationId: conversationId,
+        instagramContactId: phone,
+        leadId: conversation.leadId,
+      })
       console.log(`[ORCHESTRATOR] Instagram contact ID: ${phone} (conversationId: ${conversationId})`)
     }
     

@@ -179,6 +179,24 @@ export async function POST(
       'facebook': 'facebook',
     }
     const provider = channelToProvider[channelLower] || 'whatsapp'
+    
+    // SAFETY CHECK: Never use WhatsApp for Instagram conversations
+    if (isInstagram && provider !== 'instagram') {
+      console.error(`[INBOX-MESSAGES] SAFETY CHECK FAILED: Instagram conversation mapped to ${provider} instead of instagram`, {
+        conversationId: conversation.id,
+        channel: conversation.channel,
+        channelLower,
+        provider,
+      })
+      return NextResponse.json(
+        {
+          ok: false,
+          error: 'Internal error: Instagram conversation incorrectly routed',
+          hint: 'Please contact support. This should never happen.',
+        },
+        { status: 500 }
+      )
+    }
 
     // Send message via appropriate provider
     const sentAt = new Date()

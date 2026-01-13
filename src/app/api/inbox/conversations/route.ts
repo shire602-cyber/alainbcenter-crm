@@ -87,6 +87,8 @@ export async function GET(req: NextRequest) {
               fullName: true,
               phone: true,
               email: true,
+              igUsername: true,
+              igUserId: true,
             },
           },
           knownFields: true, // Include to extract Instagram profile photo

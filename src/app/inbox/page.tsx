@@ -62,6 +62,8 @@ type Contact = {
   phone: string
   email?: string | null
   profilePhoto?: string | null // Instagram profile photo URL
+  igUsername?: string | null // Instagram username (e.g., "john_doe")
+  igUserId?: string | null   // Instagram numeric ID (e.g., "6221774837922501")
 }
 
 type Conversation = {
@@ -183,34 +185,44 @@ function getInstagramUsername(phone: string): string | null {
 
 // Helper to get display name for contact in inbox
 function getContactDisplayName(contact: Contact, channel: string): string {
-  // If we have a good fullName, use it
-  if (contact.fullName && 
-      !contact.fullName.includes('Unknown') && 
-      contact.fullName !== 'Instagram User' &&
-      !contact.fullName.startsWith('Contact +') &&
-      !contact.fullName.startsWith('@')) {
+  // For Instagram: Check igUsername first (dedicated field)
+  if (channel === 'instagram' && contact.igUsername) {
+    return `@${contact.igUsername}`
+  }
+  
+  // If we have a good fullName (not generic/placeholder), use it
+  const isGenericName = !contact.fullName || 
+    contact.fullName === 'Instagram User' ||
+    contact.fullName.includes('Unknown') ||
+    contact.fullName.startsWith('Contact +') ||
+    contact.fullName.startsWith('@') ||
+    contact.fullName.trim() === ''
+  
+  if (!isGenericName) {
     return contact.fullName
   }
   
-  // For Instagram, try to show username from phone (but prefer fullName if it's a real name)
-  // Only show @USER_ID if fullName is generic
+  // For Instagram, try to show username from phone if fullName is generic
   if (channel === 'instagram' && contact.phone) {
     const username = getInstagramUsername(contact.phone)
     if (username) {
-      // Only show @USER_ID if we don't have a better name
-      // If fullName is "Instagram User", show @username instead
-      if (!contact.fullName || contact.fullName === 'Instagram User') {
-        return `@${username}`
-      }
+      // Show @username if fullName is generic or missing
+      return `@${username}`
+    }
+    
+    // Fallback: extract from phone if it's in ig: format
+    if (contact.phone.startsWith('ig:')) {
+      const extractedUsername = contact.phone.substring(3)
+      return `@${extractedUsername}`
+    }
+    
+    // Last resort: use igUserId if available (but format nicely)
+    if (contact.igUserId) {
+      return `@${contact.igUserId}`
     }
   }
   
-  // Fallback to phone (but format nicely for Instagram)
-  if (channel === 'instagram' && contact.phone && contact.phone.startsWith('ig:')) {
-    const username = contact.phone.substring(3)
-    return `@${username}`
-  }
-  
+  // Final fallback
   return contact.phone || 'Unknown'
 }
 

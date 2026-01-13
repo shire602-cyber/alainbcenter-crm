@@ -82,6 +82,8 @@ model Contact {
   phone            String
   phoneNormalized  String?  @unique // E.164 normalized phone number (e.g., +971501234567)
   waId             String?  @unique // WhatsApp user ID (wa_id from Meta webhook)
+  igUsername       String?  @map("ig_username") // Instagram username (e.g., "john_doe")
+  igUserId         String?  @map("ig_user_id")   // Instagram numeric ID (e.g., "6221774837922501")
   email            String?
   nationality      String?
   source           String?

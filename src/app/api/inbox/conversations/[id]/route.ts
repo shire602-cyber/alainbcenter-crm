@@ -79,6 +79,8 @@ export async function GET(
               phone: true,
               email: true,
               nationality: true,
+              igUsername: true,
+              igUserId: true,
             }
           },
           lead: {
@@ -100,6 +102,8 @@ export async function GET(
                   fullName: true,
                   phone: true,
                   email: true,
+                  igUsername: true,
+                  igUserId: true,
                 },
               },
               serviceType: {

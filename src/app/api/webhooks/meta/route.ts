@@ -943,67 +943,35 @@ async function processWebhookPayload(payload: any) {
           })
           
           try {
-            // For Instagram, use robust processing pipeline that prioritizes inbox display
+            // For Instagram, use new orchestrator (parallel to WhatsApp)
             if (channelLower === 'instagram') {
-              console.log('🚀 [META-WEBHOOK-INSTAGRAM] Using robust processing pipeline')
-              const instagramResult = await processInstagramMessageRobust({
-                pageId: pageId!,
-                workspaceId: workspaceId ?? 1,
+              console.log('🚀 [META-WEBHOOK-INSTAGRAM] Using Instagram orchestrator (first-class channel)')
+              
+              const { orchestrateInstagramInbound } = await import('@/lib/inbound/instagramOrchestrator')
+              
+              const instagramResult = await orchestrateInstagramInbound({
                 senderId: event.senderId!,
-                message: { 
-                  text: event.text, 
-                  attachments: attachments,
-                  mid: event.messageId || event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
-                },
+                messageText: event.text || '[Media message]',
+                providerMessageId: event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 timestamp: event.timestamp || new Date(),
                 instagramProfile: instagramProfile || undefined,
-                providerMessageId: event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`,
                 metadata: {
                   mediaUrl: attachments?.[0]?.url || attachments?.[0]?.payload?.url || null,
                   mediaMimeType: attachments?.[0]?.type || attachments?.[0]?.mimeType || null,
                   providerMediaId: attachments?.[0]?.payload?.media_id || attachments?.[0]?.payload?.id || null,
                 },
+                pageId: pageId!,
+                workspaceId: workspaceId ?? 1,
+                connectionId: connection?.id,
               })
-
-              // Enqueue outbound job for Instagram (similar to WhatsApp)
-              const providerMessageId = event.messageId || `meta_instagram_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`
               
-              // Check if conversation is assigned to a user (skip auto-reply if assigned)
-              if (instagramResult?.conversation?.id) {
-                const conversation = await prisma.conversation.findUnique({
-                  where: { id: instagramResult.conversation?.id },
-                  select: { assignedUserId: true },
-                })
-                
-                const isAssignedToUser = conversation?.assignedUserId !== null && conversation?.assignedUserId !== undefined
-                
-                if (isAssignedToUser) {
-                  console.log(`⏭️ [META-WEBHOOK-INSTAGRAM] Skipping auto-reply - conversation assigned to user ${conversation.assignedUserId}`)
-                } else {
-                  // Enqueue outbound job
-                  const { enqueueOutboundJob } = await import('@/lib/jobs/enqueueOutbound')
-                  
-                  try {
-                    const enqueueResult = await enqueueOutboundJob({
-                      conversationId: instagramResult.conversation.id,
-                      inboundMessageId: instagramResult.message.id,
-                      inboundProviderMessageId: providerMessageId,
-                      channel: 'instagram',
-                    })
-                    
-                    console.log(`✅ [META-WEBHOOK-INSTAGRAM] Job enqueued jobId=${enqueueResult.jobId} wasDuplicate=${enqueueResult.wasDuplicate}`)
-                    
-                    if (enqueueResult.wasDuplicate) {
-                      console.log(`⚠️ [META-WEBHOOK-INSTAGRAM] Duplicate job blocked inboundProviderMessageId=${providerMessageId}`)
-                    } else {
-                      console.log(`✅ [META-WEBHOOK-INSTAGRAM] Job enqueued, will be processed by cron jobId=${enqueueResult.jobId}`)
-                    }
-                  } catch (enqueueError: any) {
-                    console.error(`❌ [META-WEBHOOK-INSTAGRAM] Failed to enqueue job:`, enqueueError.message)
-                    // Don't fail webhook - job can be retried later
-                  }
-                }
-              }
+              console.log(`✅ [META-WEBHOOK-INSTAGRAM] Instagram orchestrator completed`, {
+                contactId: instagramResult.contact.id,
+                conversationId: instagramResult.conversation.id,
+                leadId: instagramResult.lead.id,
+                messageId: instagramResult.message.id,
+                autoReplied: instagramResult.autoReplied,
+              })
             } else {
               // For Facebook, use standard processing
           await processInboundMessage({
@@ -1283,13 +1251,22 @@ async function processInstagramMessageRobust(data: {
         oldName === 'Instagram User' || 
         oldName.includes('Unknown') ||
         oldName.startsWith('Contact +') ||
-        oldName.trim() === ''
+        oldName.trim() === '' ||
+        oldName.startsWith('@') // Also consider @USER_ID as generic
       
-      // Always update if we have a better name (not "Instagram User" or matches existing)
+      // Always update if:
+      // 1. Current name is generic AND we have a better name, OR
+      // 2. New name is better than current (not generic) AND different AND longer
+      // 3. Profile has a real name (not just username) and current is generic
+      const hasRealName = !!instagramProfile.name && instagramProfile.name !== 'Instagram User'
       const shouldUpdate = profileName !== 'Instagram User' && 
         profileName !== oldName &&
         !profileName.includes('Unknown') &&
-        (isCurrentNameGeneric || profileName.length > oldName.length)
+        (
+          isCurrentNameGeneric || 
+          (hasRealName && isCurrentNameGeneric) ||
+          (!isCurrentNameGeneric && profileName.length > oldName.length)
+        )
       
       if (shouldUpdate) {
         try {
@@ -1310,6 +1287,7 @@ async function processInstagramMessageRobust(data: {
             newName: profileName,
             profileSource: instagramProfile.name ? 'name' : 'username',
             wasGeneric: isCurrentNameGeneric,
+            hasRealName,
             senderId,
             providerMessageId,
           })
@@ -1321,6 +1299,7 @@ async function processInstagramMessageRobust(data: {
             profileName,
             oldName,
             senderId,
+            stack: updateError.stack?.substring(0, 200),
           })
         }
       } else {
@@ -1330,6 +1309,7 @@ async function processInstagramMessageRobust(data: {
           profileName,
           shouldUpdate,
           isCurrentNameGeneric,
+          hasRealName: !!instagramProfile.name,
           senderId,
         })
       }
@@ -1339,7 +1319,20 @@ async function processInstagramMessageRobust(data: {
         senderId,
         providerMessageId,
         currentName: contact.fullName,
-        note: 'Profile fetch may have failed or profile data not available',
+        note: 'Profile fetch may have failed - check Meta Graph API permissions and access token',
+        connectionId: connection?.id || 'unknown',
+      })
+    } else {
+      console.warn('⚠️ [INSTAGRAM-ROBUST] Instagram profile exists but has no name or username', {
+        contactId: contact.id,
+        senderId,
+        providerMessageId,
+        profileData: {
+          hasName: !!instagramProfile.name,
+          hasUsername: !!instagramProfile.username,
+          name: instagramProfile.name,
+          username: instagramProfile.username,
+        },
       })
     }
 
@@ -1514,10 +1507,10 @@ async function processInstagramMessageRobust(data: {
 
     // Trigger automation for data extraction and auto-reply
     // This ensures service, phone, nationality are auto-filled and AI replies are sent
-    if (lead) {
+    if (lead && lead.id) {
       try {
         const { queueInboundMessageJob } = await import('@/lib/automation/queueJob')
-        await queueInboundMessageJob(lead.id, {
+        const jobId = await queueInboundMessageJob(lead.id, {
           id: messageRecord.id,
           direction: 'INBOUND',
           channel: 'instagram',
@@ -1525,12 +1518,16 @@ async function processInstagramMessageRobust(data: {
           createdAt: messageRecord.createdAt,
         })
         console.log('✅ [INSTAGRAM-ROBUST] Automation job queued for data extraction and auto-reply', {
+          jobId,
           leadId: lead.id,
           messageId: messageRecord.id,
+          channel: 'instagram',
+          note: 'Job will be processed by automation worker to extract data and send AI reply',
         })
       } catch (automationError: any) {
         console.error('⚠️ [INSTAGRAM-ROBUST] Failed to queue automation job (non-blocking):', {
           error: automationError.message,
+          errorStack: automationError.stack?.substring(0, 200),
           leadId: lead.id,
           messageId: messageRecord.id,
           note: 'Message is still created, automation can be triggered manually if needed',
@@ -1542,6 +1539,9 @@ async function processInstagramMessageRobust(data: {
         contactId: contact.id,
         conversationId: conversationResult.id,
         messageId: messageRecord.id,
+        leadCreated: !!lead,
+        leadId: lead?.id || null,
+        note: 'Lead creation may have failed - check logs above for lead creation errors',
       })
     }
 
