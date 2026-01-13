@@ -1461,11 +1461,6 @@ export async function sendAiReply(
       throw new Error(`Contact ${conversation.contact.id} has no phone number or Instagram ID`);
     }
     
-    // Log phone/ID for debugging
-    if (provider === 'instagram') {
-      console.log(`[ORCHESTRATOR] Instagram contact ID: ${phone} (conversationId: ${conversationId})`)
-    }
-
     // Step 7.5: Map conversation channel to provider format
     // Support both lowercase and uppercase channel names
     const channelToProvider: Record<string, 'whatsapp' | 'email' | 'instagram' | 'facebook'> = {
@@ -1482,6 +1477,11 @@ export async function sendAiReply(
     
     const normalizedChannel = conversation.channel?.toLowerCase() || 'whatsapp'
     const provider = channelToProvider[normalizedChannel] || channelToProvider[conversation.channel || ''] || 'whatsapp'
+    
+    // Log phone/ID for debugging
+    if (provider === 'instagram') {
+      console.log(`[ORCHESTRATOR] Instagram contact ID: ${phone} (conversationId: ${conversationId})`)
+    }
     
     console.log(`[ORCHESTRATOR] Channel mapping:`, {
       originalChannel: conversation.channel,

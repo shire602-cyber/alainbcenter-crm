@@ -229,8 +229,30 @@ export async function runInboundAutomationsForMessage(
           if (extracted.email && !lead.contact.email) {
             contactUpdates.email = extracted.email
           }
-          if (extracted.phone && !lead.contact.phone) {
-            contactUpdates.phone = extracted.phone
+          // For Instagram: allow updating phone if current value is Instagram ID (ig:USER_ID)
+          // Instagram ID is not a real phone number, so we should replace it with actual phone
+          const isInstagramId = lead.contact.phone?.startsWith('ig:')
+          if (extracted.phone && (!lead.contact.phone || isInstagramId)) {
+            // Normalize the extracted phone number
+            try {
+              const { normalizePhone } = await import('../phone/normalize')
+              const normalizedPhone = normalizePhone(extracted.phone)
+              contactUpdates.phone = normalizedPhone
+              contactUpdates.phoneNormalized = normalizedPhone
+              console.log(`✅ [AUTOMATION] Updated Instagram contact phone from ${lead.contact.phone} to ${normalizedPhone}`, {
+                contactId: lead.contact.id,
+                leadId: lead.id,
+                wasInstagramId: isInstagramId,
+              })
+            } catch (normalizeError: any) {
+              // If normalization fails, still update with extracted phone (better than ig:USER_ID)
+              contactUpdates.phone = extracted.phone
+              console.warn(`⚠️ [AUTOMATION] Phone normalization failed, using raw extracted phone:`, {
+                contactId: lead.contact.id,
+                extractedPhone: extracted.phone,
+                error: normalizeError.message,
+              })
+            }
           }
           if (extracted.nationality && !lead.contact.nationality) {
             contactUpdates.nationality = extracted.nationality

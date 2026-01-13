@@ -987,8 +987,30 @@ async function executeExtractAndUpdateLeadData(
     if (extracted.email && !contact.email) {
       contactUpdates.email = extracted.email
     }
-    if (extracted.phone && !contact.phone) {
-      contactUpdates.phone = extracted.phone
+    // For Instagram: allow updating phone if current value is Instagram ID (ig:USER_ID)
+    // Instagram ID is not a real phone number, so we should replace it with actual phone
+    const isInstagramId = contact.phone?.startsWith('ig:')
+    if (extracted.phone && (!contact.phone || isInstagramId)) {
+      // Normalize the extracted phone number
+      try {
+        const { normalizePhone } = await import('../phone/normalize')
+        const normalizedPhone = normalizePhone(extracted.phone)
+        contactUpdates.phone = normalizedPhone
+        contactUpdates.phoneNormalized = normalizedPhone
+        console.log(`✅ [AUTOMATION-ACTION] Updated Instagram contact phone from ${contact.phone} to ${normalizedPhone}`, {
+          contactId: contact.id,
+          leadId: lead.id,
+          wasInstagramId: isInstagramId,
+        })
+      } catch (normalizeError: any) {
+        // If normalization fails, still update with extracted phone (better than ig:USER_ID)
+        contactUpdates.phone = extracted.phone
+        console.warn(`⚠️ [AUTOMATION-ACTION] Phone normalization failed, using raw extracted phone:`, {
+          contactId: contact.id,
+          extractedPhone: extracted.phone,
+          error: normalizeError.message,
+        })
+      }
     }
     if (extracted.nationality && !contact.nationality) {
       contactUpdates.nationality = extracted.nationality

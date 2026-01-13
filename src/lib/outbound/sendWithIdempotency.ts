@@ -356,10 +356,57 @@ export async function sendOutboundWithIdempotency(
         throw new Error('Instagram integration not configured. Please configure in /admin/integrations')
       }
       
-      // Extract Instagram user ID from phone (remove 'ig:' prefix if present)
-      const instagramUserId = phone.startsWith('ig:') ? phone.substring(3) : phone
+      // Extract Instagram user ID
+      // If phone starts with 'ig:', extract user ID from phone
+      // Otherwise, phone is a real number - get Instagram ID from conversation metadata
+      let instagramUserId: string
+      if (phone.startsWith('ig:')) {
+        instagramUserId = phone.substring(3)
+      } else {
+        // Phone is real number, get Instagram ID from conversation
+        const conversation = await prisma.conversation.findUnique({
+          where: { id: conversationId },
+          select: { externalThreadId: true, knownFields: true }
+        })
+        
+        // Try to extract Instagram ID from externalThreadId
+        // externalThreadId format for Instagram: "instagram:USER_ID" (from getExternalThreadId)
+        if (conversation?.externalThreadId) {
+          const threadId = conversation.externalThreadId
+          // externalThreadId format: "instagram:6221774837922501"
+          if (threadId.startsWith('instagram:')) {
+            instagramUserId = threadId.substring(11) // Remove "instagram:" prefix
+          } else if (threadId.startsWith('ig:')) {
+            instagramUserId = threadId.substring(3) // Remove "ig:" prefix (fallback)
+          } else {
+            // Try to extract numeric ID from thread ID
+            const idMatch = threadId.match(/\d+/)
+            if (idMatch) {
+              instagramUserId = idMatch[0]
+            } else {
+              instagramUserId = threadId
+            }
+          }
+        } else if (conversation?.knownFields) {
+          // Try to parse knownFields JSON for Instagram ID
+          try {
+            const knownFields = JSON.parse(conversation.knownFields)
+            if (knownFields.instagramUserId || knownFields.senderId) {
+              instagramUserId = knownFields.instagramUserId || knownFields.senderId
+            } else {
+              throw new Error('Instagram ID not found in conversation metadata')
+            }
+          } catch {
+            throw new Error('Instagram ID not found in conversation metadata and phone is not Instagram ID format')
+          }
+        } else {
+          throw new Error('Instagram ID not found in conversation metadata and phone is not Instagram ID format')
+        }
+        
+        console.log(`ℹ️ [OUTBOUND-IDEMPOTENCY] Phone is real number (${phone}), using Instagram ID from conversation: ${instagramUserId}`)
+      }
       
-      console.log(`📤 [OUTBOUND-IDEMPOTENCY] Sending Instagram message to ${instagramUserId} (conversationId: ${conversationId})`)
+      console.log(`📤 [OUTBOUND-IDEMPOTENCY] Sending Instagram message to ${instagramUserId} (conversationId: ${conversationId}, phone: ${phone})`)
       
       const result = await sendInstagramViaMeta(instagramUserId, text, config)
       
