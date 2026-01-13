@@ -196,8 +196,11 @@ export async function orchestrateInstagramInbound(
         
         const replyResult = await sendAiReply({
           conversationId: conversation.id,
+          leadId: lead.id,
+          contactId: contact.id,
+          inboundText: message.body || input.messageText || '',
           inboundMessageId: message.id,
-          inboundProviderMessageId: input.providerMessageId,
+          channel: conversation.channel || 'instagram',
         }, 'auto_reply')
         
         if (replyResult.success) {
