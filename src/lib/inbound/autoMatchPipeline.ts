@@ -929,6 +929,32 @@ export async function handleInboundMessageAutoMatch(
     elapsed: `${Date.now() - startTime}ms`,
   })
 
+  // Trigger automation for data extraction and auto-reply
+  // This ensures service, phone, nationality are auto-filled and AI replies are sent
+  if (message && lead && lead.id && message.direction === 'INBOUND') {
+    try {
+      const { queueInboundMessageJob } = await import('@/lib/automation/queueJob')
+      // Fire-and-forget - don't await, runs in background
+      queueInboundMessageJob(lead.id, {
+        id: message.id,
+        direction: message.direction,
+        channel: message.channel,
+        body: message.body,
+        createdAt: message.createdAt,
+      }).catch((err) => {
+        console.warn(`[AUTO-MATCH] Failed to queue automation job for lead ${lead.id}:`, err.message)
+      })
+      console.log(`✅ [AUTO-MATCH] Automation job queued for data extraction and auto-reply`, {
+        leadId: lead.id,
+        messageId: message.id,
+        channel: message.channel,
+      })
+    } catch (error: any) {
+      // Silent fail - don't block pipeline
+      console.warn(`[AUTO-MATCH] Error importing queueJob:`, error.message)
+    }
+  }
+
   // Trigger lead scoring for inbound messages (fire-and-forget)
   // Only trigger if message is inbound and linked to a lead
   // Note: message.direction is normalized to 'INBOUND' or 'OUTBOUND' in createCommunicationLog

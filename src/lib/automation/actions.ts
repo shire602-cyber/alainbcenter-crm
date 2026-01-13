@@ -533,21 +533,46 @@ async function executeSendAIReply(
     }
   }
 
+  // Map channel to provider
+  const channelToProvider: Record<string, 'whatsapp' | 'email' | 'instagram' | 'facebook'> = {
+    'WHATSAPP': 'whatsapp',
+    'whatsapp': 'whatsapp',
+    'INSTAGRAM': 'instagram',
+    'instagram': 'instagram',
+    'EMAIL': 'email',
+    'email': 'email',
+    'FACEBOOK': 'facebook',
+    'facebook': 'facebook',
+  }
+  const normalizedChannel = (channel || 'WHATSAPP').toUpperCase()
+  const provider = channelToProvider[normalizedChannel] || channelToProvider[channel || ''] || 'whatsapp'
+  const dbChannel = normalizedChannel.toLowerCase()
+
+  console.log(`[AUTOMATION-SEND-AI-REPLY] Channel mapping:`, {
+    originalChannel: channel,
+    normalizedChannel,
+    mappedProvider: provider,
+    dbChannel,
+    leadId: lead.id,
+    contactId: contact.id,
+  })
+
   // Send message based on channel
-  if (channel === 'WHATSAPP') {
+  if (normalizedChannel === 'WHATSAPP' || normalizedChannel === 'INSTAGRAM') {
+    // For WhatsApp and Instagram, both need phone/ID
     if (!contact.phone) {
       return {
         success: false,
-        error: 'Contact has no phone number',
+        error: 'Contact has no phone number or Instagram ID',
       }
     }
 
     try {
-      // Get or create conversation to check 24-hour window
+      // Get or create conversation
       let conversation = await prisma.conversation.findFirst({
         where: {
           contactId: contact.id,
-          channel: 'whatsapp',
+          channel: dbChannel,
           leadId: lead.id,
         },
       })
@@ -557,13 +582,13 @@ async function executeSendAIReply(
           data: {
             contactId: contact.id,
             leadId: lead.id,
-            channel: 'whatsapp',
+            channel: dbChannel,
             status: 'open',
           },
         })
       }
 
-      // Check 24-hour messaging window for WhatsApp
+      // Check 24-hour messaging window for WhatsApp (Instagram doesn't have this restriction)
       // WhatsApp Business API only allows free-form messages within 24 hours of customer's last message
       // BUT: For INBOUND_MESSAGE triggers, we're responding to a message that just arrived, so we're always within window
       const isInboundTrigger = context.triggerData?.lastMessage?.direction === 'INBOUND' || 
@@ -574,8 +599,12 @@ async function executeSendAIReply(
       
       let within24HourWindow = false
       
-      // If this is an inbound message trigger, we're definitely within the 24-hour window
-      if (isInboundTrigger) {
+      // Instagram doesn't have 24-hour window restriction
+      if (normalizedChannel === 'INSTAGRAM') {
+        within24HourWindow = true
+        console.log('✅ Instagram channel - no 24-hour window restriction')
+      } else if (isInboundTrigger) {
+        // If this is an inbound message trigger, we're definitely within the 24-hour window
         within24HourWindow = true
         console.log('✅ INBOUND_MESSAGE trigger - within 24-hour window (responding to just-received message)')
       } else if (lastInboundAt) {
@@ -588,8 +617,8 @@ async function executeSendAIReply(
         console.log('✅ No previous inbound messages - can send')
       }
 
-      // If outside 24-hour window, cannot send free-form AI message
-      if (!within24HourWindow) {
+      // If outside 24-hour window (WhatsApp only), cannot send free-form AI message
+      if (normalizedChannel === 'WHATSAPP' && !within24HourWindow) {
         console.warn(`⚠️ Outside 24-hour window: ${lastInboundAt ? Math.round((now.getTime() - new Date(lastInboundAt).getTime()) / (1000 * 60 * 60)) : 'never'} hours since last inbound`)
         return {
           success: false,
@@ -602,8 +631,9 @@ async function executeSendAIReply(
         }
       }
 
-      // Send via WhatsApp with idempotency (within 24-hour window)
-      console.log(`📤 Sending WhatsApp message to ${contact.phone} (${aiResult.text.substring(0, 50)}...)`)
+      // Send via appropriate provider with idempotency
+      const channelName = normalizedChannel === 'INSTAGRAM' ? 'Instagram' : 'WhatsApp'
+      console.log(`📤 Sending ${channelName} message to ${contact.phone} (${aiResult.text.substring(0, 50)}...)`)
       const { sendOutboundWithIdempotency } = await import('@/lib/outbound/sendWithIdempotency')
       let result: { success: boolean; messageId?: string; wasDuplicate?: boolean; error?: string }
       try {
@@ -613,17 +643,17 @@ async function executeSendAIReply(
           leadId: lead.id,
           phone: contact.phone,
           text: aiResult.text,
-          provider: 'whatsapp',
+          provider, // Use mapped provider (whatsapp or instagram)
           triggerProviderMessageId: null, // Automation send
           replyType: 'answer',
           lastQuestionKey: null,
           flowStep: null,
         })
       } catch (error: any) {
-        console.error('❌ WhatsApp send failed:', error)
+        console.error(`❌ ${channelName} send failed:`, error)
         return {
           success: false,
-          error: error.message || 'Failed to send WhatsApp message',
+          error: error.message || `Failed to send ${channelName} message`,
         }
       }
 
@@ -636,16 +666,16 @@ async function executeSendAIReply(
       }
 
       if (!result.success || !result.messageId) {
-        console.error('❌ WhatsApp send failed:', result.error || 'No message ID returned')
+        console.error(`❌ ${channelName} send failed:`, result.error || 'No message ID returned')
         return {
           success: false,
-          error: result.error || 'Failed to send WhatsApp message - no message ID returned',
+          error: result.error || `Failed to send ${channelName} message - no message ID returned`,
         }
       }
 
-      console.log(`✅ WhatsApp message sent successfully: ${result.messageId}`)
+      console.log(`✅ ${channelName} message sent successfully: ${result.messageId}`)
 
-      // Conversation already retrieved above for 24-hour check
+      // Conversation already retrieved above
 
       // Create message record
       await prisma.message.create({
@@ -654,7 +684,7 @@ async function executeSendAIReply(
           leadId: lead.id,
           contactId: contact.id,
           direction: 'OUTBOUND',
-          channel: 'whatsapp',
+          channel: dbChannel, // Use actual channel (whatsapp or instagram)
           type: 'text',
           body: aiResult.text,
           status: result.messageId ? 'SENT' : 'FAILED',
@@ -664,7 +694,8 @@ async function executeSendAIReply(
             actionType: 'SEND_AI_REPLY',
             mode,
             aiGenerated: true,
-            channel: 'WHATSAPP',
+            provider, // Store provider used
+            channel: normalizedChannel,
             confidence: aiResult.confidence,
           }),
           sentAt: new Date(),
@@ -682,12 +713,12 @@ async function executeSendAIReply(
         },
       })
 
-      // Update lead
+      // Update lead lastAutoReplyAt and lastContactChannel
       await prisma.lead.update({
         where: { id: lead.id },
         data: {
-          lastContactAt: new Date(),
-          lastContactChannel: 'whatsapp',
+          lastAutoReplyAt: new Date(),
+          lastContactChannel: dbChannel, // Use actual channel (whatsapp or instagram)
         },
       })
 
@@ -806,9 +837,9 @@ async function executeSendAIReply(
         error: error.message || 'Failed to send email',
       }
     }
-  } else if (channel === 'INSTAGRAM' || channel === 'FACEBOOK') {
-    // Instagram/Facebook sending via Meta Graph API
-    // TODO: Implement Meta Graph API sending when integration is configured
+  } else if (channel === 'FACEBOOK') {
+    // Facebook sending via Meta Graph API
+    // TODO: Implement Facebook sending when integration is configured
     // For now, log and skip
     console.log(`⏭️ ${channel} autoresponse skipped: channel adapter not yet implemented`)
     

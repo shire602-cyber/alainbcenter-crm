@@ -1512,6 +1512,39 @@ async function processInstagramMessageRobust(data: {
       messageInInbox: true,
     })
 
+    // Trigger automation for data extraction and auto-reply
+    // This ensures service, phone, nationality are auto-filled and AI replies are sent
+    if (lead) {
+      try {
+        const { queueInboundMessageJob } = await import('@/lib/automation/queueJob')
+        await queueInboundMessageJob(lead.id, {
+          id: messageRecord.id,
+          direction: 'INBOUND',
+          channel: 'instagram',
+          body: messageRecord.body,
+          createdAt: messageRecord.createdAt,
+        })
+        console.log('✅ [INSTAGRAM-ROBUST] Automation job queued for data extraction and auto-reply', {
+          leadId: lead.id,
+          messageId: messageRecord.id,
+        })
+      } catch (automationError: any) {
+        console.error('⚠️ [INSTAGRAM-ROBUST] Failed to queue automation job (non-blocking):', {
+          error: automationError.message,
+          leadId: lead.id,
+          messageId: messageRecord.id,
+          note: 'Message is still created, automation can be triggered manually if needed',
+        })
+        // Don't throw - message is already created
+      }
+    } else {
+      console.warn('⚠️ [INSTAGRAM-ROBUST] No lead created, skipping automation job', {
+        contactId: contact.id,
+        conversationId: conversationResult.id,
+        messageId: messageRecord.id,
+      })
+    }
+
     return {
       contact: contact,
       conversation: { id: conversationResult.id },
