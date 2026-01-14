@@ -154,6 +154,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const [expiryType, setExpiryType] = useState('VISA_EXPIRY')
   const [expiryDate, setExpiryDate] = useState('')
   const [expiryNotes, setExpiryNotes] = useState('')
+  const [activeTab, setActiveTab] = useState<'expiry' | 'tasks'>('expiry')
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedDocCategory, setSelectedDocCategory] = useState('OTHER')
   const [uploadingDoc, setUploadingDoc] = useState(false)
@@ -1378,7 +1379,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
             {/* Compact Tab Layout for Expiry & Tasks */}
             <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-              <Tabs defaultValue="expiry" className="w-full">
+              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'expiry' | 'tasks')} className="w-full">
                 <CardHeader className="pb-0 pt-4 px-4 border-b border-gray-100">
                   <TabsList className="w-full justify-start rounded-none border-none bg-transparent h-auto p-0">
                     <TabsTrigger 
@@ -1692,7 +1693,6 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </div>
             </div>
           </div>
-        </div>
 
         {/* Activity Timeline Section - Hidden per user request */}
         {false && (

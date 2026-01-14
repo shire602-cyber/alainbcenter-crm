@@ -125,8 +125,6 @@ export async function POST(req: NextRequest) {
       pageSubscribed = await subscribePageToWebhook(
         pageId,
         pageAccessToken,
-        webhookUrl,
-        finalVerifyToken,
         ['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'leadgen']
       )
       if (pageSubscribed) {
