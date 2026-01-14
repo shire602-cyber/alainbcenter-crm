@@ -12,6 +12,193 @@ export interface NormalizedWebhookEvent {
   text?: string
   timestamp?: Date
   rawPayload: any
+  // Lead Ads specific fields
+  leadgenId?: string
+  formId?: string
+  adId?: string
+  createdTime?: number // Unix timestamp
+}
+
+/**
+ * Service bucket type for lead categorization
+ */
+export type ServiceBucket = 'visa' | 'business_setup' | 'family_visa' | 'other'
+
+/**
+ * Extracted lead fields from Lead Ads field_data
+ */
+export interface ExtractedLeadFields {
+  name?: string
+  phone?: string
+  email?: string
+  nationality?: string
+  rawServiceText?: string
+  notes?: string
+}
+
+/**
+ * Extract lead fields from Lead Ads field_data array
+ * 
+ * Meta Lead Ads field_data format:
+ * [
+ *   { name: "full_name", values: ["John Doe"] },
+ *   { name: "email", values: ["john@example.com"] },
+ *   { name: "phone_number", values: ["+971501234567"] },
+ *   ...
+ * ]
+ * 
+ * Field names are configurable in Meta Lead Ad form, but common patterns include:
+ * - full_name, first_name, last_name
+ * - email
+ * - phone_number, phone
+ * - country, nationality
+ * - service, service_type, interested_in
+ * - notes, message, comments
+ */
+export function extractLeadAdFields(
+  fieldData: Array<{ name: string; values: string[] }> | undefined | null
+): ExtractedLeadFields {
+  const result: ExtractedLeadFields = {}
+  
+  if (!fieldData || !Array.isArray(fieldData)) {
+    console.log(`📋 [META-LEADGEN-NORMALIZE] No field_data to extract`)
+    return result
+  }
+  
+  for (const field of fieldData) {
+    const fieldName = (field.name || '').toLowerCase().trim()
+    const value = field.values?.[0]?.trim() || ''
+    
+    if (!value) continue
+    
+    // Name extraction
+    if (fieldName === 'full_name' || fieldName === 'fullname' || fieldName === 'name') {
+      result.name = value
+    } else if (fieldName === 'first_name' || fieldName === 'firstname') {
+      result.name = result.name ? `${value} ${result.name}` : value
+    } else if (fieldName === 'last_name' || fieldName === 'lastname') {
+      result.name = result.name ? `${result.name} ${value}` : value
+    }
+    
+    // Email extraction
+    if (fieldName === 'email' || fieldName === 'email_address') {
+      result.email = value
+    }
+    
+    // Phone extraction
+    if (fieldName === 'phone_number' || fieldName === 'phone' || fieldName === 'mobile') {
+      result.phone = value
+    }
+    
+    // Nationality extraction
+    if (fieldName === 'country' || fieldName === 'nationality') {
+      result.nationality = value
+    }
+    
+    // Service extraction
+    if (fieldName === 'service' || fieldName === 'service_type' || 
+        fieldName === 'interested_in' || fieldName === 'service_needed') {
+      result.rawServiceText = value
+    }
+    
+    // Notes extraction
+    if (fieldName === 'notes' || fieldName === 'message' || 
+        fieldName === 'comments' || fieldName === 'additional_info') {
+      result.notes = value
+    }
+  }
+  
+  console.log(`📋 [META-LEADGEN-NORMALIZE] Extracted fields from field_data`, {
+    hasName: !!result.name,
+    hasPhone: !!result.phone,
+    hasEmail: !!result.email,
+    hasNationality: !!result.nationality,
+    hasService: !!result.rawServiceText,
+    hasNotes: !!result.notes,
+    fieldCount: fieldData.length,
+  })
+  
+  return result
+}
+
+/**
+ * Map a ServiceType enum value to a service bucket
+ * 
+ * Service bucket rules from plan:
+ * - FAMILY_VISA → family_visa
+ * - *_BUSINESS_SETUP or OFFSHORE_COMPANY etc → business_setup
+ * - any enum containing VISA (except family) → visa
+ * - otherwise → other
+ */
+export function serviceBucketFromServiceEnum(serviceTypeEnum: string | null | undefined): ServiceBucket {
+  if (!serviceTypeEnum) {
+    return 'other'
+  }
+  
+  const upper = serviceTypeEnum.toUpperCase()
+  
+  // Family visa (check first, before generic visa check)
+  if (upper === 'FAMILY_VISA' || upper.includes('FAMILY_VISA')) {
+    return 'family_visa'
+  }
+  
+  // Business setup variants
+  if (upper.includes('BUSINESS_SETUP') || 
+      upper.includes('COMPANY_SETUP') ||
+      upper === 'OFFSHORE_COMPANY' ||
+      upper.includes('MAINLAND') ||
+      upper.includes('FREEZONE') ||
+      upper.includes('LICENSE')) {
+    return 'business_setup'
+  }
+  
+  // Generic visa (anything with VISA that's not family)
+  if (upper.includes('VISA')) {
+    return 'visa'
+  }
+  
+  // Everything else
+  return 'other'
+}
+
+/**
+ * Guess service bucket from raw service text
+ * Used when we have rawServiceText from lead form but no ServiceType enum match
+ */
+export function serviceBucketFromRawText(rawServiceText: string | null | undefined): ServiceBucket {
+  if (!rawServiceText) {
+    return 'other'
+  }
+  
+  const lower = rawServiceText.toLowerCase()
+  
+  // Family visa keywords
+  if (lower.includes('family') && lower.includes('visa')) {
+    return 'family_visa'
+  }
+  
+  // Business setup keywords
+  if (lower.includes('business') || 
+      lower.includes('company') ||
+      lower.includes('license') ||
+      lower.includes('offshore') ||
+      lower.includes('mainland') ||
+      lower.includes('freezone') ||
+      lower.includes('free zone')) {
+    return 'business_setup'
+  }
+  
+  // Generic visa keywords
+  if (lower.includes('visa') ||
+      lower.includes('golden') ||
+      lower.includes('investor') ||
+      lower.includes('employment') ||
+      lower.includes('visit') ||
+      lower.includes('tourist')) {
+    return 'visa'
+  }
+  
+  return 'other'
 }
 
 /**
@@ -339,11 +526,27 @@ export function normalizeWebhookEvent(payload: any): NormalizedWebhookEvent[] {
     const changes = entry.changes || []
     for (const change of changes) {
       if (change.field === 'leadgen' && change.value) {
-        normalized.push({
+        // Extract leadgen-specific fields from the webhook payload
+        // Format: { leadgen_id, form_id, ad_id, created_time, page_id, ... }
+        const leadgenEvent: NormalizedWebhookEvent = {
           pageId,
           eventType: 'leadgen',
           rawPayload: change.value,
+          leadgenId: change.value.leadgen_id || null,
+          formId: change.value.form_id || null,
+          adId: change.value.ad_id || null,
+          createdTime: change.value.created_time || null,
+        }
+        
+        console.log(`📋 [META-LEADGEN-NORMALIZE] Normalized leadgen event`, {
+          pageId,
+          leadgenId: leadgenEvent.leadgenId || 'N/A',
+          formId: leadgenEvent.formId || 'N/A',
+          adId: leadgenEvent.adId || 'N/A',
+          createdTime: leadgenEvent.createdTime || 'N/A',
         })
+        
+        normalized.push(leadgenEvent)
         }
       }
     }

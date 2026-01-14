@@ -262,12 +262,23 @@ export async function POST(req: NextRequest) {
           }
         }
 
+        // [IG-DM-RECEIVED] Log inbound IG DM - REQUIRED per plan
+        console.log(`📥 [IG-DM-RECEIVED]`, {
+          senderId: from,
+          messageId,
+          hasText: !!messageText && messageText.trim().length > 0 && !messageText.startsWith('['),
+          hasAttachments: !!message.attachments && message.attachments.length > 0,
+          timestamp: timestamp.toISOString(),
+        })
+
         // Use new AUTO-MATCH pipeline
+        // CRITICAL FIX: Pass fromPhone as ig:{senderId} for proper identity resolution
+        // This ensures contacts are keyed by ig:{id} not 'unknown'
         try {
           const result = await handleInboundMessageAutoMatch({
             channel: 'INSTAGRAM',
             providerMessageId: messageId,
-            fromPhone: null, // Instagram uses user IDs, not phone numbers
+            fromPhone: `ig:${from}`, // FIXED: Use ig:{senderId} for stable contact identity
             fromEmail: null,
             fromName: message.from?.name || null,
             text: messageText,
@@ -281,13 +292,27 @@ export async function POST(req: NextRequest) {
             },
           })
 
-          console.log(`✅ [INSTAGRAM-WEBHOOK] Processed Instagram message ${messageId} from ${from}`, {
-            messageId,
-            senderId: from,
+          // [IG-DM-STORED] Log successful storage - REQUIRED per plan
+          console.log(`✅ [IG-DM-STORED]`, {
+            contactId: result?.contact?.id || 'N/A',
             conversationId: result?.conversation?.id || 'N/A',
             leadId: result?.lead?.id || 'N/A',
+            messageId: result?.message?.id || 'N/A',
+            senderId: from,
+            providerMessageId: messageId,
           })
         } catch (error: any) {
+          // CRITICAL: Treat DUPLICATE_MESSAGE as expected (webhook retries)
+          // Return 200 so Meta doesn't keep retrying
+          if (error.message === 'DUPLICATE_MESSAGE') {
+            console.log(`ℹ️ [IG-DM-DUPLICATE] Duplicate message detected (expected on webhook retry)`, {
+              messageId,
+              senderId: from,
+            })
+            // Continue processing other messages - this is normal
+            continue
+          }
+          
           console.error(`❌ [INSTAGRAM-WEBHOOK] Failed to process Instagram message from ${from}:`, {
             error: error.message,
             stack: error.stack?.substring(0, 500),

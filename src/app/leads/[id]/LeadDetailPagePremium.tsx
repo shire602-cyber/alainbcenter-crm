@@ -27,6 +27,7 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
@@ -39,7 +40,6 @@ import { MessageComposerEnhanced } from '@/components/leads/MessageComposerEnhan
 import { RevenueWidget } from '@/components/leads/RevenueWidget'
 import { InlineEditableField } from '@/components/leads/InlineEditableField'
 import { ExpiryCountdown } from '@/components/leads/ExpiryCountdown'
-import { RemindersCard } from '@/components/leads/RemindersCard'
 import { ExtractedDataPanel } from '@/components/leads/ExtractedDataPanel'
 import {
   ArrowLeft,
@@ -76,6 +76,7 @@ import {
   Zap,
   CheckCheck,
   XCircle,
+  CheckSquare,
 } from 'lucide-react'
 import { format, differenceInDays, parseISO, isToday, isYesterday } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -143,6 +144,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const [showTaskModal, setShowTaskModal] = useState(false)
   const [showDocumentModal, setShowDocumentModal] = useState(false)
   const [showExpiryModal, setShowExpiryModal] = useState(false)
+  const [showReminderModal, setShowReminderModal] = useState(false)
   const [showWonLostModal, setShowWonLostModal] = useState(false)
   const [pendingStage, setPendingStage] = useState<string | null>(null)
   
@@ -158,6 +160,14 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const [selectedFile, setSelectedFile] = useState<File | null>(null)
   const [selectedDocCategory, setSelectedDocCategory] = useState('OTHER')
   const [uploadingDoc, setUploadingDoc] = useState(false)
+  
+  // Reminder states
+  const [reminders, setReminders] = useState<any[]>([])
+  const [loadingReminders, setLoadingReminders] = useState(false)
+  const [reminderType, setReminderType] = useState('FOLLOW_UP')
+  const [reminderScheduledAt, setReminderScheduledAt] = useState('')
+  const [reminderChannel, setReminderChannel] = useState('WHATSAPP')
+  const [reminderMessage, setReminderMessage] = useState('')
   const [users, setUsers] = useState<any[]>([])
   const [serviceTypes, setServiceTypes] = useState<any[]>([])
   
@@ -385,6 +395,11 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       return
     }
 
+    // For regular stages, update directly
+    await updateStageDirectly(newStage)
+  }
+
+  async function updateStageDirectly(newStage: string) {
     try {
       // Optimistic update
       const oldLead = { ...lead }
@@ -735,6 +750,78 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     }
   }
 
+  async function loadReminders() {
+    try {
+      setLoadingReminders(true)
+      const res = await fetch(`/api/leads/${leadId}/reminders`)
+      if (res.ok) {
+        const data = await res.json()
+        setReminders(data.reminders || [])
+      }
+    } catch (error) {
+      console.error('Failed to load reminders:', error)
+    } finally {
+      setLoadingReminders(false)
+    }
+  }
+
+  async function handleAddReminder() {
+    if (!reminderScheduledAt) {
+      showToast('Please select a date and time', 'error')
+      return
+    }
+
+    try {
+      const res = await fetch(`/api/leads/${leadId}/reminders`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          type: reminderType,
+          scheduledAt: new Date(reminderScheduledAt).toISOString(),
+          channel: reminderChannel,
+          message: reminderMessage || undefined,
+        }),
+      })
+
+      if (res.ok) {
+        showToast('Reminder created', 'success')
+        setReminderScheduledAt('')
+        setReminderMessage('')
+        await loadReminders()
+      } else {
+        const data = await res.json()
+        throw new Error(data.error || 'Failed to create reminder')
+      }
+    } catch (error: any) {
+      showToast(error.message || 'Failed to create reminder', 'error')
+    }
+  }
+
+  async function handleDeleteReminder(reminderId: number) {
+    if (!confirm('Delete this reminder?')) return
+
+    try {
+      const res = await fetch(`/api/leads/${leadId}/reminders/${reminderId}`, {
+        method: 'DELETE',
+      })
+
+      if (res.ok) {
+        showToast('Reminder deleted', 'success')
+        await loadReminders()
+      } else {
+        throw new Error('Failed to delete reminder')
+      }
+    } catch (error: any) {
+      showToast(error.message || 'Failed to delete reminder', 'error')
+    }
+  }
+
+  useEffect(() => {
+    if (showReminderModal) {
+      loadReminders()
+    }
+  }, [showReminderModal, leadId])
+
   function copyToClipboard(text: string, label: string) {
     navigator.clipboard.writeText(text)
     showToast(`${label} copied to clipboard`, 'success')
@@ -928,22 +1015,50 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         <MoreVertical className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
+                    <DropdownMenuContent align="end" className="w-56">
+                      {/* Lead Actions */}
                       <DropdownMenuItem onClick={() => {
                         showToast('Edit lead feature coming soon', 'info')
                       }}>
+                        <Edit className="mr-2 h-4 w-4" />
                         Edit Lead
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => {
                         showToast('Duplicate lead feature coming soon', 'info')
                       }}>
+                        <Copy className="mr-2 h-4 w-4" />
                         Duplicate
                       </DropdownMenuItem>
                       <DropdownMenuItem onClick={() => {
                         showToast('Archive lead feature coming soon', 'info')
                       }}>
+                        <FileCheck className="mr-2 h-4 w-4" />
                         Archive
                       </DropdownMenuItem>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      {/* Feature Actions */}
+                      <DropdownMenuItem onClick={() => setShowDocumentModal(true)}>
+                        <Upload className="mr-2 h-4 w-4" />
+                        Upload Documents
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setShowReminderModal(true)}>
+                        <Clock className="mr-2 h-4 w-4" />
+                        Reminders
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setShowExpiryModal(true)}>
+                        <Calendar className="mr-2 h-4 w-4" />
+                        Expiry Tracker
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => setShowTaskModal(true)}>
+                        <CheckSquare className="mr-2 h-4 w-4" />
+                        Tasks
+                      </DropdownMenuItem>
+                      
+                      <DropdownMenuSeparator />
+                      
+                      {/* Destructive Action */}
                       <DropdownMenuItem onClick={async () => {
                         if (confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
                           try {
@@ -961,6 +1076,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                           }
                         }
                       }} className="text-red-600 focus:text-red-600">
+                        <Trash2 className="mr-2 h-4 w-4" />
                         Delete
                       </DropdownMenuItem>
                     </DropdownMenuContent>
@@ -1377,269 +1493,6 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Compact Tab Layout for Expiry & Tasks */}
-            <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-              <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as 'expiry' | 'tasks')} className="w-full">
-                <CardHeader className="pb-0 pt-4 px-4 border-b border-gray-100">
-                  <TabsList className="w-full justify-start rounded-none border-none bg-transparent h-auto p-0">
-                    <TabsTrigger 
-                      value="expiry" 
-                      className="flex-1 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                    >
-                      Expiry Tracker
-                    </TabsTrigger>
-                    <TabsTrigger 
-                      value="tasks" 
-                      className="flex-1 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
-                    >
-                      Tasks
-                    </TabsTrigger>
-                  </TabsList>
-                </CardHeader>
-                <TabsContent value="expiry" className="p-4 m-0 space-y-3">
-                  <div className="flex items-center justify-end mb-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowExpiryModal(true)}
-                      className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                {/* Unverified Expiry Hints */}
-                {lead.dataJson && (() => {
-                  try {
-                    const data = JSON.parse(lead.dataJson)
-                    if (data.expiry_hint_text) {
-                      return (
-                        <div className="p-3 rounded-lg border border-yellow-200/60 bg-yellow-50">
-                          <div className="flex items-start gap-2 mb-2">
-                            <AlertCircle className="h-4 w-4 text-yellow-700 mt-0.5 flex-shrink-0" />
-                            <div className="flex-1">
-                              <p className="text-xs font-bold text-yellow-900 mb-1 tracking-tight">
-                                Unverified Expiry Hint
-                              </p>
-                              <p className="text-xs text-yellow-800 italic font-medium">
-                                "{data.expiry_hint_text}"
-                              </p>
-                            </div>
-                          </div>
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="w-full mt-2 text-xs h-7 border-yellow-300/60 font-semibold"
-                            onClick={() => setShowExpiryModal(true)}
-                          >
-                            <Calendar className="h-3 w-3 mr-1" />
-                            Confirm Date
-                          </Button>
-                        </div>
-                      )
-                    }
-                  } catch (e) {
-                    // Invalid JSON, ignore
-                  }
-                  return null
-                })()}
-
-                {/* Verified Expiry Items */}
-                {lead.expiryItems && lead.expiryItems.length > 0 ? (
-                  lead.expiryItems.map((expiry: any) => {
-                    const daysLeft = differenceInDays(parseISO(expiry.expiryDate), new Date())
-                    const isOverdue = daysLeft < 0
-                    const isUrgent = daysLeft >= 0 && daysLeft <= 7
-                    const isWarning = daysLeft > 7 && daysLeft <= 30
-
-                    return (
-                        <div
-                        key={expiry.id}
-                        className={cn(
-                          'group p-4 rounded-lg border text-sm hover:bg-muted/50 transition-all cursor-pointer',
-                          isOverdue && 'border-red-200/60 bg-red-50',
-                          isUrgent && 'border-orange-200/60 bg-orange-50',
-                          isWarning && 'border-amber-200/60 bg-amber-50',
-                          !isOverdue && !isUrgent && !isWarning && 'border-border bg-card hover:bg-muted/50'
-                        )}
-                      >
-                        <div className="flex items-center justify-between mb-3">
-                          <Badge variant="outline" className="text-sm px-2.5 py-1 rounded-full">
-                            {(expiry.type || 'UNKNOWN').replace(/_/g, ' ')}
-                          </Badge>
-                          <ExpiryCountdown expiryDate={expiry.expiryDate} type={expiry.type || 'UNKNOWN'} />
-                        </div>
-                        <div className="space-y-2">
-                          <div>
-                            <Label className="text-xs font-medium text-muted-foreground mb-1 block">Expiry Date</Label>
-                            <InlineEditableField
-                              value={format(parseISO(expiry.expiryDate), 'yyyy-MM-dd')}
-                              type="date"
-                              onSave={async (newDate) => {
-                                try {
-                                  const res = await fetch(`/api/expiry-items/${expiry.id}`, {
-                                    method: 'PATCH',
-                                    headers: { 'Content-Type': 'application/json' },
-                                    body: JSON.stringify({
-                                      expiryDate: newDate,
-                                    }),
-                                  })
-                                  if (!res.ok) {
-                                    const errorData = await res.json().catch(() => ({ error: 'Failed to update expiry date' }))
-                                    throw new Error(errorData.error || 'Failed to update expiry date')
-                                  }
-                                  showToast('Expiry date updated successfully', 'success')
-                                  await loadLead()
-                                  return Promise.resolve()
-                                } catch (err: any) {
-                                  showToast(err.message || 'Failed to update expiry date', 'error')
-                                  return Promise.reject(err)
-                                }
-                              }}
-                              className="text-sm font-medium"
-                              displayValue={format(parseISO(expiry.expiryDate), 'MMM dd, yyyy')}
-                            />
-                          </div>
-                          {expiry.notes && (
-                            <p className="text-xs text-muted-foreground">{expiry.notes}</p>
-                          )}
-                        </div>
-                        <div className="mt-3">
-                          <QuickActionsMenu 
-                            type="expiry" 
-                            value={expiry.type}
-                            expiryDate={expiry.expiryDate}
-                            onAction={(action) => {
-                              if (action === 'add-task') {
-                                setTaskTitle(`Renewal: ${(expiry.type || 'UNKNOWN').replace(/_/g, ' ')}`)
-                                setTaskType('RENEWAL')
-                                setShowTaskModal(true)
-                              } else if (action === 'renew') {
-                                handleGenerateAIDraft('renewal')
-                              }
-                            }}
-                          />
-                        </div>
-                      </div>
-                    )
-                  })
-                ) : (
-                  <div className="text-center py-4 text-muted-foreground text-xs">
-                    <Calendar className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-                    <p>No expiry items</p>
-                  </div>
-                )}
-                </TabsContent>
-                <TabsContent value="tasks" className="p-4 m-0 space-y-2">
-                  <div className="flex items-center justify-end mb-2">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => setShowTaskModal(true)}
-                      className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
-                    >
-                      <Plus className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                {lead.tasks && lead.tasks.length > 0 ? (
-                  lead.tasks
-                    .filter((t: any) => t.status === 'OPEN')
-                    .slice(0, 5)
-                    .map((task: any) => (
-                      <div
-                        key={task.id}
-                        className="flex items-start gap-3 p-3 rounded-lg border hover:bg-muted/50 cursor-pointer"
-                        onClick={() => handleToggleTask(task.id, task.status)}
-                      >
-                        <input
-                          type="checkbox"
-                          checked={task.status === 'DONE'}
-                          onChange={() => handleToggleTask(task.id, task.status)}
-                          className="mt-1 w-4 h-4"
-                        />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium line-clamp-2 leading-relaxed">{task.title}</p>
-                          {task.dueAt && (
-                            <p className="text-xs text-muted-foreground mt-2">
-                              Due {format(parseISO(task.dueAt), 'MMM dd, yyyy')}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500 text-xs">
-                    <CheckCircle2 className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-                    <p>No tasks</p>
-                  </div>
-                )}
-                </TabsContent>
-              </Tabs>
-            </Card>
-
-            {/* Reminders Card */}
-            <RemindersCard leadId={leadId} />
-
-                {/* Documents Card - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-semibold text-gray-900">Documents</CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowDocumentModal(true)}
-                        className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
-                      >
-                        <Upload className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2 px-4 pb-4 pt-4">
-                {lead.documents && lead.documents.length > 0 ? (
-                  lead.documents.slice(0, 5).map((doc: any) => (
-                    <div
-                      key={doc.id}
-                      className="flex items-center justify-between p-1.5 rounded-lg border hover:bg-muted/50"
-                    >
-                      <div className="group flex items-center gap-2 flex-1 min-w-0">
-                        <FileText className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
-                        <div className="flex-1 min-w-0">
-                          <p className="text-xs font-medium truncate">{doc.fileName || 'Document'}</p>
-                          <p className="text-[10px] text-muted-foreground">
-                            {doc.category || 'Other'}
-                          </p>
-                        </div>
-                      </div>
-                      <div className="flex items-center gap-1">
-                        <QuickActionsMenu 
-                          type="document" 
-                          value={doc.fileName || 'Document'}
-                          documentId={doc.id}
-                          onAction={(action) => {
-                            if (action === 'send' && lead.contact?.phone) {
-                              setActiveChannel('whatsapp')
-                              setMessageText(`Please find attached: ${doc.fileName || 'document'}`)
-                            }
-                          }}
-                        />
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => handleDeleteDocument(doc.id)}
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </div>
-                  ))
-                ) : (
-                  <div className="text-center py-4 text-gray-500 text-xs">
-                    <FileText className="h-6 w-6 mx-auto mb-1.5 opacity-50" />
-                    <p>No documents</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
             </div>
 
             {/* Revenue Widget */}
@@ -1915,154 +1768,525 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
       </div>
 
       {/* Modals */}
-      {/* Task Modal */}
+      {/* Tasks Modal - Enhanced Design */}
       <Dialog open={showTaskModal} onOpenChange={setShowTaskModal}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Create New Task</DialogTitle>
-            <DialogDescription>Add a follow-up task for this lead</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">Tasks</DialogTitle>
+            <DialogDescription>Create and manage tasks for this lead</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Title</Label>
-              <Input
-                value={taskTitle}
-                onChange={(e) => setTaskTitle(e.target.value)}
-                placeholder="e.g., Follow up on visa application"
-              />
+          <div className="space-y-6">
+            {/* Add Task Form */}
+            <div className="border rounded-xl p-6 bg-gradient-to-br from-green-50 to-emerald-50">
+              <h3 className="text-lg font-semibold mb-4">Create New Task</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label>Title</Label>
+                  <Input
+                    value={taskTitle}
+                    onChange={(e) => setTaskTitle(e.target.value)}
+                    placeholder="e.g., Follow up on visa application"
+                  />
+                </div>
+                <div className="grid grid-cols-2 gap-4">
+                  <div>
+                    <Label>Type</Label>
+                    <Select value={taskType} onChange={(e) => setTaskType(e.target.value)}>
+                      {TASK_TYPES.map((type) => (
+                        <option key={type.value} value={type.value}>
+                          {type.label}
+                        </option>
+                      ))}
+                    </Select>
+                  </div>
+                  <div>
+                    <Label>Due Date</Label>
+                    <Input
+                      type="datetime-local"
+                      value={taskDueAt}
+                      onChange={(e) => setTaskDueAt(e.target.value)}
+                    />
+                  </div>
+                </div>
+                <div>
+                  <Label>Assign To</Label>
+                  <Select
+                    value={taskAssignedUserId?.toString() || ''}
+                    onChange={(e) => setTaskAssignedUserId(e.target.value ? parseInt(e.target.value) : null)}
+                  >
+                    <option value="">Unassigned</option>
+                    {users.map((user) => (
+                      <option key={user.id} value={user.id.toString()}>
+                        {user.name}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <Button onClick={handleCreateTask} className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Task
+                </Button>
+              </div>
             </div>
+
+            {/* Tasks List with Filters */}
             <div>
-              <Label>Type</Label>
-              <Select value={taskType} onChange={(e) => setTaskType(e.target.value)}>
-                {TASK_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div>
-              <Label>Due Date</Label>
-              <Input
-                type="datetime-local"
-                value={taskDueAt}
-                onChange={(e) => setTaskDueAt(e.target.value)}
-              />
-            </div>
-            <div>
-              <Label>Assign To</Label>
-              <Select
-                value={taskAssignedUserId?.toString() || ''}
-                onChange={(e) => setTaskAssignedUserId(e.target.value ? parseInt(e.target.value) : null)}
-              >
-                <option value="">Unassigned</option>
-                {users.map((user) => (
-                  <option key={user.id} value={user.id.toString()}>
-                    {user.name}
-                  </option>
-                ))}
-              </Select>
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowTaskModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleCreateTask}>Create Task</Button>
+              <div className="flex items-center justify-between mb-4">
+                <h3 className="text-lg font-semibold">All Tasks</h3>
+                <div className="flex gap-2">
+                  <Badge variant="outline" className="cursor-pointer">
+                    Open ({lead.tasks?.filter((t: any) => t.status === 'OPEN').length || 0})
+                  </Badge>
+                  <Badge variant="outline" className="cursor-pointer">
+                    Done ({lead.tasks?.filter((t: any) => t.status === 'DONE').length || 0})
+                  </Badge>
+                </div>
+              </div>
+              {lead.tasks && lead.tasks.length > 0 ? (
+                <div className="space-y-2">
+                  {lead.tasks
+                    .sort((a: any, b: any) => {
+                      // Sort by status (OPEN first), then by due date
+                      if (a.status !== b.status) {
+                        return a.status === 'OPEN' ? -1 : 1
+                      }
+                      if (a.dueAt && b.dueAt) {
+                        return new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime()
+                      }
+                      return 0
+                    })
+                    .map((task: any) => (
+                      <div
+                        key={task.id}
+                        className={cn(
+                          'flex items-start gap-3 p-4 rounded-lg border transition-all cursor-pointer hover:shadow-md',
+                          task.status === 'DONE' ? 'bg-gray-50 border-gray-200 opacity-75' : 'bg-white border-gray-200'
+                        )}
+                        onClick={() => handleToggleTask(task.id, task.status)}
+                      >
+                        <div className="mt-1">
+                          <input
+                            type="checkbox"
+                            checked={task.status === 'DONE'}
+                            onChange={() => handleToggleTask(task.id, task.status)}
+                            className="w-5 h-5 rounded border-gray-300 cursor-pointer"
+                          />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 mb-1">
+                            <p className={cn(
+                              'text-sm font-medium',
+                              task.status === 'DONE' ? 'line-through text-gray-500' : 'text-gray-900'
+                            )}>
+                              {task.title}
+                            </p>
+                            <Badge variant="outline" className="text-xs">
+                              {task.type?.replace(/_/g, ' ')}
+                            </Badge>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs text-gray-500">
+                            {task.dueAt && (
+                              <span className="flex items-center gap-1">
+                                <Calendar className="h-3 w-3" />
+                                Due {format(parseISO(task.dueAt), 'MMM dd, yyyy')}
+                              </span>
+                            )}
+                            {task.assignedUser && (
+                              <span className="flex items-center gap-1">
+                                <User className="h-3 w-3" />
+                                {task.assignedUser.name}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                        <Badge
+                          variant={task.status === 'OPEN' ? 'default' : 'outline'}
+                          className={cn(
+                            'flex-shrink-0',
+                            task.status === 'DONE' && 'bg-green-50 text-green-700'
+                          )}
+                        >
+                          {task.status === 'OPEN' ? 'Open' : 'Done'}
+                        </Badge>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 border border-dashed rounded-lg bg-gray-50">
+                  <CheckSquare className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-sm text-gray-500">No tasks created yet</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Document Modal */}
+      {/* Documents Modal - Modern Design */}
       <Dialog open={showDocumentModal} onOpenChange={setShowDocumentModal}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Upload Document</DialogTitle>
-            <DialogDescription>Upload a document for this lead</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">Documents</DialogTitle>
+            <DialogDescription>Upload and manage documents for this lead</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Category</Label>
-              <Select
-                value={selectedDocCategory}
-                onChange={(e) => setSelectedDocCategory(e.target.value)}
-              >
-                {DOCUMENT_CATEGORIES.map((cat) => (
-                  <option key={cat.value} value={cat.value}>
-                    {cat.label}
-                  </option>
-                ))}
-              </Select>
+          <div className="space-y-6">
+            {/* Upload Section */}
+            <div className="border-2 border-dashed border-gray-300 rounded-xl p-8 bg-gradient-to-br from-gray-50 to-gray-100 hover:border-primary transition-colors">
+              <div className="flex flex-col items-center justify-center space-y-4">
+                <div className="w-16 h-16 rounded-full bg-primary/10 flex items-center justify-center">
+                  <Upload className="h-8 w-8 text-primary" />
+                </div>
+                <div className="text-center">
+                  <p className="text-sm font-semibold text-gray-900 mb-1">Drag and drop a file here</p>
+                  <p className="text-xs text-gray-500">or click to browse</p>
+                </div>
+                <div className="flex flex-col gap-3 w-full max-w-md">
+                  <Select
+                    value={selectedDocCategory}
+                    onChange={(e) => setSelectedDocCategory(e.target.value)}
+                    className="w-full"
+                  >
+                    {DOCUMENT_CATEGORIES.map((cat) => (
+                      <option key={cat.value} value={cat.value}>
+                        {cat.label}
+                      </option>
+                    ))}
+                  </Select>
+                  <Input
+                    ref={fileInputRef}
+                    type="file"
+                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+                    className="cursor-pointer"
+                  />
+                  {selectedFile && (
+                    <div className="flex items-center gap-2 p-2 bg-white rounded border">
+                      <FileText className="h-4 w-4 text-gray-500" />
+                      <span className="text-sm text-gray-700 flex-1 truncate">{selectedFile.name}</span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedFile(null)}
+                        className="h-6 w-6 p-0"
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  )}
+                  <Button
+                    onClick={handleUploadDocument}
+                    disabled={uploadingDoc || !selectedFile}
+                    className="w-full"
+                  >
+                    {uploadingDoc ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        Uploading...
+                      </>
+                    ) : (
+                      <>
+                        <Upload className="h-4 w-4 mr-2" />
+                        Upload Document
+                      </>
+                    )}
+                  </Button>
+                </div>
+              </div>
             </div>
+
+            {/* Documents List */}
             <div>
-              <Label>File</Label>
-              <Input
-                ref={fileInputRef}
-                type="file"
-                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowDocumentModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleUploadDocument} disabled={uploadingDoc || !selectedFile}>
-                {uploadingDoc ? (
-                  <>
-                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    Uploading...
-                  </>
-                ) : (
-                  <>
-                    <Upload className="h-4 w-4 mr-2" />
-                    Upload
-                  </>
-                )}
-              </Button>
+              <h3 className="text-lg font-semibold mb-4">Uploaded Documents</h3>
+              {lead.documents && lead.documents.length > 0 ? (
+                <div className="space-y-2">
+                  {lead.documents.map((doc: any) => (
+                    <div
+                      key={doc.id}
+                      className="flex items-center justify-between p-4 rounded-lg border bg-white hover:bg-gray-50 transition-colors"
+                    >
+                      <div className="flex items-center gap-3 flex-1 min-w-0">
+                        <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center flex-shrink-0">
+                          <FileText className="h-5 w-5 text-primary" />
+                        </div>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium text-gray-900 truncate">{doc.fileName || 'Document'}</p>
+                          <div className="flex items-center gap-2 mt-1">
+                            <Badge variant="outline" className="text-xs">
+                              {doc.category || 'Other'}
+                            </Badge>
+                            <span className="text-xs text-gray-500">
+                              {format(new Date(doc.createdAt), 'MMM dd, yyyy')}
+                            </span>
+                          </div>
+                        </div>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            if (doc.fileUrl) {
+                              window.open(doc.fileUrl, '_blank')
+                            }
+                          }}
+                        >
+                          <Download className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleDeleteDocument(doc.id)}
+                          className="text-red-600 hover:text-red-700"
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 border border-dashed rounded-lg bg-gray-50">
+                  <FileText className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-sm text-gray-500">No documents uploaded yet</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
       </Dialog>
 
-      {/* Expiry Modal */}
+      {/* Expiry Tracker Modal - Modern Design */}
       <Dialog open={showExpiryModal} onOpenChange={setShowExpiryModal}>
-        <DialogContent>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
-            <DialogTitle>Add Expiry Item</DialogTitle>
-            <DialogDescription>Track an expiry date for this lead</DialogDescription>
+            <DialogTitle className="text-2xl font-bold">Expiry Tracker</DialogTitle>
+            <DialogDescription>Track and manage expiry dates for this lead</DialogDescription>
           </DialogHeader>
-          <div className="space-y-4">
-            <div>
-              <Label>Type</Label>
-              <Select value={expiryType} onChange={(e) => setExpiryType(e.target.value)}>
-                {EXPIRY_TYPES.map((type) => (
-                  <option key={type.value} value={type.value}>
-                    {type.label}
-                  </option>
-                ))}
-              </Select>
+          <div className="space-y-6">
+            {/* Add Expiry Form */}
+            <div className="border rounded-xl p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
+              <h3 className="text-lg font-semibold mb-4">Add New Expiry</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label>Type</Label>
+                  <Select value={expiryType} onChange={(e) => setExpiryType(e.target.value)}>
+                    {EXPIRY_TYPES.map((type) => (
+                      <option key={type.value} value={type.value}>
+                        {type.label}
+                      </option>
+                    ))}
+                  </Select>
+                </div>
+                <div>
+                  <Label>Expiry Date</Label>
+                  <Input
+                    type="date"
+                    value={expiryDate}
+                    onChange={(e) => setExpiryDate(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Notes (optional)</Label>
+                  <Textarea
+                    value={expiryNotes}
+                    onChange={(e) => setExpiryNotes(e.target.value)}
+                    rows={3}
+                  />
+                </div>
+                <Button onClick={handleAddExpiry} className="w-full">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Expiry
+                </Button>
+              </div>
             </div>
+
+            {/* Expiry Items List */}
             <div>
-              <Label>Expiry Date</Label>
-              <Input
-                type="date"
-                value={expiryDate}
-                onChange={(e) => setExpiryDate(e.target.value)}
-              />
+              <h3 className="text-lg font-semibold mb-4">Expiry Items</h3>
+              {lead.expiryItems && lead.expiryItems.length > 0 ? (
+                <div className="space-y-3">
+                  {lead.expiryItems.map((expiry: any) => {
+                    const daysLeft = differenceInDays(parseISO(expiry.expiryDate), new Date())
+                    const isOverdue = daysLeft < 0
+                    const isUrgent = daysLeft >= 0 && daysLeft <= 7
+                    const isWarning = daysLeft > 7 && daysLeft <= 30
+
+                    return (
+                      <div
+                        key={expiry.id}
+                        className={cn(
+                          'p-4 rounded-lg border transition-all',
+                          isOverdue && 'border-red-300 bg-red-50',
+                          isUrgent && 'border-orange-300 bg-orange-50',
+                          isWarning && 'border-amber-300 bg-amber-50',
+                          !isOverdue && !isUrgent && !isWarning && 'border-gray-200 bg-white'
+                        )}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant="outline" className="font-semibold">
+                                {(expiry.type || 'UNKNOWN').replace(/_/g, ' ')}
+                              </Badge>
+                              <ExpiryCountdown expiryDate={expiry.expiryDate} type={expiry.type || 'UNKNOWN'} />
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 mb-1">
+                              {format(parseISO(expiry.expiryDate), 'MMM dd, yyyy')}
+                            </p>
+                            {expiry.notes && (
+                              <p className="text-xs text-gray-600">{expiry.notes}</p>
+                            )}
+                          </div>
+                          <QuickActionsMenu
+                            type="expiry"
+                            value={expiry.type}
+                            expiryDate={expiry.expiryDate}
+                            onAction={(action) => {
+                              if (action === 'add-task') {
+                                setTaskTitle(`Renewal: ${(expiry.type || 'UNKNOWN').replace(/_/g, ' ')}`)
+                                setTaskType('RENEWAL')
+                                setShowExpiryModal(false)
+                                setShowTaskModal(true)
+                              } else if (action === 'renew') {
+                                setShowExpiryModal(false)
+                                handleGenerateAIDraft('renewal')
+                              }
+                            }}
+                          />
+                        </div>
+                      </div>
+                    )
+                  })}
+                </div>
+              ) : (
+                <div className="text-center py-12 border border-dashed rounded-lg bg-gray-50">
+                  <Calendar className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-sm text-gray-500">No expiry items tracked yet</p>
+                </div>
+              )}
             </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Reminders Modal - Modern Design */}
+      <Dialog open={showReminderModal} onOpenChange={setShowReminderModal}>
+        <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle className="text-2xl font-bold">Reminders</DialogTitle>
+            <DialogDescription>Schedule and manage reminders for this lead</DialogDescription>
+          </DialogHeader>
+          <div className="space-y-6">
+            {/* Add Reminder Form */}
+            <div className="border rounded-xl p-6 bg-gradient-to-br from-purple-50 to-pink-50">
+              <h3 className="text-lg font-semibold mb-4">Schedule New Reminder</h3>
+              <div className="space-y-4">
+                <div>
+                  <Label>Type</Label>
+                  <Select value={reminderType} onChange={(e) => setReminderType(e.target.value)}>
+                    <option value="FOLLOW_UP">Follow Up</option>
+                    <option value="PAYMENT">Payment</option>
+                    <option value="RENEWAL">Renewal</option>
+                    <option value="DOCUMENT">Document</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Date & Time</Label>
+                  <Input
+                    type="datetime-local"
+                    value={reminderScheduledAt}
+                    onChange={(e) => setReminderScheduledAt(e.target.value)}
+                  />
+                </div>
+                <div>
+                  <Label>Channel</Label>
+                  <Select value={reminderChannel} onChange={(e) => setReminderChannel(e.target.value)}>
+                    <option value="WHATSAPP">WhatsApp</option>
+                    <option value="EMAIL">Email</option>
+                    <option value="SMS">SMS</option>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Message (optional)</Label>
+                  <Textarea
+                    value={reminderMessage}
+                    onChange={(e) => setReminderMessage(e.target.value)}
+                    rows={3}
+                    placeholder="Custom message for the reminder..."
+                  />
+                </div>
+                <Button onClick={handleAddReminder} className="w-full">
+                  <Clock className="h-4 w-4 mr-2" />
+                  Schedule Reminder
+                </Button>
+              </div>
+            </div>
+
+            {/* Reminders List */}
             <div>
-              <Label>Notes (optional)</Label>
-              <Textarea
-                value={expiryNotes}
-                onChange={(e) => setExpiryNotes(e.target.value)}
-                rows={3}
-              />
-            </div>
-            <div className="flex justify-end gap-2">
-              <Button variant="outline" onClick={() => setShowExpiryModal(false)}>
-                Cancel
-              </Button>
-              <Button onClick={handleAddExpiry}>Add Expiry</Button>
+              <h3 className="text-lg font-semibold mb-4">Scheduled Reminders</h3>
+              {loadingReminders ? (
+                <div className="text-center py-8">
+                  <Loader2 className="h-6 w-6 mx-auto animate-spin text-gray-400" />
+                </div>
+              ) : reminders.length > 0 ? (
+                <div className="space-y-3">
+                  {reminders
+                    .sort((a, b) => new Date(a.scheduledAt).getTime() - new Date(b.scheduledAt).getTime())
+                    .map((reminder: any) => (
+                      <div
+                        key={reminder.id}
+                        className={cn(
+                          'p-4 rounded-lg border bg-white',
+                          reminder.sent ? 'border-gray-200 opacity-60' : 'border-blue-200 bg-blue-50'
+                        )}
+                      >
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-2">
+                              <Badge variant={reminder.sent ? 'outline' : 'default'}>
+                                {reminder.type.replace(/_/g, ' ')}
+                              </Badge>
+                              <Badge variant="outline" className="text-xs">
+                                {reminder.channel}
+                              </Badge>
+                              {reminder.sent && (
+                                <Badge variant="outline" className="text-xs bg-green-50 text-green-700">
+                                  Sent
+                                </Badge>
+                              )}
+                            </div>
+                            <p className="text-sm font-medium text-gray-900 mb-1">
+                              {format(new Date(reminder.scheduledAt), 'MMM dd, yyyy h:mm a')}
+                            </p>
+                            {reminder.message && (
+                              <p className="text-xs text-gray-600 mt-1">{reminder.message}</p>
+                            )}
+                            {reminder.sentAt && (
+                              <p className="text-xs text-gray-500 mt-1">
+                                Sent: {format(new Date(reminder.sentAt), 'MMM dd, yyyy h:mm a')}
+                              </p>
+                            )}
+                          </div>
+                          {!reminder.sent && (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeleteReminder(reminder.id)}
+                              className="text-red-600 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                </div>
+              ) : (
+                <div className="text-center py-12 border border-dashed rounded-lg bg-gray-50">
+                  <Clock className="h-12 w-12 mx-auto mb-3 text-gray-400" />
+                  <p className="text-sm text-gray-500">No reminders scheduled yet</p>
+                </div>
+              )}
             </div>
           </div>
         </DialogContent>
@@ -2101,7 +2325,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               <Button
                 onClick={async () => {
                   if (pendingStage) {
-                    await handleStageChange(pendingStage)
+                    await updateStageDirectly(pendingStage)
                     setShowWonLostModal(false)
                     setPendingStage(null)
                   }

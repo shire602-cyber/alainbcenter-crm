@@ -749,7 +749,40 @@ async function processWebhookPayload(payload: any) {
         })
       }
       
-      // Check if event passes processing conditions
+      // ============== LEAD ADS (LEADGEN) HANDLER ==============
+      // Handle leadgen events FIRST (Lead Ads from Facebook Page webhooks)
+      // This is a separate flow from messaging - creates Lead + Contact + Conversation + synthetic Message
+      if (event.eventType === 'leadgen' && payload.object === 'page') {
+        console.log(`📋 [LEAD-AD-RECEIVED]`, {
+          leadgenId: event.leadgenId || event.rawPayload?.leadgen_id || 'N/A',
+          formId: event.formId || event.rawPayload?.form_id || 'N/A',
+          adId: event.adId || event.rawPayload?.ad_id || 'N/A',
+          createdTime: event.createdTime || event.rawPayload?.created_time || 'N/A',
+          pageId: event.pageId,
+          connectionId: connection?.id || 'N/A',
+        })
+        
+        try {
+          await processLeadAdEvent({
+            event,
+            connection,
+            pageId: pageId!,
+            workspaceId: workspaceId ?? 1,
+          })
+        } catch (leadAdError: any) {
+          console.error(`❌ [META-WEBHOOK] Error processing Lead Ad:`, {
+            error: leadAdError.message,
+            leadgenId: event.leadgenId || 'N/A',
+            pageId,
+          })
+          // Don't throw - event is stored, continue processing other events
+        }
+        
+        continue // Skip to next event after processing leadgen
+      }
+      
+      // ============== MESSAGE HANDLER ==============
+      // Check if event passes processing conditions (for message events)
       const passesConditions = event.eventType === 'message' && event.senderId && (hasText || hasAttachments)
       
       // Log when events are skipped due to condition check failure
@@ -1797,5 +1830,374 @@ async function processInboundMessage(data: {
     // Event is already stored in meta_webhook_events, so it can be processed manually
     throw error // Re-throw to allow caller to handle
   }
+}
+
+/**
+ * Process Lead Ad (leadgen) event
+ * 
+ * Creates: Contact + Conversation + Lead + synthetic Message
+ * Applies: Lead ingestion rules (receivedAt, SLA, owner assignment)
+ */
+async function processLeadAdEvent(data: {
+  event: NormalizedWebhookEvent
+  connection: any
+  pageId: string
+  workspaceId: number
+}) {
+  const { event, connection, pageId, workspaceId } = data
+  
+  const leadgenId = event.leadgenId || event.rawPayload?.leadgen_id
+  if (!leadgenId) {
+    console.warn(`⚠️ [META-LEADGEN] Skipping leadgen event - no leadgen_id found`)
+    return
+  }
+  
+  const receivedAt = event.createdTime 
+    ? new Date(event.createdTime * 1000) 
+    : new Date()
+  
+  console.log(`📋 [META-LEADGEN] Processing Lead Ad`, {
+    leadgenId,
+    pageId,
+    formId: event.formId || 'N/A',
+    adId: event.adId || 'N/A',
+    receivedAt: receivedAt.toISOString(),
+    workspaceId,
+  })
+  
+  // Step 1: Attempt to fetch lead details from Graph API (graceful degradation)
+  let leadData: import('@/server/integrations/meta/graph').LeadGenData | null = null
+  try {
+    const pageToken = await getDecryptedPageToken(connection.id)
+    if (pageToken) {
+      const { getLeadGen } = await import('@/server/integrations/meta/graph')
+      leadData = await getLeadGen(leadgenId, pageToken)
+    } else {
+      console.warn(`⚠️ [META-LEADGEN] No page token available for connection ${connection.id}`)
+    }
+  } catch (fetchError: any) {
+    console.warn(`⚠️ [META-LEADGEN] Failed to fetch lead details (continuing with minimal data)`, {
+      error: fetchError.message,
+      leadgenId,
+    })
+  }
+  
+  // Step 2: Extract and normalize lead fields
+  const { extractLeadAdFields, serviceBucketFromRawText } = await import('@/server/integrations/meta/normalize')
+  
+  const extractedFields = extractLeadAdFields(leadData?.field_data)
+  const serviceBucket = serviceBucketFromRawText(extractedFields.rawServiceText)
+  
+  // Build synthesized message text for the lead
+  const syntheticMessageParts: string[] = ['📋 Lead Ad Submission']
+  if (extractedFields.name) syntheticMessageParts.push(`Name: ${extractedFields.name}`)
+  if (extractedFields.phone) syntheticMessageParts.push(`Phone: ${extractedFields.phone}`)
+  if (extractedFields.email) syntheticMessageParts.push(`Email: ${extractedFields.email}`)
+  if (extractedFields.nationality) syntheticMessageParts.push(`Nationality: ${extractedFields.nationality}`)
+  if (extractedFields.rawServiceText) syntheticMessageParts.push(`Service: ${extractedFields.rawServiceText}`)
+  if (extractedFields.notes) syntheticMessageParts.push(`Notes: ${extractedFields.notes}`)
+  syntheticMessageParts.push(`Form ID: ${event.formId || 'N/A'}`)
+  
+  const syntheticMessageText = syntheticMessageParts.join('\n')
+  
+  console.log(`📋 [META-LEADGEN] Extracted lead fields`, {
+    leadgenId,
+    hasName: !!extractedFields.name,
+    hasPhone: !!extractedFields.phone,
+    hasEmail: !!extractedFields.email,
+    hasNationality: !!extractedFields.nationality,
+    serviceBucket,
+    syntheticMessageLength: syntheticMessageText.length,
+  })
+  
+  // Step 3: Create records via autoMatchPipeline (reuse existing infrastructure)
+  // Use phone if available, otherwise use leadgen ID as identity
+  const fromPhone = extractedFields.phone || `fb_lead:${leadgenId}`
+  
+  try {
+    const result = await handleInboundMessageAutoMatch({
+      channel: 'FACEBOOK',
+      providerMessageId: `leadgen_${leadgenId}`,
+      fromPhone: fromPhone,
+      fromEmail: extractedFields.email || null,
+      fromName: extractedFields.name || 'Facebook Lead',
+      text: syntheticMessageText,
+      timestamp: receivedAt,
+      metadata: {
+        isLeadAd: true,
+        leadgenId,
+        formId: event.formId,
+        adId: event.adId,
+        serviceBucket,
+        extractedFields,
+        pageId,
+      },
+    })
+    
+    console.log(`✅ [LEAD-CREATED]`, {
+      leadId: result.lead?.id || 'N/A',
+      contactId: result.contact?.id || 'N/A',
+      conversationId: result.conversation?.id || 'N/A',
+      messageId: result.message?.id || 'N/A',
+      leadgenId,
+      serviceBucket,
+      fromPhone,
+    })
+    
+    // Step 4: Apply lead ingestion rules (SLA, owner assignment)
+    if (result.lead?.id) {
+      await applyLeadIngestionRules({
+        leadId: result.lead.id,
+        conversationId: result.conversation?.id,
+        receivedAt,
+        serviceBucket,
+        extractedFields,
+      })
+    }
+    
+    return result
+  } catch (error: any) {
+    // Handle duplicate lead ads gracefully
+    if (error.message === 'DUPLICATE_MESSAGE') {
+      console.log(`ℹ️ [META-LEADGEN] Duplicate Lead Ad detected (already processed)`, {
+        leadgenId,
+        formId: event.formId || 'N/A',
+      })
+      return
+    }
+    
+    console.error(`❌ [META-LEADGEN] Failed to process Lead Ad`, {
+      error: error.message,
+      leadgenId,
+      fromPhone,
+    })
+    throw error
+  }
+}
+
+/**
+ * Apply lead ingestion rules
+ * 
+ * Per plan requirements:
+ * - Records receivedAt
+ * - Evaluates business hours (Asia/Dubai 09:00–18:00, Mon–Fri)
+ * - Schedules SLA check for 2 hours (business-hours-aware)
+ * - Assigns owner from ADMIN pool (least-loaded)
+ * - Logs milestones
+ */
+async function applyLeadIngestionRules(data: {
+  leadId: number
+  conversationId?: number
+  receivedAt: Date
+  serviceBucket: string
+  extractedFields: any
+}) {
+  const { leadId, conversationId, receivedAt, serviceBucket, extractedFields } = data
+  
+  console.log(`🔧 [LEAD-INGESTION] Applying ingestion rules`, {
+    leadId,
+    conversationId: conversationId || 'N/A',
+    receivedAt: receivedAt.toISOString(),
+    serviceBucket,
+  })
+  
+  try {
+    // Business hours configuration (Asia/Dubai, Mon-Fri 09:00-18:00)
+    const BUSINESS_TZ = 'Asia/Dubai'
+    const BUSINESS_START_HOUR = 9
+    const BUSINESS_END_HOUR = 18
+    const SLA_HOURS = 2
+    
+    // Calculate SLA due time (business-hours-aware)
+    const slaDueAt = calculateBusinessHoursDue(receivedAt, SLA_HOURS, {
+      timezone: BUSINESS_TZ,
+      startHour: BUSINESS_START_HOUR,
+      endHour: BUSINESS_END_HOUR,
+    })
+    
+    // Find least-loaded ADMIN user for assignment
+    const { prisma } = await import('@/lib/prisma')
+    
+    // Query ADMIN users
+    const admins = await prisma.user.findMany({
+      where: {
+        role: 'ADMIN',
+      },
+      select: {
+        id: true,
+        name: true,
+      },
+    })
+    
+    // Find least-loaded admin (fewest open leads)
+    let assigneeId: number | null = null
+    let assigneeName: string | null = null
+    
+    if (admins.length > 0) {
+      // Get open lead counts for each admin
+      const adminLeadCounts: Array<{ id: number; name: string; openLeadCount: number }> = []
+      
+      for (const admin of admins) {
+        const openLeadCount = await prisma.lead.count({
+          where: {
+            assignedUserId: admin.id,
+            stage: {
+              notIn: ['COMPLETED_WON', 'LOST', 'ON_HOLD'],
+            },
+          },
+        })
+        adminLeadCounts.push({ id: admin.id, name: admin.name, openLeadCount })
+      }
+      
+      // Find the admin with the fewest open leads
+      const leastLoaded = adminLeadCounts.reduce((min, admin) => {
+        return admin.openLeadCount < min.openLeadCount ? admin : min
+      }, adminLeadCounts[0])
+      
+      assigneeId = leastLoaded.id
+      assigneeName = leastLoaded.name
+      
+      console.log(`👤 [LEAD-INGESTION] Selected least-loaded admin for assignment`, {
+        assigneeId,
+        assigneeName,
+        openLeadCount: leastLoaded.openLeadCount,
+        totalAdmins: admins.length,
+      })
+    } else {
+      console.warn(`⚠️ [LEAD-INGESTION] No ADMIN users found for assignment`)
+    }
+    
+    // Update lead with receivedAt (in dataJson) and assignedUserId
+    const existingLead = await prisma.lead.findUnique({
+      where: { id: leadId },
+      select: { dataJson: true },
+    })
+    
+    const existingData = existingLead?.dataJson 
+      ? JSON.parse(existingLead.dataJson) 
+      : {}
+    
+    const updatedData = {
+      ...existingData,
+      ingestion: {
+        receivedAt: receivedAt.toISOString(),
+        serviceBucket,
+        slaDueAt: slaDueAt.toISOString(),
+        assignedAt: new Date().toISOString(),
+      },
+    }
+    
+    await prisma.lead.update({
+      where: { id: leadId },
+      data: {
+        dataJson: JSON.stringify(updatedData),
+        ...(assigneeId ? { assignedUserId: assigneeId } : {}),
+      },
+    })
+    
+    // Also update conversation if available
+    if (conversationId && assigneeId) {
+      await prisma.conversation.update({
+        where: { id: conversationId },
+        data: { assignedUserId: assigneeId },
+      })
+    }
+    
+    // Create SLA Task
+    await prisma.task.create({
+      data: {
+        leadId,
+        title: `SLA Check: Follow up on Lead Ad (${serviceBucket})`,
+        description: `Lead Ad received at ${receivedAt.toISOString()}. SLA requires response within ${SLA_HOURS} business hours.`,
+        type: 'CALL', // SLA follow-up should be a call task
+        dueAt: slaDueAt,
+        status: 'OPEN',
+        priority: 'HIGH',
+        ...(assigneeId ? { assignedUserId: assigneeId } : {}),
+      },
+    })
+    
+    console.log(`✅ [SLA-SCHEDULED]`, {
+      leadId,
+      dueAt: slaDueAt.toISOString(),
+      assigneeId: assigneeId || 'N/A',
+      assigneeName: assigneeName || 'N/A',
+      serviceBucket,
+      slaHours: SLA_HOURS,
+    })
+    
+  } catch (error: any) {
+    console.error(`❌ [LEAD-INGESTION] Failed to apply ingestion rules`, {
+      error: error.message,
+      leadId,
+      serviceBucket,
+    })
+    // Don't throw - lead is already created, ingestion rules are best-effort
+  }
+}
+
+/**
+ * Calculate due time that is SLA hours in the future, but only counting business hours
+ */
+function calculateBusinessHoursDue(
+  startTime: Date,
+  slaHours: number,
+  config: { timezone: string; startHour: number; endHour: number }
+): Date {
+  const { timezone, startHour, endHour } = config
+  const BUSINESS_HOURS_PER_DAY = endHour - startHour // 9 hours
+  
+  // Get the time in the business timezone
+  const getLocalHour = (d: Date) => {
+    const localTimeString = d.toLocaleString('en-US', { 
+      timeZone: timezone, 
+      hour: 'numeric', 
+      hour12: false 
+    })
+    return parseInt(localTimeString, 10)
+  }
+  
+  const getLocalDayOfWeek = (d: Date) => {
+    const localDayString = d.toLocaleString('en-US', { 
+      timeZone: timezone, 
+      weekday: 'short' 
+    })
+    return localDayString
+  }
+  
+  const isWeekend = (d: Date) => {
+    const day = getLocalDayOfWeek(d)
+    return day === 'Sat' || day === 'Sun'
+  }
+  
+  const isBusinessHour = (d: Date) => {
+    if (isWeekend(d)) return false
+    const hour = getLocalHour(d)
+    return hour >= startHour && hour < endHour
+  }
+  
+  // Start from the given time
+  let current = new Date(startTime)
+  let hoursRemaining = slaHours
+  
+  // If starting outside business hours, move to next business hour
+  if (!isBusinessHour(current)) {
+    // Move to next business day/hour
+    while (!isBusinessHour(current)) {
+      current = new Date(current.getTime() + 60 * 60 * 1000) // Add 1 hour
+    }
+  }
+  
+  // Count business hours
+  while (hoursRemaining > 0) {
+    if (isBusinessHour(current)) {
+      hoursRemaining -= 1
+    }
+    if (hoursRemaining > 0) {
+      current = new Date(current.getTime() + 60 * 60 * 1000) // Add 1 hour
+    }
+  }
+  
+  return current
 }
 
