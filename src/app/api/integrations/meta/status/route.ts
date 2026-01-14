@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
             igUsername: config.igUsername || null,
             connectedAt: config.connectedAt || null,
             webhookVerifyToken: config.webhookVerifyToken || null,
+            oauthFlow: config.oauthFlow || false, // Indicates if connection was via OAuth
           }
         } catch (e) {
           console.warn('Failed to parse Integration config:', e)
@@ -89,6 +90,10 @@ export async function GET(req: NextRequest) {
           igSubscriptionStatus, // Detailed Instagram subscription status
           status: conn.status,
           lastError: conn.lastError,
+          // OAuth connection details
+          metaUserTokenExpiresAt: (conn as any).metaUserTokenExpiresAt?.toISOString() || null,
+          metaConnectedAt: (conn as any).metaConnectedAt?.toISOString() || null,
+          hasOAuthToken: !!(conn as any).metaUserAccessTokenLong, // Indicates OAuth flow was used
           createdAt: conn.createdAt.toISOString(),
           updatedAt: conn.updatedAt.toISOString(),
         }

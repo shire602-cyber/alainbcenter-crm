@@ -13,6 +13,9 @@ export interface CreateConnectionInput {
   pageId: string
   pageName?: string | null
   pageAccessToken: string
+  metaUserAccessTokenLong?: string | null // Encrypted long-lived user token
+  metaUserTokenExpiresAt?: Date | null
+  metaConnectedAt?: Date | null
   igBusinessId?: string | null
   igUsername?: string | null
   scopes?: string[]
@@ -38,7 +41,10 @@ export interface UpdateConnectionInput {
 export async function upsertConnection(
   input: CreateConnectionInput
 ): Promise<{ id: number }> {
-  const encryptedToken = encryptToken(input.pageAccessToken)
+  const encryptedPageToken = encryptToken(input.pageAccessToken)
+  const encryptedUserToken = input.metaUserAccessTokenLong 
+    ? (input.metaUserAccessTokenLong.startsWith('iv:') ? input.metaUserAccessTokenLong : encryptToken(input.metaUserAccessTokenLong))
+    : undefined
 
   const connection = await prisma.metaConnection.upsert({
     where: {
@@ -48,8 +54,12 @@ export async function upsertConnection(
       },
     },
     update: {
+      metaUserId: input.metaUserId ?? undefined,
       pageName: input.pageName ?? undefined,
-      pageAccessToken: encryptedToken,
+      pageAccessToken: encryptedPageToken,
+      metaUserAccessTokenLong: encryptedUserToken ?? undefined,
+      metaUserTokenExpiresAt: input.metaUserTokenExpiresAt ?? undefined,
+      metaConnectedAt: input.metaConnectedAt ?? undefined,
       igBusinessId: input.igBusinessId ?? undefined,
       igUsername: input.igUsername ?? undefined,
       scopes: input.scopes ? JSON.stringify(input.scopes) : undefined,
@@ -64,7 +74,10 @@ export async function upsertConnection(
       metaUserId: input.metaUserId ?? null,
       pageId: input.pageId,
       pageName: input.pageName ?? null,
-      pageAccessToken: encryptedToken,
+      pageAccessToken: encryptedPageToken,
+      metaUserAccessTokenLong: encryptedUserToken ?? null,
+      metaUserTokenExpiresAt: input.metaUserTokenExpiresAt ?? null,
+      metaConnectedAt: input.metaConnectedAt ?? null,
       igBusinessId: input.igBusinessId ?? null,
       igUsername: input.igUsername ?? null,
       scopes: input.scopes ? JSON.stringify(input.scopes) : null,

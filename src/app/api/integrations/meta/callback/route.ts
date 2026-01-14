@@ -5,21 +5,18 @@
 
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-server'
-import { prisma } from '@/lib/prisma'
 import {
   exchangeCodeForToken,
+  exchangeLongLivedUserToken,
   getUserPages,
-  getPageAccessToken,
   getInstagramBusinessAccount,
-  subscribePageToWebhook,
 } from '@/lib/integrations/meta/api'
-import { encryptToken } from '@/lib/integrations/meta/encryption'
+import { storeOAuthState } from '@/server/integrations/meta/oauthState'
+import { validateToken } from '@/server/integrations/meta/token'
 
 const META_APP_ID = process.env.META_APP_ID
 const META_APP_SECRET = process.env.META_APP_SECRET
-const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI
-const META_WEBHOOK_URL = process.env.META_WEBHOOK_URL || `${process.env.NEXT_PUBLIC_APP_URL || 'https://your-domain.com'}/api/webhooks/meta`
-const META_VERIFY_TOKEN = process.env.META_VERIFY_TOKEN
+const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || process.env.META_REDIRECT_URI
 
 export async function GET(req: NextRequest) {
   try {
@@ -33,7 +30,7 @@ export async function GET(req: NextRequest) {
     const errorReason = searchParams.get('error_reason')
 
     if (error) {
-      console.error('Meta OAuth error:', error, errorReason)
+      console.error('[META-OAUTH] OAuth error:', error, errorReason)
       return NextResponse.redirect(
         `/admin/integrations?error=oauth_failed&reason=${encodeURIComponent(errorReason || error)}`
       )
@@ -59,103 +56,53 @@ export async function GET(req: NextRequest) {
       return NextResponse.redirect('/admin/integrations?error=invalid_state')
     }
 
-    // Exchange code for access token
-    const tokenData = await exchangeCodeForToken(
+    console.log('[META-OAUTH] OAuth callback received, exchanging code for token')
+
+    // Step 1: Exchange code for short-lived access token
+    const shortLivedTokenData = await exchangeCodeForToken(
       code,
-      META_OAUTH_REDIRECT_URI,
-      META_APP_ID,
-      META_APP_SECRET
+      META_OAUTH_REDIRECT_URI!,
+      META_APP_ID!,
+      META_APP_SECRET!
     )
 
-    const userAccessToken = tokenData.access_token
+    const shortLivedToken = shortLivedTokenData.access_token
+    console.log('[META-OAUTH] Short-lived token obtained')
+
+    // Step 2: Exchange short-lived token for long-lived token (60 days)
+    const longLivedTokenData = await exchangeLongLivedUserToken(
+      shortLivedToken,
+      META_APP_ID!,
+      META_APP_SECRET!
+    )
+
+    const longLivedUserToken = longLivedTokenData.access_token
+    const expiresIn = longLivedTokenData.expires_in || 5184000 // Default 60 days in seconds
+    console.log('[META-OAUTH] Long-lived token obtained, expires in', expiresIn, 'seconds')
+
+    // Step 3: Get user info for metaUserId
+    const metaUser = await validateToken(longLivedUserToken)
     const workspaceId = parseInt(stateData.workspace_id) || 1
 
-    // Get pages managed by the user
-    const pages = await getUserPages(userAccessToken)
+    // Step 4: Store OAuth state (long-lived token) in encrypted cookie
+    const expiresAt = Date.now() + (expiresIn * 1000) // Convert to milliseconds
+    await storeOAuthState({
+      longLivedUserToken,
+      expiresAt,
+      workspaceId,
+      metaUserId: metaUser.id,
+    })
 
-    if (pages.length === 0) {
-      return NextResponse.redirect(
-        '/admin/integrations?error=no_pages&message=' + encodeURIComponent('No Facebook pages found. Please create a page first.')
-      )
-    }
+    console.log('[META-OAUTH] OAuth state stored, redirecting to wizard')
 
-    // Process each page
-    const connections = []
-    for (const page of pages) {
-      try {
-        // Get page access token
-        const pageAccessToken = await getPageAccessToken(page.id, userAccessToken)
-
-        // Get Instagram Business Account if connected
-        const igAccount = await getInstagramBusinessAccount(page.id, pageAccessToken)
-
-        // Subscribe page to webhook
-        if (META_VERIFY_TOKEN) {
-          await subscribePageToWebhook(
-            page.id,
-            pageAccessToken,
-            META_WEBHOOK_URL,
-            META_VERIFY_TOKEN,
-            ['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']
-          )
-        }
-
-        // Encrypt and store connection
-        const encryptedToken = encryptToken(pageAccessToken)
-
-        // Upsert connection using Prisma models
-        await prisma.metaConnection.upsert({
-          where: {
-            workspaceId_pageId: {
-              workspaceId,
-              pageId: page.id,
-            },
-          },
-          update: {
-            pageName: page.name || null,
-            pageAccessToken: encryptedToken,
-            igBusinessId: igAccount?.id || null,
-            igUsername: igAccount?.username || null,
-            scopes: JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']),
-            status: 'connected',
-            updatedAt: new Date(),
-          },
-          create: {
-            workspaceId,
-            pageId: page.id,
-            pageName: page.name || null,
-            pageAccessToken: encryptedToken,
-            igBusinessId: igAccount?.id || null,
-            igUsername: igAccount?.username || null,
-            scopes: JSON.stringify(['messages', 'messaging_postbacks', 'messaging_optins', 'message_deliveries', 'message_reads', 'leadgen']),
-            status: 'connected',
-          },
-        })
-
-        connections.push({
-          pageId: page.id,
-          pageName: page.name,
-          igUsername: igAccount?.username,
-        })
-      } catch (pageError: any) {
-        console.error(`Error processing page ${page.id}:`, pageError)
-        // Continue with other pages
-      }
-    }
-
-    if (connections.length === 0) {
-      return NextResponse.redirect(
-        '/admin/integrations?error=connection_failed'
-      )
-    }
-
-    // Redirect back to integrations page
+    // Step 5: Redirect to integrations page with OAuth success flag
+    // The wizard will fetch pages using the stored OAuth state
     const returnUrl = stateData.return_url || '/admin/integrations'
     return NextResponse.redirect(
-      `${returnUrl}?success=meta_connected&pages=${connections.length}`
+      `${returnUrl}?meta_oauth=success`
     )
   } catch (error: any) {
-    console.error('Meta OAuth callback error:', error)
+    console.error('[META-OAUTH] OAuth callback error:', error)
     return NextResponse.redirect(
       `/admin/integrations?error=callback_failed&message=${encodeURIComponent(error.message)}`
     )

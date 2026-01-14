@@ -64,6 +64,32 @@ export async function getUserPages(accessToken: string): Promise<MetaPage[]> {
 }
 
 /**
+ * Exchange short-lived user token for long-lived token (60 days)
+ */
+export async function exchangeLongLivedUserToken(
+  shortLivedToken: string,
+  appId: string,
+  appSecret: string
+): Promise<{ access_token: string; expires_in: number }> {
+  const url = `${GRAPH_API_BASE}/oauth/access_token`
+  const params = new URLSearchParams({
+    grant_type: 'fb_exchange_token',
+    client_id: appId,
+    client_secret: appSecret,
+    fb_exchange_token: shortLivedToken,
+  })
+
+  const response = await fetch(`${url}?${params.toString()}`)
+  
+  if (!response.ok) {
+    const error = await response.text()
+    throw new Error(`Failed to exchange for long-lived token: ${response.status} - ${error}`)
+  }
+
+  return await response.json()
+}
+
+/**
  * Get page access token (long-lived)
  */
 export async function getPageAccessToken(

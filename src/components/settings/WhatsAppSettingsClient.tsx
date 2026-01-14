@@ -1,12 +1,12 @@
 'use client'
 
 import { useState, useEffect, FormEvent } from 'react'
+import { useRouter } from 'next/navigation'
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
 import { Badge } from '@/components/ui/badge'
 import { CheckCircle2, XCircle, Send, Loader2, AlertCircle, ExternalLink, MessageSquare } from 'lucide-react'
-import Link from 'next/link'
 
 interface WhatsAppConfig {
   configured: {
@@ -31,6 +31,7 @@ interface WhatsAppConfig {
 }
 
 export function WhatsAppSettingsClient() {
+  const router = useRouter()
   const [config, setConfig] = useState<WhatsAppConfig | null>(null)
   const [loading, setLoading] = useState(true)
   const [testPhone, setTestPhone] = useState('')
@@ -624,21 +625,19 @@ export function WhatsAppSettingsClient() {
         </CardHeader>
         <CardContent>
           <div className="flex flex-wrap gap-4">
-            <Button variant="outline" asChild>
-              <Link href="/settings/whatsapp/templates">
-                <MessageSquare className="h-4 w-4 mr-2" />
-                Manage Templates
-              </Link>
+            <Button 
+              variant="outline" 
+              onClick={() => router.push('/settings/whatsapp/templates')}
+            >
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Manage Templates
             </Button>
-            <Button variant="outline" asChild>
-              <a
-                href="https://business.facebook.com/settings/system-users"
-                target="_blank"
-                rel="noopener noreferrer"
-              >
-                <ExternalLink className="h-4 w-4 mr-2" />
-                Meta Business Manager
-              </a>
+            <Button 
+              variant="outline" 
+              onClick={() => window.open('https://business.facebook.com/settings/system-users', '_blank', 'noopener,noreferrer')}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Meta Business Manager
             </Button>
           </div>
         </CardContent>

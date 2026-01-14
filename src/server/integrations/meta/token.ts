@@ -46,6 +46,21 @@ export async function getUserPages(token: string): Promise<MetaPage[]> {
 }
 
 /**
+ * Get page access token using long-lived user token
+ */
+export async function getPageAccessTokenFromUserToken(
+  pageId: string,
+  longLivedUserToken: string
+): Promise<string> {
+  const response = await graphAPIGet<{ access_token: string }>(
+    `/${pageId}`,
+    longLivedUserToken,
+    ['access_token']
+  )
+  return response.access_token
+}
+
+/**
  * Get Instagram Business Account connected to a page
  */
 export async function getInstagramBusinessAccount(

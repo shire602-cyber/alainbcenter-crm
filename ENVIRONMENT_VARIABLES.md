@@ -55,10 +55,16 @@ SMTP_USER=user@example.com
 SMTP_PASSWORD=password
 SMTP_FROM=noreply@example.com
 
-# Meta (Instagram/Facebook)
-META_VERIFY_TOKEN=your_token
-META_APP_SECRET=your_secret
-META_PAGE_ACCESS_TOKEN=your_token
+# Meta (Instagram/Facebook) - OAuth Integration
+META_APP_ID=your_facebook_app_id                    # Required: Facebook App ID from Meta Developer Console
+META_APP_SECRET=your_facebook_app_secret           # Required: Facebook App Secret from Meta Developer Console
+META_OAUTH_REDIRECT_URI=https://www.implseai.com/api/integrations/meta/oauth/callback  # Required: OAuth callback URL (must match Meta App settings)
+# Alternative name (fallback):
+META_REDIRECT_URI=https://www.implseai.com/api/integrations/meta/oauth/callback
+
+# Legacy Meta variables (still supported for backward compatibility):
+META_VERIFY_TOKEN=your_token                         # Webhook verification token (auto-generated if not provided)
+META_PAGE_ACCESS_TOKEN=your_token                    # Legacy: Page access token (not needed for OAuth flow)
 
 # Webhook URL Configuration (REQUIRED for Production)
 # Set this to your main domain to use stable webhook URLs instead of dynamic Vercel URLs

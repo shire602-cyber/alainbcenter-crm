@@ -22,6 +22,12 @@ import { Select } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu'
 import { Skeleton } from '@/components/ui/skeleton'
 import { useToast } from '@/components/ui/toast'
 import { PipelineProgress } from '@/components/leads/PipelineProgress'
@@ -915,9 +921,49 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     <Plus className="h-4 w-4 mr-1.5" />
                     Task
                   </Button>
-                  <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-50">
-                    <MoreVertical className="h-4 w-4" />
-                  </Button>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-50">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => {
+                        showToast('Edit lead feature coming soon', 'info')
+                      }}>
+                        Edit Lead
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        showToast('Duplicate lead feature coming soon', 'info')
+                      }}>
+                        Duplicate
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {
+                        showToast('Archive lead feature coming soon', 'info')
+                      }}>
+                        Archive
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={async () => {
+                        if (confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
+                          try {
+                            const res = await fetch(`/api/leads/${leadId}`, {
+                              method: 'DELETE',
+                            })
+                            if (res.ok) {
+                              showToast('Lead deleted successfully', 'success')
+                              router.push('/leads')
+                            } else {
+                              showToast('Failed to delete lead', 'error')
+                            }
+                          } catch (err) {
+                            showToast('Failed to delete lead', 'error')
+                          }
+                        }
+                      }} className="text-red-600 focus:text-red-600">
+                        Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
                 </div>
               </div>
             </div>
@@ -978,14 +1024,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </CardContent>
                 </Card>
 
-            {/* Extracted Data Panel - Keep for auto-detection */}
-            <ExtractedDataPanel
-              dataJson={lead.dataJson}
-              serviceTypeEnum={lead.serviceTypeEnum}
-              nationality={lead.contact?.nationality}
-              businessActivityRaw={lead.businessActivityRaw || undefined}
-              expiryDate={lead.expiryDate || undefined}
-            />
+            {/* Extracted Data Panel - Hidden per user request */}
+            {false && (
+              <ExtractedDataPanel
+                dataJson={lead.dataJson}
+                serviceTypeEnum={lead.serviceTypeEnum}
+                nationality={lead.contact?.nationality}
+                businessActivityRaw={lead.businessActivityRaw || undefined}
+                expiryDate={lead.expiryDate || undefined}
+              />
+            )}
               </div>
 
               {/* RIGHT COLUMN: Sidebar (1/3 width) */}
@@ -1328,24 +1376,36 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
               </CardContent>
             </Card>
 
-            {/* Compact 4-Box Grid - 2x2 layout */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Expiry Tracker - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-semibold text-gray-900">Expiry Tracker</CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowExpiryModal(true)}
-                        className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-3 px-4 pb-4 pt-4">
+            {/* Compact Tab Layout for Expiry & Tasks */}
+            <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
+              <Tabs defaultValue="expiry" className="w-full">
+                <CardHeader className="pb-0 pt-4 px-4 border-b border-gray-100">
+                  <TabsList className="w-full justify-start rounded-none border-none bg-transparent h-auto p-0">
+                    <TabsTrigger 
+                      value="expiry" 
+                      className="flex-1 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                    >
+                      Expiry Tracker
+                    </TabsTrigger>
+                    <TabsTrigger 
+                      value="tasks" 
+                      className="flex-1 data-[state=active]:border-b-2 data-[state=active]:border-primary rounded-none"
+                    >
+                      Tasks
+                    </TabsTrigger>
+                  </TabsList>
+                </CardHeader>
+                <TabsContent value="expiry" className="p-4 m-0 space-y-3">
+                  <div className="flex items-center justify-end mb-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowExpiryModal(true)}
+                      className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 {/* Unverified Expiry Hints */}
                 {lead.dataJson && (() => {
                   try {
@@ -1467,25 +1527,18 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     <p>No expiry items</p>
                   </div>
                 )}
-              </CardContent>
-            </Card>
-
-                {/* Tasks Card - Professional styling */}
-                <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
-                  <CardHeader className="pb-2 pt-4 px-4 border-b border-gray-100">
-                    <div className="flex items-center justify-between">
-                      <CardTitle className="text-sm font-semibold text-gray-900">Tasks</CardTitle>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => setShowTaskModal(true)}
-                        className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
-                      >
-                        <Plus className="h-3.5 w-3.5" />
-                      </Button>
-                    </div>
-                  </CardHeader>
-                  <CardContent className="space-y-2 px-4 pb-4 pt-4">
+                </TabsContent>
+                <TabsContent value="tasks" className="p-4 m-0 space-y-2">
+                  <div className="flex items-center justify-end mb-2">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setShowTaskModal(true)}
+                      className="text-gray-600 hover:text-gray-900 h-6 w-6 p-0"
+                    >
+                      <Plus className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
                 {lead.tasks && lead.tasks.length > 0 ? (
                   lead.tasks
                     .filter((t: any) => t.status === 'OPEN')
@@ -1518,13 +1571,12 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     <p>No tasks</p>
                   </div>
                 )}
-              </CardContent>
+                </TabsContent>
+              </Tabs>
             </Card>
 
-            {/* Reminders Card - Wrapped for grid */}
-            <div className="md:col-span-1">
-              <RemindersCard leadId={leadId} />
-            </div>
+            {/* Reminders Card */}
+            <RemindersCard leadId={leadId} />
 
                 {/* Documents Card - Professional styling */}
                 <Card className="rounded-xl border border-gray-200 bg-white shadow-sm">
@@ -1642,15 +1694,17 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           </div>
         </div>
 
-        {/* Activity Timeline Section - Enhanced styling */}
-        <div className="border-t border-gray-200 bg-gray-50" data-activity-timeline>
-          <div className="max-w-[1800px] mx-auto px-12 py-12">
-            <h2 className="text-2xl font-bold text-gray-900 mb-8">Activity Timeline</h2>
-            <div className="border border-gray-200 rounded-xl p-10 bg-white shadow-md">
-              <ActivityTimeline activities={activities} />
+        {/* Activity Timeline Section - Hidden per user request */}
+        {false && (
+          <div className="border-t border-gray-200 bg-gray-50" data-activity-timeline>
+            <div className="max-w-[1800px] mx-auto px-12 py-12">
+              <h2 className="text-2xl font-bold text-gray-900 mb-8">Activity Timeline</h2>
+              <div className="border border-gray-200 rounded-xl p-10 bg-white shadow-md">
+                <ActivityTimeline activities={activities} />
+              </div>
             </div>
           </div>
-        </div>
+        )}
 
         {/* Bottom Communication Section - Enhanced styling */}
         <div className="border-t border-gray-200 bg-white">
@@ -1768,6 +1822,14 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
             {/* Message History - Enhanced styling */}
             <div className="border border-gray-200 rounded-xl p-8 bg-gray-50/50 min-h-[350px] max-h-[550px] overflow-y-auto mb-8">
+            {/* Paid Badge - Show when stage is Won */}
+            {lead.stage === 'COMPLETED_WON' && (
+              <div className="flex items-center justify-end mb-4">
+                <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 text-sm">
+                  Paid
+                </Badge>
+              </div>
+            )}
             {loadingMessages ? (
               <div className="text-center py-12 text-gray-500">
                 <Loader2 className="h-8 w-8 mx-auto mb-3 animate-spin text-gray-400" />

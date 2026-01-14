@@ -18,11 +18,17 @@ export async function POST(req: NextRequest) {
     await requireAdmin()
 
     const body = await req.json()
-    const { token, webhookVerifyToken, pageId, igBusinessId } = body
+    const { token, webhookVerifyToken, pageId, igBusinessId, oauthSessionId } = body
 
+    // Support both OAuth flow and tester token flow
+    // If oauthSessionId is provided, use OAuth flow (but we'll handle it via direct import)
+    // Note: OAuth flow should use /api/integrations/meta/oauth/connect directly from the UI
+    // This endpoint (tester token flow) remains for backward compatibility
+
+    // Tester token flow (backward compatibility)
     if (!token || typeof token !== 'string') {
       return NextResponse.json(
-        { error: 'Token is required' },
+        { error: 'Token is required (or use OAuth flow)' },
         { status: 400 }
       )
     }

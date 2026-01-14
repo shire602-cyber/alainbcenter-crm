@@ -7,7 +7,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdmin } from '@/lib/auth-server'
 
 const META_APP_ID = process.env.META_APP_ID
-const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI
+const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || process.env.META_REDIRECT_URI || process.env.META_REDIRECT_URI
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,10 +61,16 @@ export async function GET(req: NextRequest) {
     oauthUrl.searchParams.set('state', state)
     oauthUrl.searchParams.set('response_type', 'code')
 
+    console.log('[META-OAUTH] Redirecting to Meta OAuth', {
+      appId: META_APP_ID,
+      redirectUri: META_OAUTH_REDIRECT_URI,
+      scopes,
+    })
+
     // Redirect to Meta OAuth
     return NextResponse.redirect(oauthUrl.toString())
   } catch (error: any) {
-    console.error('Meta OAuth start error:', error)
+    console.error('[META-OAUTH] OAuth start error:', error)
     return NextResponse.json(
       { error: 'Failed to start OAuth flow', details: error.message },
       { status: 500 }

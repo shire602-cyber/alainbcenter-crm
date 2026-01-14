@@ -6,7 +6,7 @@ import { Badge } from '@/components/ui/badge'
 import { Button } from '@/components/ui/button'
 import { IntegrationSettings } from '@/components/admin/IntegrationSettings'
 import { IntegrationIcon } from '@/components/admin/IntegrationIcon'
-import { MetaTesterIntegration } from '@/components/admin/MetaTesterIntegration'
+import { MetaOAuthWizard } from '@/components/admin/MetaOAuthWizard'
 import { 
   Settings,
   CheckCircle2,
@@ -236,7 +236,7 @@ export default async function IntegrationsPage() {
                 <p className="text-xs text-slate-600 mb-3 font-medium">{type.description}</p>
                 
                 {type.name === 'instagram-messaging' && (type as any).isMetaTester ? (
-                  <MetaTesterIntegration 
+                  <MetaOAuthWizard 
                     connections={metaConnections}
                     hasConnection={hasMetaConnection}
                   />

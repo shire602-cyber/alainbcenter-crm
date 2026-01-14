@@ -45,16 +45,16 @@ export function PipelineProgress({ currentStage, onStageClick, className }: Pipe
           {STAGES.map((stage, index) => {
             const isCompleted = currentIndex >= index
             const isCurrent = currentIndex === index
-            const isClickable = stage.value !== 'LOST' || currentStage === 'LOST'
+            // Allow all stages to be clicked - handleStageChange will handle special cases
+            const isClickable = true
             
             return (
               <button
                 key={stage.value}
-                onClick={() => isClickable && onStageClick(stage.value)}
-                disabled={!isClickable}
+                onClick={() => onStageClick(stage.value)}
                 className={cn(
-                  'flex flex-col items-center gap-1 group',
-                  !isClickable && 'cursor-not-allowed opacity-50'
+                  'flex flex-col items-center gap-1 group cursor-pointer',
+                  'hover:opacity-80 transition-opacity'
                 )}
               >
                 <div
