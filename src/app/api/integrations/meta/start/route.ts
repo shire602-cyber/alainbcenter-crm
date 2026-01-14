@@ -1,13 +1,22 @@
 /**
  * GET /api/integrations/meta/start
  * Initiates Meta OAuth flow
+ * 
+ * META SETTINGS REQUIRED:
+ * - App Domains: implseai.com
+ * - Valid OAuth Redirect URIs: https://implseai.com/api/integrations/meta/oauth/callback
  */
 
 import { NextRequest, NextResponse } from 'next/server'
+import { cookies } from 'next/headers'
 import { requireAdmin } from '@/lib/auth-server'
+import crypto from 'crypto'
 
 const META_APP_ID = process.env.META_APP_ID
-const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || process.env.META_REDIRECT_URI || process.env.META_REDIRECT_URI
+const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || process.env.META_REDIRECT_URI
+
+// CSRF state cookie name (must match callback route)
+const STATE_COOKIE_NAME = 'meta_oauth_csrf_state'
 
 export async function GET(req: NextRequest) {
   try {
@@ -29,8 +38,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Get workspace_id from query params (default to 1 for single-tenant)
-    const workspaceId = req.nextUrl.searchParams.get('workspace_id') || '1'
-    const returnUrl = req.nextUrl.searchParams.get('return_url') || '/admin/integrations'
+    const workspaceId = parseInt(req.nextUrl.searchParams.get('workspace_id') || '1', 10)
 
     // Scopes for Instagram messaging and Facebook messaging
     const scopes = [
@@ -44,11 +52,24 @@ export async function GET(req: NextRequest) {
       'leads_retrieval',
     ].join(',')
 
-    // Generate state token with workspace_id and return_url
+    // Generate CSRF nonce
+    const nonce = crypto.randomBytes(16).toString('hex')
+
+    // Store nonce in cookie for validation on callback
+    const cookieStore = await cookies()
+    cookieStore.set(STATE_COOKIE_NAME, nonce, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 600, // 10 minutes
+      path: '/',
+    })
+
+    // Generate state token with nonce, workspace_id, and timestamp
     const state = Buffer.from(
       JSON.stringify({
+        nonce,
         workspace_id: workspaceId,
-        return_url: returnUrl,
         timestamp: Date.now(),
       })
     ).toString('base64url')
@@ -65,6 +86,7 @@ export async function GET(req: NextRequest) {
       appId: META_APP_ID,
       redirectUri: META_OAUTH_REDIRECT_URI,
       scopes,
+      workspaceId,
     })
 
     // Redirect to Meta OAuth
