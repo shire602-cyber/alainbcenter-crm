@@ -27,6 +27,7 @@ import {
 } from '@/lib/integrations/meta/api'
 import { upsertConnection } from '@/server/integrations/meta/storage'
 import { encryptToken } from '@/lib/integrations/meta/encryption'
+import { getCurrentUser } from '@/lib/auth-server'
 
 const META_APP_ID = process.env.META_APP_ID
 const META_APP_SECRET = process.env.META_APP_SECRET
@@ -34,6 +35,31 @@ const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || process.e
 
 // CSRF state cookie name (must match start route)
 const STATE_COOKIE_NAME = 'meta_oauth_csrf_state'
+const POST_OAUTH_REDIRECT_COOKIE = 'meta_oauth_post_redirect'
+const DEFAULT_RETURN_URL = '/admin/integrations'
+
+function sanitizeReturnUrl(value: string | null | undefined): string {
+  if (!value) return DEFAULT_RETURN_URL
+  if (!value.startsWith('/') || value.startsWith('//')) {
+    return DEFAULT_RETURN_URL
+  }
+  return value
+}
+
+function buildRelativeRedirect(basePath: string, params: Record<string, string>): string {
+  const url = new URL(basePath, 'http://localhost')
+  Object.entries(params).forEach(([key, val]) => {
+    url.searchParams.set(key, val)
+  })
+  return `${url.pathname}${url.search}${url.hash}`
+}
+
+function resolvePostOauthRedirect(cookieValue: string | undefined, returnUrl?: string): string {
+  const fallback = buildRelativeRedirect(sanitizeReturnUrl(returnUrl), { meta: 'connected' })
+  return sanitizeReturnUrl(cookieValue ?? '') !== DEFAULT_RETURN_URL
+    ? sanitizeReturnUrl(cookieValue ?? '')
+    : fallback
+}
 
 /**
  * Build redirect URL with query params
@@ -122,7 +148,7 @@ export async function GET(req: NextRequest) {
     }
 
     // Decode and validate state
-    let stateData: { nonce: string; workspace_id: number; timestamp: number }
+    let stateData: { nonce: string; workspace_id: number; timestamp: number; return_url?: string }
     try {
       stateData = JSON.parse(Buffer.from(state, 'base64url').toString())
     } catch {
@@ -166,8 +192,25 @@ export async function GET(req: NextRequest) {
       stateAgeMs: stateAge,
     })
 
+    const postOauthRedirect = resolvePostOauthRedirect(
+      cookieStore.get(POST_OAUTH_REDIRECT_COOKIE)?.value,
+      stateData.return_url
+    )
+
+    const currentUser = await getCurrentUser()
+    if (!currentUser) {
+      cookieStore.delete(STATE_COOKIE_NAME)
+      cookieStore.delete(POST_OAUTH_REDIRECT_COOKIE)
+      return NextResponse.redirect(
+        buildRedirectUrl('/login', {
+          next: postOauthRedirect,
+        })
+      )
+    }
+
     // Clear state cookie
     cookieStore.delete(STATE_COOKIE_NAME)
+    cookieStore.delete(POST_OAUTH_REDIRECT_COOKIE)
 
     // 4. Exchange code for short-lived token
     console.log('[META-OAUTH-TOKEN] Exchanging code for token...')
@@ -318,11 +361,7 @@ export async function GET(req: NextRequest) {
     })
 
     // Success redirect
-    return NextResponse.redirect(
-      buildRedirectUrl(baseRedirect, {
-        meta: 'connected',
-      })
-    )
+    return NextResponse.redirect(buildRedirectUrl(postOauthRedirect, {}))
   } catch (error: any) {
     console.error('[META-OAUTH-CB] Unexpected error:', error)
     return NextResponse.redirect(

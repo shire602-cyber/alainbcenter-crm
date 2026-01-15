@@ -12,13 +12,68 @@ type InstagramConfig = {
 
 /**
  * Get Instagram Meta Graph API configuration from database
+ * 
+ * Priority:
+ * 1. MetaConnection (OAuth flow) - preferred, uses encrypted page access token
+ * 2. Legacy Integration table - fallback for older setups
  */
 export async function getInstagramMetaConfig(): Promise<InstagramConfig | null> {
+  // PRIORITY 1: Try MetaConnection (OAuth flow) first
+  // This is the preferred method using the connected Facebook Page + IG Business Account
+  try {
+    const { getDecryptedPageToken } = await import('@/server/integrations/meta/storage')
+    
+    // Find an active MetaConnection with Instagram Business Account
+    const connection = await prisma.metaConnection.findFirst({
+      where: {
+        status: 'connected',
+      },
+      select: {
+        id: true,
+        pageId: true,
+        igBusinessId: true,
+        igUsername: true,
+      },
+      orderBy: {
+        createdAt: 'desc',
+      },
+    })
+    
+    // Validate that pageId and igBusinessId are set (required for IG messaging)
+    if (connection && connection.pageId && connection.igBusinessId) {
+      // Get decrypted page access token
+      const accessToken = await getDecryptedPageToken(connection.id)
+      
+      if (accessToken) {
+        console.log(`✅ [INSTAGRAM-META] Using MetaConnection OAuth config`, {
+          connectionId: connection.id,
+          pageId: connection.pageId,
+          igBusinessId: connection.igBusinessId || 'N/A',
+          igUsername: connection.igUsername || 'N/A',
+        })
+        
+        return {
+          pageId: connection.pageId,
+          accessToken,
+          appId: connection.igBusinessId || undefined,
+        }
+      } else {
+        console.warn(`⚠️ [INSTAGRAM-META] MetaConnection found but failed to decrypt page token`, {
+          connectionId: connection.id,
+        })
+      }
+    }
+  } catch (error: any) {
+    console.warn(`⚠️ [INSTAGRAM-META] Failed to load MetaConnection config, trying legacy Integration:`, error.message)
+  }
+  
+  // PRIORITY 2: Fallback to legacy Integration table
   const integration = await prisma.integration.findUnique({
     where: { name: 'instagram' },
   })
 
   if (!integration?.isEnabled || integration.provider !== 'Meta') {
+    console.warn(`⚠️ [INSTAGRAM-META] No valid config found - neither MetaConnection nor Integration`)
     return null
   }
 
@@ -36,8 +91,11 @@ export async function getInstagramMetaConfig(): Promise<InstagramConfig | null> 
   const appSecret = integration.apiSecret || config.appSecret
 
   if (!pageId || !accessToken) {
+    console.warn(`⚠️ [INSTAGRAM-META] Legacy Integration found but missing pageId or accessToken`)
     return null
   }
+
+  console.log(`ℹ️ [INSTAGRAM-META] Using legacy Integration config (pageId: ${pageId})`)
 
   return {
     pageId,

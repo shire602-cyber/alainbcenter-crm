@@ -69,6 +69,7 @@ export function MetaOAuthWizard({
   const [error, setError] = useState<string | null>(null)
   const [errorDetails, setErrorDetails] = useState<string | null>(null)
   const [success, setSuccess] = useState<string | null>(null)
+  const [metaConnectedBanner, setMetaConnectedBanner] = useState(false)
   const [connectionStatus, setConnectionStatus] = useState(connections)
   const [webhookUrl, setWebhookUrl] = useState<string | null>(null)
   const [webhookVerifyToken, setWebhookVerifyToken] = useState<string | null>(null)
@@ -83,6 +84,17 @@ export function MetaOAuthWizard({
       loadPages()
     }
   }, [searchParams, hasConnection])
+
+  useEffect(() => {
+    const metaStatus = searchParams?.get('meta')
+    if (metaStatus === 'connected') {
+      setMetaConnectedBanner(true)
+      const cleanedParams = new URLSearchParams(searchParams?.toString() || '')
+      cleanedParams.delete('meta')
+      const nextQuery = cleanedParams.toString()
+      router.replace(`/admin/integrations${nextQuery ? `?${nextQuery}` : ''}`)
+    }
+  }, [searchParams, router])
 
   // Load status on mount
   useEffect(() => {
@@ -292,6 +304,12 @@ export function MetaOAuthWizard({
   if (hasConnection && connectionStatus.length > 0) {
     return (
       <div className="space-y-3">
+        {metaConnectedBanner && (
+          <div className="flex items-center gap-2 rounded border border-green-200/60 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700">
+            <CheckCircle2 className="h-3.5 w-3.5" />
+            Meta connected successfully.
+          </div>
+        )}
         {error && (
           <div className="p-2 bg-red-50 border border-red-200/60 rounded text-xs text-red-700 font-semibold">
             <div className="font-bold">{error}</div>
@@ -410,6 +428,12 @@ export function MetaOAuthWizard({
   // Wizard UI
   return (
     <div className="space-y-4">
+      {metaConnectedBanner && (
+        <div className="flex items-center gap-2 rounded border border-green-200/60 bg-green-50 px-3 py-2 text-xs font-semibold text-green-700">
+          <CheckCircle2 className="h-3.5 w-3.5" />
+          Meta connected successfully.
+        </div>
+      )}
       {error && (
         <div className="p-2 bg-red-50 border border-red-200/60 rounded text-xs text-red-700 font-semibold">
           <div className="font-bold">{error}</div>

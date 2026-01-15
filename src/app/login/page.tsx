@@ -1,16 +1,23 @@
 'use client'
 
-import { useState, FormEvent, useEffect } from 'react'
-import { useRouter } from 'next/navigation'
+import { useState, FormEvent, useEffect, Suspense } from 'react'
+import { useRouter, useSearchParams } from 'next/navigation'
 import Link from 'next/link'
 
-export default function LoginPage() {
+function LoginForm() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState<string | null>(null)
   const [loading, setLoading] = useState(false)
   const [mounted, setMounted] = useState(false)
+
+  const sanitizeRedirectTarget = (value: string | null) => {
+    if (!value) return '/dashboard'
+    if (!value.startsWith('/') || value.startsWith('//')) return '/dashboard'
+    return value
+  }
 
   useEffect(() => {
     setMounted(true)
@@ -34,7 +41,13 @@ export default function LoginPage() {
     setLoading(true)
 
     try {
-      const res = await fetch('/api/auth/login', {
+      const redirectTarget = sanitizeRedirectTarget(
+        searchParams?.get('next') || searchParams?.get('redirect')
+      )
+      const loginUrl = new URL('/api/auth/login', window.location.origin)
+      loginUrl.searchParams.set('redirect', redirectTarget)
+
+      const res = await fetch(loginUrl.toString(), {
         method: 'POST',
         headers: { 
           'Content-Type': 'application/json',
@@ -255,3 +268,18 @@ export default function LoginPage() {
   )
 }
 
+function LoginFormFallback() {
+  return (
+    <div className="min-h-screen flex items-center justify-center bg-gradient-to-br from-slate-50 via-white to-slate-100">
+      <div className="animate-pulse text-slate-400">Loading...</div>
+    </div>
+  )
+}
+
+export default function LoginPage() {
+  return (
+    <Suspense fallback={<LoginFormFallback />}>
+      <LoginForm />
+    </Suspense>
+  )
+}

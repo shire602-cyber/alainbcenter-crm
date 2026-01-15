@@ -28,7 +28,7 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { text, templateName, templateParams, mediaUrl, mediaId, mediaType, mediaCaption, mediaFilename, mediaMimeType, mediaSize } = body
+    const { text, templateName, templateParams, mediaUrl, mediaId, mediaType, mediaCaption, mediaFilename, mediaMimeType, mediaSize, clientMessageId } = body
 
     // Validate: either text, template, or media
     if (!text && !templateName && !mediaUrl && !mediaId) {
@@ -216,6 +216,7 @@ export async function POST(
           text: text.trim(),
           provider: 'instagram',
           triggerProviderMessageId: null, // Manual send
+          clientMessageId,
           replyType: 'answer',
           lastQuestionKey: null,
           flowStep: null,
@@ -223,7 +224,11 @@ export async function POST(
 
         if (result.wasDuplicate) {
           console.log(`⚠️ [INBOX-MESSAGES] Duplicate Instagram outbound blocked by idempotency`)
-          throw new Error('Duplicate message blocked (idempotency)')
+          return NextResponse.json({
+            ok: true,
+            wasDuplicate: true,
+            message: 'Message already sent (duplicate detected)',
+          })
         } else if (!result.success) {
           throw new Error(result.error || 'Failed to send Instagram message')
         }
@@ -301,12 +306,21 @@ export async function POST(
         })
       } catch (error: any) {
         console.error('Instagram send error:', error)
-        sendError = error
-        // Continue to create message record with FAILED status
+        // CRITICAL: Return immediately with Instagram error - do NOT fall through to WhatsApp
+        return NextResponse.json(
+          {
+            ok: false,
+            error: 'Failed to send Instagram message',
+            hint: error.message || 'Check Instagram/Meta connection configuration and try again.',
+          },
+          { status: 400 }
+        )
       }
     }
 
-    // For WhatsApp: Continue with existing logic (templates, media, 24-hour window)
+    // For WhatsApp ONLY: Continue with existing logic (templates, media, 24-hour window)
+    // CRITICAL: This block must NOT run for Instagram - Instagram is handled above
+    if (isWhatsApp) {
     try {
       if ((mediaUrl || mediaId) && mediaType) {
         // Send media message (works within 24-hour window)
@@ -378,6 +392,7 @@ export async function POST(
           text: text.trim(),
           provider: 'whatsapp',
           triggerProviderMessageId: null, // Manual send
+          clientMessageId,
           replyType: 'answer',
           lastQuestionKey: null,
           flowStep: null,
@@ -385,7 +400,11 @@ export async function POST(
 
         if (result.wasDuplicate) {
           console.log(`⚠️ [INBOX-MESSAGES] Duplicate WhatsApp outbound blocked by idempotency`)
-          throw new Error('Duplicate message blocked (idempotency)')
+          return NextResponse.json({
+            ok: true,
+            wasDuplicate: true,
+            message: 'Message already sent (duplicate detected)',
+          })
         } else if (!result.success) {
           throw new Error(result.error || 'Failed to send message')
         }
@@ -474,6 +493,7 @@ export async function POST(
       sendError = error
       // Continue to create message record with FAILED status (only for template/media, not text)
     }
+    } // End of if (isWhatsApp)
 
     // Create outbound Message(OUT) record (only for template/media messages, not text)
     // Text messages are handled above via sendOutboundWithIdempotency

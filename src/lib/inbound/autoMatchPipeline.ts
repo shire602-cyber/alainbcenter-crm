@@ -215,6 +215,54 @@ export async function handleInboundMessageAutoMatch(
       console.warn(`⚠️ [AUTO-MATCH] Could not normalize phone for contact ${contact.id}: ${error.message}`)
     }
   }
+  
+  // INSTAGRAM: Extract phone number from message text if contact identity is ig:{id}
+  // When an IG user shares their phone (e.g., "my number is 050..."), save to phoneNormalized
+  // This allows calling/WhatsApp outreach while keeping ig:{id} as the primary contact.phone
+  if (input.channel === 'INSTAGRAM' && contact.phone?.startsWith('ig:') && !contact.phoneNormalized && input.text) {
+    try {
+      // Regex to match common phone patterns (UAE and international)
+      // Matches: +971501234567, 0501234567, 501234567, 00971501234567
+      const phonePatterns = [
+        /(?:\+|00)?971[0-9]{8,9}/,      // UAE with country code
+        /0[0-9]{9,10}/,                  // UAE with leading 0
+        /5[0-9]{8}/,                     // UAE mobile without prefix
+        /(?:\+|00)?[1-9][0-9]{9,14}/,   // International format
+      ]
+      
+      let extractedPhone: string | null = null
+      for (const pattern of phonePatterns) {
+        const match = input.text.match(pattern)
+        if (match) {
+          extractedPhone = match[0]
+          break
+        }
+      }
+      
+      if (extractedPhone) {
+        // Try to normalize to E.164
+        const { normalizeToE164 } = await import('../phone')
+        const normalizedPhone = normalizeToE164(extractedPhone)
+        
+        // Save to contact.phoneNormalized (do NOT overwrite contact.phone which is ig:{id})
+        await prisma.contact.update({
+          where: { id: contact.id },
+          data: { phoneNormalized: normalizedPhone },
+        })
+        contact.phoneNormalized = normalizedPhone
+        
+        console.log(`✅ [AUTO-MATCH] Instagram contact ${contact.id}: Extracted and saved phone from message`, {
+          extractedPhone,
+          normalizedPhone,
+          contactId: contact.id,
+          originalPhone: contact.phone, // Stays as ig:{id}
+        })
+      }
+    } catch (phoneError: any) {
+      // Non-blocking - continue even if phone extraction fails
+      console.warn(`⚠️ [AUTO-MATCH] Failed to extract phone from Instagram message:`, phoneError.message)
+    }
+  }
 
   // Step 3: FIND/CREATE Lead (smart rules) - MUST be before conversation to get leadId
   const lead = await findOrCreateLead({

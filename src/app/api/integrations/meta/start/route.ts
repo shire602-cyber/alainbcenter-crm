@@ -17,6 +17,25 @@ const META_OAUTH_REDIRECT_URI = process.env.META_OAUTH_REDIRECT_URI || process.e
 
 // CSRF state cookie name (must match callback route)
 const STATE_COOKIE_NAME = 'meta_oauth_csrf_state'
+const POST_OAUTH_REDIRECT_COOKIE = 'meta_oauth_post_redirect'
+
+const DEFAULT_RETURN_URL = '/admin/integrations'
+
+function sanitizeReturnUrl(value: string | null): string {
+  if (!value) return DEFAULT_RETURN_URL
+  if (!value.startsWith('/') || value.startsWith('//')) {
+    return DEFAULT_RETURN_URL
+  }
+  return value
+}
+
+function buildRelativeRedirect(basePath: string, params: Record<string, string>): string {
+  const url = new URL(basePath, 'http://localhost')
+  Object.entries(params).forEach(([key, val]) => {
+    url.searchParams.set(key, val)
+  })
+  return `${url.pathname}${url.search}${url.hash}`
+}
 
 export async function GET(req: NextRequest) {
   try {
@@ -39,6 +58,8 @@ export async function GET(req: NextRequest) {
 
     // Get workspace_id from query params (default to 1 for single-tenant)
     const workspaceId = parseInt(req.nextUrl.searchParams.get('workspace_id') || '1', 10)
+    const returnUrl = sanitizeReturnUrl(req.nextUrl.searchParams.get('return_url'))
+    const postOauthRedirect = buildRelativeRedirect(returnUrl, { meta: 'connected' })
 
     // Scopes for Instagram messaging and Facebook messaging
     const scopes = [
@@ -64,6 +85,13 @@ export async function GET(req: NextRequest) {
       maxAge: 600, // 10 minutes
       path: '/',
     })
+    cookieStore.set(POST_OAUTH_REDIRECT_COOKIE, postOauthRedirect, {
+      httpOnly: true,
+      secure: process.env.NODE_ENV === 'production',
+      sameSite: 'lax',
+      maxAge: 600, // 10 minutes
+      path: '/',
+    })
 
     // Generate state token with nonce, workspace_id, and timestamp
     const state = Buffer.from(
@@ -71,6 +99,7 @@ export async function GET(req: NextRequest) {
         nonce,
         workspace_id: workspaceId,
         timestamp: Date.now(),
+        return_url: returnUrl,
       })
     ).toString('base64url')
 

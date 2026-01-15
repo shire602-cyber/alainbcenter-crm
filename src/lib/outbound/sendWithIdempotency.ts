@@ -25,6 +25,7 @@ export interface OutboundSendOptions {
   text: string | unknown // Allow unknown to catch JSON objects/strings
   provider: 'whatsapp' | 'email' | 'instagram' | 'facebook'
   triggerProviderMessageId?: string | null
+  clientMessageId?: string | null
   replyType?: 'greeting' | 'question' | 'answer' | 'closing' | 'manual' | 'test' | 'followup' | 'reminder'
   lastQuestionKey?: string | null
   flowStep?: string | null
@@ -76,7 +77,7 @@ export function normalizeOutboundText(input: unknown): string {
  * - Includes text hash to prevent same message sent twice in same day
  */
 function computeOutboundDedupeKey(options: OutboundSendOptions): string {
-  const { conversationId, replyType, lastQuestionKey, triggerProviderMessageId, text, provider } = options
+  const { conversationId, replyType, lastQuestionKey, triggerProviderMessageId, text, provider, clientMessageId } = options
   
   // CRITICAL FIX D: For auto-reply (triggerProviderMessageId exists), use unified key format
   if (triggerProviderMessageId) {
@@ -90,6 +91,16 @@ function computeOutboundDedupeKey(options: OutboundSendOptions): string {
     return createHash('sha256').update(keyString).digest('hex')
   }
   
+  if (clientMessageId) {
+    const keyParts = [
+      `conv:${conversationId}`,
+      `provider:${provider}`,
+      `clientMsgId:${clientMessageId}`,
+    ]
+    const keyString = keyParts.join('|')
+    return createHash('sha256').update(keyString).digest('hex')
+  }
+
   // For manual sends, use existing logic with text hash
   const normalizedText = normalizeOutboundText(text)
   const normalizedQuestionKey = lastQuestionKey 
@@ -117,7 +128,7 @@ function computeOutboundDedupeKey(options: OutboundSendOptions): string {
 export async function sendOutboundWithIdempotency(
   options: OutboundSendOptions
 ): Promise<OutboundSendResult> {
-  const { conversationId, contactId, leadId, phone, text: rawText, provider, triggerProviderMessageId, replyType, lastQuestionKey, flowStep } = options
+  const { conversationId, contactId, leadId, phone, text: rawText, provider, triggerProviderMessageId, replyType, lastQuestionKey, flowStep, clientMessageId } = options
   
   // CRITICAL: Normalize text to ensure it's always plain text (never JSON)
   let text = normalizeOutboundText(rawText)
@@ -299,6 +310,12 @@ export async function sendOutboundWithIdempotency(
     // Check if it's a unique constraint violation (duplicate)
     if (error.code === 'P2002' && error.meta?.target?.includes('outboundDedupeKey')) {
       console.log(`[OUTBOUND-IDEMPOTENCY] Duplicate detected - dedupeKey: ${outboundDedupeKey.substring(0, 16)}...`)
+      console.log(`[IDEMPOTENCY-HIT]`, {
+        key: `${outboundDedupeKey.substring(0, 16)}...`,
+        provider,
+        conversationId,
+        clientMessageId: clientMessageId || 'N/A',
+      })
       
       // Find existing log
       const existing = await prisma.outboundMessageLog.findUnique({
@@ -356,56 +373,40 @@ export async function sendOutboundWithIdempotency(
         throw new Error('Instagram integration not configured. Please configure in /admin/integrations')
       }
       
-      // Extract Instagram user ID
-      // If phone starts with 'ig:', extract user ID from phone
-      // Otherwise, phone is a real number - get Instagram ID from conversation metadata
-      let instagramUserId: string
-      if (phone.startsWith('ig:')) {
+      let instagramUserId: string | undefined
+      const contactWithIg = await prisma.contact.findFirst({
+        where: { id: contactId },
+        select: { igUserId: true },
+      })
+      instagramUserId = contactWithIg?.igUserId || undefined
+
+      if (!instagramUserId && phone.startsWith('ig:')) {
         instagramUserId = phone.substring(3)
-      } else {
-        // Phone is real number, get Instagram ID from conversation
+      }
+
+      if (!instagramUserId) {
         const conversation = await prisma.conversation.findUnique({
           where: { id: conversationId },
-          select: { externalThreadId: true, knownFields: true }
+          select: { externalThreadId: true },
         })
-        
-        // Try to extract Instagram ID from externalThreadId
-        // externalThreadId format for Instagram: "instagram:USER_ID" (from getExternalThreadId)
-        if (conversation?.externalThreadId) {
-          const threadId = conversation.externalThreadId
-          // externalThreadId format: "instagram:6221774837922501"
-          if (threadId.startsWith('instagram:')) {
-            instagramUserId = threadId.substring(11) // Remove "instagram:" prefix
-          } else if (threadId.startsWith('ig:')) {
-            instagramUserId = threadId.substring(3) // Remove "ig:" prefix (fallback)
-          } else {
-            // Try to extract numeric ID from thread ID
-            const idMatch = threadId.match(/\d+/)
-            if (idMatch) {
-              instagramUserId = idMatch[0]
-            } else {
-              instagramUserId = threadId
-            }
-          }
-        } else if (conversation?.knownFields) {
-          // Try to parse knownFields JSON for Instagram ID
-          try {
-            const knownFields = JSON.parse(conversation.knownFields)
-            if (knownFields.instagramUserId || knownFields.senderId) {
-              instagramUserId = knownFields.instagramUserId || knownFields.senderId
-            } else {
-              throw new Error('Instagram ID not found in conversation metadata')
-            }
-          } catch {
-            throw new Error('Instagram ID not found in conversation metadata and phone is not Instagram ID format')
-          }
-        } else {
-          throw new Error('Instagram ID not found in conversation metadata and phone is not Instagram ID format')
+
+        if (conversation?.externalThreadId?.startsWith('instagram:')) {
+          instagramUserId = conversation.externalThreadId.substring(10)
+        } else if (conversation?.externalThreadId?.startsWith('ig:')) {
+          instagramUserId = conversation.externalThreadId.substring(3)
         }
-        
-        console.log(`ℹ️ [OUTBOUND-IDEMPOTENCY] Phone is real number (${phone}), using Instagram ID from conversation: ${instagramUserId}`)
+      }
+
+      if (!instagramUserId) {
+        throw new Error('Instagram user ID not found - check contact.igUserId or conversation.externalThreadId')
       }
       
+      console.log(`[IG-SEND-REQUEST]`, {
+        provider,
+        conversationId,
+        recipientId: instagramUserId,
+        clientMessageId: clientMessageId || 'N/A',
+      })
       console.log(`[OUTBOUND-IDEMPOTENCY] Instagram outbound → sender`, {
         instagramUserId,
         conversationId,
@@ -416,11 +417,21 @@ export async function sendOutboundWithIdempotency(
       const result = await sendInstagramViaMeta(instagramUserId, text, config)
       
       if (!result.success) {
+        console.log(`[IG-SEND-RESULT]`, {
+          messageId: result.messageId || null,
+          status: 'error',
+          errorCode: result.error || 'unknown',
+        })
         throw new Error(result.error || 'Failed to send Instagram message')
       }
       
       messageId = result.messageId
       console.log(`✅ [OUTBOUND-IDEMPOTENCY] Instagram API send succeeded messageId=${messageId} conversationId=${conversationId}`)
+      console.log(`[IG-SEND-RESULT]`, {
+        messageId,
+        status: 'success',
+        errorCode: null,
+      })
     } else {
       // Other providers not implemented yet
       throw new Error(`Provider ${provider} not implemented`)

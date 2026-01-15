@@ -702,16 +702,21 @@ function InboxPageContent() {
     setSuccess(null)
 
     try {
+      const clientMessageId = crypto.randomUUID()
       const res = await fetch(`/api/inbox/conversations/${selectedConversation.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ text: newMessage.trim() }),
+        body: JSON.stringify({ text: newMessage.trim(), clientMessageId }),
       })
 
       const data = await res.json()
 
       if (data.ok) {
-        setSuccess('Message sent successfully!')
+        if (data.wasDuplicate) {
+          setSuccess('Message already sent')
+        } else {
+          setSuccess('Message sent successfully!')
+        }
         setNewMessage('')
         await loadMessages(selectedConversation.id)
         await loadConversations()
