@@ -70,7 +70,12 @@ export async function GET(req: NextRequest) {
 
     // Additional filters
     if (pipelineStage) {
-      andConditions.push({ pipelineStage })
+      andConditions.push({
+        pipelineStage: {
+          equals: pipelineStage,
+          mode: 'insensitive',
+        },
+      })
     }
 
     if (source) {
@@ -121,6 +126,14 @@ export async function GET(req: NextRequest) {
           {
             contact: {
               email: {
+                contains: query,
+                mode: 'insensitive',
+              },
+            },
+          },
+          {
+            contact: {
+              nationality: {
                 contains: query,
                 mode: 'insensitive',
               },

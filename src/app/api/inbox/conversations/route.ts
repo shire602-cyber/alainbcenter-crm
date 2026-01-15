@@ -36,6 +36,7 @@ export async function GET(req: NextRequest) {
     // Default to 'all' instead of 'whatsapp' to show all channels by default
     // Frontend already passes 'channel=all' when activeChannel is 'all', but this ensures correct default
     const channelParam = req.nextUrl.searchParams.get('channel') || 'all'
+    const searchQuery = req.nextUrl.searchParams.get('search')?.trim()
 
     // Build where clause - if channel is 'all', don't filter by channel
     // Try to use deletedAt if available, but fallback gracefully if column doesn't exist
@@ -46,6 +47,17 @@ export async function GET(req: NextRequest) {
       // All channels are stored as lowercase in the database
       whereClause.channel = channelParam.toLowerCase()
     }
+
+    const messageFilter = searchQuery
+      ? {
+          some: {
+            body: {
+              contains: searchQuery,
+              mode: 'insensitive',
+            },
+          },
+        }
+      : { some: {} }
 
     // Query conversations - handle gracefully if deletedAt doesn't exist
     let conversations
@@ -66,9 +78,7 @@ export async function GET(req: NextRequest) {
         where: {
           ...whereWithDeletedAt,
           // Only include conversations that have at least one message
-          messages: {
-            some: {},
-          },
+          messages: messageFilter,
         },
         select: {
           id: true,
@@ -138,14 +148,12 @@ export async function GET(req: NextRequest) {
         console.warn('[DB] deletedAt column not found, querying without it (this is OK if migration not yet applied)')
         // Retry without deletedAt filter - just use channel filter
         try {
-          conversations = await prisma.conversation.findMany({
-            where: {
-              ...whereClause,
-              // Only include conversations that have at least one message
-              messages: {
-                some: {},
-              },
-            },
+        conversations = await prisma.conversation.findMany({
+          where: {
+            ...whereClause,
+            // Only include conversations that have at least one message
+            messages: messageFilter,
+          },
             select: {
               id: true,
               channel: true,

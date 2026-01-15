@@ -12,6 +12,28 @@ import { useRouter } from 'next/navigation'
 export function TopNavClient() {
   const [user, setUser] = useState<{ name?: string; email?: string; role?: string } | null>(null)
   const [searchQuery, setSearchQuery] = useState('')
+  const [searchResults, setSearchResults] = useState<{
+    conversations: Array<{
+      id: number
+      contact: { id: number; fullName: string; phone: string; email: string | null }
+      channel: string | null
+      messages: Array<{ id: number; body: string | null }>
+    }>
+    leads: Array<{
+      id: number
+      pipelineStage: string | null
+      contact: { id: number; fullName: string; phone: string; email: string | null }
+    }>
+    contacts: Array<{
+      id: number
+      fullName: string
+      phone: string
+      email: string | null
+      nationality: string | null
+    }>
+  }>({ conversations: [], leads: [], contacts: [] })
+  const [searching, setSearching] = useState(false)
+  const [showResults, setShowResults] = useState(false)
   const [unrepliedCount, setUnrepliedCount] = useState(0)
   const [notificationCount, setNotificationCount] = useState(0)
   const { toggle, isOpen } = useSidebar()
@@ -53,7 +75,8 @@ export function TopNavClient() {
   const handleSearch = (e: KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter' && searchQuery.trim()) {
       // Navigate to leads page with search query
-      router.push(`/leads?search=${encodeURIComponent(searchQuery.trim())}`)
+      router.push(`/leads?query=${encodeURIComponent(searchQuery.trim())}`)
+      setShowResults(false)
     }
   }
 
@@ -72,6 +95,37 @@ export function TopNavClient() {
     window.addEventListener('keydown', handleKeyDown)
     return () => window.removeEventListener('keydown', handleKeyDown)
   }, [])
+
+  useEffect(() => {
+    const trimmed = searchQuery.trim()
+    if (!trimmed || trimmed.length < 2) {
+      setSearchResults({ conversations: [], leads: [], contacts: [] })
+      setShowResults(false)
+      return
+    }
+
+    setShowResults(true)
+    setSearching(true)
+    const controller = new AbortController()
+    const timer = setTimeout(() => {
+      fetch(`/api/search?q=${encodeURIComponent(trimmed)}`, { signal: controller.signal })
+        .then(res => res.json())
+        .then(data => {
+          setSearchResults({
+            conversations: Array.isArray(data.conversations) ? data.conversations : [],
+            leads: Array.isArray(data.leads) ? data.leads : [],
+            contacts: Array.isArray(data.contacts) ? data.contacts : [],
+          })
+        })
+        .catch(() => {})
+        .finally(() => setSearching(false))
+    }, 250)
+
+    return () => {
+      clearTimeout(timer)
+      controller.abort()
+    }
+  }, [searchQuery])
 
   return (
     <div className="sticky top-0 z-40 flex h-16 shrink-0 items-center gap-x-4 border-b border-slate-200/60 bg-white/95 backdrop-blur-sm supports-[backdrop-filter]:bg-white/90 px-4 sm:px-6 lg:px-8 shadow-sm">
@@ -95,6 +149,12 @@ export function TopNavClient() {
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
             onKeyDown={handleSearch}
+            onFocus={() => {
+              if (searchQuery.trim()) setShowResults(true)
+            }}
+            onBlur={() => {
+              window.setTimeout(() => setShowResults(false), 150)
+            }}
             className="block h-11 w-full rounded-lg border border-slate-200 bg-slate-50/50 py-2.5 pl-10 pr-20 text-body text-slate-900 placeholder:text-slate-400 focus:ring-4 focus:ring-slate-100 focus:border-slate-300 focus:bg-white transition-all duration-300 hover:bg-slate-50 hover:border-slate-300"
           />
           <div className="absolute right-2 flex items-center gap-1">
@@ -102,6 +162,79 @@ export function TopNavClient() {
               <span className="text-xs">⌘</span>K
             </kbd>
           </div>
+          {showResults && (
+            <div className="absolute top-full mt-2 w-full rounded-lg border border-slate-200 bg-white shadow-lg z-50">
+              <div className="p-3 text-caption text-slate-500">
+                {searching ? 'Searching...' : 'Search results'}
+              </div>
+              {!searching && (
+                <div className="max-h-80 overflow-y-auto">
+                  <div className="px-3 pb-2 text-xs font-semibold text-slate-400 uppercase">Conversations</div>
+                  {(searchResults.conversations || []).slice(0, 5).map(conv => (
+                    <button
+                      key={`conv-${conv.id}`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const phone = conv.contact?.phone || ''
+                        router.push(phone ? `/inbox?phone=${encodeURIComponent(phone)}` : '/inbox')
+                        setShowResults(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                    >
+                      <div className="text-sm text-slate-900">{conv.contact?.fullName || 'Unknown'}</div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {conv.messages?.[0]?.body || 'Conversation'}
+                      </div>
+                    </button>
+                  ))}
+                  {searchResults.conversations.length === 0 && (
+                    <div className="px-3 pb-3 text-xs text-slate-400">No conversations</div>
+                  )}
+
+                  <div className="px-3 pt-2 pb-2 text-xs font-semibold text-slate-400 uppercase">Leads</div>
+                  {(searchResults.leads || []).slice(0, 5).map(lead => (
+                    <button
+                      key={`lead-${lead.id}`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        router.push(`/leads/${lead.id}`)
+                        setShowResults(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                    >
+                      <div className="text-sm text-slate-900">{lead.contact?.fullName || 'Unknown'}</div>
+                      <div className="text-xs text-slate-500 truncate">{lead.contact?.phone || lead.contact?.email || ''}</div>
+                    </button>
+                  ))}
+                  {searchResults.leads.length === 0 && (
+                    <div className="px-3 pb-3 text-xs text-slate-400">No leads</div>
+                  )}
+
+                  <div className="px-3 pt-2 pb-2 text-xs font-semibold text-slate-400 uppercase">Contacts</div>
+                  {(searchResults.contacts || []).slice(0, 5).map(contact => (
+                    <button
+                      key={`contact-${contact.id}`}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => {
+                        const fallback = contact.phone || contact.email || contact.fullName
+                        router.push(`/leads?search=${encodeURIComponent(fallback)}`)
+                        setShowResults(false)
+                      }}
+                      className="w-full text-left px-3 py-2 hover:bg-slate-50"
+                    >
+                      <div className="text-sm text-slate-900">{contact.fullName}</div>
+                      <div className="text-xs text-slate-500 truncate">
+                        {contact.phone || contact.email || contact.nationality || ''}
+                      </div>
+                    </button>
+                  ))}
+                  {searchResults.contacts.length === 0 && (
+                    <div className="px-3 pb-3 text-xs text-slate-400">No contacts</div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
         <div className="flex items-center gap-x-3 lg:gap-x-4">
           <Link href="/notifications">

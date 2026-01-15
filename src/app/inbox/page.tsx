@@ -338,11 +338,20 @@ function InboxPageContent() {
     }
   }, [messages])
 
+  function buildConversationsUrl() {
+    const params = new URLSearchParams()
+    params.set('channel', activeChannel === 'all' ? 'all' : activeChannel)
+    const trimmed = searchQuery.trim()
+    if (trimmed.length >= 2) {
+      params.set('search', trimmed)
+    }
+    return `/api/inbox/conversations?${params.toString()}`
+  }
+
   async function loadConversations() {
     try {
       setLoading(true)
-      const channelParam = activeChannel === 'all' ? 'channel=all' : `channel=${activeChannel}`
-      const res = await fetch(`/api/inbox/conversations?${channelParam}`)
+      const res = await fetch(buildConversationsUrl())
       const data = await res.json()
 
       if (data.ok) {
@@ -384,12 +393,20 @@ function InboxPageContent() {
       .catch(() => {})
   }, [activeChannel])
 
+  useEffect(() => {
+    const trimmed = searchQuery.trim()
+    if (trimmed.length === 1) return
+    const timer = setTimeout(() => {
+      loadConversations()
+    }, 250)
+    return () => clearTimeout(timer)
+  }, [searchQuery])
+
   // Auto-refresh: Poll for new messages every 3 seconds (silent background refresh)
   useEffect(() => {
     const interval = setInterval(() => {
       // Silent background refresh - don't show loading states
-      const channelParam = activeChannel === 'all' ? 'channel=all' : `channel=${activeChannel}`
-      fetch(`/api/inbox/conversations?${channelParam}`)
+      fetch(buildConversationsUrl())
         .then(res => res.json())
         .then(data => {
           if (data.ok) {
@@ -438,7 +455,7 @@ function InboxPageContent() {
     }, 3000) // Poll every 3 seconds
 
     return () => clearInterval(interval)
-  }, [selectedConversation, activeChannel])
+  }, [selectedConversation, activeChannel, searchQuery])
 
   async function loadMessages(conversationId: number, silent: boolean = false) {
     try {
@@ -868,15 +885,18 @@ function InboxPageContent() {
     }
   }
 
-  const filteredConversations = conversations.filter((conv) => {
-    if (!searchQuery) return true
-    const query = searchQuery.toLowerCase()
-    return (
-      conv.contact.fullName.toLowerCase().includes(query) ||
-      conv.contact.phone.includes(query) ||
-      conv.lastMessage?.body.toLowerCase().includes(query)
-    )
-  })
+  const useServerSearch = searchQuery.trim().length >= 2
+  const filteredConversations = useServerSearch
+    ? conversations
+    : conversations.filter((conv) => {
+        if (!searchQuery) return true
+        const query = searchQuery.toLowerCase()
+        return (
+          conv.contact.fullName.toLowerCase().includes(query) ||
+          conv.contact.phone.includes(query) ||
+          (conv.lastMessage?.body || '').toLowerCase().includes(query)
+        )
+      })
 
   return (
     <MainLayout>

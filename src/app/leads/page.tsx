@@ -7,7 +7,7 @@
 
 import { useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
-import { useRouter } from 'next/navigation'
+import { useRouter, useSearchParams } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
 import { Button } from '@/components/ui/button'
 import { Input } from '@/components/ui/input'
@@ -95,6 +95,7 @@ type User = {
 
 export default function LeadsPageNew() {
   const router = useRouter()
+  const searchParams = useSearchParams()
   const { showToast } = useToast()
   
   // State
@@ -152,6 +153,13 @@ export default function LeadsPageNew() {
     }, 300)
     return () => clearTimeout(timer)
   }, [query])
+
+  useEffect(() => {
+    const initialQuery = searchParams?.get('query') || searchParams?.get('search')
+    if (initialQuery && initialQuery !== query) {
+      setQuery(initialQuery)
+    }
+  }, [searchParams])
 
   // Check user role
   useEffect(() => {
