@@ -116,6 +116,10 @@ export default async function IntegrationsPage() {
 
   const hasMetaConnection = metaConnections.length > 0
 
+  const metaLeadgenState = await prisma.metaLeadgenState.findUnique({
+    where: { workspaceId: 1 },
+  }).catch(() => null)
+
   const integrationTypes = [
     {
       name: 'whatsapp',
@@ -198,6 +202,27 @@ export default async function IntegrationsPage() {
             icon={<XCircle className="h-4 w-4 text-slate-600" />}
           />
         </div>
+
+        <BentoCard
+          title="Meta Lead Ads Status"
+          icon={<Sparkles className="h-4 w-4 text-amber-600" />}
+          badge={<Badge variant="secondary">Diagnostics</Badge>}
+          className="border-amber-200/60"
+        >
+          <div className="space-y-2 text-sm text-muted-foreground">
+            <div>Page: {metaConnections[0]?.pageName || metaLeadgenState?.selectedPageId || '—'}</div>
+            <div>Ad Account: {metaLeadgenState?.selectedAdAccountId || '—'}</div>
+            <div>Webhook subscribed: {metaConnections[0]?.triggerSubscribed ? 'Yes' : 'No'}</div>
+            <div>Last lead received: {metaLeadgenState?.lastLeadgenReceivedAt?.toISOString() || '—'}</div>
+            <div>Last lead processed: {metaLeadgenState?.lastLeadgenProcessedAt?.toISOString() || '—'}</div>
+            <div>Poller last run: {metaLeadgenState?.lastPollRunAt?.toISOString() || '—'}</div>
+            <div>
+              <Link href="/api/debug/meta/leadgen-status" className="text-primary hover:underline">
+                View leadgen status JSON
+              </Link>
+            </div>
+          </div>
+        </BentoCard>
 
         {/* Integration Cards */}
         <div className="grid gap-4 md:grid-cols-2">

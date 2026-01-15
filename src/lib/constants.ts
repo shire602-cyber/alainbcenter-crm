@@ -75,6 +75,7 @@ export const LEAD_SOURCES = [
   'website',
   'facebook_ad',
   'instagram_ad',
+  'meta_lead_ad',
   'whatsapp',
   'manual',
 ] as const
@@ -85,6 +86,7 @@ export const LEAD_SOURCE_LABELS: Record<LeadSource, string> = {
   website: 'Website',
   facebook_ad: 'Facebook Ads',
   instagram_ad: 'Instagram Ads',
+  meta_lead_ad: 'Meta Lead Ad',
   whatsapp: 'WhatsApp',
   manual: 'Manual',
 }

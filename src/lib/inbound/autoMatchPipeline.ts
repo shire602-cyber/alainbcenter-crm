@@ -1030,9 +1030,11 @@ export async function handleInboundMessageAutoMatch(
     elapsed: `${Date.now() - startTime}ms`,
   })
 
+  const isLeadAd = !!input.metadata?.isLeadAd
+
   // Trigger automation for data extraction and auto-reply
   // This ensures service, phone, nationality are auto-filled and AI replies are sent
-  if (message && lead && lead.id && message.direction === 'INBOUND') {
+  if (message && lead && lead.id && message.direction === 'INBOUND' && !isLeadAd) {
     try {
       const { queueInboundMessageJob } = await import('@/lib/automation/queueJob')
       // Fire-and-forget - don't await, runs in background
@@ -1059,7 +1061,7 @@ export async function handleInboundMessageAutoMatch(
   // Trigger lead scoring for inbound messages (fire-and-forget)
   // Only trigger if message is inbound and linked to a lead
   // Note: message.direction is normalized to 'INBOUND' or 'OUTBOUND' in createCommunicationLog
-  if (message && lead && lead.id && message.direction === 'INBOUND') {
+  if (message && lead && lead.id && message.direction === 'INBOUND' && !isLeadAd) {
     try {
       const { triggerLeadScoring } = await import('@/lib/ai/scoreTrigger')
       // Fire-and-forget - don't await, runs in background
@@ -1070,6 +1072,14 @@ export async function handleInboundMessageAutoMatch(
       // Silent fail - don't block pipeline
       console.warn(`[AUTO-MATCH] Error importing scoreTrigger:`, error.message)
     }
+  }
+
+  if (isLeadAd) {
+    console.log(`ℹ️ [AUTO-MATCH] Skipping automation queue for lead ad message`, {
+      leadId: lead.id,
+      messageId: message.id,
+      channel: message.channel,
+    })
   }
 
   return {

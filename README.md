@@ -162,6 +162,12 @@ Alain CRM features an intuitive, Odoo-inspired navigation structure designed for
 - **Webhook Verification**: Secure webhook setup with signature verification
 - **Test Tool**: Test integration with any `leadgen_id` at `/settings/integrations/meta/test`
 - **Duplicate Prevention**: Prevents importing the same lead twice
+- **Status & Diagnostics**:
+  - Admin status JSON: `/api/debug/meta/leadgen-status`
+  - Recent events: `/api/debug/meta/leadgen-recent`
+  - Admin UI card: `/admin/integrations`
+- **Polling Fallback**: Enable Vercel cron at `/api/cron/poll-meta-leads?token=...` for missed webhooks
+- **SLA & Assignment**: Leads get a Dubai business-hours SLA (2 working hours) and service-based routing
 
 ### Admin Features
 - **User Management**: Create users, assign roles (admin/sales)

@@ -817,6 +817,7 @@ function InboxPageContent() {
       case 'instagram':
         return Instagram
       case 'facebook':
+      case 'meta_lead_ads':
         return Facebook
       case 'email':
         return Mail

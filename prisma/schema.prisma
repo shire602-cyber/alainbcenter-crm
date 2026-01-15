@@ -146,6 +146,8 @@ model Lead {
   serviceTypeEnum    String? // Direct enum field: MAINLAND_BUSINESS_SETUP | FREEZONE_BUSINESS_SETUP | etc.
   priority           String? @default("NORMAL") // LOW | NORMAL | HIGH | URGENT
   lastContactChannel String? // whatsapp | instagram | facebook | website | email | internal
+  source             String? @map("source") // e.g., META_LEAD_AD, website, whatsapp
+  metaLeadgenId      String? @unique @map("meta_leadgen_id")
 
   // Legacy string fields (for backward compatibility during migration)
   status        String  @default("new")
@@ -677,11 +679,49 @@ model ExternalEventLog {
   id         Int      @id @default(autoincrement())
   provider   String // 'meta' | 'whatsapp' | 'website'
   externalId String
+  eventType  String? // e.g., 'leadgen'
+  status     String? // processed | deduped | error
+  processedAt DateTime? @map("processed_at")
+  error      String?
   payload    String? // JSON
   receivedAt DateTime @default(now())
 
   @@unique([provider, externalId])
   @@index([provider, receivedAt])
+}
+
+model MetaLeadgenState {
+  id                     Int      @id @default(autoincrement())
+  workspaceId            Int?     @default(1) @map("workspace_id")
+  selectedPageId         String?  @map("selected_page_id")
+  selectedAdAccountId    String?  @map("selected_ad_account_id")
+  selectedFormIds        String?  @map("selected_form_ids") // JSON array
+  webhookSubscribedAt    DateTime? @map("webhook_subscribed_at")
+  lastLeadgenReceivedAt  DateTime? @map("last_leadgen_received_at")
+  lastLeadgenProcessedAt DateTime? @map("last_leadgen_processed_at")
+  lastPollAt             DateTime? @map("last_poll_at")
+  lastPollCursor         String?  @map("last_poll_cursor")
+  lastPollRunAt          DateTime? @map("last_poll_run_at")
+  pollerEnabled          Boolean  @default(true) @map("poller_enabled")
+  createdAt              DateTime @default(now()) @map("created_at")
+  updatedAt              DateTime @updatedAt @map("updated_at")
+
+  @@unique([workspaceId])
+  @@index([workspaceId])
+  @@map("meta_leadgen_state")
+}
+
+model ServiceRoutingConfig {
+  id                Int      @id @default(autoincrement())
+  workspaceId       Int?     @default(1) @map("workspace_id")
+  mapping           String?  // JSON
+  lastAssignedIndex String?  @map("last_assigned_index") // JSON
+  createdAt         DateTime @default(now()) @map("created_at")
+  updatedAt         DateTime @updatedAt @map("updated_at")
+
+  @@unique([workspaceId])
+  @@index([workspaceId])
+  @@map("service_routing_config")
 }
 
 model SentAutomation {

@@ -369,6 +369,16 @@ export default function LeadDetailPage({ leadId }: { leadId: number }) {
   const scoreCategory = getAiScoreCategory(lead.aiScore)
   const aiScoreColor = scoreCategory === 'hot' ? 'text-red-600' : scoreCategory === 'warm' ? 'text-orange-600' : 'text-blue-600'
   const aiScoreLabel = scoreCategory.toUpperCase()
+  let metaLead: any = null
+  let ingestion: any = null
+  try {
+    const dataJson = lead.dataJson ? JSON.parse(lead.dataJson) : {}
+    metaLead = dataJson?.metaLead || null
+    ingestion = dataJson?.ingestion || null
+  } catch {
+    metaLead = null
+    ingestion = null
+  }
 
   // Group tasks
   const tasksOpen = lead.tasksGrouped?.open || []
@@ -403,8 +413,22 @@ export default function LeadDetailPage({ leadId }: { leadId: number }) {
               <Badge className={currentStage.color}>
                 {currentStage.label}
               </Badge>
+              {(lead.source === 'META_LEAD_AD' || lead.source === 'meta_lead_ad' || metaLead) && (
+                <Badge variant="secondary">Meta Lead Ad</Badge>
+              )}
             </div>
           </div>
+          {(lead.source === 'META_LEAD_AD' || lead.source === 'meta_lead_ad' || metaLead) && (
+            <div className="mt-2 text-sm text-muted-foreground">
+              <div className="flex flex-wrap gap-4">
+                {metaLead?.campaignName && <span>Campaign: {metaLead.campaignName}</span>}
+                {metaLead?.adName && <span>Ad: {metaLead.adName}</span>}
+                {metaLead?.formName && <span>Form: {metaLead.formName}</span>}
+                {ingestion?.slaDueAt && <span>SLA due: {new Date(ingestion.slaDueAt).toLocaleString()}</span>}
+                {lead.assignedUser?.name && <span>Assignee: {lead.assignedUser.name}</span>}
+              </div>
+            </div>
+          )}
 
           {/* Quick Actions */}
           <div className="flex items-center gap-2 flex-wrap">

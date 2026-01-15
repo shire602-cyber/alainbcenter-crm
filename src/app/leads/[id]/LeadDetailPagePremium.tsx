@@ -180,6 +180,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const providedEmail = lead?.providedEmail || lead?.contact?.providedEmail || null
   const preferredPhone = providedPhoneE164 || providedPhone || (isInstagramSenderId ? null : contactPhone)
   const normalizedStage = normalizePipelineStage(lead?.stage, lead?.pipelineStage) || 'new'
+  let metaLead: any = null
+  let ingestion: any = null
+  try {
+    const dataJson = lead?.dataJson ? JSON.parse(lead.dataJson) : {}
+    metaLead = dataJson?.metaLead || null
+    ingestion = dataJson?.ingestion || null
+  } catch {
+    metaLead = null
+    ingestion = null
+  }
 
   useEffect(() => {
     loadLead()
@@ -1139,6 +1149,26 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
                   </CardContent>
                 </Card>
+
+                {(lead?.source === 'META_LEAD_AD' || lead?.source === 'meta_lead_ad' || metaLead) && (
+                  <Card className="rounded-xl border border-gray-200 bg-white shadow-md">
+                    <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
+                      <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
+                        <Zap className="h-5 w-5 text-amber-500" />
+                        Meta Lead Ads
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="px-7 pb-7 pt-7 space-y-2 text-sm text-gray-700">
+                      {metaLead?.campaignName && <div>Campaign: {metaLead.campaignName}</div>}
+                      {metaLead?.adName && <div>Ad: {metaLead.adName}</div>}
+                      {metaLead?.formName && <div>Form: {metaLead.formName}</div>}
+                      {ingestion?.slaDueAt && (
+                        <div>SLA due: {new Date(ingestion.slaDueAt).toLocaleString()}</div>
+                      )}
+                      {lead?.assignedUser?.name && <div>Assignee: {lead.assignedUser.name}</div>}
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Internal Notes Section - Enhanced styling */}
                 <Card className="rounded-xl border border-gray-200 bg-white shadow-md">

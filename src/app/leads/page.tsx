@@ -63,6 +63,9 @@ type Lead = {
   id: number
   stage?: string | null
   pipelineStage: string
+  source?: string | null
+  metaLeadgenId?: string | null
+  dataJson?: string | null
   aiScore: number | null
   createdAt: string
   contact: {
@@ -483,8 +486,24 @@ function LeadsPageNew() {
         return <MessageSquare className="h-4 w-4 text-green-600" />
       case 'email':
         return <Mail className="h-4 w-4 text-blue-600" />
+      case 'facebook':
+      case 'meta_lead_ads':
+        return <MessageSquare className="h-4 w-4 text-blue-700" />
       default:
         return <MessageSquare className="h-4 w-4 text-gray-600" />
+    }
+  }
+
+  const parseMetaLeadInfo = (lead: Lead) => {
+    if (!lead.dataJson) return null
+    try {
+      const dataJson = JSON.parse(lead.dataJson)
+      return {
+        metaLead: dataJson?.metaLead || null,
+        ingestion: dataJson?.ingestion || null,
+      }
+    } catch {
+      return null
     }
   }
 
@@ -901,6 +920,7 @@ function LeadsPageNew() {
                       <TableHead className="h-12 font-semibold">Stage</TableHead>
                       <TableHead className="h-12 font-semibold">Service</TableHead>
                       <TableHead className="h-12 font-semibold">Owner</TableHead>
+                      <TableHead className="h-12 font-semibold">SLA Due</TableHead>
                       <TableHead className="h-12 font-semibold">Last Message</TableHead>
                       <TableHead className="h-12 font-semibold">AI Score</TableHead>
                       <TableHead className="h-12 font-semibold">Status</TableHead>
@@ -929,6 +949,19 @@ function LeadsPageNew() {
                             <div>
                               <div className="font-semibold text-foreground">{lead.contact.fullName}</div>
                               <div className="text-caption text-muted-foreground mt-0.5">{lead.contact.phone}</div>
+                              {(() => {
+                                const metaInfo = parseMetaLeadInfo(lead)
+                                const metaLead = metaInfo?.metaLead
+                                const details = [metaLead?.campaignName, metaLead?.adName, metaLead?.formName]
+                                  .filter(Boolean)
+                                  .join(' • ')
+                                if (!details) return null
+                                return (
+                                  <div className="text-xs text-muted-foreground mt-1">
+                                    {details}
+                                  </div>
+                                )
+                              })()}
                             </div>
                           </div>
                         </TableCell>
@@ -958,6 +991,19 @@ function LeadsPageNew() {
                           <span className="text-body text-foreground">{lead.assignedUser?.name || <span className="text-muted-foreground">—</span>}</span>
                         </TableCell>
                         <TableCell className="py-3">
+                          {(() => {
+                            const metaInfo = parseMetaLeadInfo(lead)
+                            const slaDueAt = metaInfo?.ingestion?.slaDueAt
+                            return slaDueAt ? (
+                              <span className="text-body text-foreground">
+                                {new Date(slaDueAt).toLocaleString()}
+                              </span>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )
+                          })()}
+                        </TableCell>
+                        <TableCell className="py-3">
                           {lead.lastContact ? (
                             <div className="space-y-0.5">
                               <div className="text-caption text-muted-foreground">
@@ -975,9 +1021,22 @@ function LeadsPageNew() {
                           {getScoreBadge(lead.aiScore)}
                         </TableCell>
                         <TableCell className="py-3">
-                          <Badge variant="secondary" className="font-normal">
-                            {LEAD_SOURCE_LABELS[lead.contact.source as keyof typeof LEAD_SOURCE_LABELS] || lead.contact.source || 'Manual'}
-                          </Badge>
+                          {(() => {
+                            const source = lead.source || lead.contact.source || 'manual'
+                            const normalizedSource = source.toLowerCase()
+                            if (normalizedSource === 'meta_lead_ad' || source === 'META_LEAD_AD') {
+                              return (
+                                <Badge variant="secondary" className="font-normal">
+                                  Meta Lead Ad
+                                </Badge>
+                              )
+                            }
+                            return (
+                              <Badge variant="secondary" className="font-normal">
+                                {LEAD_SOURCE_LABELS[normalizedSource as keyof typeof LEAD_SOURCE_LABELS] || source || 'Manual'}
+                              </Badge>
+                            )
+                          })()}
                         </TableCell>
                         <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
                           <div className="flex items-center gap-1">
