@@ -10,6 +10,7 @@
  * STEP 4: Now uses service synonym matching for better detection
  */
 import { matchServiceWithSynonyms } from './serviceSynonyms'
+import { normalizeInboundPhone } from '../phone-inbound'
 
 export function extractService(text: string): string | undefined {
   // Try synonym matching first (more comprehensive)
@@ -279,6 +280,42 @@ export function extractExplicitDate(text: string): Date | null {
         // Invalid date, skip
         continue
       }
+    }
+  }
+
+  return null
+}
+
+export function extractEmailAddress(text: string): string | null {
+  const emailMatch = text.match(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/i)
+  return emailMatch ? emailMatch[0].trim() : null
+}
+
+export function extractProvidedPhone(text: string): { raw: string; e164?: string } | null {
+  const matches = text.match(/\+?\d[\d\s\-().]{7,}\d/g) || []
+  for (const match of matches) {
+    const raw = match.trim()
+    const cleaned = raw.replace(/[^\d+]/g, '')
+    if (!cleaned) {
+      continue
+    }
+
+    let candidate = cleaned
+    if (candidate.startsWith('00')) {
+      candidate = `+${candidate.slice(2)}`
+    } else if (candidate.startsWith('971')) {
+      candidate = `+${candidate}`
+    } else if (candidate.startsWith('05') && candidate.length === 10) {
+      candidate = `+971${candidate.slice(1)}`
+    } else if (candidate.startsWith('5') && candidate.length === 9) {
+      candidate = `+971${candidate}`
+    }
+
+    try {
+      const e164 = normalizeInboundPhone(candidate)
+      return { raw, e164 }
+    } catch {
+      // Ignore invalid candidates
     }
   }
 

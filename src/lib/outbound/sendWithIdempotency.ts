@@ -16,6 +16,7 @@ import { prisma } from '../prisma'
 import { createHash } from 'crypto'
 import { sendTextMessage } from '../whatsapp'
 import { withGlobalGreeting } from './globalGreeting'
+import { isWithinInstagramWindow } from '../integrations/instagramWindow'
 
 export interface OutboundSendOptions {
   conversationId: number
@@ -92,12 +93,7 @@ function computeOutboundDedupeKey(options: OutboundSendOptions): string {
   }
   
   if (clientMessageId) {
-    const keyParts = [
-      `conv:${conversationId}`,
-      `provider:${provider}`,
-      `clientMsgId:${clientMessageId}`,
-    ]
-    const keyString = keyParts.join('|')
+    const keyString = `manual:${clientMessageId}`
     return createHash('sha256').update(keyString).digest('hex')
   }
 
@@ -253,6 +249,25 @@ export async function sendOutboundWithIdempotency(
     text = normalizeOutboundText(text)
   }
   
+  if (provider === 'instagram') {
+    const conversation = await prisma.conversation.findUnique({
+      where: { id: conversationId },
+      select: { lastInboundAt: true },
+    })
+    const withinWindow = isWithinInstagramWindow(conversation?.lastInboundAt, new Date())
+    if (!withinWindow) {
+      console.log(`[IG-SEND-RESULT]`, {
+        messageId: null,
+        status: 'skipped',
+        errorCode: 'OUTSIDE_ALLOWED_WINDOW',
+      })
+      return {
+        success: false,
+        error: 'OUTSIDE_ALLOWED_WINDOW',
+      }
+    }
+  }
+
   // Step 1: Compute dedupe key (using normalized text, greeting applied if needed)
   const outboundDedupeKey = computeOutboundDedupeKey({ ...options, text })
   

@@ -180,6 +180,13 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
   const fileInputRef = useRef<HTMLInputElement>(null)
 
+  const contactPhone = lead?.contact?.phone || ''
+  const isInstagramSenderId = contactPhone.startsWith('ig:')
+  const providedPhone = lead?.providedPhone || lead?.contact?.providedPhone || null
+  const providedPhoneE164 = lead?.providedPhoneE164 || lead?.contact?.providedPhoneE164 || null
+  const providedEmail = lead?.providedEmail || lead?.contact?.providedEmail || null
+  const preferredPhone = providedPhoneE164 || providedPhone || (isInstagramSenderId ? null : contactPhone)
+
   useEffect(() => {
     loadLead()
     loadUsers()
@@ -963,10 +970,38 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     )}
                   </div>
                   <div className="flex items-center gap-5 flex-wrap">
-                    {lead.contact?.phone && (
+                    {contactPhone && (
                       <div className="flex items-center gap-2.5 text-sm text-gray-700">
                         <Phone className="h-4 w-4 text-gray-500" />
-                        <span className="font-semibold">{lead.contact.phone}</span>
+                        <div className="flex flex-col">
+                          <span className="text-caption text-gray-500">
+                            {isInstagramSenderId ? 'Instagram Sender ID' : 'Phone'}
+                          </span>
+                          <span className="font-semibold">{contactPhone}</span>
+                        </div>
+                      </div>
+                    )}
+                    {providedPhone && (
+                      <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                        <Phone className="h-4 w-4 text-gray-500" />
+                        <div className="flex flex-col">
+                          <span className="text-caption text-gray-500">Provided Phone</span>
+                          <span className="font-semibold">{providedPhone}</span>
+                          {providedPhoneE164 && (
+                            <span className="text-caption text-gray-500">
+                              Normalized: {providedPhoneE164}
+                            </span>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    {providedEmail && (
+                      <div className="flex items-center gap-2.5 text-sm text-gray-700">
+                        <Mail className="h-4 w-4 text-gray-500" />
+                        <div className="flex flex-col">
+                          <span className="text-caption text-gray-500">Provided Email</span>
+                          <span className="font-semibold">{providedEmail}</span>
+                        </div>
                       </div>
                     )}
                     {lead.contact?.email && (
@@ -989,9 +1024,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
 
               {/* Right: Action Buttons - Better Grouping */}
               <div className="flex items-center gap-3 flex-shrink-0">
-                {lead.contact?.phone && (
+                {preferredPhone && (
                   <Button
-                    onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
+                    onClick={() => openWhatsApp(preferredPhone, messageText || undefined)}
                     className="bg-green-600 hover:bg-green-700 text-white shadow-md font-semibold px-5"
                     size="default"
                   >
@@ -1000,8 +1035,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   </Button>
                 )}
                 <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
-                  {lead.contact?.phone && (
-                    <Button variant="outline" size="sm" onClick={() => lead.contact?.phone && window.open(`tel:${lead.contact.phone}`)} className="border-gray-300 hover:bg-gray-50">
+                  {preferredPhone && (
+                    <Button variant="outline" size="sm" onClick={() => window.open(`tel:${preferredPhone}`)} className="border-gray-300 hover:bg-gray-50">
                       <Phone className="h-4 w-4" />
                     </Button>
                   )}
@@ -1185,15 +1220,49 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     placeholder="Enter contact name"
                   />
                 </div>
-                {lead.contact?.phone && (
+                {contactPhone && (
                   <div className="group">
-                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Phone</Label>
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">
+                      {isInstagramSenderId ? 'Instagram Sender ID' : 'Phone'}
+                    </Label>
                     <div className="flex items-center gap-2">
-                      <span className="text-base font-semibold text-gray-900 flex-1">{lead.contact.phone}</span>
-                      <QuickActionsMenu 
-                        type="phone" 
-                        value={lead.contact.phone}
-                        phone={lead.contact.phone}
+                      <span className="text-base font-semibold text-gray-900 flex-1">{contactPhone}</span>
+                      {!isInstagramSenderId && (
+                        <QuickActionsMenu
+                          type="phone"
+                          value={contactPhone}
+                          phone={contactPhone}
+                        />
+                      )}
+                    </div>
+                  </div>
+                )}
+                {providedPhone && (
+                  <div className="group">
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Provided Phone</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-semibold text-gray-900 flex-1">{providedPhone}</span>
+                      {preferredPhone && (
+                        <QuickActionsMenu
+                          type="phone"
+                          value={preferredPhone}
+                          phone={preferredPhone}
+                        />
+                      )}
+                    </div>
+                    {providedPhoneE164 && (
+                      <p className="text-xs text-gray-500 mt-1">Normalized: {providedPhoneE164}</p>
+                    )}
+                  </div>
+                )}
+                {providedEmail && (
+                  <div className="group">
+                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Provided Email</Label>
+                    <div className="flex items-center gap-2">
+                      <span className="text-base font-semibold text-gray-900 flex-1">{providedEmail}</span>
+                      <QuickActionsMenu
+                        type="email"
+                        value={providedEmail}
                       />
                     </div>
                   </div>
@@ -1593,10 +1662,10 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 <FileText className="h-4 w-4 mr-2" />
                 Log note
               </Button>
-              {lead.contact?.phone && (
+              {preferredPhone && (
                 <Button
                   variant="outline"
-                  onClick={() => openWhatsApp(lead.contact?.phone || '', messageText || undefined)}
+                  onClick={() => openWhatsApp(preferredPhone, messageText || undefined)}
                   className="border-gray-300 hover:bg-gray-50 font-medium"
                 >
                   <MessageSquare className="h-4 w-4 mr-2" />

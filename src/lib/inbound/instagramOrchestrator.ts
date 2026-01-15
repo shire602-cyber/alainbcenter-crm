@@ -20,6 +20,7 @@ import { handleInboundMessageAutoMatch } from './autoMatchPipeline'
 import { fetchInstagramUserProfile } from '@/server/integrations/meta/profile'
 import { sendAiReply } from '../ai/orchestrator'
 import { getDecryptedPageToken } from '@/server/integrations/meta/storage'
+import { isWithinInstagramWindow } from '../integrations/instagramWindow'
 
 export interface OrchestrateInstagramInboundInput {
   senderId: string
@@ -60,6 +61,9 @@ export async function orchestrateInstagramInbound(
   // SAFETY CHECK: This orchestrator ONLY processes Instagram messages
   // Never process WhatsApp or other channels here
   if (!input.senderId || input.senderId.trim() === '') {
+    console.log('[IG-AUTO-REPLY-SKIP]', {
+      reason: 'no_sender',
+    })
     throw new Error('[INSTAGRAM-ORCHESTRATOR] SAFETY CHECK: senderId is required for Instagram messages')
   }
   
@@ -174,6 +178,50 @@ export async function orchestrateInstagramInbound(
   let autoReplied = false
   
   if (lead && lead.id && message && message.id && conversation && conversation.id) {
+    const aiEnabled = lead.autopilotEnabled !== false
+    const inboundWindowCheck = await prisma.conversation.findUnique({
+      where: { id: conversation.id },
+      select: { lastInboundAt: true },
+    })
+    const withinWindow = isWithinInstagramWindow(inboundWindowCheck?.lastInboundAt, new Date())
+
+    console.log('[IG-AUTO-REPLY-DECIDE]', {
+      conversationId: conversation.id,
+      inboundMessageId: message.id,
+      withinWindow,
+      aiEnabled,
+    })
+
+    if (!withinWindow) {
+      console.log('[IG-AUTO-REPLY-SKIP]', {
+        reason: 'outside_window',
+        conversationId: conversation.id,
+        inboundMessageId: message.id,
+      })
+      return {
+        contact,
+        conversation,
+        lead,
+        message,
+        autoReplied: false,
+      }
+    }
+
+    if (!aiEnabled) {
+      console.log('[IG-AUTO-REPLY-SKIP]', {
+        reason: 'disabled',
+        conversationId: conversation.id,
+        inboundMessageId: message.id,
+      })
+      return {
+        contact,
+        conversation,
+        lead,
+        message,
+        autoReplied: false,
+      }
+    }
+
     // Check if conversation is assigned to a user (skip auto-reply if assigned)
     const conversationWithAssignment = await prisma.conversation.findUnique({
       where: { id: conversation.id },
@@ -209,6 +257,9 @@ export async function orchestrateInstagramInbound(
             conversationId: conversation.id,
             messageId: replyResult.messageId,
             wasDuplicate: replyResult.wasDuplicate,
+          })
+          console.log('[IG-AUTO-REPLY-SENT]', {
+            messageId: replyResult.messageId,
           })
         } else if (replyResult.skipped) {
           console.log(`[INSTAGRAM-ORCHESTRATOR] Auto-reply skipped: ${replyResult.skipReason}`, {

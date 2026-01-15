@@ -8,6 +8,7 @@ export const PIPELINE_STAGES = [
   'docs_pending',
   'submitted',
   'completed',
+  'won',
   'lost',
 ] as const
 
@@ -20,6 +21,7 @@ export const PIPELINE_STAGE_LABELS: Record<PipelineStage, string> = {
   docs_pending: 'Docs Pending',
   submitted: 'Submitted',
   completed: 'Completed',
+  won: 'Won',
   lost: 'Lost',
 }
 
@@ -30,6 +32,7 @@ export const PIPELINE_STAGE_COLORS: Record<PipelineStage, string> = {
   docs_pending: 'bg-yellow-100 text-yellow-800',
   submitted: 'bg-purple-100 text-purple-800',
   completed: 'bg-emerald-100 text-emerald-800',
+  won: 'bg-amber-100 text-amber-800',
   lost: 'bg-red-100 text-red-800',
 }
 

@@ -84,6 +84,9 @@ model Contact {
   waId             String?  @unique // WhatsApp user ID (wa_id from Meta webhook)
   igUsername       String?  @map("ig_username") // Instagram username (e.g., "john_doe")
   igUserId         String?  @map("ig_user_id")   // Instagram numeric ID (e.g., "6221774837922501")
+  providedPhone    String?  @map("provided_phone")
+  providedPhoneE164 String? @map("provided_phone_e164")
+  providedEmail    String?  @map("provided_email")
   email            String?
   nationality      String?
   source           String?
@@ -147,6 +150,9 @@ model Lead {
   // Legacy string fields (for backward compatibility during migration)
   status        String  @default("new")
   pipelineStage String  @default("new")
+  providedPhone String? @map("provided_phone")
+  providedPhoneE164 String? @map("provided_phone_e164")
+  providedEmail String? @map("provided_email")
   urgency       String?
 
   notes                   String?

@@ -26,7 +26,7 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { text } = body
+    const { text, clientMessageId } = body
 
     if (!text || !text.trim()) {
       return NextResponse.json(
@@ -146,14 +146,30 @@ export async function POST(
         text: text.trim(),
         provider, // Use mapped provider (whatsapp or instagram)
         triggerProviderMessageId: null, // Manual send
+        clientMessageId,
         replyType: 'answer',
         lastQuestionKey: null,
         flowStep: null,
       })
 
+      if (result.error === 'OUTSIDE_ALLOWED_WINDOW') {
+        return NextResponse.json(
+          {
+            ok: false,
+            code: 'OUTSIDE_ALLOWED_WINDOW',
+            error: 'Instagram messaging window closed',
+            hint: 'Instagram allows replies within 24 hours of the last inbound message.',
+          },
+          { status: 400 }
+        )
+      }
       if (result.wasDuplicate) {
         console.log(`⚠️ [INBOX-REPLY] Duplicate outbound blocked by idempotency (channel: ${channelLower}, provider: ${provider})`)
-        sendError = 'Duplicate message blocked (idempotency)'
+        return NextResponse.json({
+          ok: true,
+          wasDuplicate: true,
+          message: 'Message already sent (duplicate detected)',
+        })
       } else if (!result.success) {
         throw new Error(result.error || 'Failed to send message')
       } else {

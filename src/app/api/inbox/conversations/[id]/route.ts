@@ -81,6 +81,9 @@ export async function GET(
               nationality: true,
               igUsername: true,
               igUserId: true,
+              providedPhone: true,
+              providedPhoneE164: true,
+              providedEmail: true,
             }
           },
           lead: {
@@ -96,6 +99,9 @@ export async function GET(
               nextFollowUpAt: true,
               expiryDate: true,
               assignedUserId: true,
+              providedPhone: true,
+              providedPhoneE164: true,
+              providedEmail: true,
               contact: {
                 select: {
                   id: true,
@@ -104,6 +110,9 @@ export async function GET(
                   email: true,
                   igUsername: true,
                   igUserId: true,
+                  providedPhone: true,
+                  providedPhoneE164: true,
+                  providedEmail: true,
                 },
               },
               serviceType: {
@@ -215,6 +224,9 @@ export async function GET(
                   phone: true,
                   email: true,
                   nationality: true,
+                  providedPhone: true,
+                  providedPhoneE164: true,
+                  providedEmail: true,
                 }
               },
               lead: {
@@ -230,12 +242,18 @@ export async function GET(
                   nextFollowUpAt: true,
                   expiryDate: true,
                   assignedUserId: true,
+                  providedPhone: true,
+                  providedPhoneE164: true,
+                  providedEmail: true,
                   contact: {
                     select: {
                       id: true,
                       fullName: true,
                       phone: true,
                       email: true,
+                      providedPhone: true,
+                      providedPhoneE164: true,
+                      providedEmail: true,
                     },
                   },
                   serviceType: {

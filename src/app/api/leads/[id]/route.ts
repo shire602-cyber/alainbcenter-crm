@@ -118,7 +118,10 @@ export async function GET(
                   id: true,
                   fullName: true,
                   phone: true,
-                  email: true
+                  email: true,
+                  providedPhone: true,
+                  providedPhoneE164: true,
+                  providedEmail: true,
                 }
               }
             },
@@ -143,7 +146,10 @@ export async function GET(
               id: 0,
               fullName: 'Unknown',
               phone: '',
-              email: ''
+              email: '',
+              providedPhone: null,
+              providedPhoneE164: null,
+              providedEmail: null,
             },
             _skeleton: true,
             _error: 'Unable to load lead data due to memory constraints'

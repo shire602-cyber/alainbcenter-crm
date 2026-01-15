@@ -222,6 +222,17 @@ export async function POST(
           flowStep: null,
         })
 
+        if (result.error === 'OUTSIDE_ALLOWED_WINDOW') {
+          return NextResponse.json(
+            {
+              ok: false,
+              code: 'OUTSIDE_ALLOWED_WINDOW',
+              error: 'Instagram messaging window closed',
+              hint: 'Instagram allows replies within 24 hours of the last inbound message.',
+            },
+            { status: 400 }
+          )
+        }
         if (result.wasDuplicate) {
           console.log(`⚠️ [INBOX-MESSAGES] Duplicate Instagram outbound blocked by idempotency`)
           return NextResponse.json({

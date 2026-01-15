@@ -14,7 +14,7 @@
 
 import { prisma } from '../prisma'
 import { normalizeInboundPhone, findContactByPhone } from '../phone-inbound'
-import { extractService, extractNationality, extractExpiry, extractExpiryHint, extractCounts, extractIdentity } from './fieldExtractors'
+import { extractService, extractNationality, extractExpiry, extractExpiryHint, extractCounts, extractIdentity, extractEmailAddress, extractProvidedPhone } from './fieldExtractors'
 import { createAutoTasks } from './autoTasks'
 import { handleInboundAutoReply } from '../autoReply'
 import { upsertContact } from '../contact/upsert'
@@ -120,7 +120,7 @@ export async function handleInboundMessageAutoMatch(
   // Fetch full contact record with all fields
   let contact = await prisma.contact.findUnique({
     where: { id: contactResult.id },
-    select: { id: true, phone: true, phoneNormalized: true, waId: true, fullName: true, email: true, nationality: true },
+    select: { id: true, phone: true, phoneNormalized: true, waId: true, fullName: true, email: true, nationality: true, providedPhone: true, providedPhoneE164: true, providedEmail: true },
   })
   
   if (!contact) {
@@ -170,7 +170,7 @@ export async function handleInboundMessageAutoMatch(
           // Refresh contact to get updated fullName
           contact = await prisma.contact.findUnique({
             where: { id: contact.id },
-            select: { id: true, phone: true, phoneNormalized: true, waId: true, fullName: true, email: true, nationality: true },
+            select: { id: true, phone: true, phoneNormalized: true, waId: true, fullName: true, email: true, nationality: true, providedPhone: true, providedPhoneE164: true, providedEmail: true },
           }) || contact
         } catch (updateError: any) {
           console.error(`❌ [AUTO-MATCH] Failed to update Instagram contact name:`, {
@@ -400,6 +400,59 @@ export async function handleInboundMessageAutoMatch(
   } catch (updateError: any) {
     console.warn(`⚠️ [AUTO-MATCH] Failed to update conversation unreadCount:`, updateError.message)
     // Non-blocking - continue processing
+  }
+
+  if (input.channel === 'INSTAGRAM') {
+    const providedEmail = extractEmailAddress(input.text || '')
+    const providedPhone = extractProvidedPhone(input.text || '')
+
+    if (providedEmail || providedPhone) {
+      const contactUpdates: Record<string, string> = {}
+      if (providedEmail && !contact.providedEmail) {
+        contactUpdates.providedEmail = providedEmail
+      }
+      if (providedPhone?.raw && !contact.providedPhone) {
+        contactUpdates.providedPhone = providedPhone.raw
+      }
+      if (providedPhone?.e164 && !contact.providedPhoneE164) {
+        contactUpdates.providedPhoneE164 = providedPhone.e164
+      }
+
+      if (Object.keys(contactUpdates).length > 0) {
+        try {
+          await prisma.contact.update({
+            where: { id: contact.id },
+            data: contactUpdates,
+          })
+        } catch (error: any) {
+          console.warn(`⚠️ [AUTO-MATCH] Failed to update contact provided info:`, error.message)
+        }
+      }
+
+      if (lead?.id) {
+        const leadUpdates: Record<string, string> = {}
+        if (providedEmail && !lead.providedEmail) {
+          leadUpdates.providedEmail = providedEmail
+        }
+        if (providedPhone?.raw && !lead.providedPhone) {
+          leadUpdates.providedPhone = providedPhone.raw
+        }
+        if (providedPhone?.e164 && !lead.providedPhoneE164) {
+          leadUpdates.providedPhoneE164 = providedPhone.e164
+        }
+
+        if (Object.keys(leadUpdates).length > 0) {
+          try {
+            await prisma.lead.update({
+              where: { id: lead.id },
+              data: leadUpdates,
+            })
+          } catch (error: any) {
+            console.warn(`⚠️ [AUTO-MATCH] Failed to update lead provided info:`, error.message)
+          }
+        }
+      }
+    }
   }
 
   /**

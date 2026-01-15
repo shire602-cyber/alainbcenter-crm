@@ -89,6 +89,9 @@ export async function GET(req: NextRequest) {
               email: true,
               igUsername: true,
               igUserId: true,
+              providedPhone: true,
+              providedPhoneE164: true,
+              providedEmail: true,
             },
           },
           knownFields: true, // Include to extract Instagram profile photo
@@ -160,6 +163,9 @@ export async function GET(req: NextRequest) {
                   fullName: true,
                   phone: true,
                   email: true,
+                  providedPhone: true,
+                  providedPhoneE164: true,
+                  providedEmail: true,
                 },
               },
               knownFields: true, // Include to extract Instagram profile photo

@@ -55,6 +55,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } f
 import { Label } from '@/components/ui/label'
 import { Languages, Flame, TrendingUp, Snowflake } from 'lucide-react'
 import { getAiScoreCategory } from '@/lib/constants'
+import { isWithinInstagramWindow } from '@/lib/integrations/instagramWindow'
 
 type Contact = {
   id: number
@@ -64,6 +65,9 @@ type Contact = {
   profilePhoto?: string | null // Instagram profile photo URL
   igUsername?: string | null // Instagram username (e.g., "john_doe")
   igUserId?: string | null   // Instagram numeric ID (e.g., "6221774837922501")
+  providedPhone?: string | null
+  providedPhoneE164?: string | null
+  providedEmail?: string | null
 }
 
 type Conversation = {
@@ -72,6 +76,7 @@ type Conversation = {
   channel: string
   status: string
   lastMessageAt: string
+  lastInboundAt?: string | null
   unreadCount: number
   lastMessage: {
     id: number
@@ -313,6 +318,17 @@ function InboxPageContent() {
   const [requiresTemplate, setRequiresTemplate] = useState(false)
   const [translations, setTranslations] = useState<Record<number, { text: string; showing: boolean }>>({})
   const [translating, setTranslating] = useState<Record<number, boolean>>({})
+  const selectedContactPhone = selectedConversation?.contact?.phone || ''
+  const isInstagramThread = selectedConversation?.channel?.toLowerCase() === 'instagram'
+  const isInstagramSenderId = selectedContactPhone.startsWith('ig:')
+  const providedPhoneRaw = selectedConversation?.contact?.providedPhone || null
+  const providedPhoneE164 = selectedConversation?.contact?.providedPhoneE164 || null
+  const providedEmail = selectedConversation?.contact?.providedEmail || null
+  const preferredPhone = providedPhoneE164 || providedPhoneRaw || (isInstagramSenderId ? null : selectedContactPhone)
+  const withinInstagramWindow = !isInstagramThread
+    ? true
+    : isWithinInstagramWindow(selectedConversation?.lastInboundAt || null)
+  const instagramSendDisabled = isInstagramThread && !withinInstagramWindow
   const fileInputRef = useRef<HTMLInputElement>(null)
   const messagesEndRef = useRef<HTMLDivElement>(null)
 
@@ -696,6 +712,10 @@ function InboxPageContent() {
     }
 
     if (!newMessage.trim()) return
+    if (instagramSendDisabled) {
+      setError('Instagram messaging window closed. You can reply within 24 hours of the last inbound message.')
+      return
+    }
 
     setSending(true)
     setError(null)
@@ -721,6 +741,10 @@ function InboxPageContent() {
         await loadMessages(selectedConversation.id)
         await loadConversations()
       } else {
+        if (data.code === 'OUTSIDE_ALLOWED_WINDOW') {
+          setError('Instagram messaging window closed. You can reply within 24 hours of the last inbound message.')
+          return
+        }
         // Check if this is a 24-hour window error
         if (data.requiresTemplate) {
           setRequiresTemplate(true)
@@ -982,8 +1006,8 @@ function InboxPageContent() {
                 <div className="flex items-center gap-2 flex-1 min-w-0">
                   <Avatar 
                     src={selectedConversation.contact.profilePhoto || undefined}
-                    alt={selectedConversation.contact.fullName || selectedConversation.contact.phone}
-                    fallback={selectedConversation.contact.fullName || selectedConversation.contact.phone} 
+                    alt={selectedConversation.contact.fullName || selectedContactPhone}
+                    fallback={selectedConversation.contact.fullName || selectedContactPhone} 
                     size="md" 
                   />
                     <div className="flex-1 min-w-0">
@@ -1005,9 +1029,20 @@ function InboxPageContent() {
                       )}
                     </div>
                     {selectedConversation.contact.fullName && 
-                     !selectedConversation.contact.fullName.includes('Unknown') && (
+                     !selectedConversation.contact.fullName.includes('Unknown') && selectedContactPhone && (
                       <p className="text-caption text-slate-600 truncate">
-                        {selectedConversation.contact.phone}
+                        {isInstagramSenderId ? 'Instagram Sender ID' : 'Phone'}: {selectedContactPhone}
+                      </p>
+                    )}
+                    {providedPhoneRaw && (
+                      <p className="text-caption text-slate-600 truncate">
+                        Provided Phone: {providedPhoneRaw}
+                        {providedPhoneE164 ? ` (Normalized: ${providedPhoneE164})` : ''}
+                      </p>
+                    )}
+                    {providedEmail && (
+                      <p className="text-caption text-slate-600 truncate">
+                        Provided Email: {providedEmail}
                       </p>
                     )}
                     </div>
@@ -1049,6 +1084,7 @@ function InboxPageContent() {
                                   channel: convData.conversation.channel,
                                   status: convData.conversation.status,
                                   lastMessageAt: convData.conversation.lastMessageAt,
+                                  lastInboundAt: convData.conversation.lastInboundAt || null,
                                   unreadCount: convData.conversation.unreadCount || 0,
                                   lastMessage: convData.conversation.lastMessage,
                                   createdAt: convData.conversation.createdAt,
@@ -1577,6 +1613,16 @@ function InboxPageContent() {
 
               {/* Message Input */}
               <div className="border-t border-slate-200/60 bg-white p-4">
+                {instagramSendDisabled && (
+                  <div className="mb-3 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-xs text-amber-800">
+                    Instagram messaging window closed. You can reply within 24 hours of the last inbound message.
+                    {preferredPhone && (
+                      <span className="ml-1">
+                        Use WhatsApp instead: {preferredPhone}
+                      </span>
+                    )}
+                  </div>
+                )}
                 {/* File Preview */}
                 {selectedFile && (
                   <div className="mb-3 p-3 bg-slate-50 rounded-xl flex items-center justify-between">
@@ -1628,7 +1674,7 @@ function InboxPageContent() {
                     accept="image/*,video/*,audio/*,.pdf,.doc,.docx,.xls,.xlsx,.ppt,.pptx,.txt"
                     onChange={handleFileSelect}
                     className="hidden"
-                    disabled={sending || uploading}
+                    disabled={sending || uploading || instagramSendDisabled}
                   />
                   
                   <Button
@@ -1636,7 +1682,7 @@ function InboxPageContent() {
                     variant="outline"
                     size="default"
                     onClick={() => fileInputRef.current?.click()}
-                    disabled={sending || uploading}
+                    disabled={sending || uploading || instagramSendDisabled}
                     className="h-[44px] px-3"
                     title="Attach file"
                   >
@@ -1648,11 +1694,11 @@ function InboxPageContent() {
                     onChange={(e) => setNewMessage(e.target.value)}
                     placeholder={selectedFile ? "Add a caption (optional)..." : "Type your message..."}
                     className="flex-1 min-h-[44px] max-h-32 text-body resize-none"
-                    disabled={sending || uploading}
+                    disabled={sending || uploading || instagramSendDisabled}
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault()
-                        if ((newMessage.trim() || selectedFile) && !sending && !uploading) {
+                        if ((newMessage.trim() || selectedFile) && !sending && !uploading && !instagramSendDisabled) {
                           handleSendMessage(e as any)
                         }
                       }
@@ -1669,7 +1715,7 @@ function InboxPageContent() {
                         await loadTemplates()
                         setShowTemplateModal(true)
                       }}
-                      disabled={sending || uploading}
+                      disabled={sending || uploading || instagramSendDisabled}
                       className="h-[44px] px-3"
                       title="Send template message"
                     >
@@ -1678,7 +1724,7 @@ function InboxPageContent() {
                   )}
                   <Button 
                     type="submit" 
-                    disabled={(!newMessage.trim() && !selectedFile) || sending || uploading} 
+                    disabled={(!newMessage.trim() && !selectedFile) || sending || uploading || instagramSendDisabled} 
                     size="default"
                     className="gap-2 h-[44px] px-4"
                   >
