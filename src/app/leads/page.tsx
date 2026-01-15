@@ -5,7 +5,7 @@
  * Modern, information-dense, actionable like respond.io/Odoo
  */
 
-import { useEffect, useState, useMemo, useCallback } from 'react'
+import { Suspense, useEffect, useState, useMemo, useCallback } from 'react'
 import Link from 'next/link'
 import { useRouter, useSearchParams } from 'next/navigation'
 import { MainLayout } from '@/components/layout/MainLayout'
@@ -93,7 +93,7 @@ type User = {
   role: string
 }
 
-export default function LeadsPageNew() {
+function LeadsPageNew() {
   const router = useRouter()
   const searchParams = useSearchParams()
   const { showToast } = useToast()
@@ -1261,6 +1261,24 @@ export default function LeadsPageNew() {
         </Dialog>
       </div>
     </MainLayout>
+  )
+}
+
+function LeadsPageFallback() {
+  return (
+    <MainLayout>
+      <div className="flex h-[calc(100vh-4rem)] items-center justify-center">
+        <Skeleton className="h-12 w-48" />
+      </div>
+    </MainLayout>
+  )
+}
+
+export default function LeadsPage() {
+  return (
+    <Suspense fallback={<LeadsPageFallback />}>
+      <LeadsPageNew />
+    </Suspense>
   )
 }
 
