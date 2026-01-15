@@ -2,26 +2,27 @@
 
 import { CheckCircle2, Circle } from 'lucide-react'
 import { cn } from '@/lib/utils'
+import {
+  PIPELINE_STAGES,
+  PIPELINE_STAGE_LABELS,
+  normalizePipelineStage,
+  type PipelineStage,
+} from '@/lib/constants'
 
-const STAGES = [
-  { value: 'NEW', label: 'New' },
-  { value: 'CONTACTED', label: 'Contacted' },
-  { value: 'ENGAGED', label: 'Engaged' },
-  { value: 'QUALIFIED', label: 'Qualified' },
-  { value: 'PROPOSAL_SENT', label: 'Proposal' },
-  { value: 'IN_PROGRESS', label: 'In Progress' },
-  { value: 'COMPLETED_WON', label: 'Won' },
-  { value: 'LOST', label: 'Lost' },
-]
+const STAGES = PIPELINE_STAGES.map((stage) => ({
+  value: stage,
+  label: PIPELINE_STAGE_LABELS[stage],
+}))
 
 interface PipelineProgressProps {
   currentStage: string
-  onStageClick: (stage: string) => void
+  onStageClick: (stage: PipelineStage) => void
   className?: string
 }
 
 export function PipelineProgress({ currentStage, onStageClick, className }: PipelineProgressProps) {
-  const currentIndex = STAGES.findIndex((s) => s.value === currentStage.toUpperCase())
+  const normalized = normalizePipelineStage(currentStage, currentStage) || 'new'
+  const currentIndex = STAGES.findIndex((s) => s.value === normalized)
   
   return (
     <div className={cn('space-y-3', className)}>

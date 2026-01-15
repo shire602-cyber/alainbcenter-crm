@@ -36,6 +36,41 @@ export const PIPELINE_STAGE_COLORS: Record<PipelineStage, string> = {
   lost: 'bg-red-100 text-red-800',
 }
 
+const LEGACY_STAGE_TO_PIPELINE: Record<string, PipelineStage> = {
+  NEW: 'new',
+  CONTACTED: 'contacted',
+  ENGAGED: 'qualified',
+  QUALIFIED: 'qualified',
+  PROPOSAL_SENT: 'submitted',
+  IN_PROGRESS: 'completed',
+  COMPLETED_WON: 'won',
+  LOST: 'lost',
+  ON_HOLD: 'contacted',
+}
+
+export function normalizePipelineStage(
+  stage?: string | null,
+  pipelineStage?: string | null
+): PipelineStage | null {
+  if (pipelineStage) {
+    const normalized = pipelineStage.toLowerCase()
+    if (PIPELINE_STAGES.includes(normalized as PipelineStage)) {
+      return normalized as PipelineStage
+    }
+  }
+
+  if (stage) {
+    const mapped = LEGACY_STAGE_TO_PIPELINE[stage.toUpperCase()]
+    if (mapped) return mapped
+    const normalized = stage.toLowerCase()
+    if (PIPELINE_STAGES.includes(normalized as PipelineStage)) {
+      return normalized as PipelineStage
+    }
+  }
+
+  return null
+}
+
 export const LEAD_SOURCES = [
   'website',
   'facebook_ad',

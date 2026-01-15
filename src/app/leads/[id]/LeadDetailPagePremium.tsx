@@ -82,18 +82,11 @@ import { format, differenceInDays, parseISO, isToday, isYesterday } from 'date-f
 import { cn } from '@/lib/utils'
 // Token interpolation is handled by the AI draft endpoint
 import Link from 'next/link'
-import { getAiScoreCategory } from '@/lib/constants'
-
-const PIPELINE_STAGES = [
-  'NEW',
-  'CONTACTED',
-  'ENGAGED',
-  'QUALIFIED',
-  'PROPOSAL_SENT',
-  'IN_PROGRESS',
-  'COMPLETED_WON',
-  'LOST',
-]
+import {
+  getAiScoreCategory,
+  normalizePipelineStage,
+  type PipelineStage,
+} from '@/lib/constants'
 
 const DOCUMENT_CATEGORIES = [
   { value: 'PASSPORT', label: 'Passport' },
@@ -146,7 +139,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const [showExpiryModal, setShowExpiryModal] = useState(false)
   const [showReminderModal, setShowReminderModal] = useState(false)
   const [showWonLostModal, setShowWonLostModal] = useState(false)
-  const [pendingStage, setPendingStage] = useState<string | null>(null)
+  const [pendingStage, setPendingStage] = useState<PipelineStage | null>(null)
   
   // Form states
   const [taskTitle, setTaskTitle] = useState('')
@@ -186,6 +179,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const providedPhoneE164 = lead?.providedPhoneE164 || lead?.contact?.providedPhoneE164 || null
   const providedEmail = lead?.providedEmail || lead?.contact?.providedEmail || null
   const preferredPhone = providedPhoneE164 || providedPhone || (isInstagramSenderId ? null : contactPhone)
+  const normalizedStage = normalizePipelineStage(lead?.stage, lead?.pipelineStage) || 'new'
 
   useEffect(() => {
     loadLead()
@@ -395,8 +389,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     }
   }
 
-  async function handleStageChange(newStage: string) {
-    if (newStage === 'COMPLETED_WON' || newStage === 'LOST') {
+  async function handleStageChange(newStage: PipelineStage) {
+    if (newStage === 'won' || newStage === 'lost') {
       setPendingStage(newStage)
       setShowWonLostModal(true)
       return
@@ -406,16 +400,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
     await updateStageDirectly(newStage)
   }
 
-  async function updateStageDirectly(newStage: string) {
+  async function updateStageDirectly(newStage: PipelineStage) {
     try {
       // Optimistic update
       const oldLead = { ...lead }
-      setLead({ ...lead, stage: newStage, pipelineStage: newStage.toLowerCase() })
+      setLead({ ...lead, pipelineStage: newStage })
 
       const res = await fetch(`/api/leads/${leadId}`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ stage: newStage, pipelineStage: newStage.toLowerCase() }),
+        body: JSON.stringify({ pipelineStage: newStage }),
       })
 
       if (!res.ok) {
@@ -1139,7 +1133,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   <CardContent className="px-7 pb-7 pt-7">
                     <div className="pipeline-highlight">
                       <PipelineProgress
-                        currentStage={lead.stage || lead.pipelineStage || 'NEW'}
+                        currentStage={normalizedStage}
                         onStageClick={handleStageChange}
                       />
                     </div>
@@ -1745,7 +1739,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             {/* Message History - Enhanced styling */}
             <div className="border border-gray-200 rounded-xl p-8 bg-gray-50/50 min-h-[350px] max-h-[550px] overflow-y-auto mb-8">
             {/* Paid Badge - Show when stage is Won */}
-            {lead.stage === 'COMPLETED_WON' && (
+            {normalizedStage === 'won' && (
               <div className="flex items-center justify-end mb-4">
                 <Badge className="bg-amber-500 hover:bg-amber-600 text-white font-semibold px-3 py-1.5 text-sm">
                   Paid
@@ -2366,22 +2360,22 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
         <DialogContent>
           <DialogHeader>
             <DialogTitle>
-              {pendingStage === 'COMPLETED_WON' ? 'Mark as Won' : 'Mark as Lost'}
+              {pendingStage === 'won' ? 'Mark as Won' : 'Mark as Lost'}
             </DialogTitle>
             <DialogDescription>
-              {pendingStage === 'COMPLETED_WON'
+              {pendingStage === 'won'
                 ? 'Congratulations! Add deal value if available.'
                 : 'Add a reason for why this lead was lost.'}
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
-            {pendingStage === 'COMPLETED_WON' && (
+            {pendingStage === 'won' && (
               <div>
                 <Label>Deal Value (optional)</Label>
                 <Input type="number" placeholder="e.g., 5000" />
               </div>
             )}
-            {pendingStage === 'LOST' && (
+            {pendingStage === 'lost' && (
               <div>
                 <Label>Lost Reason (optional)</Label>
                 <Textarea placeholder="e.g., Not interested, Price too high..." rows={3} />

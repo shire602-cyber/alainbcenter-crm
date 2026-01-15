@@ -54,12 +54,14 @@ import {
   LEAD_SOURCES,
   LEAD_SOURCE_LABELS,
   getAiScoreCategory,
+  normalizePipelineStage,
 } from '@/lib/constants'
 import { useToast } from '@/components/ui/toast'
 import { KanbanBoard } from '@/components/leads/KanbanBoard'
 
 type Lead = {
   id: number
+  stage?: string | null
   pipelineStage: string
   aiScore: number | null
   createdAt: string
@@ -935,7 +937,12 @@ function LeadsPageNew() {
                         </TableCell>
                         <TableCell className="py-3">
                           <Badge variant="outline" className="font-medium">
-                            {PIPELINE_STAGE_LABELS[lead.pipelineStage as keyof typeof PIPELINE_STAGE_LABELS] || lead.pipelineStage}
+                            {(() => {
+                              const normalized = normalizePipelineStage(lead.stage, lead.pipelineStage)
+                              return normalized
+                                ? PIPELINE_STAGE_LABELS[normalized]
+                                : lead.pipelineStage || lead.stage || 'Unknown'
+                            })()}
                           </Badge>
                         </TableCell>
                         <TableCell className="py-3">

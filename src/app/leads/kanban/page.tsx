@@ -15,6 +15,7 @@ import {
   getAiScoreCategory,
   LEAD_SOURCE_LABELS,
   type PipelineStage,
+  normalizePipelineStage,
 } from '@/lib/constants'
 import {
   KanbanSquare,
@@ -42,6 +43,7 @@ type Lead = {
   leadType: string | null
   serviceType?: { name: string } | null
   status: string
+  stage?: string | null
   pipelineStage: string
   aiScore: number | null
   expiryDate: string | null
@@ -99,6 +101,10 @@ export default function KanbanPage() {
     }
   }
 
+  function getLeadStage(lead: Lead): PipelineStage {
+    return normalizePipelineStage(lead.stage, lead.pipelineStage) || 'new'
+  }
+
   function handleDragStart(e: React.DragEvent, lead: Lead) {
     setDraggedLead(lead)
     e.dataTransfer.effectAllowed = 'move'
@@ -115,7 +121,7 @@ export default function KanbanPage() {
     if (!draggedLead) return
 
     // Only update if stage changed
-    if (draggedLead.pipelineStage !== targetStage) {
+    if (getLeadStage(draggedLead) !== targetStage) {
       handleStageChange(draggedLead.id, targetStage)
     }
 
@@ -172,7 +178,7 @@ export default function KanbanPage() {
   // Group leads by stage
   const leadsByStage = PIPELINE_STAGES.reduce(
     (acc, stage) => {
-      acc[stage] = leads.filter((lead) => lead.pipelineStage === stage)
+      acc[stage] = leads.filter((lead) => getLeadStage(lead) === stage)
       return acc
     },
     {} as Record<PipelineStage, Lead[]>
@@ -235,7 +241,7 @@ export default function KanbanPage() {
                 key={stage}
                 className={cn(
                   'flex-shrink-0 w-80 bg-card rounded-lg border shadow-sm',
-                  draggedLead && draggedLead.pipelineStage !== stage
+                  draggedLead && getLeadStage(draggedLead) !== stage
                     ? 'ring-2 ring-primary ring-offset-2'
                     : ''
                 )}

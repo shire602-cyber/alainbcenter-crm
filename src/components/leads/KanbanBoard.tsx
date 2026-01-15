@@ -11,7 +11,7 @@ import { DndContext, DragEndEvent, DragOverlay, DragStartEvent, PointerSensor, u
 import { SortableContext, verticalListSortingStrategy } from '@dnd-kit/sortable'
 import { KanbanColumn } from './KanbanColumn'
 import { KanbanCard } from './KanbanCard'
-import { PIPELINE_STAGES, PIPELINE_STAGE_LABELS, type PipelineStage } from '@/lib/constants'
+import { PIPELINE_STAGES, type PipelineStage, normalizePipelineStage } from '@/lib/constants'
 import { useToast } from '@/components/ui/toast'
 
 interface Lead {
@@ -106,7 +106,11 @@ export function KanbanBoard({ leads, loading = false, onStageChange, filters }: 
   const leadsByStage = useMemo(() => {
     const grouped: Record<PipelineStage, Lead[]> = {} as any
     PIPELINE_STAGES.forEach((stage) => {
-      grouped[stage] = filteredLeads.filter((lead) => lead.pipelineStage === stage)
+      grouped[stage] = []
+    })
+    filteredLeads.forEach((lead) => {
+      const normalized = normalizePipelineStage(lead.stage, lead.pipelineStage) || 'new'
+      grouped[normalized].push(lead)
     })
     return grouped
   }, [filteredLeads])
@@ -130,7 +134,8 @@ export function KanbanBoard({ leads, loading = false, onStageChange, filters }: 
       if (!lead) return
 
       // Only update if stage changed
-      if (lead.pipelineStage === newStage) return
+      const currentStage = normalizePipelineStage(lead.stage, lead.pipelineStage) || lead.pipelineStage
+      if (currentStage === newStage) return
 
       // Optimistic update
       setUpdating(leadId)

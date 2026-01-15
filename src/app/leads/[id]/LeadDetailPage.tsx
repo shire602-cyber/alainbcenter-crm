@@ -35,25 +35,25 @@ import {
 import { format, isToday, isYesterday, differenceInDays, parseISO } from 'date-fns'
 import { cn } from '@/lib/utils'
 import Link from 'next/link'
-import { getAiScoreCategory } from '@/lib/constants'
+import {
+  getAiScoreCategory,
+  PIPELINE_STAGES,
+  PIPELINE_STAGE_LABELS,
+  PIPELINE_STAGE_COLORS,
+  normalizePipelineStage,
+  type PipelineStage,
+} from '@/lib/constants'
 import { Dialog, DialogHeader, DialogTitle, DialogDescription, DialogContent, DialogClose } from '@/components/ui/dialog'
 import { Input } from '@/components/ui/input'
 import { Textarea } from '@/components/ui/textarea'
 import { Select } from '@/components/ui/select'
 import { Label } from '@/components/ui/label'
 
-// Pipeline stages (Odoo-style)
-const STAGES = [
-  { value: 'NEW', label: 'New', color: 'bg-gray-100 text-gray-800' },
-  { value: 'CONTACTED', label: 'Contacted', color: 'bg-blue-100 text-blue-800' },
-  { value: 'ENGAGED', label: 'Engaged', color: 'bg-purple-100 text-purple-800' },
-  { value: 'QUALIFIED', label: 'Qualified', color: 'bg-yellow-100 text-yellow-800' },
-  { value: 'PROPOSAL_SENT', label: 'Proposal Sent', color: 'bg-orange-100 text-orange-800' },
-  { value: 'IN_PROGRESS', label: 'In Progress', color: 'bg-indigo-100 text-indigo-800' },
-  { value: 'COMPLETED_WON', label: 'Won', color: 'bg-green-100 text-green-800' },
-  { value: 'LOST', label: 'Lost', color: 'bg-red-100 text-red-800' },
-  { value: 'ON_HOLD', label: 'On Hold', color: 'bg-gray-100 text-gray-800' },
-]
+const PIPELINE_STAGE_OPTIONS = PIPELINE_STAGES.map((stage) => ({
+  value: stage,
+  label: PIPELINE_STAGE_LABELS[stage],
+  color: PIPELINE_STAGE_COLORS[stage],
+}))
 
 export default function LeadDetailPage({ leadId }: { leadId: number }) {
   const [lead, setLead] = useState<any>(null)
@@ -364,7 +364,8 @@ export default function LeadDetailPage({ leadId }: { leadId: number }) {
   }
 
   const contact = lead.contact
-  const currentStage = STAGES.find(s => s.value === lead.stage) || STAGES[0]
+  const normalizedStage = normalizePipelineStage(lead.stage, lead.pipelineStage) || 'new'
+  const currentStage = PIPELINE_STAGE_OPTIONS.find(s => s.value === normalizedStage) || PIPELINE_STAGE_OPTIONS[0]
   const scoreCategory = getAiScoreCategory(lead.aiScore)
   const aiScoreColor = scoreCategory === 'hot' ? 'text-red-600' : scoreCategory === 'warm' ? 'text-orange-600' : 'text-blue-600'
   const aiScoreLabel = scoreCategory.toUpperCase()
@@ -429,18 +430,18 @@ export default function LeadDetailPage({ leadId }: { leadId: number }) {
             </Button>
             <Button 
               size="sm" 
-              variant={lead.stage === 'COMPLETED_WON' ? 'default' : 'outline'}
+              variant={normalizedStage === 'won' ? 'default' : 'outline'}
               onClick={async () => {
-                const newStage = lead.stage === 'COMPLETED_WON' ? 'IN_PROGRESS' : 'COMPLETED_WON'
+                const newStage: PipelineStage = normalizedStage === 'won' ? 'completed' : 'won'
                 await fetch(`/api/leads/${leadId}`, {
                   method: 'PATCH',
                   headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({ stage: newStage }),
+                  body: JSON.stringify({ pipelineStage: newStage }),
                 })
                 await loadLead()
               }}
             >
-              {lead.stage === 'COMPLETED_WON' ? 'Mark In Progress' : 'Mark Won'}
+              {normalizedStage === 'won' ? 'Mark Completed' : 'Mark Won'}
             </Button>
           </div>
         </div>
@@ -456,20 +457,20 @@ export default function LeadDetailPage({ leadId }: { leadId: number }) {
               </CardHeader>
               <CardContent>
                 <div className="flex items-center gap-2 overflow-x-auto pb-2">
-                  {STAGES.map((stage) => (
+                  {PIPELINE_STAGE_OPTIONS.map((stage) => (
                     <button
                       key={stage.value}
                       onClick={async () => {
                         await fetch(`/api/leads/${leadId}`, {
                           method: 'PATCH',
                           headers: { 'Content-Type': 'application/json' },
-                          body: JSON.stringify({ stage: stage.value }),
+                          body: JSON.stringify({ pipelineStage: stage.value }),
                         })
                         await loadLead()
                       }}
                       className={cn(
                         'px-3 py-1.5 rounded-full text-sm font-medium whitespace-nowrap transition-colors',
-                        lead.stage === stage.value
+                        normalizedStage === stage.value
                           ? stage.color + ' ring-2 ring-offset-2 ring-current'
                           : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
                       )}
