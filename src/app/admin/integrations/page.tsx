@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { IntegrationSettings } from '@/components/admin/IntegrationSettings'
 import { IntegrationIcon } from '@/components/admin/IntegrationIcon'
 import { MetaOAuthWizard } from '@/components/admin/MetaOAuthWizard'
+import { MetaLeadgenConfig } from '@/components/admin/MetaLeadgenConfig'
 import { checkMetaLeadgenReadiness } from '@/server/integrations/meta/leadgen'
 import { 
   Settings,
@@ -121,6 +122,15 @@ export default async function IntegrationsPage() {
     where: { workspaceId: 1 },
   }).catch(() => null)
   const metaLeadgenReadiness = await checkMetaLeadgenReadiness().catch(() => null)
+  let metaFormIds: string[] = []
+  if (metaLeadgenState?.selectedFormIds) {
+    try {
+      const parsed = JSON.parse(metaLeadgenState.selectedFormIds)
+      metaFormIds = Array.isArray(parsed) ? parsed : []
+    } catch {
+      metaFormIds = []
+    }
+  }
 
   const integrationTypes = [
     {
@@ -228,6 +238,10 @@ export default async function IntegrationsPage() {
               </Link>
             </div>
           </div>
+          <MetaLeadgenConfig
+            initialAdAccountId={metaLeadgenState?.selectedAdAccountId || '1050470112230733'}
+            initialFormIds={metaFormIds}
+          />
         </BentoCard>
 
         {/* Integration Cards */}
