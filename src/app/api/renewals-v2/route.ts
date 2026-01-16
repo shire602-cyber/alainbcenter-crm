@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAuthApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 import { differenceInDays } from 'date-fns'
+import { Prisma } from '@prisma/client'
 
 /**
  * GET /api/renewals-v2
@@ -282,6 +283,15 @@ export async function GET(req: NextRequest) {
     })
   } catch (error: any) {
     console.error('GET /api/renewals-v2 error:', error)
+    if (error instanceof Prisma.PrismaClientKnownRequestError && error.code === 'P2021') {
+      return NextResponse.json(
+        {
+          error: 'Renewals table missing',
+          hint: 'Run Prisma migrations to create RenewalItem and RenewalEventLog tables.',
+        },
+        { status: 503 }
+      )
+    }
     return NextResponse.json(
       { error: error?.message ?? 'Failed to fetch renewals' },
       { status: 500 }
