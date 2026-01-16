@@ -121,7 +121,6 @@ export async function POST(req: NextRequest) {
     // Subscribe page to webhook (for Facebook Page messages)
     let pageSubscribed = false
     try {
-      const webhookUrl = getWebhookUrl('/api/webhooks/meta', req)
       pageSubscribed = await subscribePageToWebhook(
         pageId,
         pageAccessToken,
@@ -165,6 +164,14 @@ export async function POST(req: NextRequest) {
     }
 
     const subscribed = pageSubscribed
+    const connectionScopes = [
+      'messages',
+      'messaging_postbacks',
+      'message_deliveries',
+      'message_reads',
+      'leadgen',
+      'leads_retrieval',
+    ]
 
     // Calculate token expiration
     const tokenExpiresAt = oauthState.expiresAt ? new Date(oauthState.expiresAt) : null
@@ -193,7 +200,7 @@ export async function POST(req: NextRequest) {
           metaConnectedAt: connectedAt,
           igBusinessId: igAccount.id,
           igUsername: igAccount.username,
-          scopes: JSON.stringify(['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'leadgen']),
+          scopes: JSON.stringify(connectionScopes),
           triggerSubscribed: subscribed,
           status: 'connected',
           lastError: null,
@@ -211,7 +218,7 @@ export async function POST(req: NextRequest) {
           metaConnectedAt: connectedAt,
           igBusinessId: igAccount.id,
           igUsername: igAccount.username,
-          scopes: JSON.stringify(['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'leadgen']),
+          scopes: JSON.stringify(connectionScopes),
           triggerSubscribed: subscribed,
           status: 'connected',
         },
@@ -228,6 +235,18 @@ export async function POST(req: NextRequest) {
         { error: 'Failed to store connection', details: error.message },
         { status: 500 }
       )
+    }
+
+    if (pageSubscribed) {
+      try {
+        await prisma.metaLeadgenState.upsert({
+          where: { workspaceId: workspaceId ?? 1 },
+          update: { webhookSubscribedAt: new Date() },
+          create: { workspaceId: workspaceId ?? 1, webhookSubscribedAt: new Date() },
+        })
+      } catch (error: any) {
+        console.warn('[META-CONNECT] Failed to persist webhook subscription timestamp:', error.message)
+      }
     }
 
     // Store persisted config in Integration table (for UI display)

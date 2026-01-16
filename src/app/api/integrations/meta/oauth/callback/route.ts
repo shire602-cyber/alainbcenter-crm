@@ -26,8 +26,9 @@ import {
   getInstagramBusinessAccount,
 } from '@/lib/integrations/meta/api'
 import { upsertConnection } from '@/server/integrations/meta/storage'
-import { encryptToken } from '@/lib/integrations/meta/encryption'
+import { subscribePageToWebhook } from '@/server/integrations/meta/subscribe'
 import { getCurrentUser } from '@/lib/auth-server'
+import { prisma } from '@/lib/prisma'
 
 const META_APP_ID = process.env.META_APP_ID
 const META_APP_SECRET = process.env.META_APP_SECRET
@@ -288,11 +289,37 @@ export async function GET(req: NextRequest) {
     const savedConnections: Array<{ pageId: string; pageName: string; igId?: string; igUsername?: string }> = []
     const workspaceId = stateData.workspace_id || 1
     const tokenExpiresAt = new Date(Date.now() + tokenExpiresIn * 1000)
+    const leadgenState = await prisma.metaLeadgenState.upsert({
+      where: { workspaceId },
+      update: {},
+      create: { workspaceId },
+    })
+    const selectedPageId = leadgenState.selectedPageId ?? null
 
     for (const page of pages) {
       if (!page.access_token) {
         console.warn('[META-OAUTH-ASSETS] Page missing access_token:', page.id)
         continue
+      }
+
+      let pageSubscribed = false
+      const shouldSubscribePage = selectedPageId ? page.id === selectedPageId : pages.length === 1
+      if (shouldSubscribePage) {
+        try {
+          pageSubscribed = await subscribePageToWebhook(
+            page.id,
+            page.access_token,
+            ['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'leadgen']
+          )
+          if (pageSubscribed) {
+            await prisma.metaLeadgenState.update({
+              where: { workspaceId },
+              data: { webhookSubscribedAt: new Date() },
+            })
+          }
+        } catch (error: any) {
+          console.warn('[META-OAUTH-ASSETS] Failed to subscribe page to webhook:', page.id, error.message)
+        }
       }
 
       // Fetch Instagram Business Account
@@ -323,7 +350,14 @@ export async function GET(req: NextRequest) {
           metaConnectedAt: new Date(),
           igBusinessId: igAccount?.id ?? null,
           igUsername: igAccount?.username ?? null,
-          scopes: ['pages_show_list', 'pages_messaging', 'instagram_basic', 'instagram_manage_messages'],
+          scopes: [
+            'pages_show_list',
+            'pages_messaging',
+            'instagram_basic',
+            'instagram_manage_messages',
+            'leads_retrieval',
+          ],
+          triggerSubscribed: pageSubscribed,
           status: 'connected',
         })
 
