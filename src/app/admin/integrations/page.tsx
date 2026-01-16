@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button'
 import { IntegrationSettings } from '@/components/admin/IntegrationSettings'
 import { IntegrationIcon } from '@/components/admin/IntegrationIcon'
 import { MetaOAuthWizard } from '@/components/admin/MetaOAuthWizard'
+import { checkMetaLeadgenReadiness } from '@/server/integrations/meta/leadgen'
 import { 
   Settings,
   CheckCircle2,
@@ -119,6 +120,7 @@ export default async function IntegrationsPage() {
   const metaLeadgenState = await prisma.metaLeadgenState.findUnique({
     where: { workspaceId: 1 },
   }).catch(() => null)
+  const metaLeadgenReadiness = await checkMetaLeadgenReadiness().catch(() => null)
 
   const integrationTypes = [
     {
@@ -213,6 +215,10 @@ export default async function IntegrationsPage() {
             <div>Page: {metaConnections[0]?.pageName || metaLeadgenState?.selectedPageId || '—'}</div>
             <div>Ad Account: {metaLeadgenState?.selectedAdAccountId || '—'}</div>
             <div>Webhook subscribed: {metaConnections[0]?.triggerSubscribed ? 'Yes' : 'No'}</div>
+            <div>Token present: {metaLeadgenReadiness?.connection?.metaUserAccessTokenLong ? 'Yes' : 'No'}</div>
+            <div>Token expires: {metaLeadgenReadiness?.connection?.metaUserTokenExpiresAt?.toISOString() || '—'}</div>
+            <div>Webhook subscribed at: {metaLeadgenState?.webhookSubscribedAt?.toISOString() || '—'}</div>
+            <div>Missing: {metaLeadgenReadiness?.missing?.length ? metaLeadgenReadiness.missing.join(', ') : '—'}</div>
             <div>Last lead received: {metaLeadgenState?.lastLeadgenReceivedAt?.toISOString() || '—'}</div>
             <div>Last lead processed: {metaLeadgenState?.lastLeadgenProcessedAt?.toISOString() || '—'}</div>
             <div>Poller last run: {metaLeadgenState?.lastPollRunAt?.toISOString() || '—'}</div>
@@ -229,9 +235,10 @@ export default async function IntegrationsPage() {
           {integrationTypes.map((type) => {
             const integration = integrations.find((i) => i.name === type.name)
             // For Meta tester integration, check if we have active connections
+            const isMetaLeadAds = type.name === 'facebook' || type.name === 'instagram'
             const isEnabled = type.name === 'instagram-messaging' && (type as any).isMetaTester
-              ? hasMetaConnection 
-              : (integration?.isEnabled || false)
+              ? hasMetaConnection
+              : (isMetaLeadAds ? hasMetaConnection : (integration?.isEnabled || false))
 
             return (
               <BentoCard 
@@ -259,6 +266,11 @@ export default async function IntegrationsPage() {
                 }
               >
                 <p className="text-xs text-slate-600 mb-3 font-medium">{type.description}</p>
+                {isMetaLeadAds && hasMetaConnection && (
+                  <p className="text-xs text-slate-500 mb-3">
+                    Lead Ads ingest is powered by the Meta OAuth connection.
+                  </p>
+                )}
                 
                 {type.name === 'instagram-messaging' && (type as any).isMetaTester ? (
                   <MetaOAuthWizard 

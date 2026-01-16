@@ -85,7 +85,7 @@ export async function POST(req: NextRequest) {
     response.cookies.set('alaincrm_session', sessionToken, {
       httpOnly: true,
       secure: isProduction, // false for localhost, true for HTTPS
-      sameSite: isProduction ? 'strict' : 'lax', // 'lax' allows cookies on redirects
+      sameSite: 'lax', // allow OAuth redirects in production
       maxAge: 60 * 60 * 24 * 7, // 7 days
       path: '/',
     })
@@ -94,7 +94,7 @@ export async function POST(req: NextRequest) {
     console.log('[LOGIN API] Cookie set with options:', {
       httpOnly: true,
       secure: isProduction,
-      sameSite: isProduction ? 'strict' : 'lax',
+      sameSite: 'lax',
       maxAge: 60 * 60 * 24 * 7,
       path: '/',
     })
