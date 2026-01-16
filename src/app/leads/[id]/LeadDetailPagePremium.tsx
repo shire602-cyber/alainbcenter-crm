@@ -897,9 +897,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
           <p className="text-lg text-muted-foreground">Lead not found</p>
           <div className="flex gap-2 justify-center mt-4">
             <Button onClick={loadLead}>Retry</Button>
-            <Link href="/leads">
+          <Link href="/leads">
               <Button variant="outline">Back to Leads</Button>
-            </Link>
+          </Link>
           </div>
         </div>
       </MainLayout>
@@ -1041,18 +1041,18 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                 <div className="flex items-center gap-2 border-l border-gray-200 pl-3">
                   {preferredPhone && (
                     <Button variant="outline" size="sm" onClick={() => window.open(`tel:${preferredPhone}`)} className="border-gray-300 hover:bg-gray-50">
-                      <Phone className="h-4 w-4" />
-                    </Button>
-                  )}
+                    <Phone className="h-4 w-4" />
+                  </Button>
+                )}
                   <Button variant="outline" size="sm" onClick={() => setShowTaskModal(true)} className="border-gray-300 hover:bg-gray-50">
                     <Plus className="h-4 w-4 mr-1.5" />
-                    Task
-                  </Button>
+                  Task
+                </Button>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="sm" className="text-gray-600 hover:bg-gray-50">
-                        <MoreVertical className="h-4 w-4" />
-                      </Button>
+                  <MoreVertical className="h-4 w-4" />
+                </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end" className="w-56">
                       {/* Lead Actions */}
@@ -1219,9 +1219,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
                     <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
                       <User className="h-5 w-5 text-gray-600" />
-                      Contact
-                    </CardTitle>
-                  </CardHeader>
+                  Contact
+                </CardTitle>
+              </CardHeader>
                   <CardContent className="space-y-6 px-7 pb-7 pt-7">
                 <div>
                   <Label className="text-sm font-semibold text-gray-700 mb-3 block">Name</Label>
@@ -1252,8 +1252,8 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     <div className="flex items-center gap-2">
                       <span className="text-base font-semibold text-gray-900 flex-1">{contactPhone}</span>
                       {!isInstagramSenderId && (
-                        <QuickActionsMenu
-                          type="phone"
+                      <QuickActionsMenu 
+                        type="phone" 
                           value={contactPhone}
                           phone={contactPhone}
                         />
@@ -1333,19 +1333,19 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       }
                       return ''
                     })()}
-                    onChange={(e) => {
-                      const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
-                      handleSaveField('serviceTypeId', serviceTypeId)
-                    }}
-                    className="text-base"
-                  >
-                    <option value="">Select service...</option>
-                    {serviceTypes.map((st) => (
-                      <option key={st.id} value={st.id.toString()}>
-                        {st.name}
-                      </option>
-                    ))}
-                  </Select>
+                        onChange={(e) => {
+                          const serviceTypeId = e.target.value ? parseInt(e.target.value) : null
+                          handleSaveField('serviceTypeId', serviceTypeId)
+                        }}
+                        className="text-base"
+                      >
+                        <option value="">Select service...</option>
+                        {serviceTypes.map((st) => (
+                          <option key={st.id} value={st.id.toString()}>
+                            {st.name}
+                          </option>
+                        ))}
+                      </Select>
                   {lead.serviceTypeEnum && !lead.serviceTypeId && (
                     <p className="text-xs text-slate-600 mt-1">
                       Detected: {lead.serviceTypeEnum.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase())}
@@ -1365,9 +1365,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   <CardHeader className="pb-4 pt-7 px-7 border-b border-gray-100">
                     <CardTitle className="text-lg font-bold text-gray-900 flex items-center gap-3">
                       <Sparkles className="h-5 w-5 text-gray-600" />
-                      AI Assistant
-                    </CardTitle>
-                  </CardHeader>
+                  AI Assistant
+                </CardTitle>
+              </CardHeader>
                   <CardContent className="space-y-3 px-7 pb-7 pt-7">
                 <Button
                   variant="outline"
@@ -1872,53 +1872,53 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             {/* Add Task Form */}
             <div className="border rounded-xl p-6 bg-gradient-to-br from-green-50 to-emerald-50">
               <h3 className="text-lg font-semibold mb-4">Create New Task</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label>Title</Label>
-                  <Input
-                    value={taskTitle}
-                    onChange={(e) => setTaskTitle(e.target.value)}
-                    placeholder="e.g., Follow up on visa application"
-                  />
-                </div>
+          <div className="space-y-4">
+            <div>
+              <Label>Title</Label>
+              <Input
+                value={taskTitle}
+                onChange={(e) => setTaskTitle(e.target.value)}
+                placeholder="e.g., Follow up on visa application"
+              />
+            </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div>
-                    <Label>Type</Label>
-                    <Select value={taskType} onChange={(e) => setTaskType(e.target.value)}>
-                      {TASK_TYPES.map((type) => (
-                        <option key={type.value} value={type.value}>
-                          {type.label}
-                        </option>
-                      ))}
-                    </Select>
+            <div>
+              <Label>Type</Label>
+              <Select value={taskType} onChange={(e) => setTaskType(e.target.value)}>
+                {TASK_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Due Date</Label>
+              <Input
+                type="datetime-local"
+                value={taskDueAt}
+                onChange={(e) => setTaskDueAt(e.target.value)}
+              />
                   </div>
-                  <div>
-                    <Label>Due Date</Label>
-                    <Input
-                      type="datetime-local"
-                      value={taskDueAt}
-                      onChange={(e) => setTaskDueAt(e.target.value)}
-                    />
-                  </div>
-                </div>
-                <div>
-                  <Label>Assign To</Label>
-                  <Select
-                    value={taskAssignedUserId?.toString() || ''}
-                    onChange={(e) => setTaskAssignedUserId(e.target.value ? parseInt(e.target.value) : null)}
-                  >
-                    <option value="">Unassigned</option>
-                    {users.map((user) => (
-                      <option key={user.id} value={user.id.toString()}>
-                        {user.name}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
+            </div>
+            <div>
+              <Label>Assign To</Label>
+              <Select
+                value={taskAssignedUserId?.toString() || ''}
+                onChange={(e) => setTaskAssignedUserId(e.target.value ? parseInt(e.target.value) : null)}
+              >
+                <option value="">Unassigned</option>
+                {users.map((user) => (
+                  <option key={user.id} value={user.id.toString()}>
+                    {user.name}
+                  </option>
+                ))}
+              </Select>
+            </div>
                 <Button onClick={handleCreateTask} className="w-full">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Task
-                </Button>
+              </Button>
               </div>
             </div>
 
@@ -2034,21 +2034,21 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                   <p className="text-xs text-gray-500">or click to browse</p>
                 </div>
                 <div className="flex flex-col gap-3 w-full max-w-md">
-                  <Select
-                    value={selectedDocCategory}
-                    onChange={(e) => setSelectedDocCategory(e.target.value)}
+              <Select
+                value={selectedDocCategory}
+                onChange={(e) => setSelectedDocCategory(e.target.value)}
                     className="w-full"
-                  >
-                    {DOCUMENT_CATEGORIES.map((cat) => (
-                      <option key={cat.value} value={cat.value}>
-                        {cat.label}
-                      </option>
-                    ))}
-                  </Select>
-                  <Input
-                    ref={fileInputRef}
-                    type="file"
-                    onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
+              >
+                {DOCUMENT_CATEGORIES.map((cat) => (
+                  <option key={cat.value} value={cat.value}>
+                    {cat.label}
+                  </option>
+                ))}
+              </Select>
+              <Input
+                ref={fileInputRef}
+                type="file"
+                onChange={(e) => setSelectedFile(e.target.files?.[0] || null)}
                     className="cursor-pointer"
                   />
                   {selectedFile && (
@@ -2062,7 +2062,7 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         className="h-6 w-6 p-0"
                       >
                         <X className="h-3 w-3" />
-                      </Button>
+              </Button>
                     </div>
                   )}
                   <Button
@@ -2070,18 +2070,18 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     disabled={uploadingDoc || !selectedFile}
                     className="w-full"
                   >
-                    {uploadingDoc ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Uploading...
-                      </>
-                    ) : (
-                      <>
-                        <Upload className="h-4 w-4 mr-2" />
+                {uploadingDoc ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Uploading...
+                  </>
+                ) : (
+                  <>
+                    <Upload className="h-4 w-4 mr-2" />
                         Upload Document
-                      </>
-                    )}
-                  </Button>
+                  </>
+                )}
+              </Button>
                 </div>
               </div>
             </div>
@@ -2158,37 +2158,37 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
             {/* Add Expiry Form */}
             <div className="border rounded-xl p-6 bg-gradient-to-br from-blue-50 to-indigo-50">
               <h3 className="text-lg font-semibold mb-4">Add New Expiry</h3>
-              <div className="space-y-4">
-                <div>
-                  <Label>Type</Label>
-                  <Select value={expiryType} onChange={(e) => setExpiryType(e.target.value)}>
-                    {EXPIRY_TYPES.map((type) => (
-                      <option key={type.value} value={type.value}>
-                        {type.label}
-                      </option>
-                    ))}
-                  </Select>
-                </div>
-                <div>
-                  <Label>Expiry Date</Label>
-                  <Input
-                    type="date"
-                    value={expiryDate}
-                    onChange={(e) => setExpiryDate(e.target.value)}
-                  />
-                </div>
-                <div>
-                  <Label>Notes (optional)</Label>
-                  <Textarea
-                    value={expiryNotes}
-                    onChange={(e) => setExpiryNotes(e.target.value)}
-                    rows={3}
-                  />
-                </div>
+          <div className="space-y-4">
+            <div>
+              <Label>Type</Label>
+              <Select value={expiryType} onChange={(e) => setExpiryType(e.target.value)}>
+                {EXPIRY_TYPES.map((type) => (
+                  <option key={type.value} value={type.value}>
+                    {type.label}
+                  </option>
+                ))}
+              </Select>
+            </div>
+            <div>
+              <Label>Expiry Date</Label>
+              <Input
+                type="date"
+                value={expiryDate}
+                onChange={(e) => setExpiryDate(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Notes (optional)</Label>
+              <Textarea
+                value={expiryNotes}
+                onChange={(e) => setExpiryNotes(e.target.value)}
+                rows={3}
+              />
+            </div>
                 <Button onClick={handleAddExpiry} className="w-full">
                   <Plus className="h-4 w-4 mr-2" />
                   Add Expiry
-                </Button>
+              </Button>
               </div>
             </div>
 

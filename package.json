@@ -15,6 +15,8 @@
     "test:coverage": "node scripts/test-db-ensure.mjs && vitest --coverage",
     "test:db:reset": "TEST_DB_RESET=true node scripts/test-db-ensure.mjs",
     "test:db:setup": "node scripts/test-db-ensure.mjs",
+    "test:meta-leads": "node scripts/test-db-ensure.mjs && vitest tests/meta-leads/**/*.test.ts",
+    "test:meta-leads:diagnostics": "tsx scripts/test-meta-leads-diagnostics.ts",
     "verify-llm": "tsx scripts/verify-llm-setup.ts",
     "e2e:media": "playwright test e2e/media.spec.ts",
     "backfill:wa-media": "tsx scripts/backfillWhatsappMediaIds.ts",

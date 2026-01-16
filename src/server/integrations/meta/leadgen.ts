@@ -41,6 +41,7 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
   const missing: string[] = []
   const selectedPageId = state.selectedPageId || connection?.pageId || null
   const selectedAdAccountId = state.selectedAdAccountId || null
+  let webhookSubscriptionStatus: 'subscribed' | 'unsubscribed' | 'unknown' = 'unknown'
 
   if (!state.selectedPageId && selectedPageId) {
     await prisma.metaLeadgenState.update({
@@ -54,6 +55,12 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
     const pageToken = await getDecryptedPageToken(connection.id)
     if (pageToken) {
       const subscription = await checkPageWebhookSubscription(selectedPageId, pageToken)
+      if (subscription?.subscribed === true) {
+        webhookSubscriptionStatus = 'subscribed'
+      } else if (subscription?.subscribed === false) {
+        webhookSubscriptionStatus = 'unsubscribed'
+      }
+
       if (subscription?.subscribed && connection.triggerSubscribed !== true) {
         await prisma.metaConnection.update({
           where: { id: connection.id },
@@ -88,10 +95,12 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
   }
 
   let hasLeadsRetrieval = false
+  let connectionScopes: string[] = []
   if (connection?.scopes) {
     try {
       const scopes = JSON.parse(connection.scopes)
-      hasLeadsRetrieval = Array.isArray(scopes) && scopes.includes('leads_retrieval')
+      connectionScopes = Array.isArray(scopes) ? scopes : []
+      hasLeadsRetrieval = connectionScopes.includes('leads_retrieval')
     } catch {
       hasLeadsRetrieval = false
     }
@@ -107,6 +116,14 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
       hasLeadsRetrieval = permissions.data.some(
         (perm) => perm.permission === 'leads_retrieval' && perm.status === 'granted'
       )
+      if (hasLeadsRetrieval) {
+        const nextScopes = Array.from(new Set([...connectionScopes, 'leads_retrieval', 'leadgen']))
+        await prisma.metaConnection.update({
+          where: { id: connection.id },
+          data: { scopes: JSON.stringify(nextScopes) },
+        })
+        connectionScopes = nextScopes
+      }
     } catch (error: any) {
       console.warn('[META-LEADGEN-READY] Permission check failed', { error: error.message })
     }
@@ -116,7 +133,7 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
     missing.push('leads_retrieval')
   }
 
-  if (connection?.triggerSubscribed === false) {
+  if (webhookSubscriptionStatus === 'unsubscribed' || connection?.triggerSubscribed === false) {
     missing.push('webhook_subscription')
   }
 
@@ -137,6 +154,7 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
     selectedPageId,
     selectedAdAccountId,
     state,
+    webhookSubscriptionStatus,
   }
 }
 
