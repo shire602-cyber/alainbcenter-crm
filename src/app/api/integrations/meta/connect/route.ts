@@ -222,6 +222,7 @@ export async function POST(req: NextRequest) {
         pageId: page.id,
         pageName: page.name,
         pageAccessToken: page.access_token,
+        metaUserAccessTokenLong: token,
         igBusinessId: igAccount.id,
         igUsername: igAccount.username,
         scopes: ['messages', 'messaging_postbacks', 'message_deliveries', 'message_reads', 'leadgen'],

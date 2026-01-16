@@ -159,6 +159,22 @@ The webhook URL priority order is:
 2. Click **Test** next to your webhook subscription
 3. Meta will send a test event
 
+## Leadgen Diagnostics Checklist
+
+Use this checklist when validating Meta Lead Ads ingestion:
+
+- **Status endpoint:** `/api/debug/meta/leadgen-status` should return `ok: true` with `missing: []`.
+- **Recent events:** `/api/debug/meta/leadgen-recent` should show recent `leadgen` events.
+- **Admin UI:** `/admin/integrations` card shows last received/processed timestamps.
+- **Poller fallback:** `/api/cron/poll-meta-leads?token=CRON_SECRET` should log:
+  - `[LEADGEN-POLL-START]` with `since`
+  - `[LEADGEN-POLL-SUMMARY]` with `scanned/newProcessed/deduped/errors`
+- **Webhook ingestion:** when Meta sends leadgen events, logs should include:
+  - `[LEAD-AD-RECEIVED]` for new lead IDs
+  - `[LEADGEN-DEDUPED]` when duplicates are detected
+  - `[SLA-SCHEDULED]` when SLA task is created
+  - `[LEADGEN-WA-TEMPLATE-SENT]` or `[LEADGEN-WA-SKIP]` for WhatsApp template gating
+
 ## Troubleshooting
 
 ### Token Invalid

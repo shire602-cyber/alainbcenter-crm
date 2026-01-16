@@ -1,5 +1,6 @@
 import { prisma } from '@/lib/prisma'
 import { getDecryptedPageToken } from '@/server/integrations/meta/storage'
+import { checkPageWebhookSubscription } from '@/server/integrations/meta/subscribe'
 import { decryptToken } from '@/lib/integrations/meta/encryption'
 import { getLeadGen, graphAPIGet } from '@/server/integrations/meta/graph'
 import { extractLeadAdFields, serviceBucketFromRawText, type ServiceBucket } from '@/server/integrations/meta/normalize'
@@ -46,6 +47,32 @@ export async function checkMetaLeadgenReadiness(workspaceId: number = WORKSPACE_
       where: { workspaceId },
       data: { selectedPageId },
     })
+  }
+
+  // Verify webhook subscription status when possible and persist diagnostics
+  if (connection?.id && connection.pageAccessToken && selectedPageId) {
+    const pageToken = await getDecryptedPageToken(connection.id)
+    if (pageToken) {
+      const subscription = await checkPageWebhookSubscription(selectedPageId, pageToken)
+      if (subscription?.subscribed && connection.triggerSubscribed !== true) {
+        await prisma.metaConnection.update({
+          where: { id: connection.id },
+          data: { triggerSubscribed: true },
+        })
+        if (!state.webhookSubscribedAt) {
+          await prisma.metaLeadgenState.update({
+            where: { workspaceId },
+            data: { webhookSubscribedAt: new Date() },
+          })
+        }
+      }
+      if (subscription && !subscription.subscribed && connection.triggerSubscribed !== false) {
+        await prisma.metaConnection.update({
+          where: { id: connection.id },
+          data: { triggerSubscribed: false },
+        })
+      }
+    }
   }
 
   if (!connection?.pageAccessToken) {

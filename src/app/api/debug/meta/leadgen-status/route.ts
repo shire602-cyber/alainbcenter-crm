@@ -13,6 +13,7 @@ export async function GET(req: NextRequest) {
 
     return NextResponse.json({
       ok: readiness.ok,
+      missing: readiness.missing,
       selectedPageId: readiness.selectedPageId,
       selectedAdAccountId: readiness.selectedAdAccountId,
       formIds: state.selectedFormIds ? JSON.parse(state.selectedFormIds) : [],
