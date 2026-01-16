@@ -132,6 +132,16 @@ export default async function IntegrationsPage() {
     }
   }
 
+  let metaAdAccountIds: string[] = []
+  if (metaLeadgenState?.selectedAdAccountId) {
+    try {
+      const parsed = JSON.parse(metaLeadgenState.selectedAdAccountId)
+      metaAdAccountIds = Array.isArray(parsed) ? parsed : [metaLeadgenState.selectedAdAccountId]
+    } catch {
+      metaAdAccountIds = [metaLeadgenState.selectedAdAccountId]
+    }
+  }
+
   const integrationTypes = [
     {
       name: 'whatsapp',
@@ -239,7 +249,7 @@ export default async function IntegrationsPage() {
             </div>
           </div>
           <MetaLeadgenConfig
-            initialAdAccountId={metaLeadgenState?.selectedAdAccountId || '1050470112230733'}
+            initialAdAccountIds={metaAdAccountIds.length > 0 ? metaAdAccountIds : ['1385125138679870', '1050470112230733']}
             initialFormIds={metaFormIds}
           />
         </BentoCard>

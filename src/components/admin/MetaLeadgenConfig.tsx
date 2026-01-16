@@ -7,13 +7,13 @@ import { Textarea } from '@/components/ui/textarea'
 import { Badge } from '@/components/ui/badge'
 
 export function MetaLeadgenConfig({
-  initialAdAccountId,
+  initialAdAccountIds,
   initialFormIds,
 }: {
-  initialAdAccountId: string
+  initialAdAccountIds: string[]
   initialFormIds: string[]
 }) {
-  const [adAccountId, setAdAccountId] = useState(initialAdAccountId)
+  const [adAccountIdsText, setAdAccountIdsText] = useState(initialAdAccountIds.join(', '))
   const [formIdsText, setFormIdsText] = useState(initialFormIds.join(', '))
   const [saving, setSaving] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -29,12 +29,17 @@ export function MetaLeadgenConfig({
       .map((value) => value.trim())
       .filter(Boolean)
 
+    const adAccountIds = adAccountIdsText
+      .split(',')
+      .map((value) => value.trim())
+      .filter(Boolean)
+
     try {
       const res = await fetch('/api/integrations/meta/leadgen-config', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          selectedAdAccountId: adAccountId.trim(),
+          selectedAdAccountIds: adAccountIds,
           selectedFormIds: formIds,
         }),
       })
@@ -59,11 +64,11 @@ export function MetaLeadgenConfig({
         <Badge variant="secondary">Manual</Badge>
       </div>
       <div className="space-y-2">
-        <label className="text-xs font-medium text-slate-600">Ad Account ID</label>
+        <label className="text-xs font-medium text-slate-600">Ad Account IDs (comma-separated)</label>
         <Input
-          value={adAccountId}
-          onChange={(event) => setAdAccountId(event.target.value)}
-          placeholder="1050470112230733"
+          value={adAccountIdsText}
+          onChange={(event) => setAdAccountIdsText(event.target.value)}
+          placeholder="1385125138679870, 1050470112230733"
         />
       </div>
       <div className="space-y-2">

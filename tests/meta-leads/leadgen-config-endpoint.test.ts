@@ -22,7 +22,7 @@ describe('Meta Leads - Leadgen Config Endpoint', () => {
     const request = new NextRequest('http://localhost/api/integrations/meta/leadgen-config', {
       method: 'POST',
       body: JSON.stringify({
-        selectedAdAccountId: '1050470112230733',
+        selectedAdAccountIds: ['1385125138679870', '1050470112230733'],
         selectedFormIds: ['form_1', 'form_2'],
       }),
       headers: { 'Content-Type': 'application/json' },
@@ -33,11 +33,11 @@ describe('Meta Leads - Leadgen Config Endpoint', () => {
 
     const data = await response.json()
     expect(data.ok).toBe(true)
-    expect(data.selectedAdAccountId).toBe('1050470112230733')
+    expect(data.selectedAdAccountIds).toEqual(['1385125138679870', '1050470112230733'])
     expect(data.selectedFormIds).toEqual(['form_1', 'form_2'])
 
     const state = await prisma.metaLeadgenState.findUnique({ where: { workspaceId: 1 } })
-    expect(state?.selectedAdAccountId).toBe('1050470112230733')
+    expect(state?.selectedAdAccountId).toBe(JSON.stringify(['1385125138679870', '1050470112230733']))
     expect(state?.selectedFormIds).toBe(JSON.stringify(['form_1', 'form_2']))
   })
 })

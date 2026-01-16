@@ -16,6 +16,17 @@ export async function GET(req: NextRequest) {
       missing: readiness.missing,
       selectedPageId: readiness.selectedPageId,
       selectedAdAccountId: readiness.selectedAdAccountId,
+      selectedAdAccountIds: Array.isArray(readiness.selectedAdAccountId)
+        ? readiness.selectedAdAccountId
+        : (() => {
+            try {
+              return readiness.selectedAdAccountId
+                ? JSON.parse(readiness.selectedAdAccountId)
+                : []
+            } catch {
+              return readiness.selectedAdAccountId ? [readiness.selectedAdAccountId] : []
+            }
+          })(),
       formIds: state.selectedFormIds ? JSON.parse(state.selectedFormIds) : [],
       tokenPresent: !!connection?.metaUserAccessTokenLong,
       tokenExpiresAt: connection?.metaUserTokenExpiresAt || null,
