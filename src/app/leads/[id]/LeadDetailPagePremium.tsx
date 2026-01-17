@@ -118,6 +118,67 @@ const TASK_TYPES = [
   { value: 'CUSTOM', label: 'Custom' },
 ]
 
+type FlattenedLeadField = {
+  key: string
+  value: string
+}
+
+const META_LEAD_DATA_EXCLUDE_PATHS = new Set([
+  'metaLead.campaignName',
+  'metaLead.adName',
+  'metaLead.formName',
+  'ingestion.slaDueAt',
+])
+
+const stringifyLeadValue = (value: unknown) => {
+  if (value === null || value === undefined) return ''
+  if (typeof value === 'string') return value
+  if (typeof value === 'number' || typeof value === 'boolean') return String(value)
+  try {
+    return JSON.stringify(value)
+  } catch {
+    return String(value)
+  }
+}
+
+const flattenLeadData = (input: unknown, excludePaths = META_LEAD_DATA_EXCLUDE_PATHS) => {
+  const results: FlattenedLeadField[] = []
+
+  const walk = (value: unknown, path: string) => {
+    if (value === null || value === undefined) return
+
+    if (typeof value === 'object' && !Array.isArray(value)) {
+      const entries = Object.entries(value as Record<string, unknown>)
+      if (entries.length === 0) return
+
+      entries.forEach(([key, nested]) => {
+        const nextPath = path ? `${path}.${key}` : key
+        if (excludePaths.has(nextPath)) return
+
+        if (nested !== null && typeof nested === 'object' && !Array.isArray(nested)) {
+          walk(nested, nextPath)
+          return
+        }
+
+        const stringValue = stringifyLeadValue(nested)
+        if (!stringValue) return
+        results.push({ key: nextPath, value: stringValue })
+      })
+      return
+    }
+
+    const stringValue = stringifyLeadValue(value)
+    if (!stringValue) return
+    const fallbackKey = path || 'value'
+    if (!excludePaths.has(fallbackKey)) {
+      results.push({ key: fallbackKey, value: stringValue })
+    }
+  }
+
+  walk(input, '')
+  return results.sort((a, b) => a.key.localeCompare(b.key))
+}
+
 export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const { showToast } = useToast()
   const [lead, setLead] = useState<any>(null)
@@ -182,13 +243,21 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const normalizedStage = normalizePipelineStage(lead?.stage, lead?.pipelineStage) || 'new'
   let metaLead: any = null
   let ingestion: any = null
+  let flattenedLeadData: FlattenedLeadField[] = []
   try {
-    const dataJson = lead?.dataJson ? JSON.parse(lead.dataJson) : {}
+    const dataJson =
+      typeof lead?.dataJson === 'string'
+        ? JSON.parse(lead.dataJson)
+        : lead?.dataJson && typeof lead.dataJson === 'object'
+        ? lead.dataJson
+        : {}
     metaLead = dataJson?.metaLead || null
     ingestion = dataJson?.ingestion || null
+    flattenedLeadData = flattenLeadData(dataJson)
   } catch {
     metaLead = null
     ingestion = null
+    flattenedLeadData = []
   }
 
   useEffect(() => {
@@ -1166,6 +1235,16 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         <div>SLA due: {new Date(ingestion.slaDueAt).toLocaleString()}</div>
                       )}
                       {lead?.assignedUser?.name && <div>Assignee: {lead.assignedUser.name}</div>}
+                      {flattenedLeadData.length > 0 && (
+                        <div className="pt-3 border-t border-gray-100 space-y-1 text-xs text-gray-600">
+                          {flattenedLeadData.map(field => (
+                            <div key={field.key} className="flex flex-wrap gap-1">
+                              <span className="font-medium text-gray-700">{field.key}:</span>
+                              <span className="break-all">{field.value}</span>
+                            </div>
+                          ))}
+                        </div>
+                      )}
                     </CardContent>
                   </Card>
                 )}
