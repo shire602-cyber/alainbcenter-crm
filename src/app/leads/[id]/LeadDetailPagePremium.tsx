@@ -1174,26 +1174,30 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       <DropdownMenuSeparator />
                       
                       {/* Destructive Action */}
-                      <DropdownMenuItem onClick={async () => {
-                        if (confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
-                          try {
-                            const res = await fetch(`/api/leads/${leadId}`, {
-                              method: 'DELETE',
-                            })
-                            if (res.ok) {
-                              showToast('Lead deleted successfully', 'success')
-                              router.push('/leads')
-                            } else {
+                      {currentUser?.role?.toUpperCase() === 'ADMIN' && (
+                        <DropdownMenuItem onClick={async () => {
+                          if (confirm('Are you sure you want to delete this lead? This action cannot be undone.')) {
+                            try {
+                              const res = await fetch('/api/admin/data/delete-lead', {
+                                method: 'POST',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({ leadId }),
+                              })
+                              if (res.ok) {
+                                showToast('Lead deleted successfully', 'success')
+                                router.push('/leads')
+                              } else {
+                                showToast('Failed to delete lead', 'error')
+                              }
+                            } catch (err) {
                               showToast('Failed to delete lead', 'error')
                             }
-                          } catch (err) {
-                            showToast('Failed to delete lead', 'error')
                           }
-                        }
-                      }} className="text-red-600 focus:text-red-600">
-                        <Trash2 className="mr-2 h-4 w-4" />
-                        Delete
-                      </DropdownMenuItem>
+                        }} className="text-red-600 focus:text-red-600">
+                          <Trash2 className="mr-2 h-4 w-4" />
+                          Delete
+                        </DropdownMenuItem>
+                      )}
                     </DropdownMenuContent>
                   </DropdownMenu>
                 </div>
@@ -1325,9 +1329,22 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                         : 'Unknown Contact'
                     }
                     onSave={async (value) => {
-                      // Would need contact update endpoint
-                      showToast('Contact update coming soon', 'info')
-                      return Promise.resolve()
+                      if (!lead.contact?.id) {
+                        showToast('Missing contact ID', 'error')
+                        return
+                      }
+                      const res = await fetch(`/api/contacts/${lead.contact.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ fullName: value }),
+                      })
+                      if (!res.ok) {
+                        showToast('Failed to update contact name', 'error')
+                        await loadLead()
+                        return
+                      }
+                      showToast('Contact name updated', 'success')
+                      await loadLead()
                     }}
                     className="text-base font-semibold text-gray-900"
                     placeholder="Enter contact name"
@@ -1395,12 +1412,32 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                     </div>
                   </div>
                 )}
-                {lead.contact?.nationality && (
-                  <div>
-                    <Label className="text-sm font-semibold text-gray-700 mb-3 block">Nationality</Label>
-                    <span className="text-base font-semibold text-gray-900">{lead.contact.nationality}</span>
-                  </div>
-                )}
+                <div>
+                  <Label className="text-sm font-semibold text-gray-700 mb-3 block">Nationality</Label>
+                  <InlineEditableField
+                    value={lead.contact?.nationality || ''}
+                    onSave={async (value) => {
+                      if (!lead.contact?.id) {
+                        showToast('Missing contact ID', 'error')
+                        return
+                      }
+                      const res = await fetch(`/api/contacts/${lead.contact.id}`, {
+                        method: 'PATCH',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ nationality: value }),
+                      })
+                      if (!res.ok) {
+                        showToast('Failed to update nationality', 'error')
+                        await loadLead()
+                        return
+                      }
+                      showToast('Nationality updated', 'success')
+                      await loadLead()
+                    }}
+                    className="text-base font-semibold text-gray-900"
+                    placeholder="Add nationality"
+                  />
+                </div>
                 <div>
                   <Label className="text-sm font-semibold text-gray-700 mb-3 block">Service Needed</Label>
                   {lead.requestedServiceRaw && !lead.serviceTypeId && (
