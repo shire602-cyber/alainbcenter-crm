@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminOrManagerApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
-import { RenewalServiceType, RenewalItemStatus } from '@prisma/client'
+import { RenewalItemStatus, RenewalServiceType } from '@prisma/client'
 
 const SERVICE_TYPE_MAP: Record<string, RenewalServiceType> = {
   TRADE_LICENSE_EXPIRY: 'TRADE_LICENSE',
@@ -55,6 +55,10 @@ export async function POST(req: NextRequest) {
 
         const serviceType = SERVICE_TYPE_MAP[item.type] || 'TRADE_LICENSE'
         const status: RenewalItemStatus = STATUS_MAP[item.renewalStatus] ?? 'UPCOMING'
+        const expectedValue =
+          typeof item.lead?.estimatedRenewalValue === 'number'
+            ? item.lead.estimatedRenewalValue
+            : undefined
 
         const existing = await prisma.renewalItem.findFirst({
           where: {
@@ -69,7 +73,7 @@ export async function POST(req: NextRequest) {
             where: { id: existing.id },
             data: {
               status,
-              expectedValue: item.lead?.estimatedRenewalValue ?? existing.expectedValue,
+              expectedValue: expectedValue ?? existing.expectedValue,
               probability: item.lead?.renewalProbability ?? existing.probability,
               assignedToUserId: item.assignedUserId ?? existing.assignedToUserId,
               lastContactedAt: item.lastReminderSentAt ?? existing.lastContactedAt,
@@ -86,7 +90,7 @@ export async function POST(req: NextRequest) {
               serviceName: item.type.replace(/_/g, ' '),
               expiresAt: item.expiryDate,
               status,
-              expectedValue: item.lead?.estimatedRenewalValue ?? null,
+              expectedValue: expectedValue ?? null,
               probability: item.lead?.renewalProbability ?? 70,
               assignedToUserId: item.assignedUserId,
               lastContactedAt: item.lastReminderSentAt,
