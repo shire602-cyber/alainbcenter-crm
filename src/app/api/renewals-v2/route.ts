@@ -145,6 +145,114 @@ export async function GET(req: NextRequest) {
       prisma.renewalItem.count({ where: finalWhereClause }),
     ])
 
+    if (total === 0) {
+      const now = new Date()
+      const futureDate = new Date(now)
+      futureDate.setDate(futureDate.getDate() + 180)
+      const pastDate = new Date(now)
+      pastDate.setDate(pastDate.getDate() - 120)
+
+      const expiryItems = await prisma.expiryItem.findMany({
+        where: {
+          expiryDate: {
+            gte: pastDate,
+            lte: futureDate,
+          },
+        },
+        select: {
+          id: true,
+          leadId: true,
+          contactId: true,
+          type: true,
+          expiryDate: true,
+          renewalStatus: true,
+          assignedUserId: true,
+          lastReminderSentAt: true,
+          lead: {
+            select: {
+              id: true,
+              contact: {
+                select: {
+                  id: true,
+                  fullName: true,
+                  phone: true,
+                  email: true,
+                },
+              },
+              assignedUser: {
+                select: {
+                  id: true,
+                  name: true,
+                },
+              },
+            },
+          },
+          assignedUser: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+        },
+        orderBy: {
+          expiryDate: 'asc',
+        },
+        skip,
+        take: limit,
+      })
+
+      const fallbackItems = expiryItems.map((item) => ({
+        id: item.id,
+        leadId: item.leadId,
+        contactId: item.contactId,
+        serviceType: item.type.replace(/_EXPIRY$/, ''),
+        serviceName: item.type.replace(/_/g, ' '),
+        expiresAt: item.expiryDate,
+        status: item.renewalStatus,
+        expectedValue: null,
+        probability: null,
+        assignedToUserId: item.assignedUserId,
+        lastContactedAt: item.lastReminderSentAt,
+        nextActionAt: null,
+        lead: item.lead
+          ? {
+              id: item.lead.id,
+              contact: item.lead.contact,
+              assignedUser: item.lead.assignedUser,
+            }
+          : null,
+        assignedTo: item.assignedUser,
+      }))
+
+      const totalFallback = await prisma.expiryItem.count({
+        where: {
+          expiryDate: {
+            gte: pastDate,
+            lte: futureDate,
+          },
+        },
+      })
+
+      return NextResponse.json({
+        items: fallbackItems,
+        pagination: {
+          page,
+          limit,
+          total: totalFallback,
+          totalPages: Math.ceil(totalFallback / limit),
+        },
+        summary: {
+          revenueAtRisk30: 0,
+          revenueAtRisk60: 0,
+          revenueAtRisk90: 0,
+          urgentCount: 0,
+          expiredNotContacted: 0,
+          recoveredThisMonth: 0,
+        },
+        fallback: true,
+      })
+    }
+
     // Calculate KPIs using PostgreSQL aggregation for better performance
     // Use raw SQL for efficient date calculations and aggregations
     const nowForKPIs = new Date()
