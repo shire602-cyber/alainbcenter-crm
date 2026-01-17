@@ -90,6 +90,13 @@ type Lead = {
     direction: string
     createdAt: string
   } | null
+  expiryDate?: string | null
+  expiryItems?: Array<{
+    id: number
+    type: string
+    expiryDate: string
+    renewalStatus?: string | null
+  }>
 }
 
 type User = {
