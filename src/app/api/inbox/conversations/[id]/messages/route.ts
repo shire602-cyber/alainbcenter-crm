@@ -28,7 +28,7 @@ export async function POST(
     }
 
     const body = await req.json()
-    const { text, templateName, templateParams, mediaUrl, mediaId, mediaType, mediaCaption, mediaFilename, mediaMimeType, mediaSize, clientMessageId } = body
+    const { text, templateName, templateLanguage, templateParams, mediaUrl, mediaId, mediaType, mediaCaption, mediaFilename, mediaMimeType, mediaSize, clientMessageId } = body
 
     // Validate: either text, template, or media
     if (!text && !templateName && !mediaUrl && !mediaId) {
@@ -386,7 +386,7 @@ export async function POST(
         const result = await sendTemplateMessage(
           normalizedPhone,
           templateName,
-          'en_US', // Default language, can be made configurable
+          templateLanguage || 'en_US',
           templateParams || []
         )
         messageId = result.messageId

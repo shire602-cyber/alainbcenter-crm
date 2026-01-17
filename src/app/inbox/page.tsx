@@ -691,6 +691,7 @@ function InboxPageContent() {
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           templateName: selectedTemplate.name,
+          templateLanguage: selectedTemplate.language,
           templateParams: templateVariables,
         }),
       })
@@ -706,7 +707,8 @@ function InboxPageContent() {
         await loadMessages(selectedConversation.id)
         await loadConversations()
       } else {
-        setError(data.error || 'Failed to send template message')
+        const hint = data.hint ? `\n${data.hint}` : ''
+        setError(`${data.error || 'Failed to send template message'}${hint}`)
       }
     } catch (err: any) {
       setError('Failed to send template message')
