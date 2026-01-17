@@ -2,6 +2,79 @@ import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
 import { ingestLead } from '@/lib/leadIngest'
+import { normalizeService } from '@/lib/services/normalizeService'
+
+const parseCsvDate = (value: string | undefined | null): Date | null => {
+  if (!value) return null
+  const trimmed = value.trim()
+  if (!trimmed) return null
+
+  if (trimmed.includes('/')) {
+    const parts = trimmed.split('/').map(part => part.trim())
+    if (parts.length === 3) {
+      const day = Number(parts[0])
+      const month = Number(parts[1])
+      const year = Number(parts[2])
+      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+        const parsed = new Date(year, month - 1, day)
+        if (!isNaN(parsed.getTime())) {
+          return parsed
+        }
+      }
+    }
+  }
+
+  if (trimmed.includes('-')) {
+    const parts = trimmed.split('-').map(part => part.trim())
+    if (parts.length === 3 && parts[0].length === 4) {
+      const year = Number(parts[0])
+      const month = Number(parts[1])
+      const day = Number(parts[2])
+      if (day >= 1 && day <= 31 && month >= 1 && month <= 12 && year >= 1900) {
+        const parsed = new Date(year, month - 1, day)
+        if (!isNaN(parsed.getTime())) {
+          return parsed
+        }
+      }
+    }
+  }
+
+  const fallback = new Date(trimmed)
+  return isNaN(fallback.getTime()) ? null : fallback
+}
+
+const mapServiceToExpiryType = (serviceInput?: string | null): string | null => {
+  if (!serviceInput) return null
+  const normalized = normalizeService(serviceInput)
+
+  switch (normalized.service) {
+    case 'VISIT_VISA':
+      return 'VISIT_VISA_EXPIRY'
+    case 'EMIRATES_ID':
+      return 'EMIRATES_ID_EXPIRY'
+    case 'MAINLAND_BUSINESS_SETUP':
+    case 'FREEZONE_BUSINESS_SETUP':
+    case 'OFFSHORE_COMPANY':
+    case 'BRANCH_SUBSIDIARY_SETUP':
+    case 'PRO_SERVICES':
+    case 'ACCOUNTING_VAT_SERVICES':
+    case 'BANK_ACCOUNT_ASSISTANCE':
+      return 'TRADE_LICENSE_EXPIRY'
+    case 'FAMILY_VISA':
+    case 'GOLDEN_VISA':
+    case 'FREELANCE_VISA':
+    case 'EMPLOYMENT_VISA':
+    case 'VISA_RENEWAL':
+    case 'INVESTOR_PARTNER_VISA':
+    case 'DOMESTIC_WORKER_VISA':
+    case 'STATUS_CHANGE_INSIDE_UAE':
+    case 'MEDICAL_BIOMETRICS':
+      return 'VISA_EXPIRY'
+    case 'OTHER':
+    default:
+      return serviceInput ? 'VISA_EXPIRY' : null
+  }
+}
 
 /**
  * POST /api/leads/import
@@ -38,6 +111,7 @@ export async function POST(req: NextRequest) {
     const emailIdx = headers.findIndex(h => h === 'email')
     const nationalityIdx = headers.findIndex(h => h === 'nationality')
     const serviceIdx = headers.findIndex(h => h === 'service' || h === 'servicetype')
+    const expiryDateIdx = headers.findIndex(h => h === 'expiry date' || h === 'expiry_date' || h === 'expirydate')
     const stageIdx = headers.findIndex(h => h === 'stage' || h === 'pipelinestage')
     const sourceIdx = headers.findIndex(h => h === 'source')
     const notesIdx = headers.findIndex(h => h === 'notes' || h === 'note')
@@ -74,6 +148,8 @@ export async function POST(req: NextRequest) {
       const name = values[nameIdx]?.trim()
       const phone = values[phoneIdx]?.trim()
       const email = values[emailIdx]?.trim() || undefined
+      const expiryValue = expiryDateIdx >= 0 ? values[expiryDateIdx]?.trim() : undefined
+      const parsedExpiry = parseCsvDate(expiryValue)
 
       if (!name || !phone) {
         results.preview.push({
@@ -82,6 +158,17 @@ export async function POST(req: NextRequest) {
           email,
           willCreate: false,
           reason: 'Missing name or phone',
+        })
+        continue
+      }
+
+      if (expiryValue && !parsedExpiry) {
+        results.preview.push({
+          name,
+          phone,
+          email,
+          willCreate: false,
+          reason: 'Invalid expiry date',
         })
         continue
       }
@@ -132,10 +219,18 @@ export async function POST(req: NextRequest) {
         const stage = values[stageIdx]?.trim() || undefined
         const source = values[sourceIdx]?.trim() || 'manual'
         const notes = values[notesIdx]?.trim() || undefined
+        const expiryValue = expiryDateIdx >= 0 ? values[expiryDateIdx]?.trim() : undefined
+        const parsedExpiry = parseCsvDate(expiryValue)
 
         if (!name || !phone) {
           results.skipped++
           results.errors.push({ row: i + 1, error: 'Missing name or phone' })
+          continue
+        }
+
+        if (expiryValue && !parsedExpiry) {
+          results.skipped++
+          results.errors.push({ row: i + 1, error: 'Invalid expiry date' })
           continue
         }
 
@@ -154,7 +249,7 @@ export async function POST(req: NextRequest) {
         }
 
         // Use ingestLead to create (handles duplicates)
-        await ingestLead({
+        const ingestResult = await ingestLead({
           fullName: name,
           phone: normalizedPhone,
           email,
@@ -162,8 +257,34 @@ export async function POST(req: NextRequest) {
           serviceTypeId,
           source: source as any,
           notes,
+          expiryDate: parsedExpiry ? parsedExpiry.toISOString() : undefined,
           // Note: pipelineStage is not supported in ingestLead, will need to update lead separately if needed
         })
+
+        if (parsedExpiry) {
+          const expiryType = mapServiceToExpiryType(serviceName)
+          if (expiryType) {
+            const existingExpiry = await prisma.expiryItem.findFirst({
+              where: {
+                leadId: ingestResult.lead.id,
+                expiryDate: parsedExpiry,
+                type: expiryType,
+              },
+            })
+
+            if (!existingExpiry) {
+              await prisma.expiryItem.create({
+                data: {
+                  contactId: ingestResult.contact.id,
+                  leadId: ingestResult.lead.id,
+                  type: expiryType,
+                  expiryDate: parsedExpiry,
+                  notes: notes || null,
+                },
+              })
+            }
+          }
+        }
 
         // If stage was provided, update it after creation
         if (stage) {

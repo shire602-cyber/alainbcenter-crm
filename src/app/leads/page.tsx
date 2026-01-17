@@ -919,6 +919,7 @@ function LeadsPageNew() {
                       <TableHead className="h-12 font-semibold">Channel</TableHead>
                       <TableHead className="h-12 font-semibold">Stage</TableHead>
                       <TableHead className="h-12 font-semibold">Service</TableHead>
+                      <TableHead className="h-12 font-semibold">Expiry Date</TableHead>
                       <TableHead className="h-12 font-semibold">Owner</TableHead>
                       <TableHead className="h-12 font-semibold">SLA Due</TableHead>
                       <TableHead className="h-12 font-semibold">Last Message</TableHead>
@@ -949,6 +950,11 @@ function LeadsPageNew() {
                             <div>
                               <div className="font-semibold text-foreground">{lead.contact.fullName}</div>
                               <div className="text-caption text-muted-foreground mt-0.5">{lead.contact.phone}</div>
+                              {lead.contact.nationality && (
+                                <div className="text-xs text-muted-foreground mt-0.5">
+                                  {lead.contact.nationality}
+                                </div>
+                              )}
                               {(() => {
                                 const metaInfo = parseMetaLeadInfo(lead)
                                 const metaLead = metaInfo?.metaLead
@@ -986,6 +992,19 @@ function LeadsPageNew() {
                           ) : (
                             <span className="text-muted-foreground">—</span>
                           )}
+                        </TableCell>
+                        <TableCell className="py-3">
+                          {(() => {
+                            const expiryValue = lead.expiryItems?.[0]?.expiryDate || lead.expiryDate
+                            if (!expiryValue) return <span className="text-muted-foreground">—</span>
+                            const parsed = new Date(expiryValue)
+                            if (isNaN(parsed.getTime())) return <span className="text-muted-foreground">—</span>
+                            return (
+                              <span className="text-body text-foreground">
+                                {format(parsed, 'MMM dd, yyyy')}
+                              </span>
+                            )
+                          })()}
                         </TableCell>
                         <TableCell className="py-3">
                           <span className="text-body text-foreground">{lead.assignedUser?.name || <span className="text-muted-foreground">—</span>}</span>

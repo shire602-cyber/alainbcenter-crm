@@ -339,6 +339,7 @@ export async function GET(req: NextRequest) {
                 fullName: true,
                 phone: true,
                 email: true,
+                nationality: true,
                 source: true,
               }
             },
@@ -417,6 +418,7 @@ export async function GET(req: NextRequest) {
                     fullName: true,
                     phone: true,
                     email: true,
+                    nationality: true,
                   }
                 },
                 // No nested relations in fallback
