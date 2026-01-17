@@ -5,6 +5,8 @@ import { MainLayout } from '@/components/layout/MainLayout'
 import { Button } from '@/components/ui/button'
 import { Badge } from '@/components/ui/badge'
 import { Input } from '@/components/ui/input'
+import { Label } from '@/components/ui/label'
+import { Select } from '@/components/ui/select'
 import { Skeleton } from '@/components/ui/skeleton'
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs'
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet'
@@ -12,6 +14,7 @@ import { Card } from '@/components/ui/card'
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog'
 import { useToast } from '@/components/ui/toast'
 import {
+  AlertTriangle,
   RefreshCw,
   Phone,
   Mail,
@@ -21,6 +24,7 @@ import {
   ChevronRight,
   Search,
   Play,
+  Loader2,
 } from 'lucide-react'
 import { format, differenceInDays, parseISO, formatDistanceToNow } from 'date-fns'
 import { cn } from '@/lib/utils'
@@ -71,9 +75,14 @@ export default function RenewalCommandCenter() {
   const [activeQueue, setActiveQueue] = useState<QueueType>('urgent')
   const [isActionLoading, setIsActionLoading] = useState(false)
   const [showWhatsAppModal, setShowWhatsAppModal] = useState(false)
-  const [whatsappMessage, setWhatsappMessage] = useState('')
   const [selectedActionItem, setSelectedActionItem] = useState<RenewalItem | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
+  const [templates, setTemplates] = useState<Array<{ name: string; language: string; category: string; components?: any[] }>>([])
+  const [loadingTemplates, setLoadingTemplates] = useState(false)
+  const [templateError, setTemplateError] = useState<string | null>(null)
+  const [selectedTemplate, setSelectedTemplate] = useState<{ name: string; language: string; category: string; components?: any[] } | null>(null)
+  const [templateVariables, setTemplateVariables] = useState<string[]>([])
+  const [sendingTemplate, setSendingTemplate] = useState(false)
 
   useEffect(() => {
     fetch('/api/auth/me')
@@ -195,6 +204,87 @@ export default function RenewalCommandCenter() {
     }
   }
 
+  async function loadTemplates() {
+    setLoadingTemplates(true)
+    setTemplateError(null)
+    try {
+      const res = await fetch('/api/whatsapp/templates?onlyApproved=1')
+      const data = await res.json()
+      
+      if (data.ok && data.templates) {
+        setTemplates(data.templates)
+        if (data.templates.length === 0) {
+          setTemplateError('No approved templates returned from this WABA.')
+        }
+      } else {
+        const errorMsg = data.message || data.error || 'Failed to load templates'
+        const errorDetails = data.details?.error?.message || data.details?.error?.error_user_msg || ''
+        const fullError = errorDetails ? `${errorMsg}: ${errorDetails}` : errorMsg
+        
+        setTemplateError(fullError)
+        console.error('Failed to load templates:', {
+          status: res.status,
+          error: data.error,
+          message: data.message,
+          details: data.details,
+        })
+      }
+    } catch (err: any) {
+      const errorMsg = err.message || 'Failed to load templates'
+      setTemplateError(errorMsg)
+      console.error('Failed to load templates:', err)
+    } finally {
+      setLoadingTemplates(false)
+    }
+  }
+
+  async function markRenewalContacted(item: RenewalItem) {
+    await fetch(`/api/renewals-v2/${item.id}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        lastContactedAt: new Date().toISOString(),
+        status: item.status === 'UPCOMING' || item.status === 'EXPIRED' ? 'CONTACTED' : item.status,
+      }),
+    })
+  }
+
+  async function handleSendTemplate() {
+    if (!selectedActionItem || !selectedTemplate) return
+
+    setSendingTemplate(true)
+    try {
+      const res = await fetch('/api/whatsapp/send-template', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          to: selectedActionItem.lead?.contact?.phone,
+          templateName: selectedTemplate.name,
+          language: selectedTemplate.language,
+          variables: templateVariables,
+        }),
+      })
+
+      const data = await res.json()
+
+      if (data.ok) {
+        await markRenewalContacted(selectedActionItem)
+        showToast('WhatsApp template sent', 'success')
+        await loadRenewals()
+        setShowWhatsAppModal(false)
+        setSelectedTemplate(null)
+        setTemplateVariables([])
+        setSelectedActionItem(null)
+      } else {
+        showToast(data.error || 'Failed to send template', 'error')
+      }
+    } catch (err: any) {
+      showToast(err.message || 'Failed to send template', 'error')
+    } finally {
+      setSendingTemplate(false)
+    }
+  }
+
   async function handleAction(action: 'call' | 'whatsapp' | 'email', item: RenewalItem, data?: any) {
     setIsActionLoading(true)
     try {
@@ -218,50 +308,15 @@ export default function RenewalCommandCenter() {
           break
 
         case 'whatsapp':
-          if (data?.message) {
-            const conversationRes = await fetch(`/api/inbox/conversations`)
-            const conversations = await conversationRes.json()
-            const conversation = conversations.find((c: any) =>
-              c.contact?.phone?.replace(/[^0-9]/g, '') === item.lead?.contact?.phone?.replace(/[^0-9]/g, '')
-            )
-
-            if (conversation) {
-              const sendRes = await fetch(`/api/inbox/conversations/${conversation.id}/messages`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ text: data.message }),
-              })
-
-              if (sendRes.ok) {
-                await fetch(`/api/renewals-v2/${item.id}`, {
-                  method: 'PATCH',
-                  headers: { 'Content-Type': 'application/json' },
-                  body: JSON.stringify({
-                    lastContactedAt: new Date().toISOString(),
-                    status: item.status === 'UPCOMING' || item.status === 'EXPIRED' ? 'CONTACTED' : item.status,
-                  }),
-                })
-                showToast('WhatsApp message sent', 'success')
-                await loadRenewals()
-              }
-            }
-          } else {
-            setSelectedActionItem(item)
-            setShowWhatsAppModal(true)
-          }
+          setSelectedActionItem(item)
+          await loadTemplates()
+          setShowWhatsAppModal(true)
           break
 
         case 'email':
           if (item.lead?.contact?.email) {
             window.location.href = `mailto:${item.lead.contact.email}`
-            await fetch(`/api/renewals-v2/${item.id}`, {
-              method: 'PATCH',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                lastContactedAt: new Date().toISOString(),
-                status: item.status === 'UPCOMING' || item.status === 'EXPIRED' ? 'CONTACTED' : item.status,
-              }),
-            })
+            await markRenewalContacted(item)
             await loadRenewals()
           }
           break
@@ -487,6 +542,7 @@ export default function RenewalCommandCenter() {
                             size="sm"
                             onClick={() => {
                               setSelectedActionItem(item)
+                              loadTemplates()
                               setShowWhatsAppModal(true)
                             }}
                             disabled={!item.lead?.contact?.phone || isActionLoading}
@@ -578,6 +634,7 @@ export default function RenewalCommandCenter() {
                     size="sm"
                     onClick={() => {
                       setSelectedActionItem(selectedItem)
+                      loadTemplates()
                       setShowWhatsAppModal(true)
                     }}
                     disabled={!selectedItem.lead?.contact?.phone}
@@ -611,45 +668,147 @@ export default function RenewalCommandCenter() {
         <Dialog open={showWhatsAppModal} onOpenChange={setShowWhatsAppModal}>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Send WhatsApp Message</DialogTitle>
+              <DialogTitle>Send WhatsApp Template</DialogTitle>
               <DialogDescription>
-                Send a WhatsApp message to {selectedActionItem.lead?.contact?.phone}
+                Send a Meta-approved template to {selectedActionItem.lead?.contact?.phone}
               </DialogDescription>
             </DialogHeader>
             <div className="space-y-4 py-4">
+              {templateError && (
+                <div className="p-3 border border-red-300/60 bg-red-50 rounded-lg text-body text-red-700">
+                  <div className="flex items-start gap-2">
+                    <AlertTriangle className="h-4 w-4 mt-0.5 flex-shrink-0" />
+                    <div className="flex-1">
+                      <p className="font-semibold">Error loading templates</p>
+                      <p className="mt-1">{templateError}</p>
+                    </div>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={loadTemplates}
+                    className="mt-2"
+                    disabled={loadingTemplates}
+                  >
+                    {loadingTemplates ? (
+                      <>
+                        <Loader2 className="h-3 w-3 animate-spin mr-1" />
+                        Refreshing...
+                      </>
+                    ) : (
+                      'Refresh'
+                    )}
+                  </Button>
+                </div>
+              )}
+
               <div>
-                <Input
-                  value={whatsappMessage}
-                  onChange={(e) => setWhatsappMessage(e.target.value)}
-                  placeholder="Enter your message..."
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && e.metaKey) {
-                      handleAction('whatsapp', selectedActionItem, { message: whatsappMessage })
-                      setShowWhatsAppModal(false)
-                      setWhatsappMessage('')
-                    }
-                  }}
-                />
+                <div className="flex items-center justify-between mb-2">
+                  <Label htmlFor="renewal-template-select">Template</Label>
+                  {!loadingTemplates && !templateError && (
+                    <button
+                      type="button"
+                      onClick={loadTemplates}
+                      className="text-xs text-blue-600 hover:text-blue-700 hover:underline font-medium"
+                    >
+                      Refresh
+                    </button>
+                  )}
+                </div>
+                {loadingTemplates ? (
+                  <div className="mt-2 p-4 border rounded-lg">
+                    <Loader2 className="h-4 w-4 animate-spin inline mr-2" />
+                    Loading templates...
+                  </div>
+                ) : templateError && templates.length === 0 ? (
+                  <div className="mt-2 p-4 border rounded-lg text-sm text-muted-foreground">
+                    Unable to load templates. Check the error message above.
+                  </div>
+                ) : templates.length === 0 ? (
+                  <div className="mt-2 p-4 border rounded-lg text-sm text-muted-foreground">
+                    No approved templates returned from this WABA.
+                  </div>
+                ) : (
+                  <Select
+                    id="renewal-template-select"
+                    value={selectedTemplate ? `${selectedTemplate.name}|${selectedTemplate.language}` : ''}
+                    onChange={(e) => {
+                      const [name, language] = e.target.value.split('|')
+                      const template = templates.find(t => t.name === name && t.language === language)
+                      if (template) {
+                        setSelectedTemplate(template)
+                        const bodyComponent = template.components?.find((c: any) => c.type === 'body')
+                        let variableCount = 0
+                        if (bodyComponent) {
+                          const text = bodyComponent.text || ''
+                          const matches = text.match(/\{\{(\d+)\}\}/g) || []
+                          const variableNumbers = matches.map((m: string) => parseInt(m.replace(/[{}]/g, '')))
+                          variableCount = variableNumbers.length > 0 ? Math.max(...variableNumbers) : 0
+                        }
+                        setTemplateVariables(new Array(variableCount).fill(''))
+                      }
+                    }}
+                    className="mt-2"
+                  >
+                    <option value="">Select a template...</option>
+                    {templates.map((template, idx) => (
+                      <option key={idx} value={`${template.name}|${template.language}`}>
+                        {template.name} ({template.language}) - {template.category}
+                      </option>
+                    ))}
+                  </Select>
+                )}
               </div>
+
+              {selectedTemplate && templateVariables.length > 0 && (
+                <div className="space-y-2">
+                  <Label>Template Variables</Label>
+                  {templateVariables.map((value, idx) => (
+                    <div key={idx}>
+                      <Label htmlFor={`renewal-var-${idx}`} className="text-xs text-muted-foreground">
+                        Variable {idx + 1}
+                      </Label>
+                      <Input
+                        id={`renewal-var-${idx}`}
+                        value={value}
+                        onChange={(e) => {
+                          const newVars = [...templateVariables]
+                          newVars[idx] = e.target.value
+                          setTemplateVariables(newVars)
+                        }}
+                        placeholder={`Enter value for variable ${idx + 1}`}
+                        className="mt-1"
+                      />
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
             <div className="px-6 py-4 border-t border-slate-100 flex justify-end gap-2">
-              <Button variant="outline" onClick={() => {
-                setShowWhatsAppModal(false)
-                setWhatsappMessage('')
-                setSelectedActionItem(null)
-              }}>
+              <Button
+                variant="outline"
+                onClick={() => {
+                  setShowWhatsAppModal(false)
+                  setSelectedTemplate(null)
+                  setTemplateVariables([])
+                  setSelectedActionItem(null)
+                }}
+                disabled={sendingTemplate}
+              >
                 Cancel
               </Button>
               <Button
-                onClick={async () => {
-                  await handleAction('whatsapp', selectedActionItem, { message: whatsappMessage })
-                  setShowWhatsAppModal(false)
-                  setWhatsappMessage('')
-                  setSelectedActionItem(null)
-                }}
-                disabled={isActionLoading || !whatsappMessage.trim()}
+                onClick={handleSendTemplate}
+                disabled={!selectedTemplate || sendingTemplate}
               >
-                {isActionLoading ? 'Sending...' : 'Send'}
+                {sendingTemplate ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    Sending...
+                  </>
+                ) : (
+                  'Send Template'
+                )}
               </Button>
             </div>
           </DialogContent>

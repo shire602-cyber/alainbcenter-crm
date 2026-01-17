@@ -686,14 +686,12 @@ function InboxPageContent() {
     setSuccess(null)
 
     try {
-      const res = await fetch('/api/whatsapp/send-template', {
+      const res = await fetch(`/api/inbox/conversations/${selectedConversation.id}/messages`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          to: selectedConversation.contact.phone,
           templateName: selectedTemplate.name,
-          language: selectedTemplate.language,
-          variables: templateVariables,
+          templateParams: templateVariables,
         }),
       })
 
@@ -1236,6 +1234,7 @@ function InboxPageContent() {
                     fetch('http://127.0.0.1:7242/ingest/a9581599-2981-434f-a784-3293e02077df',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'inbox/page.tsx:867',message:'Message rendering entry',data:{messageId:msg.id,type:msg.type,mediaUrl:msg.mediaUrl,mediaMimeType:msg.mediaMimeType,hasAttachments:!!(msg.attachments&&msg.attachments.length>0),attachmentsCount:msg.attachments?.length||0,body:msg.body?.substring(0,50)},timestamp:Date.now(),sessionId:'debug-session',runId:'run1',hypothesisId:'A'})}).catch(()=>{});
                     // #endregion
                     const isInbound = msg.direction === 'inbound' || msg.direction === 'INBOUND' || msg.direction === 'IN'
+                    const isTemplate = (msg.type || '').toLowerCase() === 'template'
                     return (
                       <div
                         key={msg.id}
@@ -1255,6 +1254,11 @@ function InboxPageContent() {
                           )}
                           style={{ animationDelay: `${index * 30}ms` }}
                         >
+                          {isTemplate && (
+                            <div className="mb-2 inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[11px] font-semibold text-purple-700">
+                              Template message
+                            </div>
+                          )}
                           {/* CANONICAL: Use hasMedia flag or mediaProxyUrl/providerMediaId from API */}
                           {(() => {
                             // PRIORITY 0: Use canonical hasMedia flag OR mediaProxyUrl OR providerMediaId
