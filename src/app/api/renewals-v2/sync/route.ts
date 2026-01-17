@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { requireAdminOrManagerApi } from '@/lib/authApi'
 import { prisma } from '@/lib/prisma'
-import { RenewalServiceType } from '@prisma/client'
+import { RenewalServiceType, RenewalItemStatus } from '@prisma/client'
 
 const SERVICE_TYPE_MAP: Record<string, RenewalServiceType> = {
   TRADE_LICENSE_EXPIRY: 'TRADE_LICENSE',
@@ -11,7 +11,7 @@ const SERVICE_TYPE_MAP: Record<string, RenewalServiceType> = {
   VISIT_VISA_EXPIRY: 'VISIT_VISA',
 }
 
-const STATUS_MAP: Record<string, string> = {
+const STATUS_MAP: Record<string, RenewalItemStatus> = {
   NOT_STARTED: 'UPCOMING',
   PENDING: 'UPCOMING',
   IN_PROGRESS: 'IN_PROGRESS',
@@ -54,7 +54,7 @@ export async function POST(req: NextRequest) {
         if (!item.leadId) continue
 
         const serviceType = SERVICE_TYPE_MAP[item.type] || 'TRADE_LICENSE'
-        const status = STATUS_MAP[item.renewalStatus] || 'UPCOMING'
+        const status: RenewalItemStatus = STATUS_MAP[item.renewalStatus] ?? 'UPCOMING'
 
         const existing = await prisma.renewalItem.findFirst({
           where: {
