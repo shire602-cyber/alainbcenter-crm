@@ -241,6 +241,13 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
   const providedEmail = lead?.providedEmail || lead?.contact?.providedEmail || null
   const preferredPhone = providedPhoneE164 || providedPhone || (isInstagramSenderId ? null : contactPhone)
   const normalizedStage = normalizePipelineStage(lead?.stage, lead?.pipelineStage) || 'new'
+  const formatServiceTypeEnum = (value?: string | null) =>
+    value ? value.replace(/_/g, ' ').replace(/\b\w/g, (l: string) => l.toUpperCase()) : ''
+  const requestedServiceLabel =
+    lead?.requestedServiceRaw ||
+    lead?.serviceType?.name ||
+    formatServiceTypeEnum(lead?.serviceTypeEnum) ||
+    ''
   let metaLead: any = null
   let ingestion: any = null
   let flattenedLeadData: FlattenedLeadField[] = []
@@ -1231,6 +1238,9 @@ export default function LeadDetailPagePremium({ leadId }: { leadId: number }) {
                       {metaLead?.campaignName && <div>Campaign: {metaLead.campaignName}</div>}
                       {metaLead?.adName && <div>Ad: {metaLead.adName}</div>}
                       {metaLead?.formName && <div>Form: {metaLead.formName}</div>}
+                      {requestedServiceLabel && (
+                        <div>Requested service: {requestedServiceLabel}</div>
+                      )}
                       {ingestion?.slaDueAt && (
                         <div>SLA due: {new Date(ingestion.slaDueAt).toLocaleString()}</div>
                       )}
