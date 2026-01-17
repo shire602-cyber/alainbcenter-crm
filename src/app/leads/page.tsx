@@ -73,6 +73,7 @@ type Lead = {
     fullName: string
     phone: string
     email: string | null
+    nationality?: string | null
     source: string | null
   }
   assignedUser: {
